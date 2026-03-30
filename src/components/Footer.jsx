@@ -41,7 +41,7 @@ export default function Footer() {
           <div className="footer-section">
             <h4 className="text-lg font-bold text-white mb-4">運営情報</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/draft-members-2026" className="hover:text-blue-400 transition">運営メンバー募集</Link></li>
+              <li><Link to="/draft-members-2026" className="hover:text-blue-400 transition">メッセージ</Link></li>
               <li><Link to="/draft-privacy-2026" className="hover:text-blue-400 transition">プライバシーポリシー・免責</Link></li>
             </ul>
           </div>
