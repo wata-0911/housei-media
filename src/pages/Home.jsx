@@ -1,15 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, useScroll, useTransform } from 'framer-motion';
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
   const navigate = useNavigate();
+  
+  // スクロールに応じたパララックス（視差効果）用の設定
+  const { scrollY } = useScroll();
+  const heroY = useTransform(scrollY, [0, 500], [0, 150]);
+  const opacity = useTransform(scrollY, [0, 300], [1, 0]);
 
-  // 検索ボタンやEnterキーが押されたときの処理
+  // Noto Serif JPフォントを適用するための処理
+  useEffect(() => {
+    // index.htmlをいじらなくても、React側でフォントを読み込む
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;600&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (keyword.trim() !== '') {
-      // 入力された文字をURLにくっつけてQ&Aページへ移動
       navigate(`/qa?q=${encodeURIComponent(keyword)}`);
     } else {
       navigate('/qa');
@@ -17,81 +31,187 @@ export default function Home() {
   };
 
   return (
-    <div>
-      {/* ヒーローセクション */}
-      <section 
-        className="text-white py-16 md:py-20 bg-cover bg-center relative" 
-        style={{ backgroundImage: "url('/hedda.jpeg')" }}
-      >
-        <div className="container mx-auto px-4 text-center relative z-10">
-          <h2 className="text-3xl md:text-5xl font-extrabold mb-4 drop-shadow-lg leading-tight">
-            法政通信メディア
-          </h2>
-          <p className="text-sm md:text-lg opacity-90 drop-shadow-md break-keep">
-            最新のメディア情報とコンテンツをお届けします
-          </p>
-        </div>
-      </section>
+    // font-serifを指定し、全体をNoto Serif JPに。背景は上品なオフホワイト（canvas）
+    <div className="bg-[#FAFAFA] text-[#1A1A1A] antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
+      
+      {/* ヒーローセクション（パララックス効果付き） */}
+      <header className="relative h-screen flex items-center justify-center overflow-hidden">
+        {/* 背景画像（スクロールで少し遅れて動くパララックス） */}
+        <motion.div 
+          style={{ y: heroY }}
+          className="absolute inset-0 z-0"
+        >
+          {/* 青みを少し加えたオーバーレイ */}
+          <div className="absolute inset-0 bg-[#002255]/40 z-10"></div>
+          <img 
+            src="/hedda.jpeg" 
+            alt="法政大学イメージ" 
+            className="w-full h-full object-cover scale-105" // 少し拡大してパララックスの余白を作る
+          />
+        </motion.div>
+        
+        {/* メインコピー */}
+        <motion.div 
+          style={{ opacity }}
+          className="relative z-20 text-center text-white px-4 mt-20"
+        >
+          <motion.span 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.2 }}
+            className="block text-sm md:text-base tracking-[0.15em] mb-6 text-white/90 font-light"
+          >
+            法政大学通信教育部 学生生活ガイド
+          </motion.span>
+          <motion.h2 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
+            className="text-4xl md:text-6xl lg:text-7xl font-light leading-tight tracking-wider mb-8 drop-shadow-lg"
+          >
+            学問も場所も時間も<br/>全て自由。
+          </motion.h2>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 1 }}
+            className="text-lg md:text-xl font-light tracking-wider text-white/80 max-w-2xl mx-auto"
+          >
+            時間と場所を超えて広がる、新しい学びの形。
+          </motion.p>
+        </motion.div>
 
-      {/* 検索セクション追加 */}
-      <section className="bg-blue-50 py-8 border-b border-blue-100">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <div className="bg-white p-6 md:p-8 rounded-xl shadow-md text-center">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">知りたいことはありますか？</h3>
-            <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                </svg>
-              </div>
+        {/* スクロールインジケーター（白色に変更） */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 1.5 }}
+          className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center text-white/90"
+        >
+          <span className="text-xs tracking-[0.2em] mb-3 font-light">SCROLL</span>
+          <motion.div 
+            animate={{ y: [0, 10, 0] }} 
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            className="w-[1px] h-12 bg-white/60"
+          />
+        </motion.div>
+      </header>
+
+      {/* 検索セクション（エレガントなデザインに調整） */}
+      <section className="py-20 bg-white border-b border-gray-100">
+        <div className="max-w-4xl mx-auto px-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.8 }}
+            className="text-center"
+          >
+            <h3 className="text-[#002255] text-2xl font-medium mb-8 tracking-wider">知りたいことはありますか？</h3>
+            <form onSubmit={handleSearch} className="relative flex items-center border-b border-gray-300 pb-2 transition-colors focus-within:border-[#002255]">
+              <svg className="w-5 h-5 text-gray-400 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
               <input
                 type="text"
                 placeholder="キーワードでQ&Aを検索 (例: スクーリング、試験...)"
-                className="w-full pl-11 pr-24 py-3 md:py-4 border border-gray-300 rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-base"
+                className="w-full bg-transparent outline-none text-[#1A1A1A] placeholder-gray-400 font-light tracking-wide"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
               />
-              <button 
-                type="submit"
-                className="absolute right-2 top-2 bottom-2 bg-blue-800 text-white px-6 rounded-full font-bold hover:bg-blue-700 transition"
-              >
-                検索
+              <button type="submit" className="text-[#E65C00] hover:text-[#002255] transition-colors ml-4 text-sm tracking-widest uppercase font-medium">
+                Search
               </button>
             </form>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* セクション1: ブロークングリッド（画像とテキストが重なるレイアウト） */}
+      <section className="py-32 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div className="flex flex-col md:flex-row items-center">
+            
+            {/* 画像エリア（左側） */}
+            <motion.div 
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="w-full md:w-7/12 z-10 overflow-hidden group"
+            >
+              <img 
+                src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1973&auto=format&fit=crop" 
+                alt="学習イメージ" 
+                className="w-full h-[500px] md:h-[700px] object-cover transition-transform duration-[2s] group-hover:scale-105"
+              />
+            </motion.div>
+            
+            {/* テキストエリア（右側・画像に重なる） */}
+            <motion.div 
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
+              className="w-full md:w-6/12 bg-white p-10 md:p-16 relative md:-ml-24 mt-8 md:mt-32 z-20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)]"
+            >
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / CONCEPT</span>
+              <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
+                自立した学習を、<br/>確かなサイクルで。
+              </h3>
+              <p className="text-[#666666] leading-loose mb-10 text-justify font-light">
+                通信教育での学びは「テキスト学習」「リポート作成」「単位修得試験」のサイクルで進みます。日々の読書から問いを見つけ、自分なりの考察を論文にまとめる。この一連のプロセスが、論理的思考力と深い教養を育みます。
+              </p>
+              
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/qa')} 
+                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-2 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium"
+              >
+                よくある質問を見る
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                </svg>
+              </motion.button>
+            </motion.div>
+
           </div>
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-8 md:py-12">
-        <div className="max-w-4xl mx-auto">
-          {/* 既存のコンテンツ */}
-          <article className="bg-white p-6 md:p-8 rounded-lg shadow-md mb-8">
-            <h3 className="text-xl md:text-2xl font-bold mb-4 border-b pb-2">通教生向けスケジュール</h3>
-            <p className="leading-relaxed text-sm md:text-base text-gray-700">
-              冬スクお疲れ様でした！！
-              25年度の学習も一区切りですね！
-              通教生向けに2月のスケジュールをまとめておきました！！
-              見やすいなと思って貰えたら《いいね.RP》で広めて貰えると嬉しいです！
-              <img src="/caren.jpg" alt="カレンダー" className="w-full mt-4 rounded-lg shadow-md" />
+      {/* セクション2: インフォメーション（中央配置のカードレイアウトに変更） */}
+      <section className="py-32 bg-[#F5F5F7] overflow-hidden">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            className="w-full bg-white p-10 md:p-16 z-20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)]"
+          >
+            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / SCHEDULE</span>
+            <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
+              計画的な学習が、<br/>目標への最短距離。
+            </h3>
+            <p className="text-[#666666] leading-loose mb-10 text-justify font-light">
+              冬スクお疲れ様でした！25年度の学習も一区切りですね。<br/>
+              通教生向けに2月のスケジュールをまとめておきました。<br/>
+              見やすいなと思って貰えたら《いいね・RP》で広めて貰えると嬉しいです。
             </p>
-          </article>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition">
-              <h4 className="font-bold mb-2 text-lg text-blue-800">法政通信メディア＠勉強・就職情報発信</h4>
-              <p className="text-sm text-gray-600">
-                法政通教生が運営する通教生のための情報メディア！あなたの学生生活に必要な情報や役立つ情報を発信していきます！忘れがちな振込締切日や成績更新情報なども適宜発信中！
-              </p>
+            
+            {/* 公式Xへのリンク */}
+            <div className="space-y-4">
+              <a href="https://twitter.com/hosei_tsushin_m" target="_blank" rel="noopener noreferrer" className="flex items-center text-[#666666] hover:text-[#002255] transition-colors group">
+                <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12"></span>
+                <span className="tracking-wide">法政通信メディア＠勉強・就職情報発信</span>
+              </a>
+              <a href="https://twitter.com/hosei_tsukyo_re" target="_blank" rel="noopener noreferrer" className="flex items-center text-[#666666] hover:text-[#002255] transition-colors group">
+                <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12"></span>
+                <span className="tracking-wide">締切リマインド＠法政通信メディア2nd</span>
+              </a>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition">
-              <h4 className="font-bold mb-2 text-lg text-blue-800">締切リマインド＠法政通信メディア2nd</h4>
-              <p className="text-sm text-gray-600">
-                通信教育課程に関連する様々なことをXにてリマインドします！
-              </p>
-            </div>
-          </div>
+          </motion.div>
         </div>
-      </div>
+      </section>
+
     </div>
   );
 }

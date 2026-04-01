@@ -2,56 +2,37 @@ import { Link } from 'react-router-dom';
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-800 text-gray-300 py-10 mt-auto">
-      <div className="container mx-auto px-4 max-w-5xl">
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 border-b border-gray-700 pb-8 mb-8">
-          
-          <div className="footer-section">
-            <h3 className="text-xl font-bold text-white mb-4">法政通信メディア</h3>
-            <p className="text-sm text-gray-400 leading-relaxed mb-6">
-              法政大学通信教育部生のための情報メディア。<br />
-              学生生活に役立つ情報を発信しています。
-            </p>
-            {/* X(Twitter)アイコン */}
-            <div className="flex space-x-4">
-              <a 
-                href="https://x.com/hosei_c_media" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-gray-400 hover:text-white transition-colors duration-200"
-                aria-label="X (Twitter) 公式アカウント"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 22.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-              </a>
-            </div>
-          </div>
+    <footer className="bg-[#002255] text-white/80 py-16 border-t border-white/10 mt-auto" style={{ fontFamily: '"Noto Serif JP", serif' }}>
+      <div className="max-w-7xl mx-auto px-6 text-center antialiased">
+        <p className="text-sm text-white tracking-widest font-light mb-8">
+          法政通信メディア
+        </p>
 
-          <div className="footer-section">
-            <h4 className="text-lg font-bold text-white mb-4">コンテンツ</h4>
-            <ul className="space-y-2 text-sm">
-              <li><Link to="/" className="hover:text-blue-400 transition">ホーム</Link></li>
-              <li><Link to="/qa" className="hover:text-blue-400 transition">よくある質問 (Q&A)</Link></li>
-              <li><Link to="/contact" className="hover:text-blue-400 transition">お問い合わせ</Link></li>
-            </ul>
-          </div>
-
-          <div className="footer-section">
-            <h4 className="text-lg font-bold text-white mb-4">運営情報</h4>
-            <ul className="space-y-2 text-sm">
-              <li><Link to="/draft-members-2026" className="hover:text-blue-400 transition">メッセージ</Link></li>
-              <li><Link to="/draft-privacy-2026" className="hover:text-blue-400 transition">プライバシーポリシー・免責</Link></li>
-            </ul>
-          </div>
-
+        <div className="flex justify-center mb-10">
+          <a 
+            href="https://x.com/hosei_c_media" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-white/60 hover:text-[#E65C00] transition-colors duration-300"
+            aria-label="X (Twitter) 公式アカウント"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 22.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
         </div>
 
-        <div className="text-center text-sm text-gray-500">
-          <p>&copy; 2026 法政通信メディア. All rights reserved.</p>
+        <div className="flex flex-wrap justify-center gap-6 md:gap-10 mb-12 text-xs md:text-sm tracking-widest font-light">
+          <Link to="/" className="text-white hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
+          <Link to="/qa" className="text-white hover:text-[#E65C00] transition-colors duration-300"></Link>
+          <Link to="/draft-members-2026" className="text-white hover:text-[#E65C00] transition-colors duration-300">メッセージ</Link>
+          <Link to="/draft-privacy-2026" className="text-white hover:text-[#E65C00] transition-colors duration-300">プライバシーポリシー</Link>
+          <Link to="/contact" className="text-white hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
         </div>
 
+        <p className="text-xs text-white/40 tracking-widest font-light">
+          &copy; 2026 法政通信メディア. All Rights Reserved.
+        </p>
       </div>
     </footer>
   );
