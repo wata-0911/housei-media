@@ -69,7 +69,7 @@ export default function Home() {
             transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
             className="text-4xl md:text-6xl lg:text-7xl font-light leading-tight tracking-wider mb-8 drop-shadow-lg"
           >
-            学問も場所も時間も<br/>全て自由。
+            誰かの「困った」を<br/>「良かった」に変えるために。
           </motion.h2>
           <motion.p 
             initial={{ opacity: 0 }}
@@ -77,7 +77,7 @@ export default function Home() {
             transition={{ duration: 1, delay: 1 }}
             className="text-lg md:text-xl font-light tracking-wider text-white/80 max-w-2xl mx-auto"
           >
-            時間と場所を超えて広がる、新しい学びの形。
+            法政通信メディアは皆様の学生生活に役立つ情報をまとめています。
           </motion.p>
         </motion.div>
 
