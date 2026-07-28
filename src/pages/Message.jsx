@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-export default function Members() {
+export default function Message() {
   // Noto Serif JPフォントを適用
   useEffect(() => {
     const link = document.createElement('link');
@@ -13,19 +13,19 @@ export default function Members() {
 
   return (
     <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
-      
+
       {/* ヒーローセクション */}
       <section className="bg-[#002255] text-white py-24 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         <div className="container mx-auto px-4 text-center relative z-10">
-          <motion.span 
+          <motion.span
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="block text-[#E65C00] text-sm tracking-[0.2em] font-medium mb-4"
           >
             MESSAGE
           </motion.span>
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -39,7 +39,7 @@ export default function Members() {
       {/* メッセージ本文（手紙・コラム風レイアウト） */}
       <section className="py-20 md:py-32">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
@@ -59,7 +59,7 @@ export default function Members() {
               <p>
                 卒業を迎えるにあたり、私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
               </p>
-              
+
               <p>
                 私の大学生活は、最初から順風満帆だったわけではありません。無駄に大きい設題総覧や学習のしおりを頑張って読み込むも勘違いをしてミスの連発もありましたし、スクーリングではどう振る舞えばいいのか分からず、一人で途方に暮れていた時期もありました。
               </p>

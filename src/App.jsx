@@ -8,7 +8,7 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import QA from './pages/QA';
 import Contact from './pages/Contact';
-import Members from './pages/Members';
+import Message from './pages/Message';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 
 export default function App() {
@@ -27,7 +27,7 @@ export default function App() {
             <Route path="/contact" element={<Contact />} />
             
             {/* 隠しページ */}
-            <Route path="/draft-members-2026" element={<Members />} />
+            <Route path="/draft-message-2026" element={<Message />} />
             <Route path="/draft-privacy-2026" element={<PrivacyPolicy />} />
           </Routes>
         </main>

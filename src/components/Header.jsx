@@ -37,6 +37,9 @@ export default function Header() {
               <Link to="/" className="hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
             </li>
             <li>
+               <Link to="/draft-message-2026" className="hover:text-[#E65C00] transition-colors duration-300">創立者からのメッセージ</Link>
+            </li>
+            <li>
               <Link to="/qa" className="hover:text-[#E65C00] transition-colors duration-300">よくある質問</Link>
             </li>
             <li>
