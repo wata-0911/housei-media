@@ -125,59 +125,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション1: CONCEPT（画像左・テキスト右） */}
-      <section className="py-32 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="flex flex-col md:flex-row items-center">
-
-            {/* 画像エリア（左側・テキストの下敷き） */}
-            <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="w-full md:w-7/12 z-10 overflow-hidden group"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1973&auto=format&fit=crop"
-                alt="学習イメージ"
-                className="w-full h-[500px] md:h-[700px] object-cover transition-transform duration-[2s] group-hover:scale-105"
-              />
-            </motion.div>
-
-            {/* テキストエリア（右側・画像に重なる） */}
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
-              className="w-full md:w-6/12 bg-white p-10 md:p-16 relative md:-ml-24 mt-8 md:mt-32 z-20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)]"
-            >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / CONCEPT</span>
-              <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
-                自立した学習を、<br />確かなサイクルで。
-              </h3>
-              <p className="text-[#666666] leading-loose mb-10 text-justify font-light">
-                通信教育での学びは「テキスト学習」「リポート作成」「単位修得試験」のサイクルで進みます。日々の読書から問いを見つけ、自分なりの考察を論文にまとめる。この一連のプロセスが、論理的思考力と深い教養を育みます。
-              </p>
-
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/qa')}
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-2 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium"
-              >
-                よくある質問を見る
-                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                </svg>
-              </motion.button>
-            </motion.div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* セクション2: SCHEDULE（テキスト左・画像右の逆ブロークングリッド） */}
+ {/* セクション1: SCHEDULE（テキスト左・画像右の逆ブロークングリッド） */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row items-center">
@@ -190,7 +138,7 @@ export default function Home() {
               transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
               className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / SCHEDULE</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / SCHEDULE</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
                 計画的な学習が、<br />目標への最短距離。
               </h3>
@@ -228,6 +176,58 @@ export default function Home() {
                   className="w-full h-auto object-contain"
                 />
               </div>
+            </motion.div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* セクション2: CONCEPT（画像左・テキスト右） */}
+      <section className="py-32 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div className="flex flex-col md:flex-row items-center">
+
+            {/* 画像エリア（左側・テキストの下敷き） */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="w-full md:w-7/12 z-10 overflow-hidden group"
+            >
+              <img
+                src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1973&auto=format&fit=crop"
+                alt="学習イメージ"
+                className="w-full h-[500px] md:h-[700px] object-cover transition-transform duration-[2s] group-hover:scale-105"
+              />
+            </motion.div>
+
+            {/* テキストエリア（右側・画像に重なる） */}
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
+              className="w-full md:w-6/12 bg-white p-10 md:p-16 relative md:-ml-24 mt-8 md:mt-32 z-20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)]"
+            >
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / CONCEPT</span>
+              <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
+                自立した学習を、<br />確かなサイクルで。
+              </h3>
+              <p className="text-[#666666] leading-loose mb-10 text-justify font-light">
+                通信教育での学びは「テキスト学習」「リポート作成」「単位修得試験」のサイクルで進みます。日々の読書から問いを見つけ、自分なりの考察を論文にまとめる。この一連のプロセスが、論理的思考力と深い教養を育みます。
+              </p>
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/qa')}
+                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-2 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium"
+              >
+                よくある質問を見る
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                </svg>
+              </motion.button>
             </motion.div>
 
           </div>
