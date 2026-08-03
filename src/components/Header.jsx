@@ -19,12 +19,12 @@ export default function Header() {
   };
 
   return (
-    <header 
+    <header
       className="sticky top-0 z-50 bg-[#002255]/95 backdrop-blur-md border-b border-white/10 transition-all duration-300 relative"
       style={{ fontFamily: '"Noto Serif JP", serif' }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
-        
+
         {/* ロゴ部分 */}
         <Link to="/" className="text-xl md:text-2xl font-medium tracking-widest text-white flex items-baseline hover:text-[#E65C00] transition-colors duration-300">
           法政通信メディア
@@ -37,7 +37,10 @@ export default function Header() {
               <Link to="/" className="hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
             </li>
             <li>
-               <Link to="/draft-message-2026" className="hover:text-[#E65C00] transition-colors duration-300">創立者からのメッセージ</Link>
+              <Link to="/draft-message-2026" className="hover:text-[#E65C00] transition-colors duration-300">創立者からのメッセージ</Link>
+            </li>
+            <li>
+              <Link to="/member">運営メンバー紹介</Link>
             </li>
             <li>
               <Link to="/qa" className="hover:text-[#E65C00] transition-colors duration-300">よくある質問</Link>
@@ -45,13 +48,13 @@ export default function Header() {
             <li>
               <Link to="/contact" className="hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
             </li>
-            
+
             {/* 区切り線 */}
             <li className="h-4 w-[1px] bg-white/20 hidden md:block"></li>
 
             {/* 虫眼鏡（検索）アイコン */}
             <li>
-              <button 
+              <button
                 onClick={() => setIsSearchOpen(!isSearchOpen)}
                 className={`flex items-center transition-colors duration-300 ${isSearchOpen ? 'text-[#E65C00]' : 'hover:text-[#E65C00]'}`}
                 aria-label="検索を開く"
@@ -68,8 +71,8 @@ export default function Header() {
       {/* ドロップダウン型 検索バー */}
       {isSearchOpen && (
         <div className="absolute top-[100%] right-4 md:right-8 mt-2 w-72 bg-white shadow-2xl p-2 rounded-lg border border-gray-100 z-50">
-          <form 
-            onSubmit={handleSearch} 
+          <form
+            onSubmit={handleSearch}
             className="flex items-center bg-[#FAFAFA] rounded-md px-3 py-2 border border-transparent focus-within:border-[#002255] transition-colors"
           >
             <svg className="w-4 h-4 text-gray-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

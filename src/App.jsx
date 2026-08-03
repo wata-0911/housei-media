@@ -10,6 +10,7 @@ import QA from './pages/QA';
 import Contact from './pages/Contact';
 import Message from './pages/Message';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import ProfileCard from './pages/member';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
             {/* 隠しページ */}
             <Route path="/draft-message-2026" element={<Message />} />
             <Route path="/draft-privacy-2026" element={<PrivacyPolicy />} />
+            <Route path="/member" element={<ProfileCard />} />
           </Routes>
         </main>
 
