@@ -45,7 +45,7 @@ const membersData = [
     region: "静岡県",
     age: "20代",
     grade: "2年",
-    credits: "34(掲載時)",
+    credits: "34単位(掲載時)",
     career: "未定",
     qualifications: "なし",
     gakuchika: "インターン",
