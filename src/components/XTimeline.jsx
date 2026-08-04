@@ -41,7 +41,7 @@ export default function XTimeline({ username }) {
         data-height="600"
         data-theme="light"
         data-chrome="noheader nofooter"
-        href={`https://x.com/${username}`}
+        href={`https://x.com/hosei_c_media/`}
       >
         Xの投稿を読み込んでいます...
       </a>
