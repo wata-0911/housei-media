@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import XTimeline from '../components/XTimeline';
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
@@ -81,7 +82,7 @@ export default function Home() {
           </motion.p>
         </motion.div>
 
-        {/* スクロールインジケーター（白色に変更） */}
+        {/* スクロールインジケーター */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -97,7 +98,7 @@ export default function Home() {
         </motion.div>
       </header>
 
-      {/* 検索セクション（エレガントなデザインに調整） */}
+      {/* 検索セクション */}
       <section className="py-20 bg-white border-b border-gray-100">
         <div className="max-w-4xl mx-auto px-6">
           <motion.div
@@ -125,12 +126,12 @@ export default function Home() {
         </div>
       </section>
 
- {/* セクション1: SCHEDULE（テキスト左・画像右の逆ブロークングリッド） */}
+      {/* セクション1: SCHEDULE */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row items-center">
 
-            {/* テキストエリア（左側・今回は下敷きになる） */}
+            {/* テキストエリア */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -160,15 +161,14 @@ export default function Home() {
               </div>
             </motion.div>
 
-            {/* 画像エリア（右側・テキストの上にフワッと重なる） */}
+            {/* 画像エリア */}
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 1, ease: "easeOut" }}
-              className="w-full md:w-7/12 z-20 relative mt-8 md:mt-0 md:-ml-12" // テキストボックスに被せるためのマイナスマージン
+              className="w-full md:w-7/12 z-20 relative mt-8 md:mt-0 md:-ml-12"
             >
-              {/* カレンダーは情報が命なので、hover時の拡大を無くし、枠と影で美しく見せる */}
               <div className="rounded-xl overflow-hidden border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] bg-white p-2 md:p-4">
                 <img
                   src="/schedule-calendar.png"
@@ -182,52 +182,51 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション2: CONCEPT（画像左・テキスト右） */}
-      <section className="py-32 overflow-hidden">
+      {/* セクション2: OFFICIAL X TIMELINE（更新部分） */}
+      <section className="py-32 overflow-hidden bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="flex flex-col md:flex-row items-center">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-12">
 
-            {/* 画像エリア（左側・テキストの下敷き） */}
+            {/* 左側：説明テキスト */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 1, ease: "easeOut" }}
-              className="w-full md:w-7/12 z-10 overflow-hidden group"
+              className="w-full md:w-5/12 bg-[#FAFAFA] p-10 md:p-16 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
-              <img
-                src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1973&auto=format&fit=crop"
-                alt="学習イメージ"
-                className="w-full h-[500px] md:h-[700px] object-cover transition-transform duration-[2s] group-hover:scale-105"
-              />
-            </motion.div>
-
-            {/* テキストエリア（右側・画像に重なる） */}
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
-              className="w-full md:w-6/12 bg-white p-10 md:p-16 relative md:-ml-24 mt-8 md:mt-32 z-20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)]"
-            >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / CONCEPT</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / OFFICIAL X</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
-                自立した学習を、<br />確かなサイクルで。
+                最新の更新情報を、<br />リアルタイムで。
               </h3>
               <p className="text-[#666666] leading-loose mb-10 text-justify font-light">
-                通信教育での学びは「テキスト学習」「リポート作成」「単位修得試験」のサイクルで進みます。日々の読書から問いを見つけ、自分なりの考察を論文にまとめる。この一連のプロセスが、論理的思考力と深い教養を育みます。
+                公式Xアカウントでは、リポートの提出締切やスクーリング情報、学習・就職活動に役立つ情報をタイムリーに投稿しています。
               </p>
 
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/qa')}
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-2 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium"
+              <a
+                href="https://x.com/hosei_c_media"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium"
               >
-                よくある質問を見る
+                Xでフォローする
                 <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
                 </svg>
-              </motion.button>
+              </a>
+            </motion.div>
+
+            {/* 右側：Xタイムライン埋め込み表示 */}
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
+              className="w-full md:w-6/12 z-20 relative"
+            >
+              <div className="bg-white rounded-2xl p-2 md:p-4 border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)]">
+                <XTimeline username="hosei_c_media" />
+              </div>
             </motion.div>
 
           </div>
