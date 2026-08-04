@@ -26,6 +26,7 @@ export default function Footer() {
           <Link to="/" className="text-white hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
           <Link to="/qa" className="text-white hover:text-[#E65C00] transition-colors duration-300"></Link>
           <Link to="/draft-message-2026" className="text-white hover:text-[#E65C00] transition-colors duration-300">創立者からのメッセージ</Link>
+          <Link to="/member" className="text-white hover:text-[#E65C00] transition-colors duration-300">運営メンバー紹介</Link>
           <Link to="/draft-privacy-2026" className="text-white hover:text-[#E65C00] transition-colors duration-300">プライバシーポリシー</Link>
           <Link to="/contact" className="text-white hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
         </div>

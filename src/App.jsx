@@ -8,7 +8,7 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import QA from './pages/QA';
 import Contact from './pages/Contact';
-import Message from './pages/Message';
+import Message from './pages/Message'; // 重複を削除し、1つにまとめました
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProfileCard from './pages/member';
 
@@ -16,7 +16,7 @@ export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        
+
         {/* 切り出したヘッダー */}
         <Header />
 
@@ -26,7 +26,10 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/qa" element={<QA />} />
             <Route path="/contact" element={<Contact />} />
-            
+
+            {/* 追加: 創立者からのメッセージページへのルーティング */}
+            <Route path="/message" element={<Message />} />
+
             {/* 隠しページ */}
             <Route path="/draft-message-2026" element={<Message />} />
             <Route path="/draft-privacy-2026" element={<PrivacyPolicy />} />
@@ -36,7 +39,7 @@ export default function App() {
 
         {/* 切り出したフッター */}
         <Footer />
-        
+
       </div>
     </Router>
   );

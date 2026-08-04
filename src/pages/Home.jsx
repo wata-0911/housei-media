@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import XTimeline from '../components/XTimeline';
 
@@ -182,50 +182,169 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション2: OFFICIAL X TIMELINE（更新部分） */}
+      {/* セクション2: OFFICIAL X TIMELINE */}
       <section className="py-32 overflow-hidden bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-12">
+          <div className="flex flex-col items-center gap-12">
 
-            {/* 左側：説明テキスト */}
             <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="w-full md:w-5/12 bg-[#FAFAFA] p-10 md:p-16 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="text-center w-full"
             >
               <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / OFFICIAL X</span>
-              <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
-                最新の更新情報を、<br />リアルタイムで。
+              <h3 className="text-3xl md:text-4xl text-[#002255] font-medium tracking-wide">
+                TIMELINE
               </h3>
-              <p className="text-[#666666] leading-loose mb-10 text-justify font-light">
-                公式Xアカウントでは、リポートの提出締切やスクーリング情報、学習・就職活動に役立つ情報をタイムリーに投稿しています。
-              </p>
-
-              <a
-                href="https://x.com/hosei_c_media"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium"
-              >
-                Xでフォローする
-                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                </svg>
-              </a>
             </motion.div>
 
-            {/* 右側：Xタイムライン埋め込み表示 */}
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 z-20 relative">
+
+              <motion.div
+                initial={{ opacity: 0, x: -30 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
+                className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
+              >
+                <div className="bg-white rounded-xl p-2 border border-gray-200">
+                  <XTimeline tweetId="2084129602176503976" />
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: 30 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
+                className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
+              >
+                <div className="bg-white rounded-xl p-2 border border-gray-200">
+                  <XTimeline tweetId="2082412435609457121" />
+                </div>
+              </motion.div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* セクション3: MEMBERS */}
+      <section className="py-32 bg-[#F5F5F7] overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          {/* justify-between と gap-12 を追加し、被りを防ぐ */}
+          <div className="flex flex-col md:flex-row-reverse items-center justify-between gap-12">
+
+            {/* テキストエリア */}
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
-              className="w-full md:w-6/12 z-20 relative"
+              className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
-              <div className="bg-white rounded-2xl p-2 md:p-4 border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)]">
-                <XTimeline username="hosei_c_media" />
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">03 / MEMBERS</span>
+              <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
+                法政通信メディアの<br />運営メンバーを紹介します！
+              </h3>
+              <p className="text-[#666666] leading-loose mb-10 text-justify font-light">
+                当サイトは、現役の通教生が自らの経験と知識を持ち寄り、学生生活をサポートするために運営しています。メンバーそれぞれの学習スタイルや目標などをご紹介します。
+              </p>
+
+              <Link
+                to="/member"
+                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium group"
+              >
+                メンバープロフィールを見る
+                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                </svg>
+              </Link>
+            </motion.div>
+
+            {/* 画像エリア（マイナスマージンを削除し、幅をw-6/12に調整） */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="w-full md:w-6/12 z-20 relative mt-8 md:mt-0"
+            >
+              <div className="bg-white rounded-xl border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-12 flex justify-center items-center gap-6">
+                <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
+                  <img src="/member1.jpg" alt="メンバー1" className="w-full h-full object-cover" />
+                </div>
+                <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
+                  <img src="/member2.jpg" alt="メンバー2" className="w-full h-full object-cover" />
+                </div>
+                <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
+                  <img src="/member3.jpg" alt="メンバー3" className="w-full h-full object-cover" />
+                </div>
+              </div>
+            </motion.div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* セクション4: MESSAGE（追加部分） */}
+      <section className="py-32 bg-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-12">
+
+            {/* 左側：メッセージの抜粋 */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="w-full md:w-6/12 bg-[#FAFAFA] p-10 md:p-16 border-t-4 border-[#002255] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] relative"
+            >
+              {/* 装飾：引用符 */}
+              <div className="absolute top-0 left-8 -translate-y-1/2 bg-white px-2">
+                <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
+              </div>
+
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER'S MESSAGE</span>
+              <h3 className="text-2xl md:text-3xl text-[#002255] font-medium mb-8 leading-relaxed tracking-widest">
+                いつか君も困っている人がいたら、<br />
+                助けてあげてね。
+              </h3>
+              <div className="text-[#666666] leading-loose mb-10 text-justify font-light space-y-4">
+                <p>
+                  私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
+                </p>
+                <p>
+                  私の大学生活は、最初から順風満帆だったわけではありません。そんな暗闇の中にいた私に、優しさで手を差し伸べてくれた人がたくさんがいました。
+                </p>
+              </div>
+
+              <Link
+                to="/Message"
+                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium group"
+              >
+                メッセージの続きを読む
+                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                </svg>
+              </Link>
+            </motion.div>
+
+            {/* 右側：シンプルなグラフィックまたはタイポグラフィ */}
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
+              className="w-full md:w-5/12 z-20 relative flex justify-center items-center"
+            >
+              <div className="relative w-full aspect-square max-w-sm rounded-full border border-gray-100 bg-[#FAFAFA] flex flex-col justify-center items-center p-12 shadow-[inset_0_10px_30px_rgba(0,0,0,0.02)]">
+                <p className="text-[#002255] tracking-[0.2em] text-sm font-medium mb-4 text-center">
+                  法政通信メディア<br />創立者
+                </p>
+                <div className="w-12 h-[1px] bg-[#E65C00]"></div>
               </div>
             </motion.div>
 
