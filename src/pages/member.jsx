@@ -68,7 +68,7 @@ const ProfileCard = () => {
             className={`select-btn ${index === currentMemberIndex ? 'active' : ''}`}
             onClick={() => setCurrentMemberIndex(index)}
           >
-            メンバー {index + 1} ({member.nickname})
+            メンバー {index + 1}
           </button>
         ))}
       </div>
