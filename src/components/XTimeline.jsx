@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-export default function XTimeline({ username }) {
+export default function XTimeline({ tweetId = '2084129602176503976' }) {
   const containerRef = useRef(null);
   const isMounted = useRef(false);
 
@@ -11,9 +11,21 @@ export default function XTimeline({ username }) {
     const scriptId = 'twitter-wjs';
     let script = document.getElementById(scriptId);
 
-    const renderWidget = () => {
+    const renderTweet = () => {
       if (window.twttr && window.twttr.widgets && containerRef.current) {
-        window.twttr.widgets.load(containerRef.current);
+        // 重複描画を防ぐためコンテナを初期化
+        containerRef.current.innerHTML = '';
+        
+        // 特定ポストの埋め込みを実行
+        window.twttr.widgets.createTweet(
+          tweetId,
+          containerRef.current,
+          {
+            theme: 'light',
+            align: 'center',
+            conversation: 'none' // 返信スレッドを非表示にしてスッキリ見せる設定
+          }
+        );
       }
     };
 
@@ -23,28 +35,16 @@ export default function XTimeline({ username }) {
       script.src = 'https://platform.twitter.com/widgets.js';
       script.async = true;
       script.charset = 'utf-8';
-      script.onload = renderWidget;
+      script.onload = renderTweet;
       document.head.appendChild(script);
     } else {
-      renderWidget();
+      renderTweet();
     }
-  }, [username]);
+  }, [tweetId]);
 
   return (
-    <div 
-      ref={containerRef} 
-      className="w-full flex justify-center items-center"
-      style={{ minHeight: '600px' }}
-    >
-      <a
-        className="twitter-timeline"
-        data-height="600"
-        data-theme="light"
-        data-chrome="noheader nofooter"
-        href={`https://x.com/hosei_c_media/`}
-      >
-        Xの投稿を読み込んでいます...
-      </a>
+    <div className="w-full flex justify-center items-center min-h-[300px]">
+      <div ref={containerRef} className="w-full max-w-lg" />
     </div>
   );
 }
