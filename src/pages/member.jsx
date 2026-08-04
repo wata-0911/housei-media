@@ -6,6 +6,22 @@ import './member.css';
 const membersData = [
   {
     id: "member1",
+    subtitle: "FOUNDER",
+    nickname: "初代中の人",
+    image: "/member-founder.jpg", // 設立者用の画像ファイル名（必要に応じて変更してください）
+    gender: "男性",
+    region: "東京都",
+    age: "20代",
+    grade: "卒業済",
+    credits: "134単位修得(26年度卒業)",
+    career: "卒業済（現在は金融IT職）",
+    qualifications: "基本情報技術者（就職後取得）",
+    gakuchika: "法政通信メディアの活動・学業がメイン",
+    studyStyle: "リポ単も割とやってましたが、スクの方が多めではありました",
+    reason: "通教特化の情報発信媒体があれば便利だと思っていたが、誰もやってくれなかったので自分が始めました！"
+  },
+  {
+    id: "member2",
     subtitle: "NICKNAME",
     nickname: "黒糖",
     image: "/member1.jpg",
@@ -21,7 +37,7 @@ const membersData = [
     reason: "初代中の人をはじめ、多くの方に支えられてきた経験があり、その恩返しとして今度は私が誰かの力になりたいと思ったため"
   },
   {
-    id: "member2",
+    id: "member3",
     subtitle: "NICKNAME",
     nickname: "Y",
     image: "/member2.jpg",
@@ -37,7 +53,7 @@ const membersData = [
     reason: "スケジュール管理が卒業の大きな障壁になる通信教育において、「法政通信メディア」の果たす役割は重要であり、初代中の人の卒業後も継続させたいと思ったため"
   },
   {
-    id: "member3",
+    id: "member4",
     subtitle: "NICKNAME",
     nickname: "W",
     image: "/member3.jpg",

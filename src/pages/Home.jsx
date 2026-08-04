@@ -274,13 +274,16 @@ export default function Home() {
             >
               <div className="bg-white rounded-xl border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-12 flex justify-center items-center gap-6">
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member1.jpg" alt="メンバー1" className="w-full h-full object-cover" />
+                  <img src="/member-founder.jpg" alt="メンバー1" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member2.jpg" alt="メンバー2" className="w-full h-full object-cover" />
+                  <img src="/member1.jpg" alt="メンバー2" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member3.jpg" alt="メンバー3" className="w-full h-full object-cover" />
+                  <img src="/member2.jpg" alt="メンバー3" className="w-full h-full object-cover" />
+                </div>
+                <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
+                  <img src="/member3.jpg" alt="メンバー4" className="w-full h-full object-cover" />
                 </div>
               </div>
             </motion.div>
@@ -289,40 +292,40 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション4: MESSAGE（追加部分） */}
+      {/* セクション4: MESSAGE */}
       <section className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-12">
 
-            {/* 左側：メッセージの抜粋 */}
-            <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="w-full md:w-6/12 bg-[#FAFAFA] p-10 md:p-16 border-t-4 border-[#002255] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] relative"
-            >
-              {/* 装飾：引用符 */}
-              <div className="absolute top-0 left-8 -translate-y-1/2 bg-white px-2">
-                <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
-              </div>
+          {/* 中央に配置し、横長に広げる */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            className="w-full max-w-5xl mx-auto bg-[#FAFAFA] p-10 md:p-16 md:px-24 border-t-4 border-[#002255] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] relative"
+          >
+            {/* 装飾：引用符 */}
+            <div className="absolute top-0 left-8 md:left-12 -translate-y-1/2 bg-white px-2">
+              <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
+            </div>
 
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER'S MESSAGE</span>
-              <h3 className="text-2xl md:text-3xl text-[#002255] font-medium mb-8 leading-relaxed tracking-widest">
-                いつか君も困っている人がいたら、<br />
-                助けてあげてね。
-              </h3>
-              <div className="text-[#666666] leading-loose mb-10 text-justify font-light space-y-4">
-                <p>
-                  私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
-                </p>
-                <p>
-                  私の大学生活は、最初から順風満帆だったわけではありません。そんな暗闇の中にいた私に、優しさで手を差し伸べてくれた人がたくさんがいました。
-                </p>
-              </div>
+            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER'S MESSAGE</span>
+            <h3 className="text-2xl md:text-3xl text-[#002255] font-medium mb-8 leading-relaxed tracking-widest">
+              いつか君も困っている人がいたら、<br />
+              助けてあげてね。
+            </h3>
+            <div className="text-[#666666] leading-loose mb-10 text-justify font-light space-y-4">
+              <p>
+                私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
+              </p>
+              <p>
+                私の大学生活は、最初から順風満帆だったわけではありません。そんな暗闇の中にいた私に、優しさで手を差し伸べてくれた人がたくさんがいました。
+              </p>
+            </div>
 
+            <div className="flex justify-start">
               <Link
-                to="/Message"
+                to="/message"
                 className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium group"
               >
                 メッセージの続きを読む
@@ -330,25 +333,9 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
                 </svg>
               </Link>
-            </motion.div>
+            </div>
+          </motion.div>
 
-            {/* 右側：シンプルなグラフィックまたはタイポグラフィ */}
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
-              className="w-full md:w-5/12 z-20 relative flex justify-center items-center"
-            >
-              <div className="relative w-full aspect-square max-w-sm rounded-full border border-gray-100 bg-[#FAFAFA] flex flex-col justify-center items-center p-12 shadow-[inset_0_10px_30px_rgba(0,0,0,0.02)]">
-                <p className="text-[#002255] tracking-[0.2em] text-sm font-medium mb-4 text-center">
-                  法政通信メディア<br />創立者
-                </p>
-                <div className="w-12 h-[1px] bg-[#E65C00]"></div>
-              </div>
-            </motion.div>
-
-          </div>
         </div>
       </section>
 
