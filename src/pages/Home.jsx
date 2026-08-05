@@ -210,7 +210,7 @@ export default function Home() {
                 className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
               >
                 <div className="bg-white rounded-xl p-2 border border-gray-200">
-                  <XTimeline tweetId="2084129602176503976" />
+                  <XTimeline tweetId="2084907256160637081" />
                 </div>
               </motion.div>
 
@@ -222,7 +222,7 @@ export default function Home() {
                 className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
               >
                 <div className="bg-white rounded-xl p-2 border border-gray-200">
-                  <XTimeline tweetId="2082412435609457121" />
+                  <XTimeline tweetId="2084929908820852873" />
                 </div>
               </motion.div>
 
