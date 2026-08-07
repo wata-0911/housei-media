@@ -13,19 +13,19 @@ export default function PrivacyPolicy() {
 
   return (
     <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
-      
+
       {/* ヒーローセクション */}
       <section className="bg-[#002255] text-white py-24 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         <div className="container mx-auto px-4 text-center relative z-10">
-          <motion.span 
+          <motion.span
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="block text-[#E65C00] text-sm tracking-[0.2em] font-medium mb-4"
           >
             LEGAL
           </motion.span>
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -39,7 +39,7 @@ export default function PrivacyPolicy() {
       {/* コンテンツセクション */}
       <section className="py-20 md:py-32">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
@@ -58,7 +58,7 @@ export default function PrivacyPolicy() {
             </div>
 
             <div className="space-y-16">
-              
+
               <section>
                 <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
                   <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
@@ -73,28 +73,7 @@ export default function PrivacyPolicy() {
               <section>
                 <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
                   <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
-                  2. AIチャット機能の利用について
-                </h3>
-                <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify">
-                  当サイトのチャット機能は、外部のAPIを利用して回答を生成しています。入力された質問内容は、システムの品質向上のために一時的に処理されますが、個人を特定する形での学習には使用されません。個人情報や機密情報は入力しないでください。
-                </p>
-              </section>
-
-              <section>
-                <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
-                  <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
-                  3. 広告の配信について
-                </h3>
-                <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify">
-                  当サイトは、第三者配信の広告サービス（Googleアドセンス、Amazonアソシエイト等）を利用する可能性があります。<br />
-                  広告配信事業者は、ユーザーの興味に応じた広告を表示するためにCookie（クッキー）を使用することがあります。これにより、当サイトはお客様のコンピュータを識別できるようになりますが、お客様個人を特定できるものではありません。Cookieを無効にする方法やGoogleアドセンスに関する詳細は「Googleポリシーと規約」をご覧ください。
-                </p>
-              </section>
-
-              <section>
-                <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
-                  <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
-                  4. アクセス解析ツールについて
+                  2. アクセス解析ツールについて
                 </h3>
                 <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify">
                   当サイトでは、Googleによるアクセス解析ツール「Googleアナリティクス」を利用しています。このGoogleアナリティクスはトラフィックデータの収集のためにクッキー（Cookie）を使用しております。トラフィックデータは匿名で収集されており、個人を特定するものではありません。
@@ -104,7 +83,7 @@ export default function PrivacyPolicy() {
               <section>
                 <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
                   <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
-                  5. 個人情報の第三者への開示
+                  3. 個人情報の第三者への開示
                 </h3>
                 <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify mb-4">
                   当サイトでは、個人情報は適切に管理し、以下に該当する場合を除いて第三者に開示することはありません。
@@ -124,11 +103,11 @@ export default function PrivacyPolicy() {
               <section>
                 <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
                   <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
-                  6. 免責事項
+                  4. 免責事項
                 </h3>
                 <div className="space-y-4">
                   <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify">
-                    当サイトに掲載されている情報やAIの回答は正確を期していますが、大学の公式見解ではありません。履修登録や単位修得に関する最終的な確認は、必ず大学発行の公式シラバスや履修要項で行ってください。
+                    履修登録や単位修得に関する最終的な確認は、必ず大学発行の公式シラバスや履修要項で行ってください。
                   </p>
                   <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify">
                     当サイトのコンテンツ・情報について、可能な限り正確な情報を掲載するよう努めておりますが、情報の正確性や安全性を保証するものではありません。当サイトに掲載された内容によって生じた損害等の一切の責任を負いかねますのでご了承ください。
@@ -142,7 +121,7 @@ export default function PrivacyPolicy() {
               <section>
                 <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
                   <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
-                  7. 著作権・肖像権について
+                  5. 著作権・肖像権について
                 </h3>
                 <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify">
                   当サイトで掲載している文章や画像などにつきましては、無断転載を禁止します。<br />
@@ -153,7 +132,7 @@ export default function PrivacyPolicy() {
               <section>
                 <h3 className="text-xl md:text-2xl text-[#002255] font-medium border-b border-[#C6A87C] pb-4 mb-6 flex items-center tracking-wide">
                   <span className="w-1.5 h-6 bg-[#E65C00] mr-4 inline-block"></span>
-                  8. 本ポリシーの変更
+                  6. 本ポリシーの変更
                 </h3>
                 <p className="text-[#4A4A4A] leading-loose text-sm md:text-base font-light text-justify">
                   当サイトは、個人情報に関して適用される日本の法令を遵守するとともに、本ポリシーの内容を適宜見直しその改善に努めます。修正された最新のプライバシーポリシーは常に本ページにて開示されます。

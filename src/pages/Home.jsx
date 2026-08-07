@@ -5,6 +5,13 @@ import XTimeline from '../components/XTimeline';
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
+  
+  // APIから取得するポストIDを保持（初期値として元々の2件を設定）
+  const [tweetIds, setTweetIds] = useState([
+    '2084907256160637081',
+    '2084929908820852873'
+  ]);
+
   const navigate = useNavigate();
 
   // スクロールに応じたパララックス（視差効果）用の設定
@@ -20,6 +27,18 @@ export default function Home() {
     link.rel = 'stylesheet';
     document.head.appendChild(link);
     return () => document.head.removeChild(link);
+  }, []);
+
+  // RSS経由のAPIから最新2件のツイートIDを自動取得する処理
+  useEffect(() => {
+    fetch('/api/latest-tweets')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.tweetIds && data.tweetIds.length > 0) {
+          setTweetIds(data.tweetIds);
+        }
+      })
+      .catch((err) => console.error('Error fetching latest tweets:', err));
   }, []);
 
   const handleSearch = (e) => {
@@ -182,7 +201,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション2: OFFICIAL X TIMELINE */}
+      {/* セクション2: OFFICIAL X TIMELINE（動的配列マップに変更） */}
       <section className="py-32 overflow-hidden bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col items-center gap-12">
@@ -201,32 +220,22 @@ export default function Home() {
             </motion.div>
 
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 z-20 relative">
-
-              <motion.div
-                initial={{ opacity: 0, x: -30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
-                className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
-              >
-                <div className="bg-white rounded-xl p-2 border border-gray-200">
-                  <XTimeline tweetId="2084907256160637081" />
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
-                className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
-              >
-                <div className="bg-white rounded-xl p-2 border border-gray-200">
-                  <XTimeline tweetId="2084929908820852873" />
-                </div>
-              </motion.div>
-
+              {tweetIds.map((id, index) => (
+                <motion.div
+                  key={id || index}
+                  initial={{ opacity: 0, x: index === 0 ? -30 : 30 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                  transition={{ duration: 1, delay: 0.2 + index * 0.2, ease: "easeOut" }}
+                  className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
+                >
+                  <div className="bg-white rounded-xl p-2 border border-gray-200">
+                    <XTimeline tweetId={id} />
+                  </div>
+                </motion.div>
+              ))}
             </div>
+
           </div>
         </div>
       </section>
@@ -234,7 +243,6 @@ export default function Home() {
       {/* セクション3: MEMBERS */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          {/* justify-between と gap-12 を追加し、被りを防ぐ */}
           <div className="flex flex-col md:flex-row-reverse items-center justify-between gap-12">
 
             {/* テキストエリア */}
@@ -264,7 +272,7 @@ export default function Home() {
               </Link>
             </motion.div>
 
-            {/* 画像エリア（マイナスマージンを削除し、幅をw-6/12に調整） */}
+            {/* 画像エリア */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -296,7 +304,6 @@ export default function Home() {
       <section className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
 
-          {/* 中央に配置し、横長に広げる */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -304,7 +311,6 @@ export default function Home() {
             transition={{ duration: 1, ease: "easeOut" }}
             className="w-full max-w-5xl mx-auto bg-[#FAFAFA] p-10 md:p-16 md:px-24 border-t-4 border-[#002255] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] relative"
           >
-            {/* 装飾：引用符 */}
             <div className="absolute top-0 left-8 md:left-12 -translate-y-1/2 bg-white px-2">
               <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
             </div>
