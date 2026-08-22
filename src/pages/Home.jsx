@@ -5,23 +5,20 @@ import XTimeline from '../components/XTimeline';
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
-  
-  // APIから取得するポストIDを保持（初期値として元々の2件を設定）
-  const [tweetIds, setTweetIds] = useState([
-    '2084907256160637081',
-    '2084929908820852873'
-  ]);
+
+  // 初期状態は空配列にして二重生成を防止
+  const [tweetIds, setTweetIds] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const navigate = useNavigate();
 
-  // スクロールに応じたパララックス（視差効果）用の設定
+  // スクロールに応じたパララックス設定
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 500], [0, 150]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
 
-  // Noto Serif JPフォントを適用するための処理
+  // Noto Serif JPフォントの適用
   useEffect(() => {
-    // index.htmlをいじらなくても、React側でフォントを読み込む
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;600&display=swap';
     link.rel = 'stylesheet';
@@ -29,16 +26,36 @@ export default function Home() {
     return () => document.head.removeChild(link);
   }, []);
 
-  // RSS経由のAPIから最新2件のツイートIDを自動取得する処理
+  // プロキシ経由で最新のツイートIDを自動取得
   useEffect(() => {
-    fetch('/api/latest-tweets')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.tweetIds && data.tweetIds.length > 0) {
-          setTweetIds(data.tweetIds);
+    const fetchLatestTweets = async () => {
+      try {
+        const res = await fetch('/api/rss-feed');
+        if (!res.ok) throw new Error('RSS取得エラー');
+
+        const xmlText = await res.text();
+        const regex = /status(?:es)?\/([0-9]+)/g;
+        const matches = [];
+        let match;
+        while ((match = regex.exec(xmlText)) !== null) {
+          matches.push(match[1]);
         }
-      })
-      .catch((err) => console.error('Error fetching latest tweets:', err));
+
+        const uniqueIds = Array.from(new Set(matches));
+        if (uniqueIds.length > 0) {
+          setTweetIds(uniqueIds.slice(0, 2));
+        } else {
+          setTweetIds(['2084907256160637081', '2084929908820852873']);
+        }
+      } catch (err) {
+        console.error('最新ツイートの取得に失敗しました:', err);
+        setTweetIds(['2084907256160637081', '2084929908820852873']);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLatestTweets();
   }, []);
 
   const handleSearch = (e) => {
@@ -51,30 +68,20 @@ export default function Home() {
   };
 
   return (
-    // font-serifを指定し、全体をNoto Serif JPに。背景は上品なオフホワイト（canvas）
     <div className="bg-[#FAFAFA] text-[#1A1A1A] antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
 
-      {/* ヒーローセクション（パララックス効果付き） */}
+      {/* ヒーローセクション */}
       <header className="relative h-screen flex items-center justify-center overflow-hidden">
-        {/* 背景画像（スクロールで少し遅れて動くパララックス） */}
-        <motion.div
-          style={{ y: heroY }}
-          className="absolute inset-0 z-0"
-        >
-          {/* 青みを少し加えたオーバーレイ */}
+        <motion.div style={{ y: heroY }} className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[#002255]/40 z-10"></div>
           <img
             src="/hedda.jpeg"
             alt="法政大学イメージ"
-            className="w-full h-full object-cover scale-105" // 少し拡大してパララックスの余白を作る
+            className="w-full h-full object-cover scale-105"
           />
         </motion.div>
 
-        {/* メインコピー */}
-        <motion.div
-          style={{ opacity }}
-          className="relative z-20 text-center text-white px-4 mt-20"
-        >
+        <motion.div style={{ opacity }} className="relative z-20 text-center text-white px-4 mt-20">
           <motion.span
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -101,7 +108,6 @@ export default function Home() {
           </motion.p>
         </motion.div>
 
-        {/* スクロールインジケーター */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -149,8 +155,6 @@ export default function Home() {
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row items-center">
-
-            {/* テキストエリア */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -167,7 +171,6 @@ export default function Home() {
                 見やすいなと思って貰えたらXで《いいね》や《RT》で広めて貰えると嬉しいです。
               </p>
 
-              {/* 公式Xへのリンク */}
               <div className="space-y-4">
                 <a href="https://x.com/hosei_c_media?s=20" target="_blank" rel="noopener noreferrer" className="flex items-center text-[#666666] hover:text-[#002255] transition-colors group">
                   <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12"></span>
@@ -180,7 +183,6 @@ export default function Home() {
               </div>
             </motion.div>
 
-            {/* 画像エリア */}
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -196,12 +198,11 @@ export default function Home() {
                 />
               </div>
             </motion.div>
-
           </div>
         </div>
       </section>
 
-      {/* セクション2: OFFICIAL X TIMELINE（動的配列マップに変更） */}
+      {/* セクション2: OFFICIAL X TIMELINE */}
       <section className="py-32 overflow-hidden bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col items-center gap-12">
@@ -219,10 +220,10 @@ export default function Home() {
               </h3>
             </motion.div>
 
-            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 z-20 relative">
-              {tweetIds.map((id, index) => (
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 z-20 relative min-h-[400px]">
+              {!isLoading && tweetIds.map((id, index) => (
                 <motion.div
-                  key={id || index}
+                  key={id}
                   initial={{ opacity: 0, x: index === 0 ? -30 : 30 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true, margin: "-100px" }}
@@ -244,8 +245,6 @@ export default function Home() {
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row-reverse items-center justify-between gap-12">
-
-            {/* テキストエリア */}
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -272,7 +271,6 @@ export default function Home() {
               </Link>
             </motion.div>
 
-            {/* 画像エリア */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -295,7 +293,6 @@ export default function Home() {
                 </div>
               </div>
             </motion.div>
-
           </div>
         </div>
       </section>
@@ -303,7 +300,6 @@ export default function Home() {
       {/* セクション4: MESSAGE */}
       <section className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -341,7 +337,6 @@ export default function Home() {
               </Link>
             </div>
           </motion.div>
-
         </div>
       </section>
 

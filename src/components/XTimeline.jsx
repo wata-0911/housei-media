@@ -1,26 +1,32 @@
 import React, { useEffect, useRef } from 'react';
 
-export default function XTimeline({ tweetId = '2084129602176503976' }) {
+export default function XTimeline({ tweetId }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    // tweetIdの余計な空白や改行を自動除去
-    const cleanTweetId = String(tweetId).trim();
-    if (!cleanTweetId) return;
+    const cleanTweetId = String(tweetId || '').trim();
+    if (!cleanTweetId || !containerRef.current) return;
+
+    let isMounted = true;
+    const container = containerRef.current;
+    container.innerHTML = '';
 
     const renderTweet = () => {
-      if (window.twttr && window.twttr.widgets && containerRef.current) {
-        containerRef.current.innerHTML = '';
-        window.twttr.widgets.createTweet(
-          cleanTweetId,
-          containerRef.current,
-          {
-            theme: 'light',
-            align: 'center',
-            conversation: 'none'
+      if (!isMounted || !window.twttr || !window.twttr.widgets) return;
+
+      container.innerHTML = '';
+      window.twttr.widgets
+        .createTweet(cleanTweetId, container, {
+          theme: 'light',
+          align: 'center',
+          conversation: 'none'
+        })
+        .then((element) => {
+          // 非同期完了時にアンマウント済み、または重複要素がある場合は破棄
+          if (!isMounted && element) {
+            element.remove();
           }
-        );
-      }
+        });
     };
 
     const scriptId = 'twitter-wjs';
@@ -32,22 +38,27 @@ export default function XTimeline({ tweetId = '2084129602176503976' }) {
       script.src = 'https://platform.twitter.com/widgets.js';
       script.async = true;
       script.charset = 'utf-8';
+      script.onload = () => {
+        if (isMounted) renderTweet();
+      };
       document.head.appendChild(script);
-    }
-
-    // window.twttr が準備完了するまで安全に待機して描画
-    if (window.twttr && window.twttr.widgets) {
-      renderTweet();
     } else {
-      const interval = setInterval(() => {
-        if (window.twttr && window.twttr.widgets) {
-          renderTweet();
-          clearInterval(interval);
-        }
-      }, 100);
-
-      return () => clearInterval(interval);
+      if (window.twttr && window.twttr.widgets) {
+        renderTweet();
+      } else {
+        const onLoad = () => {
+          if (isMounted) renderTweet();
+        };
+        script.addEventListener('load', onLoad, { once: true });
+      }
     }
+
+    return () => {
+      isMounted = false;
+      if (container) {
+        container.innerHTML = '';
+      }
+    };
   }, [tweetId]);
 
   return (

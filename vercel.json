@@ -1,0 +1,12 @@
+{
+    "rewrites": [
+        {
+            "source": "/api/rss-feed",
+            "destination": "https://rss.app/feeds/DjTTnJM54Xd7QeFl.xml"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
+}
