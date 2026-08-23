@@ -5,9 +5,12 @@ import XTimeline from '../components/XTimeline';
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
-
-  // 初期状態は空配列にして二重生成を防止
-  const [tweetIds, setTweetIds] = useState([]);
+  
+  // 初期値（通信完了までのフォールバック）
+  const [tweetIds, setTweetIds] = useState([
+    '2084907256160637081',
+    '2084929908820852873'
+  ]);
   const [isLoading, setIsLoading] = useState(true);
 
   const navigate = useNavigate();
@@ -26,33 +29,61 @@ export default function Home() {
     return () => document.head.removeChild(link);
   }, []);
 
-  // プロキシ経由で最新のツイートIDを自動取得
+  // 多重迂回ルートによる最新ツイート自動取得
   useEffect(() => {
     const fetchLatestTweets = async () => {
-      try {
-        const res = await fetch('/api/rss-feed');
-        if (!res.ok) throw new Error('RSS取得エラー');
+      // 実際に動作しているRSS.appのURL
+      const targetRss = 'https://rss.app/feeds/DjTTnJM54Xd7QeFl.xml';
 
-        const xmlText = await res.text();
-        const regex = /status(?:es)?\/([0-9]+)/g;
-        const matches = [];
-        let match;
-        while ((match = regex.exec(xmlText)) !== null) {
-          matches.push(match[1]);
+      // 取得を試みるルート一覧（優先度順）
+      const fetchRoutes = [
+        // ルート1: AllOrigins JSON API（CORSを完全に通すラッパー）
+        async () => {
+          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetRss)}`);
+          if (!res.ok) throw new Error('Route 1 failed');
+          const data = await res.json();
+          return data.contents;
+        },
+        // ルート2: CodeTabs CORS Proxy
+        async () => {
+          const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetRss)}`);
+          if (!res.ok) throw new Error('Route 2 failed');
+          return await res.text();
+        },
+        // ルート3: 自前サーバーAPI
+        async () => {
+          const res = await fetch('/api/rss-feed');
+          if (!res.ok) throw new Error('Route 3 failed');
+          return await res.text();
         }
+      ];
 
-        const uniqueIds = Array.from(new Set(matches));
-        if (uniqueIds.length > 0) {
-          setTweetIds(uniqueIds.slice(0, 2));
-        } else {
-          setTweetIds(['2084907256160637081', '2084929908820852873']);
+      for (const route of fetchRoutes) {
+        try {
+          const xmlText = await route();
+          if (!xmlText) continue;
+
+          // XMLテキストからポストID（status/数字）を抽出
+          const regex = /status(?:es)?\/([0-9]+)/g;
+          const matches = [];
+          let match;
+          while ((match = regex.exec(xmlText)) !== null) {
+            matches.push(match[1]);
+          }
+
+          const uniqueIds = Array.from(new Set(matches));
+          if (uniqueIds.length > 0) {
+            setTweetIds(uniqueIds.slice(0, 2));
+            setIsLoading(false);
+            return; // 取得成功したら終了
+          }
+        } catch (e) {
+          // 次のルートへ自動フォールバック
         }
-      } catch (err) {
-        console.error('最新ツイートの取得に失敗しました:', err);
-        setTweetIds(['2084907256160637081', '2084929908820852873']);
-      } finally {
-        setIsLoading(false);
       }
+
+      // 全ルート失敗時
+      setIsLoading(false);
     };
 
     fetchLatestTweets();
