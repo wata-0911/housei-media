@@ -5,8 +5,8 @@ import XTimeline from '../components/XTimeline';
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
-  
-  // 初期値（通信完了までのフォールバック）
+
+  // 初期値
   const [tweetIds, setTweetIds] = useState([
     '2084907256160637081',
     '2084929908820852873'
@@ -15,12 +15,12 @@ export default function Home() {
 
   const navigate = useNavigate();
 
-  // スクロールに応じたパララックス設定
+  // スクロール設定
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 500], [0, 150]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
 
-  // Noto Serif JPフォントの適用
+  // フォント適用
   useEffect(() => {
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;600&display=swap';
@@ -29,61 +29,24 @@ export default function Home() {
     return () => document.head.removeChild(link);
   }, []);
 
-  // 多重迂回ルートによる最新ツイート自動取得
+  // 自前GAS APIから最新ツイートIDを高速・確実に取得
   useEffect(() => {
     const fetchLatestTweets = async () => {
-      // 実際に動作しているRSS.appのURL
-      const targetRss = 'https://rss.app/feeds/DjTTnJM54Xd7QeFl.xml';
+      try {
+        // ステップ2でコピーしたGASのウェブアプリURLを貼り付けてください
+        const gasUrl = 'https://script.google.com/macros/s/AKfycbyyd8XGGvrbS2drulZa91kItf0xlLaDiehSfkFMshO0AsIMaHLPrKnQgMMu8ExbynVFag/exec';
 
-      // 取得を試みるルート一覧（優先度順）
-      const fetchRoutes = [
-        // ルート1: AllOrigins JSON API（CORSを完全に通すラッパー）
-        async () => {
-          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetRss)}`);
-          if (!res.ok) throw new Error('Route 1 failed');
-          const data = await res.json();
-          return data.contents;
-        },
-        // ルート2: CodeTabs CORS Proxy
-        async () => {
-          const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetRss)}`);
-          if (!res.ok) throw new Error('Route 2 failed');
-          return await res.text();
-        },
-        // ルート3: 自前サーバーAPI
-        async () => {
-          const res = await fetch('/api/rss-feed');
-          if (!res.ok) throw new Error('Route 3 failed');
-          return await res.text();
+        const res = await fetch(gasUrl);
+        const data = await res.json();
+
+        if (data.tweetIds && data.tweetIds.length > 0) {
+          setTweetIds(data.tweetIds.slice(0, 2));
         }
-      ];
-
-      for (const route of fetchRoutes) {
-        try {
-          const xmlText = await route();
-          if (!xmlText) continue;
-
-          // XMLテキストからポストID（status/数字）を抽出
-          const regex = /status(?:es)?\/([0-9]+)/g;
-          const matches = [];
-          let match;
-          while ((match = regex.exec(xmlText)) !== null) {
-            matches.push(match[1]);
-          }
-
-          const uniqueIds = Array.from(new Set(matches));
-          if (uniqueIds.length > 0) {
-            setTweetIds(uniqueIds.slice(0, 2));
-            setIsLoading(false);
-            return; // 取得成功したら終了
-          }
-        } catch (e) {
-          // 次のルートへ自動フォールバック
-        }
+      } catch (err) {
+        console.error('Failed to fetch from GAS API:', err);
+      } finally {
+        setIsLoading(false);
       }
-
-      // 全ルート失敗時
-      setIsLoading(false);
     };
 
     fetchLatestTweets();
