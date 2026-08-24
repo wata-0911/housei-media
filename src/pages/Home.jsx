@@ -37,8 +37,7 @@ export default function Home() {
     const fetchLatestTweets = async () => {
       try {
         // 設定済みのGASウェブアプリURL
-        const gasUrl = 'ここにコピーしたGASのウェブアプリURLを貼り付け';
-
+        const gasUrl = 'https://script.google.com/home/projects/1-g96lNzF7CalHbn7WZOvWhMkOTlx1vo1a-73aPRWS4KqHZRBMpox3zWr/edit';
         const res = await fetch(gasUrl);
         const data = await res.json();
 
