@@ -3,13 +3,16 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import XTimeline from '../components/XTimeline';
 
+// 常に右側に固定表示するポストID
+const PINNED_TWEET_ID = '2084929908820852873';
+
 export default function Home() {
   const [keyword, setKeyword] = useState('');
 
-  // 初期値
+  // 初期値（通信完了前: フォールバックID + 固定ID）
   const [tweetIds, setTweetIds] = useState([
     '2084907256160637081',
-    '2084929908820852873'
+    PINNED_TWEET_ID
   ]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,18 +32,22 @@ export default function Home() {
     return () => document.head.removeChild(link);
   }, []);
 
-  // 自前GAS APIから最新ツイートIDを高速・確実に取得
+  // GAS APIから最新ポストを取得し、固定ポストと合成
   useEffect(() => {
     const fetchLatestTweets = async () => {
       try {
-        // ステップ2でコピーしたGASのウェブアプリURLを貼り付けてください
-        const gasUrl = 'https://script.google.com/macros/s/AKfycbyyd8XGGvrbS2drulZa91kItf0xlLaDiehSfkFMshO0AsIMaHLPrKnQgMMu8ExbynVFag/exec';
+        // 設定済みのGASウェブアプリURL
+        const gasUrl = 'ここにコピーしたGASのウェブアプリURLを貼り付け';
 
         const res = await fetch(gasUrl);
         const data = await res.json();
 
         if (data.tweetIds && data.tweetIds.length > 0) {
-          setTweetIds(data.tweetIds.slice(0, 2));
+          // 固定ポストと重複しない最新ポストを1件抽出
+          const latestId = data.tweetIds.find((id) => id !== PINNED_TWEET_ID) || data.tweetIds[0];
+
+          // [最新ポスト, 固定ポスト] の配列を作成
+          setTweetIds([latestId, PINNED_TWEET_ID]);
         }
       } catch (err) {
         console.error('Failed to fetch from GAS API:', err);
