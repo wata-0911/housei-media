@@ -17,6 +17,7 @@ import Contact from './pages/Contact';
 import Message from './pages/Message'; // 重複を削除し、1つにまとめました
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProfileCard from './pages/member';
+import NotFound from './pages/NotFound'
 
 type PageMetaEntry = {
   title: string
@@ -61,11 +62,16 @@ const pageMeta: Record<string, PageMetaEntry> = {
   },
 };
 
+const fallbackMeta: PageMetaEntry = {
+  title: 'ページが見つかりません | 法政通信メディア',
+  description: 'お探しのページは見つかりませんでした。',
+}
+
 function PageMeta() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    const meta = pageMeta[pathname] ?? pageMeta['/'];
+    const meta = pageMeta[pathname] ?? fallbackMeta
 
     document.title = meta.title;
 
@@ -114,6 +120,7 @@ export default function App() {
             <Route path="/message" element={<Message />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/member" element={<ProfileCard />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
 
