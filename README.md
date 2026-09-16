@@ -60,7 +60,7 @@ vercel.json              # SPAのリライト設定
 
 ## ローカル開発
 
-Node.js 22系（22.20.0以上）とnpmを用意してください。CIもNode.js 22系を使用しています。
+Node.js 22系とnpmを用意してください。CIもNode.js 22系を使用しています。
 
 ```bash
 git clone https://github.com/wata-0911/housei-media.git
