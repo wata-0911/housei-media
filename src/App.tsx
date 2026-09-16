@@ -18,7 +18,12 @@ import Message from './pages/Message'; // 重複を削除し、1つにまとめ�
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProfileCard from './pages/member';
 
-const pageMeta = {
+type PageMetaEntry = {
+  title: string
+  description: string
+}
+
+const pageMeta: Record<string, PageMetaEntry> = {
   '/': {
     title: '法政通信メディア | 勉強・就職・学生生活の情報まとめ',
     description:
