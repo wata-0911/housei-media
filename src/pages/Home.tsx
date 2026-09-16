@@ -306,14 +306,14 @@ export default function Home() {
               <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
             </div>
 
-            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER'S MESSAGE</span>
+            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER;S MESSAGE</span>
             <h3 className="text-2xl md:text-3xl text-[#002255] font-medium mb-8 leading-relaxed tracking-widest">
               いつか君も困っている人がいたら、<br />
               助けてあげてね。
             </h3>
             <div className="text-[#666666] leading-loose mb-10 text-justify font-light space-y-4">
               <p>
-                私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
+                私がこの「法政通信メディア」を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
               </p>
               <p>
                 私の大学生活は、最初から順風満帆だったわけではありません。そんな暗闇の中にいた私に、優しさで手を差し伸べてくれた人がたくさんがいました。

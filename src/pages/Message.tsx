@@ -48,7 +48,7 @@ export default function Message() {
 
             <div className="text-[#4A4A4A] leading-[2.2] tracking-wide text-sm md:text-base font-light space-y-8 text-justify">
               <p>
-                卒業を迎えるにあたり、私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
+                卒業を迎えるにあたり、私がこの「法政通信メディア」 を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
               </p>
 
               <p>
