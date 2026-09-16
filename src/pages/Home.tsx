@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import XTimeline from '../components/XTimeline';
 
+type TweetApiResponse = {
+  tweetIds?: string[]
+}
 // 常に右側に固定表示するポストID
 const PINNED_TWEET_ID = '2084929908820852873';
 
@@ -31,7 +34,7 @@ export default function Home() {
         // 設定済みのGASウェブアプリURL
         const gasUrl = 'https://script.google.com/macros/s/AKfycbyyd8XGGvrbS2drulZa91kItf0xlLaDiehSfkFMshO0AsIMaHLPrKnQgMMu8ExbynVFag/exec';
         const res = await fetch(gasUrl);
-        const data = await res.json();
+        const data = (await res.json()) as TweetApiResponse
 
         if (data.tweetIds && data.tweetIds.length > 0) {
           // 固定ポストと重複しない最新ポストを1件抽出
@@ -50,7 +53,7 @@ export default function Home() {
     fetchLatestTweets();
   }, []);
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (keyword.trim() !== '') {
       navigate(`/qa?q=${encodeURIComponent(keyword)}`);
