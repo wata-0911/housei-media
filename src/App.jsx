@@ -1,4 +1,10 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useEffect } from 'react';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useLocation,
+} from 'react-router-dom';
 
 // 共通部品の読み込み
 import Header from './components/Header';
@@ -12,11 +18,84 @@ import Message from './pages/Message'; // 重複を削除し、1つにまとめ�
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProfileCard from './pages/member';
 
+const pageMeta = {
+  '/': {
+    title: '法政通信メディア | 勉強・就職・学生生活の情報まとめ',
+    description:
+      '法政大学通信教育部の学生向け情報サイト。単位修得、リポート・試験、スクーリング、就職活動など学生生活に役立つ情報を掲載しています。',
+  },
+
+  '/qa': {
+    title: 'Q&A | 法政通信メディア',
+    description:
+      '法政大学通信教育部の学生生活、単位、試験、スクーリング、履修などに関するQ&Aをまとめています。',
+  },
+
+  '/contact': {
+    title: 'お問い合わせ | 法政通信メディア',
+    description:
+      '法政通信メディアへのお問い合わせページです。',
+  },
+
+  '/message': {
+    title: '創立者からのメッセージ | 法政通信メディア',
+    description:
+      '法政通信メディア創立者からのメッセージを掲載しています。',
+  },
+
+  '/privacy': {
+    title: 'プライバシーポリシー・免責事項 | 法政通信メディア',
+    description:
+      '法政通信メディアのプライバシーポリシー、免責事項、著作権等について掲載しています。',
+  },
+
+  '/member': {
+    title: '運営メンバー | 法政通信メディア',
+    description:
+      '法政通信メディアを運営するメンバーを紹介しています。',
+  },
+};
+
+function PageMeta() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    const meta = pageMeta[pathname] ?? pageMeta['/'];
+
+    document.title = meta.title;
+
+    const description = document.querySelector(
+      'meta[name="description"]'
+    );
+
+    if (description) {
+      description.setAttribute('content', meta.description);
+    }
+
+    let canonical = document.querySelector(
+      'link[rel="canonical"]'
+    );
+
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonical);
+    }
+
+    canonical.setAttribute(
+      'href',
+      `https://hosei-tsukyo-media.com${pathname}`
+    );
+  }, [pathname]);
+
+  return null;
+}
 export default function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <PageMeta />
 
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* 切り出したヘッダー */}
         <Header />
 
