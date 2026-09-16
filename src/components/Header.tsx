@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 export default function Header() {
@@ -8,8 +8,9 @@ export default function Header() {
   const navigate = useNavigate();
 
   // 検索を実行したときの処理
-  const handleSearch = (e) => {
+  const handleSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
     if (keyword.trim() !== '') {
       // Q&Aページにキーワードを渡して移動
       navigate(`/qa?q=${encodeURIComponent(keyword)}`);

@@ -1,7 +1,28 @@
 import { useEffect, useRef } from 'react';
 
-export default function XTimeline({ tweetId }) {
-  const containerRef = useRef(null);
+type XTimelineProps = {
+  tweetId: string;
+}
+declare global {
+  interface Window {
+    twttr?: {
+      widgets?: {
+        createTweet: (
+          tweetId: string,
+          element: HTMLElement,
+          options?: {
+            theme?: 'light' | 'dark'
+            align?: 'left' | 'center' | 'right'
+            conversation?: 'none' | 'all'
+          }
+        ) => Promise<HTMLElement | null>
+      }
+    }
+  }
+}
+
+export default function XTimeline({ tweetId }: XTimelineProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const cleanTweetId = String(tweetId || '').trim();
@@ -30,7 +51,10 @@ export default function XTimeline({ tweetId }) {
     };
 
     const scriptId = 'twitter-wjs';
-    let script = document.getElementById(scriptId);
+
+    let script = document.getElementById(
+      scriptId
+    ) as HTMLScriptElement | null
 
     if (!script) {
       script = document.createElement('script');
@@ -38,27 +62,27 @@ export default function XTimeline({ tweetId }) {
       script.src = 'https://platform.twitter.com/widgets.js';
       script.async = true;
       script.charset = 'utf-8';
+
       script.onload = () => {
         if (isMounted) renderTweet();
-      };
-      document.head.appendChild(script);
-    } else {
-      if (window.twttr && window.twttr.widgets) {
-        renderTweet();
-      } else {
-        const onLoad = () => {
-          if (isMounted) renderTweet();
-        };
-        script.addEventListener('load', onLoad, { once: true });
       }
+
+      document.head.appendChild(script);
+    } else if (window.twttr && window.twttr.widgets) {
+      renderTweet()
+    } else {
+      const onLoad = () => {
+        if (isMounted) renderTweet();
+      }
+
+      script.addEventListener('load', onLoad, { once: true })
     }
+
 
     return () => {
       isMounted = false;
-      if (container) {
-        container.innerHTML = '';
-      }
-    };
+      container.innerHTML = '';
+    }
   }, [tweetId]);
 
   return (
