@@ -1,6 +1,6 @@
 import { GoogleAICacheManager } from "@google/generative-ai/server";
-require('dotenv').config();
-const apiKey = process.env.GCP_API_KE;
+import 'dotenv/config';
+const apiKey = process.env.GCP_API_KEY;
 const cacheManager = new GoogleAICacheManager(apiKey);
 
 async function checkCacheStatus() {
@@ -13,17 +13,17 @@ async function checkCacheStatus() {
     console.log(`モデル名: ${cacheInfo.model}`);
     console.log(`有効期限: ${cacheInfo.expireTime}`);
     console.log(`作成時間: ${cacheInfo.createTime}`);
-    
+
     // ここが重要：中身（トークン数）が入っているか
     console.log(`記憶されたデータの量: ${cacheInfo.usageMetadata.totalTokenCount} トークン`);
-    
+
     if (cacheInfo.usageMetadata.totalTokenCount > 0) {
       console.log("論理的結論：AIの記憶の中にデータは存在します。問題は『呼び出し方』にあります。");
     } else {
       console.log("論理的結論：キャッシュは存在しますが、中身が空です。作成をやり直す必要があります。");
     }
-    
-  } catch (error) {
+
+  } catch {
     console.error("診断エラー：指定されたキャッシュが見つかりません。すでに削除されているか、名前が間違っています。");
   }
 }
