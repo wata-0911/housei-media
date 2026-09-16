@@ -11,15 +11,12 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
     "dotenv": "^17.4.2",
     "framer-motion": "^12.38.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
-    "react-tweet": "^3.3.1",
-    "three": "^0.183.2"
+    "react-tweet": "^3.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
