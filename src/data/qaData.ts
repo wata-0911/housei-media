@@ -1,5 +1,10 @@
-export
-const qaData = [
+export type QAItem = {
+  category?: string
+  question: string
+  answer: string
+}
+
+export const qaData: QAItem[] = [
   // --- 今回追加された重要データ ---
   {
     category: "試験",

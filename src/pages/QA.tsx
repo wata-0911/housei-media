@@ -1,38 +1,47 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { qaData } from '../data/qaData';
+import { qaData, type QAItem } from '../data/qaData';
 
-const groupByCategory = (data) => {
-  return data.reduce((acc, item) => {
-    const key = item.category || "その他";
+const groupByCategory = (
+  data: QAItem[]
+): Record<string, QAItem[]> => {
+  return data.reduce<Record<string, QAItem[]>>((acc, item) => {
+    const key = item.category || 'その他'
+
     if (!acc[key]) {
-      acc[key] = [];
+      acc[key] = []
     }
+
     const isDuplicate = acc[key].some(
       (existing) => existing.question === item.question
-    );
+    )
+
     if (!isDuplicate) {
-      acc[key].push(item);
+      acc[key].push(item)
     }
-    return acc;
-  }, {});
-};
+
+    return acc
+  }, {})
+}
 
 export default function QA() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
   const [searchQuery, setSearchQuery] = useState(initialQuery);
 
-  const handleSearchChange = (e) => {
-    const val = e.target.value;
-    setSearchQuery(val);
+  const handleSearchChange = (
+    e: ChangeEvent<HTMLInputElement>
+  ) => {
+    const val = e.target.value
+    setSearchQuery(val)
+
     if (val) {
-      setSearchParams({ q: val });
+      setSearchParams({ q: val })
     } else {
-      setSearchParams({});
+      setSearchParams({})
     }
-  };
+  }
 
   const filteredData = qaData.filter((item) => {
     const query = searchQuery.toLowerCase();
