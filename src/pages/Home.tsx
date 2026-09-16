@@ -4,20 +4,45 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import XTimeline from '../components/XTimeline';
 
 type TweetApiResponse = {
-  tweetIds?: string[]
+  tweetIds: string[]
 }
-// 常に右側に固定表示するポストID
-const PINNED_TWEET_ID = '2084929908820852873';
+
+const FALLBACK_TWEET_ID = '2084907256160637081'
+const PINNED_TWEET_ID = '2084929908820852873'
+
+const GAS_URL =
+  'https://script.google.com/macros/s/AKfycbyyd8XGGvrbS2drulZa91kItf0xlLaDiehSfkFMshO0AsIMaHLPrKnQgMMu8ExbynVFag/exec'
+
+const FETCH_TIMEOUT_MS = 8000
+
+const isTweetApiResponse = (
+  value: unknown
+): value is TweetApiResponse => {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('tweetIds' in value)
+  ) {
+    return false
+  }
+
+  const tweetIds = (value as { tweetIds?: unknown }).tweetIds
+
+  return (
+    Array.isArray(tweetIds) &&
+    tweetIds.every(
+      (id) => typeof id === 'string' && /^\d+$/.test(id)
+    )
+  )
+}
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
 
-  // 初期値（通信完了前: フォールバックID + 固定ID）
-  const [tweetIds, setTweetIds] = useState([
-    '2084907256160637081',
-    PINNED_TWEET_ID
-  ]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [tweetIds, setTweetIds] = useState<string[]>([
+    FALLBACK_TWEET_ID,
+    PINNED_TWEET_ID,
+  ])
 
   const navigate = useNavigate();
 
@@ -27,31 +52,68 @@ export default function Home() {
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
 
 
-  // GAS APIから最新ポストを取得し、固定ポストと合成
   useEffect(() => {
+    const controller = new AbortController()
+
+    const timeoutId = window.setTimeout(() => {
+      controller.abort()
+    }, FETCH_TIMEOUT_MS)
+
     const fetchLatestTweets = async () => {
       try {
-        // 設定済みのGASウェブアプリURL
-        const gasUrl = 'https://script.google.com/macros/s/AKfycbyyd8XGGvrbS2drulZa91kItf0xlLaDiehSfkFMshO0AsIMaHLPrKnQgMMu8ExbynVFag/exec';
-        const res = await fetch(gasUrl);
-        const data = (await res.json()) as TweetApiResponse
+        const res = await fetch(GAS_URL, {
+          signal: controller.signal,
+        })
 
-        if (data.tweetIds && data.tweetIds.length > 0) {
-          // 固定ポストと重複しない最新ポストを1件抽出
-          const latestId = data.tweetIds.find((id) => id !== PINNED_TWEET_ID) || data.tweetIds[0];
+        if (!res.ok) {
+          throw new Error(
+            `GAS API returned HTTP ${res.status}`
+          )
+        }
 
-          // [最新ポスト, 固定ポスト] の配列を作成
-          setTweetIds([latestId, PINNED_TWEET_ID]);
+        const data: unknown = await res.json()
+
+        if (!isTweetApiResponse(data)) {
+          throw new Error('Invalid response from GAS API')
+        }
+
+        const uniqueTweetIds = [...new Set(data.tweetIds)]
+
+        const latestId = uniqueTweetIds.find(
+          (id) => id !== PINNED_TWEET_ID
+        )
+
+        if (latestId) {
+          setTweetIds([
+            latestId,
+            PINNED_TWEET_ID,
+          ])
         }
       } catch (err) {
-        console.error('Failed to fetch from GAS API:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+        if (
+          err instanceof DOMException &&
+          err.name === 'AbortError'
+        ) {
+          console.warn('GAS API request timed out')
+          return
+        }
 
-    fetchLatestTweets();
-  }, []);
+        console.error(
+          'Failed to fetch from GAS API:',
+          err
+        )
+      } finally {
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    void fetchLatestTweets()
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [])
 
   const handleSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -216,7 +278,7 @@ export default function Home() {
             </motion.div>
 
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 z-20 relative min-h-[400px]">
-              {!isLoading && tweetIds.map((id, index) => (
+              {tweetIds.map((id, index) => (
                 <motion.div
                   key={id}
                   initial={{ opacity: 0, x: index === 0 ? -30 : 30 }}
