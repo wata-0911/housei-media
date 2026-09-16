@@ -26,13 +26,9 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/qa" element={<QA />} />
             <Route path="/contact" element={<Contact />} />
-
-            {/* 追加: 創立者からのメッセージページへのルーティング */}
+            {/* 創立者からのメッセージページへのルーティング */}
             <Route path="/message" element={<Message />} />
-
-            {/* 隠しページ */}
-            <Route path="/draft-message-2026" element={<Message />} />
-            <Route path="/draft-privacy-2026" element={<PrivacyPolicy />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/member" element={<ProfileCard />} />
           </Routes>
         </main>
