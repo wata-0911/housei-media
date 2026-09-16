@@ -6,6 +6,17 @@ type ContactApiResponse = {
   message?: string
 }
 
+function isContactApiResponse(value: unknown): value is ContactApiResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    'status' in value &&
+    (value.status === 'success' || value.status === 'error') &&
+    (!('message' in value) || typeof value.message === 'string')
+  )
+}
+
 export default function Contact() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sendEmail = async (e: FormEvent<HTMLFormElement>) => {
@@ -23,6 +34,9 @@ export default function Contact() {
 
     const gasUrl = "https://script.google.com/macros/s/AKfycbwJdQvB7ZUcirtgj7c310lh5hBgkz0lcp8qO6OmlCIoG2U4FQetz7T_jbjXM8gKKbPf/exec";
 
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 10_000)
+
     try {
       const response = await fetch(gasUrl, {
         method: 'POST',
@@ -30,9 +44,18 @@ export default function Contact() {
           'Content-Type': 'text/plain',
         },
         body: JSON.stringify(data),
+        signal: controller.signal,
       })
 
-      const result = (await response.json()) as ContactApiResponse
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`)
+      }
+
+      const result: unknown = await response.json()
+
+      if (!isContactApiResponse(result)) {
+        throw new Error('Invalid contact API response')
+      }
 
       if (result.status === 'success') {
         alert('送信しました！自動返信メールをご確認ください。')
@@ -42,8 +65,13 @@ export default function Contact() {
       }
     } catch (error) {
       console.error(error)
-      alert('送信に失敗しました。もう一度お試しください。')
+      if (controller.signal.aborted) {
+        alert('送信結果を確認できませんでした。処理が完了している可能性があります。自動返信メールをご確認ください。')
+      } else {
+        alert('送信に失敗しました。時間をおいてからもう一度お試しください。')
+      }
     } finally {
+      window.clearTimeout(timeoutId)
       setIsSubmitting(false)
     }
   }
@@ -89,12 +117,14 @@ export default function Contact() {
             <form onSubmit={sendEmail} className="space-y-8">
 
               <div>
-                <label className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
+                <label htmlFor="contact-name" className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
                   お名前
                 </label>
                 <input
                   type="text"
                   name="name"
+                  id="contact-name"
+                  autoComplete="name"
                   required
                   className="w-full px-4 py-4 bg-[#FAFAFA] border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400 rounded-sm"
                   placeholder="法政 太郎"
@@ -102,12 +132,14 @@ export default function Contact() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
+                <label htmlFor="contact-email" className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
                   メールアドレス
                 </label>
                 <input
                   type="email"
                   name="email"
+                  id="contact-email"
+                  autoComplete="email"
                   required
                   className="w-full px-4 py-4 bg-[#FAFAFA] border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400 rounded-sm"
                   placeholder="example@hosei.jp"
@@ -115,11 +147,12 @@ export default function Contact() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
+                <label htmlFor="contact-message" className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
                   お問い合わせ内容
                 </label>
                 <textarea
                   name="message"
+                  id="contact-message"
                   rows={6}
                   required
                   className="w-full px-4 py-4 bg-[#FAFAFA] border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400 resize-none rounded-sm"
