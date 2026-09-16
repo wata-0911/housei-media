@@ -1,46 +1,52 @@
-import { useRef, useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { motion } from 'framer-motion';
 
+type ContactApiResponse = {
+  status: 'success' | 'error'
+  message?: string
+}
+
 export default function Contact() {
-  const form = useRef();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const sendEmail = async (e) => {
+  const sendEmail = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const formData = new FormData(form.current);
+    const formElement = e.currentTarget
+    const formData = new FormData(formElement)
+
     const data = {
-      name: formData.get('name'),
-      email: formData.get('email'),
-      message: formData.get('message')
-    };
+      name: String(formData.get('name') ?? ''),
+      email: String(formData.get('email') ?? ''),
+      message: String(formData.get('message') ?? ''),
+    }
 
     const gasUrl = "https://script.google.com/macros/s/AKfycbwJdQvB7ZUcirtgj7c310lh5hBgkz0lcp8qO6OmlCIoG2U4FQetz7T_jbjXM8gKKbPf/exec";
 
     try {
       const response = await fetch(gasUrl, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "text/plain"
+          'Content-Type': 'text/plain',
         },
-        body: JSON.stringify(data)
-      });
+        body: JSON.stringify(data),
+      })
 
-      const result = await response.json();
+      const result = (await response.json()) as ContactApiResponse
 
-      if (result.status === "success") {
-        alert('送信しました！自動返信メールをご確認ください。');
-        form.current.reset();
+      if (result.status === 'success') {
+        alert('送信しました！自動返信メールをご確認ください。')
+        formElement.reset()
       } else {
-        throw new Error(result.message);
+        throw new Error(result.message ?? 'Unknown error')
       }
     } catch (error) {
-      console.error(error);
-      alert('送信に失敗しました。もう一度お試しください。');
+      console.error(error)
+      alert('送信に失敗しました。もう一度お試しください。')
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   return (
     <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
@@ -80,7 +86,7 @@ export default function Contact() {
               <span className="text-xs text-[#E65C00] mt-3 inline-block font-medium">※自動で受付メールが届きます</span>
             </p>
 
-            <form ref={form} onSubmit={sendEmail} className="space-y-8">
+            <form onSubmit={sendEmail} className="space-y-8">
 
               <div>
                 <label className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
@@ -114,7 +120,7 @@ export default function Contact() {
                 </label>
                 <textarea
                   name="message"
-                  rows="6"
+                  rows={6}
                   required
                   className="w-full px-4 py-4 bg-[#FAFAFA] border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400 resize-none rounded-sm"
                   placeholder="ここに内容を入力してください"
