@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   useLocation,
+  useNavigationType,
 } from 'react-router-dom';
 
 // 共通部品の読み込み
@@ -67,11 +68,34 @@ const fallbackMeta: PageMetaEntry = {
   description: 'お探しのページは見つかりませんでした。',
 }
 
+function normalizePathname(pathname: string) {
+  return pathname.replace(/\/+$/, '').toLowerCase() || '/'
+}
+
+function ScrollToTop() {
+  const { pathname, hash } = useLocation()
+  const navigationType = useNavigationType()
+  const normalizedPathname = normalizePathname(pathname)
+  const previousPathname = useRef(normalizedPathname)
+
+  useEffect(() => {
+    const changedPage = previousPathname.current !== normalizedPathname
+    previousPathname.current = normalizedPathname
+
+    if (changedPage && navigationType !== 'POP' && !hash) {
+      window.scrollTo(0, 0)
+    }
+  }, [normalizedPathname, navigationType, hash])
+
+  return null
+}
+
 function PageMeta() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    const meta = pageMeta[pathname] ?? fallbackMeta
+    const normalizedPathname = normalizePathname(pathname)
+    const meta = pageMeta[normalizedPathname] ?? fallbackMeta
 
     document.title = meta.title;
 
@@ -95,7 +119,7 @@ function PageMeta() {
 
     canonical.setAttribute(
       'href',
-      `https://hosei-tsukyo-media.com${pathname}`
+      `https://hosei-tsukyo-media.com${normalizedPathname}`
     );
   }, [pathname]);
 
@@ -105,6 +129,7 @@ export default function App() {
   return (
     <Router>
       <PageMeta />
+      <ScrollToTop />
 
       <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* 切り出したヘッダー */}

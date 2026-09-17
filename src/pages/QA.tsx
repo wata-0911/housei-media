@@ -104,7 +104,9 @@ export default function QA() {
                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
               </svg>
             </div>
+            <label htmlFor="qa-search" className="sr-only">Q&Aをキーワードで検索</label>
             <input
+              id="qa-search"
               type="text"
               placeholder="キーワードで検索 (例: スクーリング、試験、単位...)"
               className="w-full pl-14 pr-6 py-4 bg-white border border-gray-200 shadow-sm focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400"

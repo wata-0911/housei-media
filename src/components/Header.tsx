@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 export default function Header() {
@@ -6,6 +6,7 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
   const navigate = useNavigate();
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
 
   // 検索を実行したときの処理
   const handleSearch = (e: FormEvent<HTMLFormElement>) => {
@@ -21,6 +22,13 @@ export default function Header() {
 
   return (
     <header
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && isSearchOpen) {
+          event.preventDefault();
+          setIsSearchOpen(false);
+          searchButtonRef.current?.focus();
+        }
+      }}
       className="sticky top-0 z-50 bg-[#002255]/95 backdrop-blur-md border-b border-white/10 transition-all duration-300 relative"
       style={{ fontFamily: '"Noto Serif JP", serif' }}
     >
@@ -50,9 +58,12 @@ export default function Header() {
             {/* 虫眼鏡（検索）アイコン */}
             <li>
               <button
+                ref={searchButtonRef}
                 onClick={() => setIsSearchOpen(!isSearchOpen)}
                 className={`flex items-center transition-colors duration-300 ${isSearchOpen ? 'text-[#E65C00]' : 'hover:text-[#E65C00]'}`}
-                aria-label="検索を開く"
+                aria-label={isSearchOpen ? '検索を閉じる' : '検索を開く'}
+                aria-expanded={isSearchOpen}
+                aria-controls="header-search-panel"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -65,7 +76,7 @@ export default function Header() {
 
       {/* ドロップダウン型 検索バー */}
       {isSearchOpen && (
-        <div className="absolute top-[100%] right-4 md:right-8 mt-2 w-72 bg-white shadow-2xl p-2 rounded-lg border border-gray-100 z-50">
+        <div id="header-search-panel" className="absolute top-[100%] right-4 md:right-8 mt-2 w-72 bg-white shadow-2xl p-2 rounded-lg border border-gray-100 z-50">
           <form
             onSubmit={handleSearch}
             className="flex items-center bg-[#FAFAFA] rounded-md px-3 py-2 border border-transparent focus-within:border-[#002255] transition-colors"
@@ -73,7 +84,9 @@ export default function Header() {
             <svg className="w-4 h-4 text-gray-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
+            <label htmlFor="header-search" className="sr-only">Q&Aをキーワードで検索</label>
             <input
+              id="header-search"
               type="text"
               placeholder="キーワードでQ&Aを検索..."
               className="w-full bg-transparent outline-none text-[#1A1A1A] text-sm font-light tracking-wide placeholder-gray-400"

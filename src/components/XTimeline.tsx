@@ -106,53 +106,63 @@ export default function XTimeline({ tweetId }: XTimelineProps) {
     }
 
     let cancelled = false
+    let timedOut = false
     let timeoutId: number | undefined
 
     setHasError(false)
     container.innerHTML = ''
+    // Each render owns its target so late completion cannot affect a newer tweet.
+    const target = document.createElement('div')
+    container.appendChild(target)
+
+    const createTweet = async () => {
+      await loadTwitterWidgets()
+
+      if (cancelled || timedOut || !window.twttr?.widgets) {
+        return
+      }
+
+      const element = await window.twttr.widgets.createTweet(
+        cleanTweetId,
+        target,
+        {
+          theme: 'light',
+          align: 'center',
+          conversation: 'none',
+        }
+      )
+
+      if (cancelled || timedOut) {
+        element?.remove()
+        target.replaceChildren()
+        target.remove()
+        return
+      }
+
+      if (!element) {
+        throw new Error('X post could not be rendered')
+      }
+    }
 
     const renderTweet = async () => {
       try {
         await Promise.race([
-          loadTwitterWidgets(),
+          createTweet(),
           new Promise<never>((_, reject) => {
             timeoutId = window.setTimeout(() => {
+              timedOut = true
               reject(new Error('X widget loading timed out'))
             }, LOAD_TIMEOUT_MS)
           }),
         ])
-
-        if (cancelled || !window.twttr?.widgets) {
-          return
-        }
-
-        container.innerHTML = ''
-
-        const element = await window.twttr.widgets.createTweet(
-          cleanTweetId,
-          container,
-          {
-            theme: 'light',
-            align: 'center',
-            conversation: 'none',
-          }
-        )
-
-        if (cancelled) {
-          element?.remove()
-          return
-        }
-
-        if (!element) {
-          throw new Error('X post could not be rendered')
-        }
       } catch (error) {
         if (cancelled) {
           return
         }
 
         console.error('Failed to render X post:', error)
-        container.innerHTML = ''
+        target.replaceChildren()
+        target.remove()
         setHasError(true)
       } finally {
         if (timeoutId !== undefined) {
@@ -170,7 +180,8 @@ export default function XTimeline({ tweetId }: XTimelineProps) {
         window.clearTimeout(timeoutId)
       }
 
-      container.innerHTML = ''
+      target.replaceChildren()
+      target.remove()
     }
   }, [tweetId])
 

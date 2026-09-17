@@ -193,7 +193,9 @@ export default function Home() {
             <h3 className="text-[#002255] text-2xl font-medium mb-8 tracking-wider">知りたいことはありますか？</h3>
             <form onSubmit={handleSearch} className="relative flex items-center border-b border-gray-300 pb-2 transition-colors focus-within:border-[#002255]">
               <svg className="w-5 h-5 text-gray-400 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <label htmlFor="home-search" className="sr-only">Q&Aをキーワードで検索</label>
               <input
+                id="home-search"
                 type="text"
                 placeholder="キーワードでQ&Aを検索 (例: スクーリング、試験...)"
                 className="w-full bg-transparent outline-none text-[#1A1A1A] placeholder-gray-400 font-light tracking-wide"
