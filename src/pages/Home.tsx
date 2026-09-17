@@ -250,6 +250,7 @@ export default function Home() {
               <div className="rounded-xl overflow-hidden border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] bg-white p-2 md:p-4">
                 <img
                   src="/schedule-calendar.png"
+                  loading="lazy"
                   alt="通教生向け 年間スケジュールカレンダー"
                   className="w-full h-auto object-contain"
                 />
@@ -337,16 +338,16 @@ export default function Home() {
             >
               <div className="bg-white rounded-xl border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-12 flex justify-center items-center gap-6">
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member-founder.jpg" alt="メンバー1" className="w-full h-full object-cover" />
+                  <img src="/member-founder.jpg" loading="lazy" alt="メンバー1" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member1.jpg" alt="メンバー2" className="w-full h-full object-cover" />
+                  <img src="/member1.jpg" loading="lazy" alt="メンバー2" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member2.jpg" alt="メンバー3" className="w-full h-full object-cover" />
+                  <img src="/member2.jpg" loading="lazy" alt="メンバー3" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member3.jpg" alt="メンバー4" className="w-full h-full object-cover" />
+                  <img src="/member3.jpg" loading="lazy" alt="メンバー4" className="w-full h-full object-cover" />
                 </div>
               </div>
             </motion.div>
