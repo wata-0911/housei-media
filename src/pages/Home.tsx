@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import XTimeline from '../components/XTimeline';
 
 type TweetApiResponse = {
@@ -45,6 +45,8 @@ export default function Home() {
   ])
 
   const navigate = useNavigate();
+
+  const shouldReduceMotion = useReducedMotion();
 
   // スクロール設定
   const { scrollY } = useScroll();
@@ -129,7 +131,7 @@ export default function Home() {
 
       {/* ヒーローセクション */}
       <header className="relative h-screen flex items-center justify-center overflow-hidden">
-        <motion.div style={{ y: heroY }} className="absolute inset-0 z-0">
+        <motion.div style={{ y: shouldReduceMotion ? 0 : heroY }} className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[#002255]/40 z-10"></div>
           <img
             src="/hedda.jpeg"
@@ -138,7 +140,7 @@ export default function Home() {
           />
         </motion.div>
 
-        <motion.div style={{ opacity }} className="relative z-20 text-center text-white px-4 mt-20">
+        <motion.div style={{ opacity: shouldReduceMotion ? 1 : opacity }} className="relative z-20 text-center text-white px-4 mt-20">
           <motion.span
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -173,8 +175,8 @@ export default function Home() {
         >
           <span className="text-xs tracking-[0.2em] mb-3 font-light">SCROLL</span>
           <motion.div
-            animate={{ y: [0, 10, 0] }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            animate={{ y: shouldReduceMotion ? 0 : [0, 10, 0] }}
+            transition={shouldReduceMotion ? { duration: 0 } : { repeat: Infinity, duration: 2, ease: "easeInOut" }}
             className="w-[1px] h-12 bg-white/60"
           />
         </motion.div>
