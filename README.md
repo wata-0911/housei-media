@@ -1,16 +1,146 @@
-# React + Vite
+# 法政通信メディア
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+法政大学通信教育部の学生向けに、勉強、単位修得、試験、スクーリング、就職、学生生活などの情報を提供するサイトです。現役学生が自らの経験と知識を持ち寄って運営しています。
 
-Currently, two official plugins are available:
+**学生有志による非公式サイトであり、法政大学の公式サイトではありません。**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 公開サイト
 
-## React Compiler
+[https://hosei-tsukyo-media.com/](https://hosei-tsukyo-media.com/)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 主な機能
 
-## Expanding the ESLint configuration
+| ページ | パス | 内容 |
+|---|---|---|
+| トップ | `/` | サイト紹介、年間スケジュール画像、Q&A検索への導線、X投稿、各ページへの案内 |
+| Q&A | `/qa` | 質問・回答・カテゴリを対象にしたキーワード検索、カテゴリ別表示、回答の開閉 |
+| お問い合わせ | `/contact` | Google Apps Script（GAS）経由の送信、送信結果の案内 |
+| 運営メンバー | `/member` | メンバーを切り替えてプロフィールを表示 |
+| 創立者メッセージ | `/message` | 設立の背景と活動への想い |
+| プライバシーポリシー | `/privacy` | 個人情報の取り扱い、免責事項など |
+| 404 | その他のパス | ページが見つからない旨とトップページへのリンク |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Q&A検索はURLクエリ `q` と同期し、検索結果のURL共有や再読み込みに対応します。トップとヘッダーからも検索できます。
+- Xの最新投稿IDをGASから取得し、固定投稿とともに表示します。取得中・取得失敗時は設定済みの投稿IDを使用します。埋め込みエラーを検出すると「Xでこのポストを見る」リンクを表示します。
+- お問い合わせはHTTPステータスとJSONの構造を検証し、10秒でタイムアウトします。タイムアウト時は失敗と断定せず、自動返信メールの確認を案内します。
+- `src/App.tsx` でページごとの `title`・`description` と、パスに応じた `canonical` をブラウザ上で更新します。検索クエリはcanonicalに含めません。
+
+## 技術構成
+
+ReactとTypeScriptによるSPAです。以下は `package-lock.json` に記録されたバージョンです。依存更新時はlockfileを確認してください。
+
+| 技術 | バージョン | 用途 |
+|---|---|---|
+| React / React DOM | 19.2.4 | UI・描画 |
+| TypeScript | 5.9.3 | 型チェック（`strict: true`） |
+| Vite | 7.3.6 | 開発サーバー・ビルド |
+| React Router DOM | 7.18.4 | `BrowserRouter` によるページ遷移・検索クエリ管理 |
+| Tailwind CSS | 3.4.17 | スタイリング（PostCSS・Autoprefixer経由） |
+| Framer Motion | 12.38.0 | アニメーション |
+| ESLint | 9.39.2 | TypeScript・React・Hooksの静的検査 |
+
+品質チェックにはGitHub Actions、ホスティングにはVercelを使用しています。GASとX Widgetsは外部サービスとして利用します。
+
+## ディレクトリ構成
+
+```text
+.github/workflows/ci.yml  # 型チェック・Lint・ビルド
+public/                  # カレンダー・プロフィールなどの画像
+src/
+  components/            # Header、Footer、XTimeline
+  pages/                 # 各ページとメンバーページ用CSS
+  data/qaData.ts         # 型付きQ&Aデータ
+  assets/                # ソース側のアセット
+  App.tsx                # ルーティング・メタ情報
+  main.tsx               # エントリーポイント
+  index.css              # Tailwind CSSの読み込み
+index.html               # HTML・初期メタ情報・外部リソース
+vercel.json              # SPAのリライト設定
+```
+
+## ローカル開発
+
+Node.js 22系とnpmを用意してください。CIもNode.js 22系を使用しています。
+
+```bash
+git clone https://github.com/wata-0911/housei-media.git
+cd housei-media
+npm install
+npm run dev
+```
+
+起動後、ターミナルに表示されるローカルURLを開きます。lockfileどおりに依存を導入する場合は、`npm install` の代わりに `npm ci` を使用してください。現在、フロントエンドの起動に必須の環境変数設定はありません。
+
+ローカルでも外部サービスへ接続します。お問い合わせの送信は実サービスに届くため、動作確認時は送信先とテスト方法を運営者と確認してください。
+
+## 品質チェック
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
+`build` はViteのビルドのみで、型チェックは別コマンドです。ビルド結果は `dist/` に出力され、`npm run preview` で確認できます。
+
+[GitHub Actions](.github/workflows/ci.yml)では、**mainへのpushとmainを対象とするPR**で `npm ci` の後に上記3つの検査を実行します。現在、単体テスト・E2Eテストのコマンドはありません。
+
+## 外部サービス
+
+| サービス | 用途 |
+|---|---|
+| Google Apps Script | 最新X投稿IDの取得、お問い合わせの送信先 |
+| X Widgets | 投稿の埋め込み表示 |
+| Vercel | サイトのホスティング・GitHub連携デプロイ |
+| Google Analytics / Google Fonts | アクセス解析 / Webフォントの配信 |
+
+GAS側の実装・設定はこのリポジトリに含まれません。引き継ぎ時は管理権限・送信先・自動返信の設定を別途確認してください。GASの実URL、APIキー、秘密情報、個人情報はREADMEに記載しません。
+
+通信を中断してもGAS側の処理が完了している可能性があります。問い合わせのタイムアウト時は、再送する前に自動返信メールを確認してください。
+
+## Q&Aデータとコンテンツ更新
+
+Q&Aは [src/data/qaData.ts](src/data/qaData.ts) の `qaData` で管理します。
+
+| 項目 | 型 | 内容 |
+|---|---|---|
+| `id` | `string` | 各Q&Aの安定した一意のID。表示時のReactキーにも使用 |
+| `category` | `string`（省略可） | 分類。未指定・空文字の場合は「その他」 |
+| `question` | `string` | 質問文 |
+| `answer` | `string` | 回答文 |
+
+追加時は既存と重複しないIDを付け、文言修正や並べ替えだけでIDを変更しないでください。回答中の改行は表示に反映されます。変更後は品質チェックと検索・カテゴリ表示を確認してください。
+
+年間スケジュール画像は `public/schedule-calendar.png`、メンバーデータは `src/pages/member.tsx`、各ページのメタ情報は `src/App.tsx` で更新します。
+
+## デプロイ
+
+mainのコミットにVercelのデプロイ成功ステータスが付いており、GitHub連携を確認できます。[vercel.json](vercel.json) はSPAの各パスを `/index.html` にリライトします。
+
+mainへpushした後は、GitHub Actionsの検査結果とVercelのデプロイ結果をそれぞれ確認し、公開サイトの主要ページを確認してください。CI定義にはデプロイ処理がなく、CI成功がVercel公開の必須条件かどうかはリポジトリからは確認できません。本番ブランチや公開ドメインの割り当てはVercel側の設定を確認してください。
+
+404ページはクライアント側の表示です。HTTPステータス404を返す設定は、このリライト設定には含まれません。
+
+## 今後の改善
+
+- Q&Aに `sourceUrl`・`lastReviewedAt` などを追加し、出典と更新日を管理する
+- 画像・faviconの軽量化と、画面下部の画像の遅延読み込み
+- 検索のURL同期や外部通信の失敗を検証する回帰テストの追加
+
+## 注意事項
+
+当サイトは非公式の学生向け情報サイトです。掲載情報の正確性・最新性を保証するものではありません。履修、試験、卒業要件などの最終確認は、大学公式サイト、シラバス、履修要項などの公式情報を参照してください。
+
+## 2026 履修プランナー
+
+`/planner`（ヘッダーの「履修計画」）で、2026カタログの686開講を検索・追加し、6種類の履修状態を記録できます。検索結果は30件ずつ表示します。`courseId=null`の348開講も対象です。履修計画は`offeringId`で参照し、同じ開講の重複追加を防ぎます。
+
+- 生成済み`planner_catalog_2026.json`、`plannerCatalog.ts`、`plannerHelpers.ts`とJSON Schemaをそのままコピーしています。再生成やIDの再推定は行っていません。
+- カタログと保存状態は同じ生成済みSchemaをAjv（Draft 2020-12）で検証し、保存状態の参照・重複も確認します。snapshot、manifest、Python、検証用ハッシュは配信しません。
+- `hosei-planner:v1`に保存します。初回表示では書き込まず、追加・状態変更に成功した時だけ更新します。保存失敗時は画面の状態を変更せず通知します。
+- 不正な保存データや別タブの更新を検知した時は、追加・変更を停止します。元データをダウンロードでき、「バックアップして初期化」を確認すると元データを`hosei-planner:v1:recovery`へ保存してから初期化します。バックアップキーは直近1回分です。再初期化する前に必要なデータをダウンロードしてください。保存領域自体が利用できない場合はブラウザ設定の確認が必要です。
+- `earned`・`in_progress`・`planned`をそれぞれ合計します。`waiting`・`failed`・`dropped`は合計対象外です。単位数が`null`の件数は状態を問わず別表示します。同一科目の別開講をまとめる処理や卒業要件への算入判定はありません。
+- 卒業判定・todo UIは未実装です。契約互換のため空の`todos`を保持し、既存のtodoや所属データがあれば変更せず保存します。
+- プランナーは遅延読み込みです。カタログ込みのプランナー用チャンクは約796 kB（gzip約147 kB）で、Viteのサイズ警告が出ます。既存ページの初回読み込みには含めません。
+
+検証：`npm run typecheck`、`npm run lint`、`npm run test:planner`、`npm run build`。テストは実カタログの全件検索・未確定科目・6状態の保存・破損データ保全・単位数不明・保存失敗・復旧・既存状態保持を確認します。

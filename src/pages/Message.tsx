@@ -1,15 +1,6 @@
-import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 export default function Message() {
-  // Noto Serif JPフォントを適用
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;600&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-    return () => document.head.removeChild(link);
-  }, []);
 
   return (
     <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
@@ -57,7 +48,7 @@ export default function Message() {
 
             <div className="text-[#4A4A4A] leading-[2.2] tracking-wide text-sm md:text-base font-light space-y-8 text-justify">
               <p>
-                卒業を迎えるにあたり、私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
+                卒業を迎えるにあたり、私がこの「法政通信メディア」 を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
               </p>
 
               <p>

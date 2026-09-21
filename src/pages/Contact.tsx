@@ -1,55 +1,80 @@
-import { useRef, useEffect, useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { motion } from 'framer-motion';
 
+type ContactApiResponse = {
+  status: 'success' | 'error'
+  message?: string
+}
+
+function isContactApiResponse(value: unknown): value is ContactApiResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    'status' in value &&
+    (value.status === 'success' || value.status === 'error') &&
+    (!('message' in value) || typeof value.message === 'string')
+  )
+}
+
 export default function Contact() {
-  const form = useRef();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;600&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-    return () => document.head.removeChild(link);
-  }, []);
-
-  const sendEmail = async (e) => {
+  const sendEmail = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const formData = new FormData(form.current);
+    const formElement = e.currentTarget
+    const formData = new FormData(formElement)
+
     const data = {
-      name: formData.get('name'),
-      email: formData.get('email'),
-      message: formData.get('message')
-    };
+      name: String(formData.get('name') ?? ''),
+      email: String(formData.get('email') ?? ''),
+      message: String(formData.get('message') ?? ''),
+    }
 
     const gasUrl = "https://script.google.com/macros/s/AKfycbwJdQvB7ZUcirtgj7c310lh5hBgkz0lcp8qO6OmlCIoG2U4FQetz7T_jbjXM8gKKbPf/exec";
 
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 10_000)
+
     try {
       const response = await fetch(gasUrl, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "text/plain"
+          'Content-Type': 'text/plain',
         },
-        body: JSON.stringify(data)
-      });
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      })
 
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`)
+      }
 
-      if (result.status === "success") {
-        alert('送信しました！自動返信メールをご確認ください。');
-        form.current.reset();
+      const result: unknown = await response.json()
+
+      if (!isContactApiResponse(result)) {
+        throw new Error('Invalid contact API response')
+      }
+
+      if (result.status === 'success') {
+        alert('送信しました！自動返信メールをご確認ください。')
+        formElement.reset()
       } else {
-        throw new Error(result.message);
+        throw new Error(result.message ?? 'Unknown error')
       }
     } catch (error) {
-      console.error(error);
-      alert('送信に失敗しました。もう一度お試しください。');
+      console.error(error)
+      if (controller.signal.aborted) {
+        alert('送信結果を確認できませんでした。処理が完了している可能性があります。自動返信メールをご確認ください。')
+      } else {
+        alert('送信に失敗しました。時間をおいてからもう一度お試しください。')
+      }
     } finally {
-      setIsSubmitting(false);
+      window.clearTimeout(timeoutId)
+      setIsSubmitting(false)
     }
-  };
+  }
 
   return (
     <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
@@ -89,15 +114,17 @@ export default function Contact() {
               <span className="text-xs text-[#E65C00] mt-3 inline-block font-medium">※自動で受付メールが届きます</span>
             </p>
 
-            <form ref={form} onSubmit={sendEmail} className="space-y-8">
+            <form onSubmit={sendEmail} className="space-y-8">
 
               <div>
-                <label className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
+                <label htmlFor="contact-name" className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
                   お名前
                 </label>
                 <input
                   type="text"
                   name="name"
+                  id="contact-name"
+                  autoComplete="name"
                   required
                   className="w-full px-4 py-4 bg-[#FAFAFA] border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400 rounded-sm"
                   placeholder="法政 太郎"
@@ -105,12 +132,14 @@ export default function Contact() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
+                <label htmlFor="contact-email" className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
                   メールアドレス
                 </label>
                 <input
                   type="email"
                   name="email"
+                  id="contact-email"
+                  autoComplete="email"
                   required
                   className="w-full px-4 py-4 bg-[#FAFAFA] border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400 rounded-sm"
                   placeholder="example@hosei.jp"
@@ -118,12 +147,13 @@ export default function Contact() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
+                <label htmlFor="contact-message" className="block text-sm font-medium text-[#002255] mb-2 tracking-widest">
                   お問い合わせ内容
                 </label>
                 <textarea
                   name="message"
-                  rows="6"
+                  id="contact-message"
+                  rows={6}
                   required
                   className="w-full px-4 py-4 bg-[#FAFAFA] border border-gray-200 focus:bg-white focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400 resize-none rounded-sm"
                   placeholder="ここに内容を入力してください"

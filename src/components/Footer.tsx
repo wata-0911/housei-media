@@ -9,10 +9,10 @@ export default function Footer() {
         </p>
 
         <div className="flex justify-center mb-10">
-          <a 
-            href="https://x.com/hosei_c_media" 
-            target="_blank" 
-            rel="noopener noreferrer" 
+          <a
+            href="https://x.com/hosei_c_media"
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-white/60 hover:text-[#E65C00] transition-colors duration-300"
             aria-label="X (Twitter) 公式アカウント"
           >
@@ -24,10 +24,10 @@ export default function Footer() {
 
         <div className="flex flex-wrap justify-center gap-6 md:gap-10 mb-12 text-xs md:text-sm tracking-widest font-light">
           <Link to="/" className="text-white hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
-          <Link to="/qa" className="text-white hover:text-[#E65C00] transition-colors duration-300"></Link>
-          <Link to="/draft-message-2026" className="text-white hover:text-[#E65C00] transition-colors duration-300">創立者からのメッセージ</Link>
+          <Link to="/qa" className="text-white hover:text-[#E65C00] transition-colors duration-300">Q&A</Link>
+          <Link to="/message" className="text-white hover:text-[#E65C00] transition-colors duration-300">創立者からのメッセージ</Link>
           <Link to="/member" className="text-white hover:text-[#E65C00] transition-colors duration-300">運営メンバー紹介</Link>
-          <Link to="/draft-privacy-2026" className="text-white hover:text-[#E65C00] transition-colors duration-300">プライバシーポリシー</Link>
+          <Link to="/privacy" className="text-white hover:text-[#E65C00] transition-colors duration-300">プライバシーポリシー</Link>
           <Link to="/contact" className="text-white hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
         </div>
 

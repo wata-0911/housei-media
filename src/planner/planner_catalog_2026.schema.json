@@ -1,0 +1,1053 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/PlannerCatalog",
+  "$defs": {
+    "Source": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "page"
+      ],
+      "additionalProperties": false
+    },
+    "Program": {
+      "type": "object",
+      "properties": {
+        "scopeId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "faculty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "course": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "isCommon": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scopeId",
+        "faculty",
+        "department",
+        "course",
+        "displayName",
+        "isCommon"
+      ],
+      "additionalProperties": false
+    },
+    "Course": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "canonicalName": {
+          "type": "string"
+        },
+        "identityStatus": {
+          "const": "provisional"
+        }
+      },
+      "required": [
+        "id",
+        "canonicalName",
+        "identityStatus"
+      ],
+      "additionalProperties": false
+    },
+    "Mapping": {
+      "type": "object",
+      "properties": {
+        "mappingId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "scopeId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "faculty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "course": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "category": {
+          "type": "string"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requirementType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "curriculumCredits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "eligibleYears": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              },
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schoolingOnly": {
+          "type": "boolean"
+        },
+        "mediaOnly": {
+          "type": "boolean"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        }
+      },
+      "required": [
+        "mappingId",
+        "scopeId",
+        "faculty",
+        "department",
+        "course",
+        "category",
+        "field",
+        "requirementType",
+        "curriculumCredits",
+        "eligibleYears",
+        "schoolingOnly",
+        "mediaOnly",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "Offering": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "courseId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "academicYear": {
+          "const": 2026
+        },
+        "name": {
+          "type": "string"
+        },
+        "method": {
+          "enum": [
+            "correspondence",
+            "schooling"
+          ]
+        },
+        "subjectCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "classCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "credits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deliveryCategory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "period": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "faculty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "eligibleYears": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              },
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolutionStatus": {
+          "enum": [
+            "matched",
+            "manual_review",
+            "outside_mapping_scope"
+          ]
+        },
+        "mappingIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "uniqueItems": true
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        }
+      },
+      "required": [
+        "id",
+        "courseId",
+        "academicYear",
+        "name",
+        "method",
+        "subjectCode",
+        "classCode",
+        "credits",
+        "deliveryCategory",
+        "period",
+        "faculty",
+        "department",
+        "eligibleYears",
+        "resolutionStatus",
+        "mappingIds",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "RuleTarget": {
+      "type": "object",
+      "properties": {
+        "course_name": {
+          "type": "string"
+        },
+        "curriculum_category": {
+          "type": "string"
+        },
+        "curriculum_field": {
+          "type": "string"
+        },
+        "requirement_type": {
+          "type": "string"
+        },
+        "credit_source": {
+          "type": "string"
+        },
+        "program": {
+          "type": "string"
+        },
+        "course_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "RuleConditions": {
+      "type": "object",
+      "properties": {
+        "max_enrollments": {
+          "type": "integer"
+        },
+        "min_enrollments": {
+          "type": "integer"
+        },
+        "min_courses": {
+          "type": "integer"
+        },
+        "credits_per_course": {
+          "type": "integer"
+        },
+        "choose_count": {
+          "type": "integer"
+        },
+        "max_languages_counted": {
+          "type": "integer"
+        },
+        "marker_source_page": {
+          "type": "integer"
+        },
+        "requires_completed_courses": {
+          "type": "integer"
+        },
+        "aggregate": {
+          "type": "boolean"
+        },
+        "same_language_as_foreign_requirement": {
+          "type": "boolean"
+        },
+        "same_language": {
+          "type": "boolean"
+        },
+        "includes_thesis": {
+          "type": "boolean"
+        },
+        "full_course_credits_required": {
+          "type": "boolean"
+        },
+        "partial_two_credits_countable": {
+          "type": "boolean"
+        },
+        "general_total_unaffected": {
+          "type": "boolean"
+        },
+        "exclude_schooling_required": {
+          "type": "boolean"
+        },
+        "double_count": {
+          "type": "boolean"
+        },
+        "before": {
+          "type": "string"
+        },
+        "group_by": {
+          "type": "string"
+        },
+        "applies_to": {
+          "type": "string"
+        },
+        "exclude_table_marker": {
+          "type": "string"
+        },
+        "method": {
+          "enum": [
+            "correspondence",
+            "schooling"
+          ]
+        },
+        "transfer": {
+          "const": "excess_only"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "combine_categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded_categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "when": {
+          "type": "object",
+          "properties": {
+            "thesis_selected": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "thesis_selected"
+          ],
+          "additionalProperties": false
+        },
+        "from": {
+          "$ref": "#/$defs/RuleTarget"
+        },
+        "to": {
+          "$ref": "#/$defs/RuleTarget"
+        },
+        "threshold": {
+          "type": "object",
+          "properties": {
+            "credits": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "credits"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "StructuredRequirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "scopeId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "sourcePage": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "const": "structured"
+        },
+        "ruleType": {
+          "enum": [
+            "required_course",
+            "min_credits",
+            "max_credits",
+            "overflow_credit_transfer",
+            "min_schooling_credits",
+            "min_courses",
+            "exact_credits",
+            "choose_one"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/RuleTarget"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conditions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleConditions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "ruleId",
+        "scopeId",
+        "sourcePage",
+        "status",
+        "ruleType",
+        "target",
+        "value",
+        "unit",
+        "conditions"
+      ],
+      "additionalProperties": false
+    },
+    "UnsupportedRequirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "scopeId": {
+          "type": "null"
+        },
+        "sourcePage": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "const": "unsupported"
+        },
+        "ruleType": {
+          "type": "null"
+        },
+        "target": {
+          "type": "null"
+        },
+        "value": {
+          "type": "null"
+        },
+        "unit": {
+          "type": "null"
+        },
+        "conditions": {
+          "type": "null"
+        },
+        "scopeLabel": {
+          "type": "string"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "id",
+        "ruleId",
+        "scopeId",
+        "sourcePage",
+        "status",
+        "ruleType",
+        "target",
+        "value",
+        "unit",
+        "conditions",
+        "scopeLabel",
+        "category",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "Requirement": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/StructuredRequirement"
+        },
+        {
+          "$ref": "#/$defs/UnsupportedRequirement"
+        }
+      ]
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "offeringCount": {
+          "type": "integer"
+        },
+        "mappingCount": {
+          "type": "integer"
+        },
+        "mappingEdgeCount": {
+          "type": "integer"
+        },
+        "matchedOfferingCount": {
+          "type": "integer"
+        },
+        "manualReviewOfferingCount": {
+          "type": "integer"
+        },
+        "outsideMappingScopeOfferingCount": {
+          "type": "integer"
+        },
+        "courseIdPresentOfferingCount": {
+          "type": "integer"
+        },
+        "courseIdNullOfferingCount": {
+          "type": "integer"
+        },
+        "allSnapshotOfferingsSelectable": {
+          "const": true
+        },
+        "scope": {
+          "const": "2026_input_snapshot_only"
+        }
+      },
+      "required": [
+        "offeringCount",
+        "mappingCount",
+        "mappingEdgeCount",
+        "matchedOfferingCount",
+        "manualReviewOfferingCount",
+        "outsideMappingScopeOfferingCount",
+        "courseIdPresentOfferingCount",
+        "courseIdNullOfferingCount",
+        "allSnapshotOfferingsSelectable",
+        "scope"
+      ],
+      "additionalProperties": false
+    },
+    "Metadata": {
+      "type": "object",
+      "properties": {
+        "graduationCheckComplete": {
+          "const": false
+        },
+        "structuredRequirementCount": {
+          "type": "integer"
+        },
+        "unsupportedRequirementCount": {
+          "type": "integer"
+        },
+        "unresolvedOfferingCount": {
+          "type": "integer"
+        },
+        "unresolvedOfferingMeaning": {
+          "const": "no_curriculum_mapping: manual_review + outside_mapping_scope; independent_of_courseId"
+        },
+        "provisionalCourseCount": {
+          "type": "integer"
+        },
+        "catalogCoverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "requirementEvaluationDefault": {
+          "const": "unknown"
+        },
+        "unsupportedScopePolicy": {
+          "const": "retain_all_warnings_until_scope_is_verified"
+        },
+        "sourceLinksReverified": {
+          "const": false
+        }
+      },
+      "required": [
+        "graduationCheckComplete",
+        "structuredRequirementCount",
+        "unsupportedRequirementCount",
+        "unresolvedOfferingCount",
+        "unresolvedOfferingMeaning",
+        "provisionalCourseCount",
+        "catalogCoverage",
+        "requirementEvaluationDefault",
+        "unsupportedScopePolicy",
+        "sourceLinksReverified"
+      ],
+      "additionalProperties": false
+    },
+    "PlannerCatalog": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "academicYear": {
+          "const": 2026
+        },
+        "generatedFromSnapshot": {
+          "const": "hosei-2026-v1-postgresql-import"
+        },
+        "programs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Program"
+          }
+        },
+        "courses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Course"
+          }
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Mapping"
+          }
+        },
+        "offerings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Offering"
+          }
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "academicYear",
+        "generatedFromSnapshot",
+        "programs",
+        "courses",
+        "mappings",
+        "offerings",
+        "requirements",
+        "metadata"
+      ],
+      "additionalProperties": false
+    },
+    "PlannerItem": {
+      "type": "object",
+      "properties": {
+        "offeringId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "in_progress",
+            "waiting",
+            "earned",
+            "failed",
+            "dropped"
+          ]
+        },
+        "plannedYear": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plannedTerm": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "offeringId",
+        "status",
+        "plannedYear",
+        "plannedTerm"
+      ],
+      "additionalProperties": false
+    },
+    "PlannerTodo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "offeringId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "done": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "offeringId",
+        "text",
+        "done"
+      ],
+      "additionalProperties": false
+    },
+    "PlannerState": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "selectedScopeId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlannerItem"
+          }
+        },
+        "todos": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlannerTodo"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "selectedScopeId",
+        "items",
+        "todos"
+      ],
+      "additionalProperties": false
+    },
+    "RequirementEvaluation": {
+      "type": "object",
+      "properties": {
+        "requirementId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "result": {
+          "enum": [
+            "satisfied",
+            "unsatisfied",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requirementId",
+        "result",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "GraduationEvaluation": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "const": "unknown"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "result",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

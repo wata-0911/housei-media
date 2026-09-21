@@ -1,9 +1,26 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import './member.css';
+import './member.css'
 
 // 各メンバーのデータに実際の情報を反映しました
-const membersData = [
+type Member = {
+  id: string
+  subtitle: string
+  nickname: string
+  image: string
+  gender: string
+  region: string
+  age: string
+  grade: string
+  credits: string
+  career: string
+  qualifications: string
+  gakuchika: string
+  studyStyle: string
+  reason: string
+}
+
+const membersData: Member[] = [
   {
     id: "member1",
     subtitle: "FOUNDER",
@@ -71,8 +88,8 @@ const membersData = [
 ];
 
 const ProfileCard = () => {
-  const [currentMemberIndex, setCurrentMemberIndex] = useState(0);
-  const currentMember = membersData[currentMemberIndex];
+  const [currentMemberIndex, setCurrentMemberIndex] = useState<number>(0)
+  const currentMember = membersData[currentMemberIndex]
 
   return (
     <div className="member-page-wrapper">

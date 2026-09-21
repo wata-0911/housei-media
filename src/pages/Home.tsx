@@ -1,64 +1,123 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import XTimeline from '../components/XTimeline';
 
-// 常に右側に固定表示するポストID
-const PINNED_TWEET_ID = '2084929908820852873';
+type TweetApiResponse = {
+  tweetIds: string[]
+}
+
+const FALLBACK_TWEET_ID = '2084907256160637081'
+const PINNED_TWEET_ID = '2084929908820852873'
+
+const GAS_URL =
+  'https://script.google.com/macros/s/AKfycbyyd8XGGvrbS2drulZa91kItf0xlLaDiehSfkFMshO0AsIMaHLPrKnQgMMu8ExbynVFag/exec'
+
+const FETCH_TIMEOUT_MS = 8000
+
+const isTweetApiResponse = (
+  value: unknown
+): value is TweetApiResponse => {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('tweetIds' in value)
+  ) {
+    return false
+  }
+
+  const tweetIds = (value as { tweetIds?: unknown }).tweetIds
+
+  return (
+    Array.isArray(tweetIds) &&
+    tweetIds.every(
+      (id) => typeof id === 'string' && /^\d+$/.test(id)
+    )
+  )
+}
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
 
-  // 初期値（通信完了前: フォールバックID + 固定ID）
-  const [tweetIds, setTweetIds] = useState([
-    '2084907256160637081',
-    PINNED_TWEET_ID
-  ]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [tweetIds, setTweetIds] = useState<string[]>([
+    FALLBACK_TWEET_ID,
+    PINNED_TWEET_ID,
+  ])
 
   const navigate = useNavigate();
+
+  const shouldReduceMotion = useReducedMotion();
 
   // スクロール設定
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 500], [0, 150]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
 
-  // フォント適用
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;600&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-    return () => document.head.removeChild(link);
-  }, []);
 
-  // GAS APIから最新ポストを取得し、固定ポストと合成
   useEffect(() => {
+    const controller = new AbortController()
+
+    const timeoutId = window.setTimeout(() => {
+      controller.abort()
+    }, FETCH_TIMEOUT_MS)
+
     const fetchLatestTweets = async () => {
       try {
-        // 設定済みのGASウェブアプリURL
-        const gasUrl = 'https://script.google.com/macros/s/AKfycbyyd8XGGvrbS2drulZa91kItf0xlLaDiehSfkFMshO0AsIMaHLPrKnQgMMu8ExbynVFag/exec';
-        const res = await fetch(gasUrl);
-        const data = await res.json();
+        const res = await fetch(GAS_URL, {
+          signal: controller.signal,
+        })
 
-        if (data.tweetIds && data.tweetIds.length > 0) {
-          // 固定ポストと重複しない最新ポストを1件抽出
-          const latestId = data.tweetIds.find((id) => id !== PINNED_TWEET_ID) || data.tweetIds[0];
+        if (!res.ok) {
+          throw new Error(
+            `GAS API returned HTTP ${res.status}`
+          )
+        }
 
-          // [最新ポスト, 固定ポスト] の配列を作成
-          setTweetIds([latestId, PINNED_TWEET_ID]);
+        const data: unknown = await res.json()
+
+        if (!isTweetApiResponse(data)) {
+          throw new Error('Invalid response from GAS API')
+        }
+
+        const uniqueTweetIds = [...new Set(data.tweetIds)]
+
+        const latestId = uniqueTweetIds.find(
+          (id) => id !== PINNED_TWEET_ID
+        )
+
+        if (latestId) {
+          setTweetIds([
+            latestId,
+            PINNED_TWEET_ID,
+          ])
         }
       } catch (err) {
-        console.error('Failed to fetch from GAS API:', err);
+        if (
+          err instanceof DOMException &&
+          err.name === 'AbortError'
+        ) {
+          console.warn('GAS API request timed out')
+          return
+        }
+
+        console.error(
+          'Failed to fetch from GAS API:',
+          err
+        )
       } finally {
-        setIsLoading(false);
+        window.clearTimeout(timeoutId)
       }
-    };
+    }
 
-    fetchLatestTweets();
-  }, []);
+    void fetchLatestTweets()
 
-  const handleSearch = (e) => {
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [])
+
+  const handleSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (keyword.trim() !== '') {
       navigate(`/qa?q=${encodeURIComponent(keyword)}`);
@@ -72,7 +131,7 @@ export default function Home() {
 
       {/* ヒーローセクション */}
       <header className="relative h-screen flex items-center justify-center overflow-hidden">
-        <motion.div style={{ y: heroY }} className="absolute inset-0 z-0">
+        <motion.div style={{ y: shouldReduceMotion ? 0 : heroY }} className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[#002255]/40 z-10"></div>
           <img
             src="/hedda.jpeg"
@@ -81,7 +140,7 @@ export default function Home() {
           />
         </motion.div>
 
-        <motion.div style={{ opacity }} className="relative z-20 text-center text-white px-4 mt-20">
+        <motion.div style={{ opacity: shouldReduceMotion ? 1 : opacity }} className="relative z-20 text-center text-white px-4 mt-20">
           <motion.span
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -116,8 +175,8 @@ export default function Home() {
         >
           <span className="text-xs tracking-[0.2em] mb-3 font-light">SCROLL</span>
           <motion.div
-            animate={{ y: [0, 10, 0] }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            animate={{ y: shouldReduceMotion ? 0 : [0, 10, 0] }}
+            transition={shouldReduceMotion ? { duration: 0 } : { repeat: Infinity, duration: 2, ease: "easeInOut" }}
             className="w-[1px] h-12 bg-white/60"
           />
         </motion.div>
@@ -136,7 +195,9 @@ export default function Home() {
             <h3 className="text-[#002255] text-2xl font-medium mb-8 tracking-wider">知りたいことはありますか？</h3>
             <form onSubmit={handleSearch} className="relative flex items-center border-b border-gray-300 pb-2 transition-colors focus-within:border-[#002255]">
               <svg className="w-5 h-5 text-gray-400 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              <label htmlFor="home-search" className="sr-only">Q&Aをキーワードで検索</label>
               <input
+                id="home-search"
                 type="text"
                 placeholder="キーワードでQ&Aを検索 (例: スクーリング、試験...)"
                 className="w-full bg-transparent outline-none text-[#1A1A1A] placeholder-gray-400 font-light tracking-wide"
@@ -193,6 +254,7 @@ export default function Home() {
               <div className="rounded-xl overflow-hidden border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] bg-white p-2 md:p-4">
                 <img
                   src="/schedule-calendar.png"
+                  loading="lazy"
                   alt="通教生向け 年間スケジュールカレンダー"
                   className="w-full h-auto object-contain"
                 />
@@ -221,7 +283,7 @@ export default function Home() {
             </motion.div>
 
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 z-20 relative min-h-[400px]">
-              {!isLoading && tweetIds.map((id, index) => (
+              {tweetIds.map((id, index) => (
                 <motion.div
                   key={id}
                   initial={{ opacity: 0, x: index === 0 ? -30 : 30 }}
@@ -280,16 +342,16 @@ export default function Home() {
             >
               <div className="bg-white rounded-xl border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-12 flex justify-center items-center gap-6">
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member-founder.jpg" alt="メンバー1" className="w-full h-full object-cover" />
+                  <img src="/member-founder.jpg" loading="lazy" alt="メンバー1" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member1.jpg" alt="メンバー2" className="w-full h-full object-cover" />
+                  <img src="/member1.jpg" loading="lazy" alt="メンバー2" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member2.jpg" alt="メンバー3" className="w-full h-full object-cover" />
+                  <img src="/member2.jpg" loading="lazy" alt="メンバー3" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#FAFAFA] shadow-md">
-                  <img src="/member3.jpg" alt="メンバー4" className="w-full h-full object-cover" />
+                  <img src="/member3.jpg" loading="lazy" alt="メンバー4" className="w-full h-full object-cover" />
                 </div>
               </div>
             </motion.div>
@@ -311,14 +373,14 @@ export default function Home() {
               <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
             </div>
 
-            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER'S MESSAGE</span>
+            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER;S MESSAGE</span>
             <h3 className="text-2xl md:text-3xl text-[#002255] font-medium mb-8 leading-relaxed tracking-widest">
               いつか君も困っている人がいたら、<br />
               助けてあげてね。
             </h3>
             <div className="text-[#666666] leading-loose mb-10 text-justify font-light space-y-4">
               <p>
-                私がこの"法政通信メディア"を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
+                私がこの「法政通信メディア」を立ち上げた背景にある、一つの大切な「約束」についてお話しさせてください。
               </p>
               <p>
                 私の大学生活は、最初から順風満帆だったわけではありません。そんな暗闇の中にいた私に、優しさで手を差し伸べてくれた人がたくさんがいました。
