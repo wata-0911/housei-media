@@ -41,7 +41,7 @@ export default function Header() {
 
         {/* ナビゲーションメニュー */}
         <nav className="flex items-center">
-          <ul className="flex space-x-5 md:space-x-8 text-sm tracking-widest font-light text-white/80 items-center">
+          <ul className="flex flex-wrap justify-center gap-x-4 gap-y-3 md:gap-x-8 text-sm tracking-widest font-light text-white/80 items-center">
             <li>
               <Link to="/" className="hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
             </li>
@@ -50,6 +50,10 @@ export default function Header() {
             </li>
             <li>
               <Link to="/contact" className="hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
+            </li>
+
+            <li>
+              <Link to="/planner" className="hover:text-[#E65C00] transition-colors duration-300">履修計画</Link>
             </li>
 
             {/* 区切り線 */}
