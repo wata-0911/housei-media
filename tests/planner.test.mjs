@@ -177,3 +177,67 @@ test('category totals conserve overall credits and unknown counts across every o
     assert.ok(rows.find(r => r.category === '未分類/要確認').count >= unresolved.length);
   }
 });
+
+test('real catalog foreign-language mappings count as foreign languages for all eight affiliations', () => {
+  const foreignMappings = catalog.mappings.filter(m => m.category === '外国語');
+  assert.equal(foreignMappings.length, 7);
+  assert.deepEqual([...new Set(foreignMappings.map(m => m.field))].sort(), ['仏語', '独語', '英語']);
+  const commonScopes = new Set(catalog.programs.filter(p => p.isCommon).map(p => p.scopeId));
+  assert.ok(foreignMappings.every(m => commonScopes.has(m.scopeId)));
+  const ids = new Set(foreignMappings.map(m => m.mappingId));
+  const offerings = catalog.offerings.filter(o => o.mappingIds.some(id => ids.has(id)));
+  assert.equal(offerings.length, 15);
+  assert.ok(offerings.some(o => o.name === '英語２'));
+  assert.ok(offerings.some(o => o.name === '仏語S(後期メディア)'));
+  for (const { scopeId } of selectablePrograms(catalog)) {
+    const classify = createCreditClassifier(catalog, scopeId);
+    for (const offering of offerings) {
+      assert.equal(classify(offering), '外国語', `${scopeId}: ${offering.name}`);
+    }
+    const items = offerings.map(o => item(o.id));
+    const rows = summarizeCategories(items, catalog, scopeId);
+    assert.deepEqual(rows.find(r => r.category === '外国語'), {
+      category: '外国語', count: 15, ...summarizeCredits(items, offeringsById),
+    });
+    assert.equal(rows.find(r => r.category === '未分類/要確認').count, 0);
+  }
+});
+
+test('matching common and selected scope mappings count each offering once for all common categories', () => {
+  const scope = selectablePrograms(catalog)[0].scopeId;
+  const commonScopes = new Set(catalog.programs.filter(p => p.isCommon).map(p => p.scopeId));
+  for (const category of ['一般教育：人文', '一般教育：社会', '一般教育：自然', '外国語', '保健体育']) {
+    const classify = createCreditClassifier(catalog, scope);
+    const offering = catalog.offerings.find(o => classify(o) === category && o.credits !== null);
+    assert.ok(offering, category);
+    const commonMapping = catalog.mappings.find(m => offering.mappingIds.includes(m.mappingId) && commonScopes.has(m.scopeId));
+    assert.ok(commonMapping);
+    const selectedMapping = { ...commonMapping, mappingId: 'selected-copy', scopeId: scope };
+    const fixture = {
+      ...catalog,
+      mappings: [...catalog.mappings, selectedMapping],
+      offerings: [{ ...offering, mappingIds: [...offering.mappingIds, selectedMapping.mappingId] }],
+    };
+    for (const status of ['planned', 'in_progress', 'earned']) {
+      const rows = summarizeCategories([item(offering.id, status)], fixture, scope);
+      assert.equal(rows.find(r => r.category === category)[status], offering.credits);
+      assert.equal(rows.find(r => r.category === category).count, 1);
+      assert.equal(rows.reduce((sum, r) => sum + r[status], 0), offering.credits);
+      assert.equal(rows.reduce((sum, r) => sum + r.count, 0), 1);
+    }
+  }
+});
+
+test('reported English S class 21005 stays unclassified while its mapping is unresolved', () => {
+  const offering = offeringsById.get('066427dc-1df4-47bd-a6b1-538ab161e869');
+  assert.equal(offering.name, '英語Ｓ［５］（秋期スクーリング）');
+  assert.equal(offering.classCode, '21005');
+  assert.equal(offering.resolutionStatus, 'manual_review');
+  assert.deepEqual(offering.mappingIds, []);
+  for (const { scopeId } of selectablePrograms(catalog)) {
+    const rows = summarizeCategories([item(offering.id)], catalog, scopeId);
+    assert.equal(rows.find(r => r.category === '外国語').count, 0);
+    assert.equal(rows.find(r => r.category === '未分類/要確認').count, 1);
+    assert.equal(rows.find(r => r.category === '未分類/要確認').planned, offering.credits);
+  }
+});
