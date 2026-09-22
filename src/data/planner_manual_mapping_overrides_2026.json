@@ -95,6 +95,270 @@
       ],
       "mappingIds": ["48855a72-795f-4dcf-8c42-32b0e468f653"],
       "reason": "Manually approved: [S] denotes a schooling offering. Preserve the 地誌学特講 mapping without renaming the offering."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38002",
+      "approvedPattern": "情報学入門［1］［データ演習］（夏期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "b1682775-8f72-46c8-8453-cbee94cf3d25"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38002; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38003",
+      "approvedPattern": "コンピュータ入門［1］［データ演習］（夏期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "088137f3-3d6c-430f-8ace-416b8a1bce4c"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38003; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38005",
+      "approvedPattern": "情報学入門［2］［表計算］（夏期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "c2668703-00e7-41fa-a266-c69c4137c9a0"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38005; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38006",
+      "approvedPattern": "コンピュータ入門［2］［表計算］（夏期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "876d3acc-a81d-4cfe-9ce7-3597d50285bd"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38006; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38009",
+      "approvedPattern": "情報学入門［3］［データベース］（夏期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "2b49a4ae-7201-45d2-a313-81eb2f7a8a97"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38009; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38010",
+      "approvedPattern": "コンピュータ入門［3］［データベース］（夏期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "3b29f222-7d02-4bb8-9147-00c366c7cac1"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38010; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38012",
+      "approvedPattern": "情報学入門［4］［表計算］（夏期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "8da37ef1-b8a9-4dbf-a9c5-415281b49f44"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38012; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38013",
+      "approvedPattern": "コンピュータ入門［4］［表計算］（夏期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "347fac60-91c9-4836-ae8a-129d703725ff"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38013; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38015",
+      "approvedPattern": "情報学入門［5］［データ演習］（夏期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "963b7557-4abe-4e0d-8c33-294e67541763"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38015; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38016",
+      "approvedPattern": "コンピュータ入門［5］［データ演習］（夏期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "7f939488-a393-4e51-bacf-00db26372828"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38016; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38019",
+      "approvedPattern": "情報学入門［6］［データベース］（夏期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "adc888f1-463b-49ad-9f53-3ab49e3fb2f4"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38019; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_38020",
+      "approvedPattern": "コンピュータ入門［6］［データベース］（夏期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "e2260959-bb86-4c84-810f-c8b3ebe7b3da"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=38020; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_48005",
+      "approvedPattern": "情報学入門［1］［表計算］（冬期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "7f570269-3975-4faa-bd78-c786d8184e3f"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=48005; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_48006",
+      "approvedPattern": "コンピュータ入門［1］［表計算］（冬期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "e463ceca-79be-4ec4-8a29-da4cfeca5433"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=48006; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_48008",
+      "approvedPattern": "情報学入門［2］［データ演習］（冬期スクーリング）",
+      "targetCourseName": "情報学入門",
+      "offeringIds": [
+        "17931cc6-1840-4c99-b8ec-124f1ee3b875"
+      ],
+      "mappingIds": [
+        "ee06b350-5b46-4398-aff8-c187161defba",
+        "1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d",
+        "cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2",
+        "431409fd-5e1e-4272-aa03-36e0e5a27968",
+        "4eec8986-f2ec-4b6c-9292-3ee4dcd078f0",
+        "5736899c-eb14-4e2a-8328-f482291833ca",
+        "eae25b18-9c9f-410e-84fa-907103fdc9af"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=48008; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_48009",
+      "approvedPattern": "コンピュータ入門［2］［データ演習］（冬期スクーリング）",
+      "targetCourseName": "コンピュータ入門",
+      "offeringIds": [
+        "2490f18a-b529-48fe-8c2e-bb7b99087542"
+      ],
+      "mappingIds": [
+        "b9f5f378-0985-40ad-918e-32f6f6ae5818"
+      ],
+      "reason": "利用者確認済みの角括弧ラベルは授業内容であり別offeringを示す。元名称・授業方法schooling・2単位をcatalogで確認し、mapping表の同名スクーリング専用・専門教育・選択・2単位と整合する。科目同定や内容の同一性ではなく、当該offeringのカリキュラム算入先のみ手動で対応付ける。subjectCodeは識別情報として記録するだけで判定根拠にしない。情報学基礎・データサイエンス等への置換はしない。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=48009; evidence=catalog, mapping table, user-confirmed naming semantics."
+    },
+    {
+      "ruleId": "cleanup_2026_class_25007",
+      "approvedPattern": "歴史資料学（日本近代）（秋期スクーリング）",
+      "targetCourseName": "歴史資料学1〜6",
+      "offeringIds": [
+        "37d6fd84-d753-480d-a41b-c1bc961c3636"
+      ],
+      "mappingIds": [
+        "e50dd61e-27ef-4e93-afe7-9c61624661b7"
+      ],
+      "reason": "しおりp.53 iで歴史資料学の1〜6は授業内容によらず修得順と確認。catalogの日本近代/日本近世はいずれもschooling・2単位で、p.52の単一の集合mapping「歴史資料学1〜6」（史学科・専門教育・選択・field null）に対応する。集合mapping内の番号は割り当てず、個別offeringも統合しない。過去matcherの候補空はこの集合mappingを拾えていなかったため補完。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=25007; evidence=catalog, mapping table, other."
+    },
+    {
+      "ruleId": "cleanup_2026_class_45010",
+      "approvedPattern": "歴史資料学（日本近世）（冬期スクーリング）",
+      "targetCourseName": "歴史資料学1〜6",
+      "offeringIds": [
+        "d199f31a-469b-40d9-96a5-3be0fd67de2f"
+      ],
+      "mappingIds": [
+        "e50dd61e-27ef-4e93-afe7-9c61624661b7"
+      ],
+      "reason": "しおりp.53 iで歴史資料学の1〜6は授業内容によらず修得順と確認。catalogの日本近代/日本近世はいずれもschooling・2単位で、p.52の単一の集合mapping「歴史資料学1〜6」（史学科・専門教育・選択・field null）に対応する。集合mapping内の番号は割り当てず、個別offeringも統合しない。過去matcherの候補空はこの集合mappingを拾えていなかったため補完。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=45010; evidence=catalog, mapping table, other."
     }
   ]
 }
