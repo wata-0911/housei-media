@@ -1,5 +1,7 @@
 # 外国語の未分類表示の調査
 
+> 追記: この文書は原因調査時点の記録。クラス21005を含む番号付き英語Sは、後続の利用者承認に基づき`manual_curated` overrideで解決した。現在の適用範囲とprovenanceは`planner-manual-curated-mappings.md`を参照。
+
 対象: `feature/planner-annual-plan`、調査開始時 `405643b`。
 
 ## 確認結果

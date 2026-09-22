@@ -135,7 +135,7 @@ mainへpushした後は、GitHub Actionsの検査結果とVercelのデプロイ�
 
 `/planner`（ヘッダーの「履修計画」）で、2026カタログの686開講を検索・追加し、6種類の履修状態を記録できます。検索結果は30件ずつ表示します。`courseId=null`の348開講も対象です。履修計画は`offeringId`で参照し、同じ開講の重複追加を防ぎます。
 
-- 生成済み`planner_catalog_2026.json`、`plannerCatalog.ts`、`plannerHelpers.ts`とJSON Schemaをそのままコピーしています。再生成やIDの再推定は行っていません。
+- 生成済み`planner_catalog_2026.json`、`plannerCatalog.ts`、`plannerHelpers.ts`とJSON Schemaをそのままコピーしています。再生成やIDの再推定は行っていません。承認済みの例外34開講だけは`planner_manual_mapping_overrides_2026.json`の`manual_curated` ledgerを読込時に適用し、元のoffering名と科目identityを保持します。
 - カタログと保存状態は同じ生成済みSchemaをAjv（Draft 2020-12）で検証し、保存状態の参照・重複も確認します。snapshot、manifest、Python、検証用ハッシュは配信しません。
 - `hosei-planner:v1`に保存します。初回表示では書き込まず、追加・状態変更に成功した時だけ更新します。保存失敗時は画面の状態を変更せず通知します。
 - 不正な保存データや別タブの更新を検知した時は、追加・変更を停止します。元データをダウンロードでき、「バックアップして初期化」を確認すると元データを`hosei-planner:v1:recovery`へ保存してから初期化します。バックアップキーは直近1回分です。再初期化する前に必要なデータをダウンロードしてください。保存領域自体が利用できない場合はブラウザ設定の確認が必要です。

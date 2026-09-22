@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { catalog, offeringsById } from '../src/planner/catalog.ts';
+import { manualMappingOverrideLedger } from '../src/planner/manualMappingOverrides.ts';
 import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
@@ -11,6 +13,8 @@ function memoryStore(raw = null) {
 }
 const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedYear: 2026, plannedTerm: null });
 const first = catalog.offerings[0];
+const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
+const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
 
 test('catalog preserves all 686 offerings, 348 null course IDs and incomplete graduation coverage', () => {
   assert.equal(catalog.offerings.length, 686);
@@ -178,7 +182,7 @@ test('category totals conserve overall credits and unknown counts across every o
   }
 });
 
-test('real catalog foreign-language mappings count as foreign languages for all eight affiliations', () => {
+test('catalog and manual-curated foreign-language mappings count for all eight affiliations', () => {
   const foreignMappings = catalog.mappings.filter(m => m.category === '外国語');
   assert.equal(foreignMappings.length, 7);
   assert.deepEqual([...new Set(foreignMappings.map(m => m.field))].sort(), ['仏語', '独語', '英語']);
@@ -186,7 +190,7 @@ test('real catalog foreign-language mappings count as foreign languages for all 
   assert.ok(foreignMappings.every(m => commonScopes.has(m.scopeId)));
   const ids = new Set(foreignMappings.map(m => m.mappingId));
   const offerings = catalog.offerings.filter(o => o.mappingIds.some(id => ids.has(id)));
-  assert.equal(offerings.length, 15);
+  assert.equal(offerings.length, 41);
   assert.ok(offerings.some(o => o.name === '英語２'));
   assert.ok(offerings.some(o => o.name === '仏語S(後期メディア)'));
   for (const { scopeId } of selectablePrograms(catalog)) {
@@ -197,7 +201,7 @@ test('real catalog foreign-language mappings count as foreign languages for all 
     const items = offerings.map(o => item(o.id));
     const rows = summarizeCategories(items, catalog, scopeId);
     assert.deepEqual(rows.find(r => r.category === '外国語'), {
-      category: '外国語', count: 15, ...summarizeCredits(items, offeringsById),
+      category: '外国語', count: 41, ...summarizeCredits(items, offeringsById),
     });
     assert.equal(rows.find(r => r.category === '未分類/要確認').count, 0);
   }
@@ -228,16 +232,90 @@ test('matching common and selected scope mappings count each offering once for a
   }
 });
 
-test('reported English S class 21005 stays unclassified while its mapping is unresolved', () => {
+test('manual curated ledger resolves only the 34 approved offerings and preserves source identity', () => {
+  assert.equal(manualMappingOverrideLedger.provenance, 'manual_curated');
+  assert.equal(manualMappingOverrideLedger.officialVerified, false);
+  const curatedIds = manualMappingOverrideLedger.overrides.flatMap(entry => entry.offeringIds);
+  assert.equal(curatedIds.length, 34);
+  assert.equal(new Set(curatedIds).size, 34);
+  assert.equal(rawCatalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 93);
+  assert.equal(catalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 59);
+  assert.equal(catalog.metadata.unresolvedOfferingCount, 59);
+  assert.equal(catalog.metadata.catalogCoverage.matchedOfferingCount, 627);
+  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 29);
+  assert.equal(catalog.metadata.catalogCoverage.outsideMappingScopeOfferingCount, 30);
+  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1161);
+  for (const entry of manualMappingOverrideLedger.overrides) {
+    for (const offeringId of entry.offeringIds) {
+      const raw = rawOfferingsById.get(offeringId);
+      const patched = offeringsById.get(offeringId);
+      assert.equal(raw.resolutionStatus, 'manual_review');
+      assert.deepEqual(raw.mappingIds, []);
+      assert.equal(patched.name, raw.name);
+      assert.equal(patched.courseId, raw.courseId);
+      assert.equal(patched.classCode, raw.classCode);
+      assert.equal(patched.subjectCode, raw.subjectCode);
+      assert.equal(patched.resolutionStatus, 'matched');
+      assert.deepEqual(patched.mappingIds, entry.mappingIds);
+    }
+  }
+  for (const raw of rawCatalog.offerings.filter(o => o.resolutionStatus === 'matched')) {
+    assert.deepEqual(offeringsById.get(raw.id), raw, raw.id);
+  }
+});
+
+test('all 26 numbered English S offerings classify as foreign language, including class 21005', () => {
+  const entry = manualMappingOverrideLedger.overrides.find(item => item.ruleId === 'english_s_numbered_classes');
+  assert.equal(entry.offeringIds.length, 26);
+  for (const { scopeId } of selectablePrograms(catalog)) {
+    const classify = createCreditClassifier(catalog, scopeId);
+    for (const offeringId of entry.offeringIds) {
+      assert.equal(classify(offeringsById.get(offeringId)), '外国語');
+    }
+  }
   const offering = offeringsById.get('066427dc-1df4-47bd-a6b1-538ab161e869');
   assert.equal(offering.name, '英語Ｓ［５］（秋期スクーリング）');
   assert.equal(offering.classCode, '21005');
-  assert.equal(offering.resolutionStatus, 'manual_review');
-  assert.deepEqual(offering.mappingIds, []);
-  for (const { scopeId } of selectablePrograms(catalog)) {
-    const rows = summarizeCategories([item(offering.id)], catalog, scopeId);
-    assert.equal(rows.find(r => r.category === '外国語').count, 0);
-    assert.equal(rows.find(r => r.category === '未分類/要確認').count, 1);
-    assert.equal(rows.find(r => r.category === '未分類/要確認').planned, offering.credits);
+  assert.equal(createCreditClassifier(catalog, selectablePrograms(catalog)[0].scopeId)(offering), '外国語');
+});
+
+test('history [S] overrides retain every candidate mapping and classify only in their proper scopes', () => {
+  const historyScope = catalog.programs.find(p => p.displayName === '文学部 / 史学科').scopeId;
+  const geographyScope = catalog.programs.find(p => p.displayName === '文学部 / 地理学科').scopeId;
+  const overviewRules = manualMappingOverrideLedger.overrides.filter(entry => entry.ruleId.includes('history_overview'));
+  assert.equal(overviewRules.length, 3);
+  for (const entry of overviewRules) {
+    assert.equal(entry.offeringIds.length, 2);
+    assert.equal(entry.mappingIds.length, 3);
+    for (const offeringId of entry.offeringIds) {
+      const offering = offeringsById.get(offeringId);
+      assert.equal(createCreditClassifier(catalog, historyScope)(offering), '専門教育');
+      assert.equal(createCreditClassifier(catalog, geographyScope)(offering), '専門教育');
+      for (const program of selectablePrograms(catalog).filter(p => ![historyScope, geographyScope].includes(p.scopeId))) {
+        assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), '未分類/要確認');
+      }
+    }
   }
+  const geographyRule = manualMappingOverrideLedger.overrides.find(entry => entry.ruleId === 'regional_geography_special_schooling_marker');
+  for (const offeringId of geographyRule.offeringIds) {
+    const offering = offeringsById.get(offeringId);
+    assert.equal(createCreditClassifier(catalog, geographyScope)(offering), '専門教育');
+    for (const program of selectablePrograms(catalog).filter(p => p.scopeId !== geographyScope)) {
+      assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), '未分類/要確認');
+    }
+  }
+});
+
+test('information, computer and held history offerings remain unresolved with distinct names', () => {
+  const information = catalog.offerings.filter(o => /^(情報学入門|コンピュータ入門)［[1-6]］［(表計算|データ演習|データベース)］/.test(o.name));
+  assert.equal(information.length, 16);
+  assert.ok(information.every(o => o.resolutionStatus === 'manual_review' && o.mappingIds.length === 0));
+  assert.ok(information.every(o => rawOfferingsById.get(o.id).name === o.name));
+
+  const held = catalog.offerings.filter(o =>
+    /^史学演習（(日本|西洋|東洋)）/.test(o.name)
+    || /^歴史資料学（日本(近代|近世)）/.test(o.name)
+    || o.name.startsWith('日本史特講（日本仏教史）（地理）'));
+  assert.equal(held.length, 11);
+  assert.ok(held.every(o => o.resolutionStatus === 'manual_review' && o.mappingIds.length === 0));
 });
