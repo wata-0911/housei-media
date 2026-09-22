@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import CourseSearch from '../components/planner/CourseSearch';
 import PlannedCourseList from '../components/planner/PlannedCourseList';
+import ProgramSettings from '../components/planner/ProgramSettings';
+import CategorySummary from '../components/planner/CategorySummary';
+import { createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
 import CreditSummary from '../components/planner/CreditSummary';
 import { catalog, offeringsById } from '../planner/catalog';
 import { summarizeCredits } from '../planner/calculations';
@@ -26,6 +29,7 @@ export default function PlannerPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const state = loaded.state;
+  const classify = createCreditClassifier(catalog, state.selectedScopeId);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -54,8 +58,8 @@ export default function PlannerPage() {
     commit({ ...state, items: [...state.items, { offeringId: id, status: 'planned', plannedYear: 2026, plannedTerm: null }] }, `${offeringsById.get(id)!.name}を追加・保存しました。`);
   }
 
-  function changeStatus(id: string, status: PlannerItem['status']) {
-    commit({ ...state, items: state.items.map(item => item.offeringId === id ? { ...item, status } : item) }, '履修状態を保存しました。');
+  function changeItem(id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) {
+    commit({ ...state, items: state.items.map(item => item.offeringId === id ? { ...item, ...patch } : item) }, '履修計画を保存しました。');
   }
 
   function recover() {
@@ -93,11 +97,13 @@ export default function PlannerPage() {
         </div>
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
+      <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} disabled={loaded.error !== null} onChange={selectedScopeId => commit({ ...state, selectedScopeId }, '所属を保存しました。')} />
       <CreditSummary summary={summarizeCredits(state.items, offeringsById)} />
+      {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId)} />}
       <p role="status" className="text-sm text-[#002255] min-h-5">{notice}</p>
       <div className="grid lg:grid-cols-2 gap-6 items-start">
-        <CourseSearch offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} />
-        <PlannedCourseList items={state.items} offerings={offeringsById} disabled={loaded.error !== null} onStatus={changeStatus} />
+        <CourseSearch classify={classify} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} />
+        <PlannedCourseList classify={classify} items={state.items} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} />
       </div>
     </div>
   </div>;
