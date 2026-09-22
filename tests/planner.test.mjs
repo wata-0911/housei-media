@@ -157,14 +157,15 @@ test('classification uses exact common/selected mappings; unresolved, conflictin
   const offering = { ...first, courseId: null, resolutionStatus: 'matched', mappingIds: ['human', 'human2'] };
   assert.equal(classify(offering), '一般教育：人文');
   assert.equal(classify({ ...offering, mappingIds: ['special', 'other'] }), '専門教育');
-  for (const mappingIds of [[], ['other'], ['unknown'], ['human', 'special'], ['human', 'unknown']]) {
-    assert.equal(classify({ ...offering, mappingIds }), '未分類/要確認');
+  for (const mappingIds of [[], ['human', 'special'], ['human', 'unknown']]) {
+    assert.equal(classify({ ...offering, mappingIds }), '対応情報を確認中');
   }
-  for (const resolutionStatus of ['manual_review', 'outside_mapping_scope']) {
-    assert.equal(classify({ ...offering, resolutionStatus }), '未分類/要確認');
-  }
-  assert.equal(createCreditClassifier(fixture, null)(offering), '未分類/要確認');
-  assert.equal(createCreditClassifier(fixture, common)(offering), '未分類/要確認');
+  assert.equal(classify({ ...offering, resolutionStatus: 'manual_review' }), '対応情報を確認中');
+  assert.equal(classify({ ...offering, resolutionStatus: 'outside_mapping_scope' }), '教職等・通常カリキュラム対象外');
+  assert.equal(classify({ ...offering, mappingIds: ['other'] }), '選択した所属のカリキュラム対象外');
+  assert.equal(classify({ ...offering, mappingIds: ['unknown'] }), '一般教育：その他');
+  assert.equal(createCreditClassifier(fixture, null)(offering), '所属を選択すると区分を表示');
+  assert.equal(createCreditClassifier(fixture, common)(offering), '所属を選択すると区分を表示');
 });
 
 test('category totals conserve overall credits and unknown counts across every offering/status and scope', () => {
@@ -177,8 +178,8 @@ test('category totals conserve overall credits and unknown counts across every o
       assert.equal(rows.reduce((sum, row) => sum + row[key], 0), total[key]);
     }
     assert.equal(rows.reduce((sum, row) => sum + row.count, 0), 686);
-    const unresolved = catalog.offerings.filter(o => o.resolutionStatus !== 'matched');
-    assert.ok(rows.find(r => r.category === '未分類/要確認').count >= unresolved.length);
+    assert.equal(rows.find(r => r.category === '教職等・通常カリキュラム対象外').count, 30);
+    assert.ok(rows.find(r => r.category === '対応情報を確認中').count >= 29);
   }
 });
 
@@ -203,7 +204,7 @@ test('catalog and manual-curated foreign-language mappings count for all eight a
     assert.deepEqual(rows.find(r => r.category === '外国語'), {
       category: '外国語', count: 41, ...summarizeCredits(items, offeringsById),
     });
-    assert.equal(rows.find(r => r.category === '未分類/要確認').count, 0);
+    assert.equal(rows.find(r => r.category === '対応情報を確認中').count, 0);
   }
 });
 
@@ -292,7 +293,7 @@ test('history [S] overrides retain every candidate mapping and classify only in 
       assert.equal(createCreditClassifier(catalog, historyScope)(offering), '専門教育');
       assert.equal(createCreditClassifier(catalog, geographyScope)(offering), '専門教育');
       for (const program of selectablePrograms(catalog).filter(p => ![historyScope, geographyScope].includes(p.scopeId))) {
-        assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), '未分類/要確認');
+        assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), '選択した所属のカリキュラム対象外');
       }
     }
   }
@@ -301,7 +302,7 @@ test('history [S] overrides retain every candidate mapping and classify only in 
     const offering = offeringsById.get(offeringId);
     assert.equal(createCreditClassifier(catalog, geographyScope)(offering), '専門教育');
     for (const program of selectablePrograms(catalog).filter(p => p.scopeId !== geographyScope)) {
-      assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), '未分類/要確認');
+      assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), '選択した所属のカリキュラム対象外');
     }
   }
 });
@@ -318,4 +319,45 @@ test('information, computer and held history offerings remain unresolved with di
     || o.name.startsWith('日本史特講（日本仏教史）（地理）'));
   assert.equal(held.length, 11);
   assert.ok(held.every(o => o.resolutionStatus === 'manual_review' && o.mappingIds.length === 0));
+});
+
+
+test('outside selected scope is a reference row and never contributes to normal curriculum categories', async () => {
+  const { isCreditCategory } = await import('../src/planner/annualPlan.ts');
+  const scope = selectablePrograms(catalog)[0].scopeId;
+  const classify = createCreditClassifier(catalog, scope);
+  const offering = catalog.offerings.find(o => classify(o) === '選択した所属のカリキュラム対象外' && o.credits > 0);
+  assert.ok(offering);
+  const rows = summarizeCategories([item(offering.id, 'earned')], catalog, scope);
+  assert.equal(rows.filter(row => isCreditCategory(row.category)).reduce((sum, row) => sum + row.earned, 0), 0);
+  assert.equal(rows.find(row => row.category === classify(offering)).earned, offering.credits);
+});
+
+test('general education other is a normal category even with a null course identity', () => {
+  const scope = selectablePrograms(catalog)[0].scopeId;
+  const classify = createCreditClassifier(catalog, scope);
+  const offering = catalog.offerings.find(o => classify(o) === '一般教育：その他');
+  assert.ok(offering);
+  assert.equal(classify({ ...offering, courseId: null }), '一般教育：その他');
+  const rows = summarizeCategories([item(offering.id)], catalog, scope);
+  assert.equal(rows.find(row => row.category === '一般教育：その他').count, 1);
+  assert.equal(rows.find(row => row.category === '対応情報を確認中').count, 0);
+});
+
+test('outside mapping and manual review keep distinct labels and remain saveable', () => {
+  for (const [status, label, count] of [
+    ['outside_mapping_scope', '教職等・通常カリキュラム対象外', 30],
+    ['manual_review', '対応情報を確認中', 29],
+  ]) {
+    const offerings = catalog.offerings.filter(o => o.resolutionStatus === status);
+    assert.equal(offerings.length, count);
+    for (const scope of [null, ...selectablePrograms(catalog).map(p => p.scopeId)]) {
+      const classify = createCreditClassifier(catalog, scope);
+      assert.ok(offerings.every(o => classify(o) === label));
+      const state = { ...initialState(), selectedScopeId: scope, items: offerings.map(o => item(o.id)) };
+      const store = memoryStore();
+      saveState(store, state, null, catalog);
+      assert.deepEqual(loadState(store, catalog).state, state);
+    }
+  }
 });

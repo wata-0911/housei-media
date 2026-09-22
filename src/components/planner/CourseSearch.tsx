@@ -1,9 +1,11 @@
+import ClassificationLabel from './ClassificationLabel';
+import type { createCreditClassifier } from '../../planner/annualPlan';
 import { useState } from 'react';
 import type { Offering } from '../../planner/plannerCatalog';
 import { searchOfferings } from '../../planner/calculations';
 
-type Props = { offerings: Offering[]; addedIds: Set<string>; disabled: boolean; onAdd: (id: string) => void };
-export default function CourseSearch({ offerings, addedIds, disabled, onAdd }: Props) {
+type Props = { classify: ReturnType<typeof createCreditClassifier>; offerings: Offering[]; addedIds: Set<string>; disabled: boolean; onAdd: (id: string) => void };
+export default function CourseSearch({ classify, offerings, addedIds, disabled, onAdd }: Props) {
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(30);
   const matches = searchOfferings(offerings, query);
@@ -18,6 +20,7 @@ export default function CourseSearch({ offerings, addedIds, disabled, onAdd }: P
       {matches.slice(0, limit).map(o => <li key={o.id} className="py-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
         <div className="min-w-0">
           <h3 className="font-medium break-words">{o.name}</h3>
+          <ClassificationLabel value={classify(o)} />
           <p className="text-sm text-gray-600 mt-1">{[o.deliveryCategory ?? (o.method === 'correspondence' ? '通信学習' : 'スクーリング'), o.period, o.credits === null ? '単位数不明' : `${o.credits}単位`].filter(Boolean).join(' / ')}</p>
           <p className="text-xs text-gray-500 mt-1">科目コード：{o.subjectCode ?? '—'} / クラス：{o.classCode ?? '—'}</p>
         </div>

@@ -1,3 +1,5 @@
+import ClassificationLabel from './ClassificationLabel';
+import type { createCreditClassifier } from '../../planner/annualPlan';
 import { useState } from 'react';
 import type { Offering, PlannerItem } from '../../planner/plannerCatalog';
 import { groupAnnualPlan, termOptions } from '../../planner/annualPlan';
@@ -5,7 +7,7 @@ import { groupAnnualPlan, termOptions } from '../../planner/annualPlan';
 const statuses: Record<PlannerItem['status'], string> = {
   planned: '計画中', in_progress: '履修中', waiting: '結果待ち', earned: '修得済み', failed: '不合格', dropped: '取りやめ',
 };
-type Props = { items: PlannerItem[]; offerings: Map<string, Offering>; disabled: boolean; onChange: (id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) => void };
+type Props = { classify: ReturnType<typeof createCreditClassifier>; items: PlannerItem[]; offerings: Map<string, Offering>; disabled: boolean; onChange: (id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) => void };
 const control = 'w-full min-w-0 border border-gray-300 rounded-sm p-2 bg-white disabled:opacity-50';
 
 function YearEditor({ item, disabled, onChange }: { item: PlannerItem; disabled: boolean; onChange: Props['onChange'] }) {
@@ -28,7 +30,7 @@ function YearEditor({ item, disabled, onChange }: { item: PlannerItem; disabled:
   </form>;
 }
 
-export default function PlannedCourseList({ items, offerings, disabled, onChange }: Props) {
+export default function PlannedCourseList({ classify, items, offerings, disabled, onChange }: Props) {
   const terms = termOptions([...offerings.values()]);
   return <section aria-labelledby="planned-heading" className="bg-white border border-gray-200 p-5 sm:p-7 min-w-0">
     <h2 id="planned-heading" className="text-xl text-[#002255]">年間履修計画 <span className="text-sm">{items.length}件</span></h2>
@@ -45,7 +47,7 @@ export default function PlannedCourseList({ items, offerings, disabled, onChange
             return <li key={item.offeringId} className="py-4 min-w-0">
               <h5 className="font-medium break-words">{offering.name}</h5>
               <p className="text-sm text-gray-600 my-2">開講期：{offering.period ?? '未分類'} / {offering.classCode ?? 'クラス未設定'} / {offering.credits === null ? '単位数不明' : `${offering.credits}単位`}</p>
-              {offering.resolutionStatus !== 'matched' && <p className="text-xs text-amber-800 mb-3">{offering.resolutionStatus === 'manual_review' ? '対応情報の確認が必要（manual_review）' : '対応情報の対象外（outside_mapping_scope）'}</p>}
+              <ClassificationLabel value={classify(offering)} />
               <div className="grid gap-3 sm:grid-cols-2">
                 <YearEditor key={`${item.offeringId}-${item.plannedYear}`} item={item} disabled={disabled} onChange={onChange} />
                 <div><label htmlFor={`term-${item.offeringId}`} className="block text-sm mb-1">計画期</label>
