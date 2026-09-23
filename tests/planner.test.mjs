@@ -105,6 +105,73 @@ test('graduation progress copy never asserts graduation eligibility', () => {
   assert.match(source, /卒業可否を保証しません/);
 });
 
+test('grouped requirements use earned credits, one language, and one mapped offering', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const common = catalog.programs.find(program => program.isCommon).scopeId;
+  const base = catalog.mappings[0];
+  const maps = [
+    ['human', '一般教育', '人文'], ['other', '一般教育', 'その他'],
+    ['physical', '保健体育', null], ['english', '外国語', '英語'],
+    ['english-duplicate', '外国語', '英語'], ['german', '外国語', '独語'],
+  ].map(([mappingId, category, field]) => ({ ...base, mappingId, scopeId: common, category, field }));
+  const offering = (id, name, credits, method, mappingIds) => ({ ...catalog.offerings[0], id, name, credits, method, mappingIds, resolutionStatus: 'matched' });
+  const fixture = { ...catalog, mappings: maps, offerings: [
+    offering('literature', '文学', 4, 'correspondence', ['human']),
+    offering('general-other', 'その他科目', 28, 'correspondence', ['other']),
+    offering('health', '健康・スポーツ科学概論', 2, 'correspondence', ['physical']),
+    offering('sport', 'スポーツ総合演習（春期）', 2, 'schooling', ['physical']),
+    offering('english2', '英語2', 2, 'correspondence', ['english', 'english-duplicate']),
+    offering('englishS1', '英語S［1］', 1, 'schooling', ['english']),
+    offering('englishS2', '英語S［2］', 1, 'schooling', ['english']),
+    offering('german2', '独語2', 2, 'correspondence', ['german']),
+    offering('germanS', '独語S', 2, 'schooling', ['german']),
+  ] };
+  const card = (items, id) => calculateGraduationProgress(items, fixture, scope).cards.find(row => row.requirementId === `group-${id}`);
+  const empty = calculateGraduationProgress([], fixture, scope);
+  assert.equal(empty.graduationCheckComplete, false);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).status), ['unsatisfied', 'unsatisfied', 'unsatisfied']);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).earned), [0, 0, 0]);
+  assert.ok(empty.cards.every(row => row.ruleType !== 'max_credits'));
+  for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress'], ['earned', 'earned']]) {
+    const general = card([item('literature', status)], 'general');
+    assert.equal(general[key], 4);
+    assert.equal(general.details[0][key], 4);
+    assert.equal(general.status, 'unsatisfied');
+    const foreign = card([item('english2', status)], 'foreign');
+    assert.equal(foreign[key], 2);
+    assert.equal(foreign.details[0][key], 2);
+    assert.equal(foreign.status, 'unsatisfied');
+    const physical = card([item('health', status)], 'physical');
+    assert.equal(physical.status, status === 'earned' ? 'satisfied' : 'unsatisfied');
+  }
+  assert.equal(card([item('sport', 'earned')], 'physical').status, 'satisfied');
+  assert.equal(card([item('literature', 'earned'), item('general-other', 'earned')], 'general').status, 'unsatisfied');
+  assert.equal(card([item('english2', 'earned'), item('englishS1', 'earned'), item('englishS2', 'earned')], 'foreign').status, 'satisfied');
+  assert.equal(card([item('english2', 'earned'), item('german2', 'earned')], 'foreign').details[0].schooling, 0);
+  assert.equal(card([item('english2', 'earned'), item('german2', 'earned')], 'foreign').status, 'unsatisfied');
+  assert.equal(card([item('english2', 'earned'), item('german2', 'earned'), item('germanS', 'earned')], 'foreign').earned, 4);
+  assert.equal(card([item('english2', 'earned'), item('englishS1', 'earned'), item('englishS2', 'earned'), item('german2', 'earned'), item('germanS', 'earned')], 'foreign').earned, 4);
+});
+
+test('real catalog groups literature, English 2 and curated English S', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const find = name => catalog.offerings.find(offering => offering.name === name && offering.resolutionStatus === 'matched');
+  const literature = find('文学');
+  const english = find('英語２');
+  const englishS = catalog.offerings.filter(offering => offering.name.startsWith('英語Ｓ［') && offering.credits === 1 && offering.resolutionStatus === 'matched').slice(0, 2);
+  assert.ok(literature && english && englishS.length === 2);
+  const progress = calculateGraduationProgress([
+    item(literature.id, 'earned'), item(english.id, 'earned'), ...englishS.map(offering => item(offering.id, 'earned')),
+  ], catalog, scope);
+  assert.equal(progress.cards.filter(row => row.label === '一般教育').length, 1);
+  assert.equal(progress.cards.filter(row => row.label === '外国語').length, 1);
+  assert.equal(progress.cards.filter(row => row.label === '保健体育').length, 1);
+  assert.equal(progress.cards.find(row => row.label === '一般教育').details[0].earned, 4);
+  assert.equal(progress.cards.find(row => row.label === '外国語').status, 'satisfied');
+  assert.ok(progress.cards.every(row => row.ruleType !== 'max_credits'));
+  assert.equal(progress.graduationCheckComplete, false);
+});
+
 test('search spans every offering and each specified field, normalizes full-width input', () => {
   assert.equal(searchOfferings(catalog.offerings, '').length, 686);
   for (const offering of catalog.offerings) {

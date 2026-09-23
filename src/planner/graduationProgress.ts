@@ -26,10 +26,23 @@ export type RequirementProgress = {
 export type GraduationProgress = {
   graduationCheckComplete: false;
   requirements: RequirementProgress[];
+  cards: ProgressCard[];
   evaluableCount: number;
   unknownCount: number;
   unknownReasons: Array<{ reason: string; count: number }>;
 };
+
+export type ProgressCard = RequirementProgress & {
+  details?: Array<{ label: string; earned: number; inProgress: number; planned: number; target: number; schooling?: number }>;
+  note?: string;
+};
+
+const GROUP_RULES = new Set([
+  'common_general_exact_credits', 'common_general_max_credits',
+  'common_general_humanities_min_credits', 'common_general_social_min_credits', 'common_general_natural_min_credits',
+  'common_physical_exact_credits', 'common_physical_max_credits', 'common_physical_choose_one',
+  'common_foreign_choose_one', 'common_foreign_exact_credits', 'common_foreign_min_schooling_credits', 'common_foreign_max_credits',
+]);
 
 const CONDITION_ALLOWLIST: Partial<Record<StructuredRequirement['ruleType'], string[][]>> = {
   min_credits: [[], ['full_course_credits_required']],
@@ -152,11 +165,74 @@ function evaluateStructured(
   };
 }
 
-/** Individual rules stay independent; this never composes them into a graduation decision. */
+function groupedCards(
+  items: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[],
+  hasUnresolvedEarned: boolean,
+): ProgressCard[] {
+  type Totals = { earned: number; inProgress: number; planned: number; schooling: number };
+  const empty = (): Totals => ({ earned: 0, inProgress: 0, planned: 0, schooling: 0 });
+  const general = empty();
+  const fields = new Map(['人文', '社会', '自然'].map(field => [field, empty()]));
+  const physical = empty();
+  const physicalEarned = new Set<string>();
+  const languages = new Map(['英語', '独語', '仏語'].map(language => [language, empty()]));
+  for (const item of items) {
+    const offering = offerings.get(item.offeringId);
+    if (!offering) throw new Error(`Unknown offering: ${item.offeringId}`);
+    if (offering.resolutionStatus !== 'matched' || offering.credits === null) continue;
+    const mappings = eligibleMappings(offering);
+    const add = (totals: Totals) => {
+      if (item.status === 'earned') {
+        totals.earned += offering.credits!;
+        if (offering.method === 'schooling') totals.schooling += offering.credits!;
+      } else if (item.status === 'in_progress') totals.inProgress += offering.credits!;
+      else totals.planned += offering.credits!;
+    };
+    if (mappings.some(mapping => mapping.category === '一般教育')) {
+      add(general);
+      for (const [field, totals] of fields) {
+        if (mappings.some(mapping => mapping.category === '一般教育' && mapping.field === field)) add(totals);
+      }
+    }
+    if (mappings.some(mapping => mapping.category === '保健体育')
+      && (offering.name.startsWith('健康・スポーツ科学概論') || offering.name.startsWith('スポーツ総合演習'))) {
+      add(physical);
+      if (item.status === 'earned' && offering.credits >= 2) physicalEarned.add(offering.name.startsWith('健康・スポーツ科学概論') ? '概論' : '演習');
+    }
+    for (const [language, totals] of languages) {
+      if (mappings.some(mapping => mapping.category === '外国語' && mapping.field === language)) add(totals);
+    }
+  }
+  const detail = (label: string, totals: Totals, target: number, showSchooling = false) => ({
+    label, earned: totals.earned, inProgress: totals.inProgress, planned: totals.planned, target,
+    ...(showSchooling ? { schooling: totals.schooling } : {}),
+  });
+  const make = (id: string, label: string, totals: Totals, target: number, satisfied: boolean, details?: ProgressCard['details'], note?: string): ProgressCard => ({
+    requirementId: id, label, ruleType: 'group', status: hasUnresolvedEarned ? 'unknown' : satisfied ? 'satisfied' : 'unsatisfied',
+    earned: Math.min(target, totals.earned), inProgress: totals.inProgress, planned: totals.planned, target, unit: 'credits',
+    reason: hasUnresolvedEarned ? '修得済みに対応関係を確認中の科目があります' : null, details, note,
+  });
+  const generalDetails = [...fields].map(([field, totals]) => detail(field, totals, 8));
+  const generalCard = make('group-general', '一般教育', general, 36,
+    general.earned >= 36 && [...fields.values()].every(totals => totals.earned >= 8), generalDetails,
+    '36単位のうち人文・社会・自然を各8単位以上。算入上限36単位');
+  const physicalCard = make('group-physical', '保健体育', physical, 2, physicalEarned.size > 0, undefined,
+    '健康・スポーツ科学概論 または スポーツ総合演習を1科目。算入上限2単位');
+  const candidates = [...languages].filter(([, totals]) => totals.earned >= 4 && totals.schooling >= 2);
+  const best = candidates[0]?.[1] ?? [...languages.values()].sort((a, b) =>
+    Math.min(4, b.earned) - Math.min(4, a.earned) || b.schooling - a.schooling
+    || b.inProgress - a.inProgress || b.planned - a.planned)[0];
+  const foreignCard = make('group-foreign', '外国語', best,
+    4, candidates.length > 0, [...languages].map(([language, totals]) => detail(language, totals, 4, true)),
+    `同一言語で4単位、うちスクーリング2単位以上。算入は1言語・上限4単位${candidates.length > 1 ? '（複数候補）' : candidates.length === 1 ? `（候補：${candidates[0][0]}）` : ''}`);
+  return [generalCard, foreignCard, physicalCard];
+}
+
+/** Individual rules and grouped cards never compose into a graduation decision. */
 export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
-    return { graduationCheckComplete: false, requirements: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [] };
+    return { graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [] };
   }
   const offerings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const resolve = createMappingResolver(catalog);
@@ -167,6 +243,11 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     requirement.status === 'unsupported'
       ? unknown(requirement, requirement.reason || '未対応の要件です')
       : evaluateStructured(requirement, items, offerings, eligibleMappings, hasUnresolvedEarned));
+  const cards = [
+    ...groupedCards(items, offerings, eligibleMappings, hasUnresolvedEarned),
+    ...requirements.filter(row => row.status !== 'unknown' && row.ruleType !== 'max_credits'
+      && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')),
+  ];
   const reasons = new Map<string, number>();
   for (const row of requirements.filter(row => row.status === 'unknown')) {
     const reason = row.reason ?? '自動判定できません';
@@ -175,6 +256,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   return {
     graduationCheckComplete: false,
     requirements,
+    cards,
     evaluableCount: requirements.filter(row => row.status !== 'unknown').length,
     unknownCount: requirements.filter(row => row.status === 'unknown').length,
     unknownReasons: [...reasons].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
