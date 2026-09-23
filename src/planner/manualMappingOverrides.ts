@@ -1,4 +1,5 @@
 import overrideData from '../data/planner_manual_mapping_overrides_2026.json';
+import officialData from '../data/planner_official_mapping_overrides_2026.json';
 import type { PlannerCatalog } from './plannerCatalog';
 
 type OverrideEntry = {
@@ -8,13 +9,14 @@ type OverrideEntry = {
   offeringIds: string[];
   mappingIds: string[];
   reason: string;
+  evidence?: Array<{ title: string; url: string; printedPages: number[]; finding: string }>;
 };
 
 type OverrideLedger = {
   schemaVersion: 1;
   academicYear: 2026;
-  provenance: 'manual_curated';
-  officialVerified: false;
+  provenance: 'manual_curated' | 'official_source_verified';
+  officialVerified: boolean;
   approvedBy: string;
   overrides: OverrideEntry[];
 };
@@ -31,8 +33,8 @@ function parseLedger(value: unknown): OverrideLedger {
   if (!isRecord(value)
     || value.schemaVersion !== 1
     || value.academicYear !== 2026
-    || value.provenance !== 'manual_curated'
-    || value.officialVerified !== false
+    || !((value.provenance === 'manual_curated' && value.officialVerified === false)
+      || (value.provenance === 'official_source_verified' && value.officialVerified === true))
     || typeof value.approvedBy !== 'string'
     || !Array.isArray(value.overrides)) {
     throw new Error('Manual mapping override ledger is invalid.');
@@ -44,7 +46,12 @@ function parseLedger(value: unknown): OverrideLedger {
       || typeof entry.targetCourseName !== 'string'
       || !stringArray(entry.offeringIds)
       || !stringArray(entry.mappingIds)
-      || typeof entry.reason !== 'string') {
+      || typeof entry.reason !== 'string'
+      || (value.officialVerified && (!Array.isArray(entry.evidence) || entry.evidence.length === 0
+        || !entry.evidence.every(source => isRecord(source)
+          && typeof source.title === 'string' && typeof source.url === 'string'
+          && typeof source.finding === 'string' && Array.isArray(source.printedPages)
+          && source.printedPages.length > 0 && source.printedPages.every(page => Number.isInteger(page) && page > 0))))) {
       throw new Error('Manual mapping override entry is invalid.');
     }
   }
@@ -52,6 +59,7 @@ function parseLedger(value: unknown): OverrideLedger {
 }
 
 export const manualMappingOverrideLedger = parseLedger(overrideData);
+export const officialMappingOverrideLedger = parseLedger(officialData);
 
 /** Apply only explicitly approved offering-to-mapping edges; never rewrite offering identity. */
 export function applyManualMappingOverrides(input: PlannerCatalog): PlannerCatalog {
@@ -60,7 +68,7 @@ export function applyManualMappingOverrides(input: PlannerCatalog): PlannerCatal
   const claimedOfferingIds = new Set<string>();
   const replacements = new Map<string, PlannerCatalog['offerings'][number]>();
 
-  for (const override of manualMappingOverrideLedger.overrides) {
+  for (const override of [...manualMappingOverrideLedger.overrides, ...officialMappingOverrideLedger.overrides]) {
     for (const mappingId of override.mappingIds) {
       if (!mappingIds.has(mappingId)) throw new Error(`Manual override references unknown mapping: ${mappingId}`);
     }
