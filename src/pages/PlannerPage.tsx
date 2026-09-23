@@ -5,10 +5,12 @@ import ProgramSettings from '../components/planner/ProgramSettings';
 import CategorySummary from '../components/planner/CategorySummary';
 import { createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
 import CreditSummary from '../components/planner/CreditSummary';
+import GraduationProgress from '../components/planner/GraduationProgress';
 import { catalog, offeringsById } from '../planner/catalog';
 import { summarizeCredits } from '../planner/calculations';
 import { initialState, loadState, recoverState, saveState, STORAGE_KEY, type LoadResult } from '../planner/storage';
 import type { PlannerItem, PlannerState } from '../planner/plannerCatalog';
+import { calculateGraduationProgress } from '../planner/graduationProgress';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -30,6 +32,7 @@ export default function PlannerPage() {
   const [notice, setNotice] = useState('');
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
+  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -82,7 +85,7 @@ export default function PlannerPage() {
     </section>
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <div className="border-l-4 border-[#E65C00] bg-orange-50 p-4 text-sm leading-relaxed">
-        {!catalog.metadata.graduationCheckComplete && <p>卒業判定には対応していません。表示する単位は開講ごとの単純合計で、卒業要件への算入・同一科目の重複は判定しません。</p>}
+        {!catalog.metadata.graduationCheckComplete && <p>一部要件のみ自動判定しています。卒業可否を保証しません。</p>}
         <p className="mt-1">2026年の収録データを使用しています。計画はこのブラウザに保存されます。結果待ち・不合格・取りやめの単位は合計に含めません。単位数不明の件数は全状態を対象に表示します。</p>
       </div>
       {loaded.error && <div role="alert" className="bg-amber-50 border border-amber-300 p-4 space-y-3">
@@ -100,6 +103,7 @@ export default function PlannerPage() {
       <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} disabled={loaded.error !== null} onChange={selectedScopeId => commit({ ...state, selectedScopeId }, '所属を保存しました。')} />
       <CreditSummary summary={summarizeCredits(state.items, offeringsById)} />
       {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId)} />}
+      {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}
       <p role="status" className="text-sm text-[#002255] min-h-5">{notice}</p>
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         <CourseSearch classify={classify} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} />

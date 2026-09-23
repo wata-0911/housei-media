@@ -6,6 +6,7 @@ import { manualMappingOverrideLedger } from '../src/planner/manualMappingOverrid
 import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
+import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -21,6 +22,87 @@ test('catalog preserves all 686 offerings, 348 null course IDs and incomplete gr
   assert.equal(catalog.offerings.filter(o => o.courseId === null).length, 348);
   assert.equal(catalog.metadata.graduationCheckComplete, false);
   assert.equal(validateCatalog({ ...catalog, metadata: { ...catalog.metadata, graduationCheckComplete: true } }), false);
+});
+
+test('partial graduation progress uses earned only and includes common plus selected scope', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const common = catalog.programs.find(program => program.isCommon).scopeId;
+  const baseMapping = catalog.mappings[0];
+  const baseOffering = catalog.offerings[0];
+  const requirements = [
+    { id: 'common-rule', ruleId: 'common-rule', scopeId: common, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '一般教育' }, value: 4, unit: 'credits', conditions: null },
+    { id: 'selected-rule', ruleId: 'selected-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 4, unit: 'credits', conditions: null },
+  ];
+  const fixture = {
+    ...catalog,
+    mappings: [
+      { ...baseMapping, mappingId: 'common-map', scopeId: common, category: '一般教育', field: '人文', requirementType: null },
+      { ...baseMapping, mappingId: 'selected-map', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+    ],
+    offerings: [
+      { ...baseOffering, id: 'earned-common', credits: 4, resolutionStatus: 'matched', mappingIds: ['common-map'] },
+      { ...baseOffering, id: 'planned-selected', credits: 4, resolutionStatus: 'matched', mappingIds: ['selected-map'] },
+      { ...baseOffering, id: 'progress-selected', credits: 2, resolutionStatus: 'matched', mappingIds: ['selected-map'] },
+    ],
+    requirements,
+  };
+  const progress = calculateGraduationProgress([
+    item('earned-common', 'earned'), item('planned-selected', 'planned'), item('progress-selected', 'in_progress'),
+  ], fixture, scope);
+  assert.equal(progress.graduationCheckComplete, false);
+  assert.deepEqual(progress.requirements.map(row => ({ id: row.requirementId, status: row.status, earned: row.earned, inProgress: row.inProgress, planned: row.planned })), [
+    { id: 'common-rule', status: 'satisfied', earned: 4, inProgress: 0, planned: 0 },
+    { id: 'selected-rule', status: 'unsatisfied', earned: 0, inProgress: 2, planned: 4 },
+  ]);
+});
+
+test('partial progress treats null credits, unsupported and special conditions as unknown', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const baseMapping = { ...catalog.mappings[0], mappingId: 'map', scopeId: scope, category: '専門教育', field: null, requirementType: null };
+  const fixture = {
+    ...catalog,
+    mappings: [baseMapping],
+    offerings: [{ ...catalog.offerings[0], id: 'null-credit', credits: null, resolutionStatus: 'matched', mappingIds: ['map'] }],
+    requirements: [
+      { id: 'null-rule', ruleId: 'null-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 4, unit: 'credits', conditions: null },
+      { id: 'special-rule', ruleId: 'special-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 4, unit: 'credits', conditions: { when: { thesis_selected: true } } },
+      { id: 'overflow-rule', ruleId: 'overflow-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'overflow_credit_transfer', target: { curriculum_category: '専門教育' }, value: null, unit: null, conditions: null },
+      { id: 'unsupported-rule', ruleId: 'unsupported-rule', scopeId: null, scopeLabel: '全体', category: null, reason: '未対応', sourcePage: 1, status: 'unsupported', ruleType: null, target: null, value: null, unit: null, conditions: null },
+    ],
+  };
+  const progress = calculateGraduationProgress([item('null-credit', 'earned')], fixture, scope);
+  assert.equal(progress.evaluableCount, 0);
+  assert.equal(progress.unknownCount, 4);
+  assert.ok(progress.requirements.every(row => row.status === 'unknown'));
+});
+
+test('one offering with duplicate matching mappings is counted once and outside-scope offerings are excluded', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const base = catalog.mappings[0];
+  const fixture = {
+    ...catalog,
+    mappings: [
+      { ...base, mappingId: 'map-a', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+      { ...base, mappingId: 'map-b', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+    ],
+    offerings: [
+      { ...catalog.offerings[0], id: 'duplicate-edge', credits: 4, resolutionStatus: 'matched', mappingIds: ['map-a', 'map-b'] },
+      { ...catalog.offerings[0], id: 'teacher', credits: 4, resolutionStatus: 'outside_mapping_scope', mappingIds: [] },
+    ],
+    requirements: [{ id: 'rule', ruleId: 'rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 8, unit: 'credits', conditions: null }],
+  };
+  const row = calculateGraduationProgress([item('duplicate-edge', 'earned'), item('teacher', 'earned')], fixture, scope).requirements[0];
+  assert.equal(row.earned, 4);
+  assert.equal(row.status, 'unsatisfied');
+});
+
+test('graduation progress copy never asserts graduation eligibility', () => {
+  const source = [
+    readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/components/planner/GraduationProgress.tsx', import.meta.url), 'utf8'),
+  ].join('\n');
+  assert.doesNotMatch(source, /卒業できます|卒業可能|卒業不可/);
+  assert.match(source, /卒業可否を保証しません/);
 });
 
 test('search spans every offering and each specified field, normalizes full-width input', () => {
