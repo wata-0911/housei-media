@@ -179,7 +179,7 @@ test('category totals conserve overall credits and unknown counts across every o
     }
     assert.equal(rows.reduce((sum, row) => sum + row.count, 0), 686);
     assert.equal(rows.find(r => r.category === '教職等・通常カリキュラム対象外').count, 30);
-    assert.ok(rows.find(r => r.category === '対応情報を確認中').count >= 29);
+    assert.ok(rows.find(r => r.category === '対応情報を確認中').count >= 11);
   }
 });
 
@@ -233,19 +233,19 @@ test('matching common and selected scope mappings count each offering once for a
   }
 });
 
-test('manual curated ledger resolves only the 34 approved offerings and preserves source identity', () => {
+test('manual curated ledger resolves only the 52 approved offerings and preserves source identity', () => {
   assert.equal(manualMappingOverrideLedger.provenance, 'manual_curated');
   assert.equal(manualMappingOverrideLedger.officialVerified, false);
   const curatedIds = manualMappingOverrideLedger.overrides.flatMap(entry => entry.offeringIds);
-  assert.equal(curatedIds.length, 34);
-  assert.equal(new Set(curatedIds).size, 34);
+  assert.equal(curatedIds.length, 52);
+  assert.equal(new Set(curatedIds).size, 52);
   assert.equal(rawCatalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 93);
-  assert.equal(catalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 59);
-  assert.equal(catalog.metadata.unresolvedOfferingCount, 59);
-  assert.equal(catalog.metadata.catalogCoverage.matchedOfferingCount, 627);
-  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 29);
+  assert.equal(catalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 41);
+  assert.equal(catalog.metadata.unresolvedOfferingCount, 41);
+  assert.equal(catalog.metadata.catalogCoverage.matchedOfferingCount, 645);
+  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 11);
   assert.equal(catalog.metadata.catalogCoverage.outsideMappingScopeOfferingCount, 30);
-  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1161);
+  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1227);
   for (const entry of manualMappingOverrideLedger.overrides) {
     for (const offeringId of entry.offeringIds) {
       const raw = rawOfferingsById.get(offeringId);
@@ -307,17 +307,16 @@ test('history [S] overrides retain every candidate mapping and classify only in 
   }
 });
 
-test('information, computer and held history offerings remain unresolved with distinct names', () => {
+test('information and computer offerings preserve distinct names while ambiguous history stays unresolved', () => {
   const information = catalog.offerings.filter(o => /^(情報学入門|コンピュータ入門)［[1-6]］［(表計算|データ演習|データベース)］/.test(o.name));
   assert.equal(information.length, 16);
-  assert.ok(information.every(o => o.resolutionStatus === 'manual_review' && o.mappingIds.length === 0));
+  assert.ok(information.every(o => o.resolutionStatus === 'matched' && o.mappingIds.length > 0));
   assert.ok(information.every(o => rawOfferingsById.get(o.id).name === o.name));
 
   const held = catalog.offerings.filter(o =>
     /^史学演習（(日本|西洋|東洋)）/.test(o.name)
-    || /^歴史資料学（日本(近代|近世)）/.test(o.name)
     || o.name.startsWith('日本史特講（日本仏教史）（地理）'));
-  assert.equal(held.length, 11);
+  assert.equal(held.length, 9);
   assert.ok(held.every(o => o.resolutionStatus === 'manual_review' && o.mappingIds.length === 0));
 });
 
@@ -347,7 +346,7 @@ test('general education other is a normal category even with a null course ident
 test('outside mapping and manual review keep distinct labels and remain saveable', () => {
   for (const [status, label, count] of [
     ['outside_mapping_scope', '教職等・通常カリキュラム対象外', 30],
-    ['manual_review', '対応情報を確認中', 29],
+    ['manual_review', '対応情報を確認中', 11],
   ]) {
     const offerings = catalog.offerings.filter(o => o.resolutionStatus === status);
     assert.equal(offerings.length, count);
@@ -360,4 +359,152 @@ test('outside mapping and manual review keep distinct labels and remain saveable
       assert.deepEqual(loadState(store, catalog).state, state);
     }
   }
+});
+
+// Freeze the pre-cleanup ledger so extending it cannot silently rewrite its 34 offerings.
+const beforeCleanupLedger = JSON.parse(readFileSync(new URL('./fixtures/planner-manual-overrides-before-cleanup.json', import.meta.url), 'utf8'));
+const cleanupAudit = JSON.parse(readFileSync(new URL('../docs/planner-mapping-cleanup-audit-2026.json', import.meta.url), 'utf8'));
+const beforeOverrides = new Map(beforeCleanupLedger.overrides.flatMap(entry => entry.offeringIds.map(id => [id, entry.mappingIds])));
+const beforeCleanupCatalog = {
+  ...rawCatalog,
+  offerings: rawCatalog.offerings.map(o => beforeOverrides.has(o.id)
+    ? { ...o, resolutionStatus: 'matched', mappingIds: beforeOverrides.get(o.id) } : o),
+};
+
+test('cleanup preserves every field and UI classification of all 627 previously matched offerings', () => {
+  assert.deepEqual(manualMappingOverrideLedger.overrides.slice(0, beforeCleanupLedger.overrides.length), beforeCleanupLedger.overrides);
+  assert.equal(beforeOverrides.size, 34);
+  const matched = beforeCleanupCatalog.offerings.filter(o => o.resolutionStatus === 'matched');
+  assert.equal(matched.length, 627);
+  for (const offering of matched) assert.deepEqual(offeringsById.get(offering.id), offering);
+  for (const scope of [null, ...selectablePrograms(catalog).map(p => p.scopeId)]) {
+    const before = createCreditClassifier(beforeCleanupCatalog, scope);
+    const after = createCreditClassifier(catalog, scope);
+    for (const offering of matched) assert.equal(after(offeringsById.get(offering.id)), before(offering));
+  }
+  const outside = rawCatalog.offerings.filter(o => o.resolutionStatus === 'outside_mapping_scope');
+  assert.equal(outside.length, 30);
+  for (const offering of outside) assert.deepEqual(offeringsById.get(offering.id), offering);
+});
+
+test('audit covers exactly the 29 remaining offerings, and only the 18 safe decisions enter the ledger', () => {
+  const expected = beforeCleanupCatalog.offerings.filter(o => o.resolutionStatus === 'manual_review');
+  assert.equal(expected.length, 29);
+  assert.deepEqual(cleanupAudit.offerings.map(o => o.offeringId).sort(), expected.map(o => o.id).sort());
+  const added = manualMappingOverrideLedger.overrides.slice(beforeCleanupLedger.overrides.length);
+  assert.equal(added.length, 18);
+  assert.ok(added.every(entry => entry.offeringIds.length === 1));
+  const safe = cleanupAudit.offerings.filter(o => o.proposedDecision === 'safe_manual_curated');
+  const held = cleanupAudit.offerings.filter(o => o.proposedDecision === 'remain_manual_review');
+  assert.equal(safe.length, 18);
+  assert.equal(held.length, 11);
+  assert.deepEqual(added.flatMap(e => e.offeringIds).sort(), safe.map(o => o.offeringId).sort());
+  const mappingIds = new Set(catalog.mappings.map(m => m.mappingId));
+  for (const row of cleanupAudit.offerings) {
+    const raw = rawOfferingsById.get(row.offeringId);
+    assert.equal(row.courseName, raw.name);
+    assert.equal(row.classCode, raw.classCode);
+    assert.equal(row.subjectCode, raw.subjectCode);
+    assert.equal(row.currentResolutionStatus, 'manual_review');
+    assert.deepEqual(row.currentMappingIds, []);
+    assert.equal(row.currentUiClassification, '対応情報を確認中');
+    assert.ok(row.reason.length > 0 && row.evidenceType.length > 0 && row.evidence.length > 0);
+    assert.equal(row.officialVerified, false);
+    assert.ok(row.candidateMappings.every(m => mappingIds.has(m.mappingId)));
+    assert.equal(row.selectedCommonScopeRelation.bySelectedScope.length, 8);
+    for (const relation of row.selectedCommonScopeRelation.bySelectedScope) {
+      assert.equal(createCreditClassifier(beforeCleanupCatalog, relation.selectedScopeId)(raw), relation.currentUiClassification);
+      assert.equal(createCreditClassifier(catalog, relation.selectedScopeId)(offeringsById.get(raw.id)), relation.proposedUiClassification);
+    }
+    if (row.proposedDecision === 'safe_manual_curated') {
+      assert.deepEqual(offeringsById.get(row.offeringId).mappingIds, row.proposedMappingTargets);
+      assert.deepEqual(row.proposedMappingTargets, row.candidateMappings.map(m => m.mappingId));
+    } else {
+      assert.deepEqual(row.proposedMappingTargets, []);
+      assert.deepEqual(offeringsById.get(row.offeringId), raw);
+    }
+  }
+});
+
+test('all 686 offering identities survive cleanup; same content labels with different classes remain separate saved items', () => {
+  assert.equal(new Set(catalog.offerings.map(o => o.id)).size, 686);
+  for (const raw of rawCatalog.offerings) {
+    const { resolutionStatus: rawStatus, mappingIds: rawMappings, ...rawIdentity } = raw;
+    const { resolutionStatus: status, mappingIds, ...identity } = offeringsById.get(raw.id);
+    assert.ok(rawStatus && status && rawMappings && mappingIds);
+    assert.deepEqual(identity, rawIdentity);
+  }
+  const information = catalog.offerings.filter(o => /^(情報学入門|コンピュータ入門)［/.test(o.name));
+  assert.equal(information.length, 16);
+  assert.equal(new Set(information.map(o => o.id)).size, 16);
+  assert.equal(new Set(information.map(o => o.classCode)).size, 16);
+  assert.ok(information.every(o => o.courseId === null));
+  for (const label of ['表計算', 'データ演習', 'データベース']) {
+    const sameLabel = information.filter(o => o.name.includes(`［${label}］`));
+    assert.ok(sameLabel.length > 1);
+    assert.equal(new Set(sameLabel.map(o => o.classCode)).size, sameLabel.length);
+  }
+  const state = { ...initialState(), items: information.map(o => item(o.id)) };
+  const store = memoryStore();
+  saveState(store, state, null, catalog);
+  assert.deepEqual(loadState(store, catalog).state, state);
+  assert.equal(summarizeCredits(state.items, offeringsById).planned, 32);
+});
+
+test('information retains all seven professional scopes and computer only economics, without a common mapping', () => {
+  const economics = '3641eb3c-91bd-4094-a56e-6e0f0da660f5';
+  const informationIds = [
+    'ee06b350-5b46-4398-aff8-c187161defba', '1cc20b2e-9f40-4cf9-9d7c-f3897e6ab88d',
+    'cdd097de-6ebb-4b7d-88b4-d0e9e636a0d2', '431409fd-5e1e-4272-aa03-36e0e5a27968',
+    '4eec8986-f2ec-4b6c-9292-3ee4dcd078f0', '5736899c-eb14-4e2a-8328-f482291833ca',
+    'eae25b18-9c9f-410e-84fa-907103fdc9af',
+  ];
+  for (const [prefix, expectedIds, count] of [
+    ['情報学入門［', informationIds, 8],
+    ['コンピュータ入門［', ['b9f5f378-0985-40ad-918e-32f6f6ae5818'], 8],
+  ]) {
+    const offerings = catalog.offerings.filter(o => o.name.startsWith(prefix));
+    assert.equal(offerings.length, count);
+    for (const offering of offerings) {
+      assert.deepEqual(offering.mappingIds, expectedIds);
+      for (const program of selectablePrograms(catalog)) {
+        const included = prefix.startsWith('情報') ? program.scopeId !== economics : program.scopeId === economics;
+        assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), included ? '専門教育' : '選択した所属のカリキュラム対象外');
+      }
+    }
+  }
+});
+
+test('historical materials use the single grouped mapping while seminar sequence, geography qualifier and teacher training remain held', () => {
+  const materials = catalog.offerings.filter(o => /^歴史資料学（日本(近代|近世)）/.test(o.name));
+  assert.equal(materials.length, 2);
+  const expectedId = 'e50dd61e-27ef-4e93-afe7-9c61624661b7';
+  const mapping = catalog.mappings.find(m => m.mappingId === expectedId);
+  assert.equal(mapping.scopeId, '118c5183-6aec-4fa1-905a-265f25d86db1');
+  assert.equal(mapping.category, '専門教育');
+  assert.equal(mapping.field, null);
+  assert.equal(mapping.requirementType, '選択');
+  for (const offering of materials) assert.deepEqual(offering.mappingIds, [expectedId]);
+  const held = catalog.offerings.filter(o => o.resolutionStatus === 'manual_review');
+  assert.equal(held.filter(o => o.name.startsWith('史学演習')).length, 8);
+  assert.equal(held.filter(o => o.name.startsWith('日本史特講（日本仏教史）（地理）')).length, 1);
+  assert.equal(held.filter(o => o.name.startsWith('【教職】政治学')).length, 2);
+  assert.ok(held.every(o => o.mappingIds.length === 0));
+});
+
+test('cleanup coverage and audit before/after counts reconcile independently', () => {
+  const before = beforeCleanupCatalog.offerings;
+  const after = catalog.offerings;
+  assert.equal(before.filter(o => o.resolutionStatus !== 'matched').length, 59);
+  assert.equal(after.filter(o => o.resolutionStatus !== 'matched').length, 41);
+  assert.equal(catalog.metadata.unresolvedOfferingCount, 41);
+  assert.equal(after.filter(o => o.resolutionStatus === 'manual_review').length, 11);
+  assert.equal(after.filter(o => o.resolutionStatus === 'matched').length, 645);
+  assert.equal(after.reduce((n, o) => n + o.mappingIds.length, 0), 1227);
+  assert.deepEqual(cleanupAudit.summary, {
+    audited: 29, newlyResolved: 18, manualReviewBefore: 29, manualReviewAfter: 11, remainManualReview: 11,
+    unresolvedBefore: 59, unresolvedAfter: 41, outsideMappingScopeBefore: 30, outsideMappingScopeAfter: 30,
+    matchedBefore: 627, matchedAfter: 645, manualCuratedBefore: 34, manualCuratedAfter: 52,
+    mappingEdgesBefore: 1161, mappingEdgesAfter: 1227,
+  });
 });

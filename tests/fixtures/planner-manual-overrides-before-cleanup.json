@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "academicYear": 2026,
+  "provenance": "manual_curated",
+  "officialVerified": false,
+  "approvedBy": "user_instruction_2026-09-22",
+  "overrides": [
+    {
+      "ruleId": "english_s_numbered_classes",
+      "approvedPattern": "英語S［1］〜［9］",
+      "targetCourseName": "英語S",
+      "offeringIds": [
+        "056ffe8f-4c4b-4cc8-825d-7919f470b7b6",
+        "066427dc-1df4-47bd-a6b1-538ab161e869",
+        "0c8b780c-2748-4c5c-96c0-43caa9102892",
+        "0f434746-a27e-4dfe-9707-95044945ef04",
+        "20ebf537-9d5d-4af9-a7bb-9a183372e41e",
+        "2e859992-20a2-41bf-a773-2ad5a0993296",
+        "41a0f46f-b768-4806-ac35-78a3d580ce4b",
+        "4c5bcdd9-a25f-4f58-a93d-ad99254ef630",
+        "4cd612cb-6135-43c7-b4ea-e0eee6d47e2c",
+        "664c4f4c-dcc3-456b-8b5f-21bb033a7686",
+        "6f623927-a1e3-4deb-b054-f5afa4945805",
+        "72cb38cb-1792-4c71-90d9-4c9040935a43",
+        "7531c9e5-c71f-493e-9839-6d1365a328ff",
+        "7a51138b-b66d-4567-94a8-e54b92171646",
+        "7c1e6798-32c1-46ad-8afc-b501f495f98e",
+        "8708330c-5611-4209-87f9-9f0bdd17bf9d",
+        "a97121ea-a40b-466c-88d7-3490c76b68e1",
+        "aa00add3-5c8d-4cee-a4f5-230d7ca67065",
+        "b2d47775-d36b-4cb3-bab5-101bb55a9bf0",
+        "b66423e0-2cbf-4251-9d39-17d7388f7f67",
+        "bf83e5b0-f984-4b0e-9437-337d6efbbcdf",
+        "d0a89240-df07-402c-ab93-f3c646b712dd",
+        "d39b403f-1751-4057-a0fb-1af55425fa81",
+        "d3f410c4-4bf9-4cfb-b5f3-5a6e1fac7d0e",
+        "d7e36ef4-f1bf-4337-871f-6865400aa528",
+        "eda4964a-ea13-46cd-9bd4-5966a8734498"
+      ],
+      "mappingIds": ["740cce61-61ab-48bb-ad52-5a404b4940b8"],
+      "reason": "Manually approved: the bracketed number identifies the offering class, while the curriculum target remains 英語S."
+    },
+    {
+      "ruleId": "japanese_history_overview_schooling_marker",
+      "approvedPattern": "日本史概説[S] / ［S］",
+      "targetCourseName": "日本史概説",
+      "offeringIds": [
+        "52db8968-0681-4186-9a30-c4bd134e1ec3",
+        "830688aa-ff84-43e4-9a86-348871f382d1"
+      ],
+      "mappingIds": [
+        "f87aca70-d720-4435-8f2c-013b1c1fd5e4",
+        "c644b305-f312-4b08-8f8f-aaf02cf9069e",
+        "db2833b3-2a18-4059-85e7-beeaae2d3107"
+      ],
+      "reason": "Manually approved: [S] denotes a schooling offering. Preserve every 日本史概説 mapping in the matcher candidate set."
+    },
+    {
+      "ruleId": "western_history_overview_schooling_marker",
+      "approvedPattern": "西洋史概説[S] / ［S］",
+      "targetCourseName": "西洋史概説",
+      "offeringIds": [
+        "13b84a06-03b7-4226-8451-1ea65e460951",
+        "3610cf8a-7306-4dce-b780-9e1585e58c85"
+      ],
+      "mappingIds": [
+        "8dc9f71e-30c1-4a7f-8fb7-7a117af6a3a7",
+        "a1c1e855-6e61-4232-8b8a-d7d9dd2a809a",
+        "ff8c6d9b-0403-4503-9f2e-b5187b945297"
+      ],
+      "reason": "Manually approved: [S] denotes a schooling offering. Preserve every 西洋史概説 mapping in the matcher candidate set."
+    },
+    {
+      "ruleId": "eastern_history_overview_schooling_marker",
+      "approvedPattern": "東洋史概説[S] / ［S］",
+      "targetCourseName": "東洋史概説",
+      "offeringIds": [
+        "1527d859-5060-4027-972b-b0c31d4dec6f",
+        "c7ce6809-c7a8-4541-b01b-1023dc2fc25f"
+      ],
+      "mappingIds": [
+        "4623706f-84c7-46f2-b736-b98731eba3a0",
+        "4db251ac-3887-4f18-a225-1c332572d2db",
+        "31ed9496-4945-49ec-a4c5-db07a26f18d3"
+      ],
+      "reason": "Manually approved: [S] denotes a schooling offering. Preserve every 東洋史概説 mapping in the matcher candidate set."
+    },
+    {
+      "ruleId": "regional_geography_special_schooling_marker",
+      "approvedPattern": "地誌学特講[S] / ［S］",
+      "targetCourseName": "地誌学特講",
+      "offeringIds": [
+        "6918c021-9290-484e-b7c7-221ee6633242",
+        "d17c94bd-1b6a-44a1-884a-3d73f7c03cb4"
+      ],
+      "mappingIds": ["48855a72-795f-4dcf-8c42-32b0e468f653"],
+      "reason": "Manually approved: [S] denotes a schooling offering. Preserve the 地誌学特講 mapping without renaming the offering."
+    }
+  ]
+}
