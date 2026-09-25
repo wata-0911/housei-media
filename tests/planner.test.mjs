@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { catalog, offeringsById } from '../src/planner/catalog.ts';
-import { manualMappingOverrideLedger } from '../src/planner/manualMappingOverrides.ts';
+import { manualMappingOverrideLedger, officialMappingOverrideLedger } from '../src/planner/manualMappingOverrides.ts';
 import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
+import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -21,6 +22,154 @@ test('catalog preserves all 686 offerings, 348 null course IDs and incomplete gr
   assert.equal(catalog.offerings.filter(o => o.courseId === null).length, 348);
   assert.equal(catalog.metadata.graduationCheckComplete, false);
   assert.equal(validateCatalog({ ...catalog, metadata: { ...catalog.metadata, graduationCheckComplete: true } }), false);
+});
+
+test('partial graduation progress uses earned only and includes common plus selected scope', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const common = catalog.programs.find(program => program.isCommon).scopeId;
+  const baseMapping = catalog.mappings[0];
+  const baseOffering = catalog.offerings[0];
+  const requirements = [
+    { id: 'common-rule', ruleId: 'common-rule', scopeId: common, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '一般教育' }, value: 4, unit: 'credits', conditions: null },
+    { id: 'selected-rule', ruleId: 'selected-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 4, unit: 'credits', conditions: null },
+  ];
+  const fixture = {
+    ...catalog,
+    mappings: [
+      { ...baseMapping, mappingId: 'common-map', scopeId: common, category: '一般教育', field: '人文', requirementType: null },
+      { ...baseMapping, mappingId: 'selected-map', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+    ],
+    offerings: [
+      { ...baseOffering, id: 'earned-common', credits: 4, resolutionStatus: 'matched', mappingIds: ['common-map'] },
+      { ...baseOffering, id: 'planned-selected', credits: 4, resolutionStatus: 'matched', mappingIds: ['selected-map'] },
+      { ...baseOffering, id: 'progress-selected', credits: 2, resolutionStatus: 'matched', mappingIds: ['selected-map'] },
+    ],
+    requirements,
+  };
+  const progress = calculateGraduationProgress([
+    item('earned-common', 'earned'), item('planned-selected', 'planned'), item('progress-selected', 'in_progress'),
+  ], fixture, scope);
+  assert.equal(progress.graduationCheckComplete, false);
+  assert.deepEqual(progress.requirements.map(row => ({ id: row.requirementId, status: row.status, earned: row.earned, inProgress: row.inProgress, planned: row.planned })), [
+    { id: 'common-rule', status: 'satisfied', earned: 4, inProgress: 0, planned: 0 },
+    { id: 'selected-rule', status: 'unsatisfied', earned: 0, inProgress: 2, planned: 4 },
+  ]);
+});
+
+test('partial progress treats null credits, unsupported and special conditions as unknown', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const baseMapping = { ...catalog.mappings[0], mappingId: 'map', scopeId: scope, category: '専門教育', field: null, requirementType: null };
+  const fixture = {
+    ...catalog,
+    mappings: [baseMapping],
+    offerings: [{ ...catalog.offerings[0], id: 'null-credit', credits: null, resolutionStatus: 'matched', mappingIds: ['map'] }],
+    requirements: [
+      { id: 'null-rule', ruleId: 'null-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 4, unit: 'credits', conditions: null },
+      { id: 'special-rule', ruleId: 'special-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 4, unit: 'credits', conditions: { when: { thesis_selected: true } } },
+      { id: 'overflow-rule', ruleId: 'overflow-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'overflow_credit_transfer', target: { curriculum_category: '専門教育' }, value: null, unit: null, conditions: null },
+      { id: 'unsupported-rule', ruleId: 'unsupported-rule', scopeId: null, scopeLabel: '全体', category: null, reason: '未対応', sourcePage: 1, status: 'unsupported', ruleType: null, target: null, value: null, unit: null, conditions: null },
+    ],
+  };
+  const progress = calculateGraduationProgress([item('null-credit', 'earned')], fixture, scope);
+  assert.equal(progress.evaluableCount, 0);
+  assert.equal(progress.unknownCount, 4);
+  assert.ok(progress.requirements.every(row => row.status === 'unknown'));
+});
+
+test('one offering with duplicate matching mappings is counted once and outside-scope offerings are excluded', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const base = catalog.mappings[0];
+  const fixture = {
+    ...catalog,
+    mappings: [
+      { ...base, mappingId: 'map-a', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+      { ...base, mappingId: 'map-b', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+    ],
+    offerings: [
+      { ...catalog.offerings[0], id: 'duplicate-edge', credits: 4, resolutionStatus: 'matched', mappingIds: ['map-a', 'map-b'] },
+      { ...catalog.offerings[0], id: 'teacher', credits: 4, resolutionStatus: 'outside_mapping_scope', mappingIds: [] },
+    ],
+    requirements: [{ id: 'rule', ruleId: 'rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 8, unit: 'credits', conditions: null }],
+  };
+  const row = calculateGraduationProgress([item('duplicate-edge', 'earned'), item('teacher', 'earned')], fixture, scope).requirements[0];
+  assert.equal(row.earned, 4);
+  assert.equal(row.status, 'unsatisfied');
+});
+
+test('graduation progress copy never asserts graduation eligibility', () => {
+  const source = [
+    readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/components/planner/GraduationProgress.tsx', import.meta.url), 'utf8'),
+  ].join('\n');
+  assert.doesNotMatch(source, /卒業できます|卒業可能|卒業不可/);
+  assert.match(source, /卒業可否を保証しません/);
+});
+
+test('grouped requirements use earned credits, one language, and one mapped offering', () => {
+  const scope = catalog.programs.find(program => !program.isCommon).scopeId;
+  const common = catalog.programs.find(program => program.isCommon).scopeId;
+  const base = catalog.mappings[0];
+  const maps = [
+    ['human', '一般教育', '人文'], ['other', '一般教育', 'その他'],
+    ['physical', '保健体育', null], ['english', '外国語', '英語'],
+    ['english-duplicate', '外国語', '英語'], ['german', '外国語', '独語'],
+  ].map(([mappingId, category, field]) => ({ ...base, mappingId, scopeId: common, category, field }));
+  const offering = (id, name, credits, method, mappingIds) => ({ ...catalog.offerings[0], id, name, credits, method, mappingIds, resolutionStatus: 'matched' });
+  const fixture = { ...catalog, mappings: maps, offerings: [
+    offering('literature', '文学', 4, 'correspondence', ['human']),
+    offering('general-other', 'その他科目', 28, 'correspondence', ['other']),
+    offering('health', '健康・スポーツ科学概論', 2, 'correspondence', ['physical']),
+    offering('sport', 'スポーツ総合演習（春期）', 2, 'schooling', ['physical']),
+    offering('english2', '英語2', 2, 'correspondence', ['english', 'english-duplicate']),
+    offering('englishS1', '英語S［1］', 1, 'schooling', ['english']),
+    offering('englishS2', '英語S［2］', 1, 'schooling', ['english']),
+    offering('german2', '独語2', 2, 'correspondence', ['german']),
+    offering('germanS', '独語S', 2, 'schooling', ['german']),
+  ] };
+  const card = (items, id) => calculateGraduationProgress(items, fixture, scope).cards.find(row => row.requirementId === `group-${id}`);
+  const empty = calculateGraduationProgress([], fixture, scope);
+  assert.equal(empty.graduationCheckComplete, false);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).status), ['unsatisfied', 'unsatisfied', 'unsatisfied']);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).earned), [0, 0, 0]);
+  assert.ok(empty.cards.every(row => row.ruleType !== 'max_credits'));
+  for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress'], ['earned', 'earned']]) {
+    const general = card([item('literature', status)], 'general');
+    assert.equal(general[key], 4);
+    assert.equal(general.details[0][key], 4);
+    assert.equal(general.status, 'unsatisfied');
+    const foreign = card([item('english2', status)], 'foreign');
+    assert.equal(foreign[key], 2);
+    assert.equal(foreign.details[0][key], 2);
+    assert.equal(foreign.status, 'unsatisfied');
+    const physical = card([item('health', status)], 'physical');
+    assert.equal(physical.status, status === 'earned' ? 'satisfied' : 'unsatisfied');
+  }
+  assert.equal(card([item('sport', 'earned')], 'physical').status, 'satisfied');
+  assert.equal(card([item('literature', 'earned'), item('general-other', 'earned')], 'general').status, 'unsatisfied');
+  assert.equal(card([item('english2', 'earned'), item('englishS1', 'earned'), item('englishS2', 'earned')], 'foreign').status, 'satisfied');
+  assert.equal(card([item('english2', 'earned'), item('german2', 'earned')], 'foreign').details[0].schooling, 0);
+  assert.equal(card([item('english2', 'earned'), item('german2', 'earned')], 'foreign').status, 'unsatisfied');
+  assert.equal(card([item('english2', 'earned'), item('german2', 'earned'), item('germanS', 'earned')], 'foreign').earned, 4);
+  assert.equal(card([item('english2', 'earned'), item('englishS1', 'earned'), item('englishS2', 'earned'), item('german2', 'earned'), item('germanS', 'earned')], 'foreign').earned, 4);
+});
+
+test('real catalog groups literature, English 2 and curated English S', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const find = name => catalog.offerings.find(offering => offering.name === name && offering.resolutionStatus === 'matched');
+  const literature = find('文学');
+  const english = find('英語２');
+  const englishS = catalog.offerings.filter(offering => offering.name.startsWith('英語Ｓ［') && offering.credits === 1 && offering.resolutionStatus === 'matched').slice(0, 2);
+  assert.ok(literature && english && englishS.length === 2);
+  const progress = calculateGraduationProgress([
+    item(literature.id, 'earned'), item(english.id, 'earned'), ...englishS.map(offering => item(offering.id, 'earned')),
+  ], catalog, scope);
+  assert.equal(progress.cards.filter(row => row.label === '一般教育').length, 1);
+  assert.equal(progress.cards.filter(row => row.label === '外国語').length, 1);
+  assert.equal(progress.cards.filter(row => row.label === '保健体育').length, 1);
+  assert.equal(progress.cards.find(row => row.label === '一般教育').details[0].earned, 4);
+  assert.equal(progress.cards.find(row => row.label === '外国語').status, 'satisfied');
+  assert.ok(progress.cards.every(row => row.ruleType !== 'max_credits'));
+  assert.equal(progress.graduationCheckComplete, false);
 });
 
 test('search spans every offering and each specified field, normalizes full-width input', () => {
@@ -179,7 +328,7 @@ test('category totals conserve overall credits and unknown counts across every o
     }
     assert.equal(rows.reduce((sum, row) => sum + row.count, 0), 686);
     assert.equal(rows.find(r => r.category === '教職等・通常カリキュラム対象外').count, 30);
-    assert.ok(rows.find(r => r.category === '対応情報を確認中').count >= 11);
+    assert.ok(rows.find(r => r.category === '対応情報を確認中').count >= 9);
   }
 });
 
@@ -240,12 +389,12 @@ test('manual curated ledger resolves only the 52 approved offerings and preserve
   assert.equal(curatedIds.length, 52);
   assert.equal(new Set(curatedIds).size, 52);
   assert.equal(rawCatalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 93);
-  assert.equal(catalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 41);
-  assert.equal(catalog.metadata.unresolvedOfferingCount, 41);
-  assert.equal(catalog.metadata.catalogCoverage.matchedOfferingCount, 645);
-  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 11);
+  assert.equal(catalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 39);
+  assert.equal(catalog.metadata.unresolvedOfferingCount, 39);
+  assert.equal(catalog.metadata.catalogCoverage.matchedOfferingCount, 647);
+  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 9);
   assert.equal(catalog.metadata.catalogCoverage.outsideMappingScopeOfferingCount, 30);
-  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1227);
+  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1229);
   for (const entry of manualMappingOverrideLedger.overrides) {
     for (const offeringId of entry.offeringIds) {
       const raw = rawOfferingsById.get(offeringId);
@@ -346,7 +495,7 @@ test('general education other is a normal category even with a null course ident
 test('outside mapping and manual review keep distinct labels and remain saveable', () => {
   for (const [status, label, count] of [
     ['outside_mapping_scope', '教職等・通常カリキュラム対象外', 30],
-    ['manual_review', '対応情報を確認中', 11],
+    ['manual_review', '対応情報を確認中', 9],
   ]) {
     const offerings = catalog.offerings.filter(o => o.resolutionStatus === status);
     assert.equal(offerings.length, count);
@@ -387,6 +536,10 @@ test('cleanup preserves every field and UI classification of all 627 previously 
   for (const offering of outside) assert.deepEqual(offeringsById.get(offering.id), offering);
 });
 
+const cleanupCatalog = { ...catalog, offerings: catalog.offerings.map(o =>
+  officialMappingOverrideLedger.overrides.some(entry => entry.offeringIds.includes(o.id)) ? rawOfferingsById.get(o.id) : o) };
+const cleanupOfferingsById = new Map(cleanupCatalog.offerings.map(o => [o.id, o]));
+
 test('audit covers exactly the 29 remaining offerings, and only the 18 safe decisions enter the ledger', () => {
   const expected = beforeCleanupCatalog.offerings.filter(o => o.resolutionStatus === 'manual_review');
   assert.equal(expected.length, 29);
@@ -414,14 +567,14 @@ test('audit covers exactly the 29 remaining offerings, and only the 18 safe deci
     assert.equal(row.selectedCommonScopeRelation.bySelectedScope.length, 8);
     for (const relation of row.selectedCommonScopeRelation.bySelectedScope) {
       assert.equal(createCreditClassifier(beforeCleanupCatalog, relation.selectedScopeId)(raw), relation.currentUiClassification);
-      assert.equal(createCreditClassifier(catalog, relation.selectedScopeId)(offeringsById.get(raw.id)), relation.proposedUiClassification);
+      assert.equal(createCreditClassifier(cleanupCatalog, relation.selectedScopeId)(cleanupOfferingsById.get(raw.id)), relation.proposedUiClassification);
     }
     if (row.proposedDecision === 'safe_manual_curated') {
-      assert.deepEqual(offeringsById.get(row.offeringId).mappingIds, row.proposedMappingTargets);
+      assert.deepEqual(cleanupOfferingsById.get(row.offeringId).mappingIds, row.proposedMappingTargets);
       assert.deepEqual(row.proposedMappingTargets, row.candidateMappings.map(m => m.mappingId));
     } else {
       assert.deepEqual(row.proposedMappingTargets, []);
-      assert.deepEqual(offeringsById.get(row.offeringId), raw);
+      assert.deepEqual(cleanupOfferingsById.get(row.offeringId), raw);
     }
   }
 });
@@ -475,7 +628,7 @@ test('information retains all seven professional scopes and computer only econom
   }
 });
 
-test('historical materials use the single grouped mapping while seminar sequence, geography qualifier and teacher training remain held', () => {
+test('historical materials use the single grouped mapping while seminar sequence and geography qualifier remain held', () => {
   const materials = catalog.offerings.filter(o => /^歴史資料学（日本(近代|近世)）/.test(o.name));
   assert.equal(materials.length, 2);
   const expectedId = 'e50dd61e-27ef-4e93-afe7-9c61624661b7';
@@ -488,16 +641,16 @@ test('historical materials use the single grouped mapping while seminar sequence
   const held = catalog.offerings.filter(o => o.resolutionStatus === 'manual_review');
   assert.equal(held.filter(o => o.name.startsWith('史学演習')).length, 8);
   assert.equal(held.filter(o => o.name.startsWith('日本史特講（日本仏教史）（地理）')).length, 1);
-  assert.equal(held.filter(o => o.name.startsWith('【教職】政治学')).length, 2);
+  assert.equal(held.filter(o => o.name.startsWith('【教職】政治学')).length, 0);
   assert.ok(held.every(o => o.mappingIds.length === 0));
 });
 
 test('cleanup coverage and audit before/after counts reconcile independently', () => {
   const before = beforeCleanupCatalog.offerings;
-  const after = catalog.offerings;
+  const after = cleanupCatalog.offerings;
   assert.equal(before.filter(o => o.resolutionStatus !== 'matched').length, 59);
   assert.equal(after.filter(o => o.resolutionStatus !== 'matched').length, 41);
-  assert.equal(catalog.metadata.unresolvedOfferingCount, 41);
+  assert.equal(catalog.metadata.unresolvedOfferingCount, 39);
   assert.equal(after.filter(o => o.resolutionStatus === 'manual_review').length, 11);
   assert.equal(after.filter(o => o.resolutionStatus === 'matched').length, 645);
   assert.equal(after.reduce((n, o) => n + o.mappingIds.length, 0), 1227);
@@ -507,4 +660,57 @@ test('cleanup coverage and audit before/after counts reconcile independently', (
     matchedBefore: 627, matchedAfter: 645, manualCuratedBefore: 34, manualCuratedAfter: 52,
     mappingEdgesBefore: 1161, mappingEdgesAfter: 1227,
   });
+});
+
+
+test('official political science mappings count only for law and preserve earned-only progress', () => {
+  const ledger = officialMappingOverrideLedger;
+  assert.equal(ledger.provenance, 'official_source_verified');
+  assert.equal(ledger.officialVerified, true);
+  assert.equal(ledger.overrides.flatMap(e => e.offeringIds).length, 2);
+  assert.ok(ledger.overrides.every(e => e.evidence.length > 0));
+  const lawScope = 'e31201f3-4f1d-432a-906e-6af94af294c9';
+  const political = catalog.offerings.filter(o => ['33003', '43006'].includes(o.classCode));
+  assert.equal(political.length, 2);
+  for (const offering of political) {
+    assert.equal(offering.resolutionStatus, 'matched');
+    assert.equal(offering.credits, 2);
+    assert.deepEqual(offering.mappingIds, ['f49de1e6-82ae-4b86-8c0a-453ef41995ce']);
+    const { resolutionStatus, mappingIds, ...identity } = offering;
+    assert.ok(resolutionStatus && mappingIds);
+    const { resolutionStatus: rawStatus, mappingIds: rawIds, ...rawIdentity } = rawOfferingsById.get(offering.id);
+    assert.ok(rawStatus && rawIds);
+    assert.deepEqual(identity, rawIdentity);
+    for (const program of selectablePrograms(catalog)) {
+      const law = program.scopeId === lawScope;
+      assert.equal(createCreditClassifier(catalog, program.scopeId)(offering), law ? '専門教育' : '選択した所属のカリキュラム対象外');
+      const empty = calculateGraduationProgress([], catalog, program.scopeId);
+      for (const status of ['earned', 'planned', 'in_progress']) {
+        const progress = calculateGraduationProgress([item(offering.id, status)], catalog, program.scopeId);
+        assert.equal(progress.graduationCheckComplete, false);
+        if (!law) assert.deepEqual(progress, empty);
+        else {
+          const actual = progress.requirements.filter(r => r.label.startsWith('専門教育'));
+          assert.ok(actual.length > 0 && actual.every(r => r.status === 'unknown'));
+          const summary = summarizeCategories([item(offering.id, status)], catalog, lawScope).find(r => r.category === '専門教育');
+          assert.equal(summary.earned, status === 'earned' ? 2 : 0);
+          // Isolate mapping eligibility from the intentionally unsupported law DSL conditions.
+          const fixture = { ...catalog, requirements: [{ id: 'law-category', ruleId: 'law-category',
+            scopeId: lawScope, sourcePage: 46, status: 'structured', ruleType: 'min_credits',
+            target: { curriculum_category: '専門教育', requirement_type: '選択' }, value: 54, unit: 'credits', conditions: null }] };
+          const row = calculateGraduationProgress([item(offering.id, status)], fixture, lawScope).requirements[0];
+          assert.equal(row.earned, status === 'earned' ? 2 : 0);
+          assert.equal(row.planned, status === 'planned' ? 2 : 0);
+          assert.equal(row.inProgress, status === 'in_progress' ? 2 : 0);
+          assert.equal(row.status, 'unsatisfied');
+        }
+      }
+    }
+  }
+  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 9);
+  assert.deepEqual(catalog.offerings.filter(o => o.resolutionStatus === 'manual_review').map(o => o.classCode).sort(),
+    ['15005', '25003', '25004', '35002', '35003', '35007', '35009', '35015', '45006']);
+  assert.equal(catalog.metadata.catalogCoverage.outsideMappingScopeOfferingCount, 30);
+  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1229);
+  assert.equal(validateCatalog(catalog), true);
 });

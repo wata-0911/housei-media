@@ -3,7 +3,7 @@ import { isCreditCategory, type summarizeCategories } from '../../planner/annual
 export default function CategorySummary({ rows }: { rows: ReturnType<typeof summarizeCategories> }) {
   return <section aria-labelledby="category-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="category-heading" className="text-xl text-[#002255]">所属に基づく区分別集計</h2>
-    <p className="text-sm text-gray-600 my-3">全年度の開講単位の単純合計です。対象外・確認中の科目は通常区分に加算せず、下段に参考表示します。卒業要件への算入は判定しません。</p>
+    <p className="text-sm text-gray-600 my-3">全年度の開講単位の単純合計です。対象外・確認中の科目は通常区分に加算せず、下段に参考表示します。この集計自体は卒業要件の達成を示しません。</p>
     <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
       {rows.filter(row => isCreditCategory(row.category)).map(row => <div key={row.category} className="border border-gray-200 p-4 min-w-0">
         <h3 className="font-medium text-[#002255]">{row.category} <span className="text-xs">{row.count}件</span></h3>
