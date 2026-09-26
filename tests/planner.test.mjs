@@ -12,7 +12,7 @@ function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
   return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
 }
-const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedYear: 2026, plannedTerm: null });
+const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedYear: 2026, plannedTerm: null, earnedOrder: null });
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
@@ -196,7 +196,7 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 2 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 3 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
@@ -643,6 +643,47 @@ test('historical materials use the single grouped mapping while seminar sequence
   assert.equal(held.filter(o => o.name.startsWith('日本史特講（日本仏教史）（地理）')).length, 1);
   assert.equal(held.filter(o => o.name.startsWith('【教職】政治学')).length, 0);
   assert.ok(held.every(o => o.mappingIds.length === 0));
+});
+
+test('history seminars use recorded completion order, never offering order, and cap graduation credits at four completions', () => {
+  const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  const seminars = catalog.offerings.filter(o => /^史学演習（(日本|西洋|東洋)）/.test(o.name));
+  const card = (items, id) => calculateGraduationProgress(items, catalog, scope).cards.find(row => row.requirementId === id);
+  const required = 'history-seminar-required-elective';
+  const elective = 'history-seminar-elective';
+  const earned = (count) => seminars.slice(0, count).map((offering, index) => ({ ...item(offering.id, 'earned'), earnedOrder: index < 4 ? index + 1 : null }));
+
+  assert.deepEqual([card(earned(1), required).earned, card(earned(1), elective).earned], [2, 0]);
+  assert.deepEqual([card(earned(2), required).earned, card(earned(2), elective).earned], [4, 0]);
+  assert.deepEqual([card(earned(3), required).earned, card(earned(3), elective).earned], [4, 2]);
+  assert.deepEqual([card(earned(4), required).earned, card(earned(4), elective).earned], [4, 4]);
+  assert.deepEqual([card(earned(5), required).earned, card(earned(5), elective).earned], [4, 4]);
+
+  const pending = [{ ...item(seminars[0].id, 'planned'), earnedOrder: null }, { ...item(seminars[1].id, 'in_progress'), earnedOrder: null }];
+  assert.deepEqual([card(pending, required).earned, card(pending, elective).earned], [0, 0]);
+  assert.equal(card(pending, required).status, 'unsatisfied');
+  const unknown = [{ ...item(seminars[0].id, 'earned'), earnedOrder: null }];
+  assert.equal(card(unknown, required).status, 'unknown');
+  assert.match(card(unknown, required).reason, /修得順が未確定/);
+});
+
+test('history seminar completion order is unique, consecutive, earned-only, and v1 state migrates without inference', () => {
+  const seminars = catalog.offerings.filter(o => /^史学演習（/.test(o.name));
+  const state = { ...initialState(), items: [
+    { ...item(seminars[0].id, 'earned'), earnedOrder: 1 },
+    { ...item(seminars[1].id, 'earned'), earnedOrder: 2 },
+  ] };
+  assert.equal(validateState(state, catalog), true);
+  assert.equal(validateState({ ...state, items: [{ ...state.items[0], earnedOrder: 2 }, state.items[1]] }, catalog), false);
+  assert.equal(validateState({ ...state, items: [{ ...state.items[0], earnedOrder: 1 }, { ...state.items[1], earnedOrder: 3 }] }, catalog), false);
+  assert.equal(validateState({ ...state, items: [{ ...state.items[0], status: 'planned' }] }, catalog), false);
+  const v1 = { schemaVersion: 1, selectedScopeId: null, items: [{ offeringId: seminars[0].id, status: 'earned', plannedYear: 2026, plannedTerm: null }], todos: [] };
+  const store = memoryStore(JSON.stringify(v1));
+  const loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.state.schemaVersion, 2);
+  assert.equal(loaded.state.items[0].earnedOrder, null);
+  assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
 });
 
 test('cleanup coverage and audit before/after counts reconcile independently', () => {

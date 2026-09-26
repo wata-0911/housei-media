@@ -58,11 +58,13 @@ export default function PlannerPage() {
 
   function addOffering(id: string) {
     if (state.items.some(item => item.offeringId === id)) return;
-    commit({ ...state, items: [...state.items, { offeringId: id, status: 'planned', plannedYear: 2026, plannedTerm: null }] }, `${offeringsById.get(id)!.name}を追加・保存しました。`);
+    commit({ ...state, items: [...state.items, { offeringId: id, status: 'planned', plannedYear: 2026, plannedTerm: null, earnedOrder: null }] }, `${offeringsById.get(id)!.name}を追加・保存しました。`);
   }
 
   function changeItem(id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) {
-    commit({ ...state, items: state.items.map(item => item.offeringId === id ? { ...item, ...patch } : item) }, '履修計画を保存しました。');
+    commit({ ...state, items: state.items.map(item => item.offeringId === id
+      ? { ...item, ...patch, ...(patch.status && patch.status !== 'earned' ? { earnedOrder: null } : {}) }
+      : item) }, '履修計画を保存しました。');
   }
 
   function recover() {

@@ -177,6 +177,8 @@ export type PlannerItem = {
   status: "planned" | "in_progress" | "waiting" | "earned" | "failed" | "dropped";
   plannedYear: number | null;
   plannedTerm: string | null;
+  /** Only used for 2026 史学演習 offerings. The learner records the confirmed completion order. */
+  earnedOrder: 1 | 2 | 3 | 4 | null;
 };
 
 export type PlannerTodo = {
@@ -187,7 +189,7 @@ export type PlannerTodo = {
 };
 
 export type PlannerState = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   selectedScopeId: string | null;
   items: Array<PlannerItem>;
   todos: Array<PlannerTodo>;
