@@ -9,6 +9,7 @@ import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverSta
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
 import { removePlannerItem, restorePlannerItem } from '../src/planner/removeUndo.ts';
+import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -51,6 +52,54 @@ test('catalog preserves all 686 offerings, 348 null course IDs and incomplete gr
   assert.equal(catalog.offerings.filter(o => o.courseId === null).length, 348);
   assert.equal(catalog.metadata.graduationCheckComplete, false);
   assert.equal(validateCatalog({ ...catalog, metadata: { ...catalog.metadata, graduationCheckComplete: true } }), false);
+});
+
+test('2026 public-course limits are eight courses and sixteen credits for every documented department', () => {
+  for (const department of ['日本文学科', '史学科', '地理学科', '法律学科', '経済学科', '商業学科']) {
+    const scope = catalog.programs.find(program => program.department === department).scopeId;
+    assert.deepEqual(publicCourseLimitFor(catalog, scope), { maxCredits: 16, maxCourses: 8, sourcePage: {
+      日本文学科: 48, 史学科: 53, 地理学科: 55, 法律学科: 47, 経済学科: 57, 商業学科: 59,
+    }[department] });
+  }
+});
+
+test('public-course cap counts earned only, applies both limits, and never double-counts mapping edges', () => {
+  const offering = (id, credits = 2, mappingIds = ['public-map']) => ({ ...first, id, credits, mappingIds, resolutionStatus: 'matched' });
+  const offerings = new Map([
+    ...Array.from({ length: 9 }, (_, index) => [`public-${index}`, offering(`public-${index}`, 2, ['public-map', 'public-map'])]),
+    ['planned', offering('planned')], ['progress', offering('progress')],
+    ['waiting', offering('waiting')], ['failed', offering('failed')], ['dropped', offering('dropped')],
+  ]);
+  const progress = evaluatePublicCourseLimit([
+    ...Array.from({ length: 9 }, (_, index) => item(`public-${index}`, 'earned')),
+    item('planned', 'planned'), item('progress', 'in_progress'),
+    item('waiting', 'waiting'), item('failed', 'failed'), item('dropped', 'dropped'),
+  ], offerings, new Set(['public-map']), { maxCredits: 16, maxCourses: 8, sourcePage: 1 });
+  assert.deepEqual(progress, {
+    status: 'unsatisfied', earnedCredits: 18, countedCredits: 16, earnedCourses: 9, countedCourses: 8,
+    inProgressCredits: 2, plannedCredits: 2, excludedCredits: 2,
+    limit: { maxCredits: 16, maxCourses: 8, sourcePage: 1 }, reason: null,
+  });
+});
+
+test('public-course cap never partially counts a course when the credit cap has no room', () => {
+  const offerings = new Map([
+    ['four-a', { ...first, id: 'four-a', credits: 4, mappingIds: ['public-map'], resolutionStatus: 'matched' }],
+    ['four-b', { ...first, id: 'four-b', credits: 4, mappingIds: ['public-map'], resolutionStatus: 'matched' }],
+  ]);
+  const progress = evaluatePublicCourseLimit([item('four-a', 'earned'), item('four-b', 'earned')], offerings,
+    new Set(['public-map']), { maxCredits: 6, maxCourses: 8, sourcePage: 1 });
+  assert.equal(progress.countedCredits, 4);
+  assert.equal(progress.countedCourses, 1);
+  assert.equal(progress.excludedCredits, 4);
+});
+
+test('the current catalog keeps public-course progress unknown until official mapping IDs are supplied', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const card = calculateGraduationProgress([], catalog, scope).cards.find(row => row.ruleType === 'public_course_limit');
+  assert.equal(card.status, 'unknown');
+  assert.match(card.reason, /公式mapping ID/);
+  assert.equal(card.target, 16);
 });
 
 test('partial graduation progress uses earned only and includes common plus selected scope', () => {

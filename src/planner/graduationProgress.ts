@@ -9,6 +9,7 @@ import type {
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
+import { evaluatePublicCourseLimit, publicCourseLimitFor, publicCourseMappingIdsFor } from './publicCourseRules';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -39,6 +40,7 @@ export type ProgressCard = RequirementProgress & {
   partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
   note?: string;
   repeatableCourses?: Array<{ label: string; earned: number; counted: number; limit: number; courses: number; limitCourses: number }>;
+  publicCourse?: { earnedCourses: number; countedCourses: number; earnedCredits: number; countedCredits: number; excludedCredits: number; limitCourses: number; limitCredits: number };
 };
 
 const GROUP_RULES = new Set([
@@ -579,6 +581,24 @@ function professionalCards(
   ];
 }
 
+function publicCourseCard(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>): ProgressCard[] {
+  const limit = publicCourseLimitFor(catalog, scopeId);
+  if (!limit) return [];
+  const progress = evaluatePublicCourseLimit(items, offerings, publicCourseMappingIdsFor(scopeId), limit);
+  return [{
+    requirementId: `public-course-${scopeId}`,
+    label: '他学部・他学科公開科目', ruleType: 'public_course_limit', status: progress.status,
+    earned: progress.countedCredits, inProgress: progress.inProgressCredits, planned: progress.plannedCredits,
+    target: limit.maxCredits, unit: 'credits', reason: progress.reason,
+    ...(progress.earnedCredits === null ? {} : { publicCourse: {
+      earnedCourses: progress.earnedCourses!, countedCourses: progress.countedCourses!, earnedCredits: progress.earnedCredits,
+      countedCredits: progress.countedCredits!, excludedCredits: progress.excludedCredits!,
+      limitCourses: limit.maxCourses, limitCredits: limit.maxCredits,
+    } }),
+    note: progress.reason ?? '修得済みのみ卒業算入に使います。履修中・計画中は参考値です。',
+  }];
+}
+
 /** Individual rules and grouped cards never compose into a graduation decision. */
 export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
@@ -600,6 +620,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const cards = [
     ...groupedCards(items, offerings, eligibleMappings, hasUnresolvedEarned),
     ...professional,
+    ...publicCourseCard(items, catalog, scopeId, offerings),
     ...(scopeId === HISTORY_SCOPE_ID ? historySeminarCards(items, offerings) : []),
     ...requirements.filter(row => row.status !== 'unknown' && row.ruleType !== 'max_credits'
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')
