@@ -7,6 +7,7 @@ import type {
   StructuredRequirement,
 } from './plannerCatalog';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
+import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -228,6 +229,31 @@ function groupedCards(
   return [generalCard, foreignCard, physicalCard];
 }
 
+function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offering>): ProgressCard[] {
+  const seminars = items.filter(item => item.status === 'earned' && isHistorySeminar(offerings.get(item.offeringId)));
+  const ordered = seminars.filter(item => item.earnedOrder !== null);
+  const assignedAll = ordered.length === 4;
+  const orderKnown = validHistorySeminarOrders(items, offerings) && (assignedAll || seminars.every(item => item.earnedOrder !== null));
+  const reason = orderKnown ? null : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
+  const creditsFor = (orders: number[]) => ordered.filter(item => orders.includes(item.earnedOrder!)).reduce((sum, item) => sum + (offerings.get(item.offeringId)?.credits ?? 0), 0);
+  const required = creditsFor([1, 2]);
+  const elective = creditsFor([3, 4]);
+  const details = ordered.map(item => {
+    const offering = offerings.get(item.offeringId)!;
+    return { label: `史学演習${item.earnedOrder}（${historySeminarField(offering) ?? '分野未確認'}）`, earned: offering.credits ?? 0, inProgress: 0, planned: 0, target: 2 };
+  });
+  const card = (requirementId: string, label: string, earned: number, target: number): ProgressCard => ({
+    requirementId, label, ruleType: 'history_seminar_sequence',
+    status: orderKnown ? (earned >= target ? 'satisfied' : 'unsatisfied') : 'unknown',
+    earned: orderKnown ? earned : null, inProgress: 0, planned: 0, target, unit: 'credits', reason,
+    details, note: '史学演習1・2はスクーリング選択必修、3・4は選択。5回目以降は卒業所要単位に算入しません。分野別概説4単位の修得前提は参考情報であり、受講可否は判定しません。',
+  });
+  return [
+    card('history-seminar-required-elective', '史学演習1・2（スクーリング選択必修）', required, 4),
+    card('history-seminar-elective', '史学演習3・4（選択）', elective, 4),
+  ];
+}
+
 /** Individual rules and grouped cards never compose into a graduation decision. */
 export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
@@ -238,13 +264,16 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));
   const eligibleMappings = (offering: Offering) => resolve(offering).filter(mapping => mapping.scopeId === scopeId || commonScopes.has(mapping.scopeId));
-  const hasUnresolvedEarned = items.some(item => item.status === 'earned' && offerings.get(item.offeringId)?.resolutionStatus === 'manual_review');
+  const hasUnresolvedEarned = items.some(item => item.status === 'earned'
+    && offerings.get(item.offeringId)?.resolutionStatus === 'manual_review'
+    && !(scopeId === HISTORY_SCOPE_ID && isHistorySeminar(offerings.get(item.offeringId))));
   const requirements = requirementsForScope(catalog, scopeId).map(requirement =>
     requirement.status === 'unsupported'
       ? unknown(requirement, requirement.reason || '未対応の要件です')
       : evaluateStructured(requirement, items, offerings, eligibleMappings, hasUnresolvedEarned));
   const cards = [
     ...groupedCards(items, offerings, eligibleMappings, hasUnresolvedEarned),
+    ...(scopeId === HISTORY_SCOPE_ID ? historySeminarCards(items, offerings) : []),
     ...requirements.filter(row => row.status !== 'unknown' && row.ruleType !== 'max_credits'
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')),
   ];

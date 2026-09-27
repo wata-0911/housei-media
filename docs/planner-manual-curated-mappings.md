@@ -28,4 +28,4 @@ cleanup時点では、史学演習8開講は修得順によってmapping 1〜4�
 
 ## 公式資料確認後の追補（2026-09-23）
 
-【教職】政治学33003・43006は、別ledger `planner_official_mapping_overrides_2026.json` で法律学科の政治学へ接続した。`official_source_verified` / `officialVerified:true` を使い、既存の手動対応52件は変更しない。現在はmanual_review 9件、unresolved 39件、outside_mapping_scope 30件。根拠・ページは[教職資料確認](planner-teacher-training-source-gap.md)を参照。
+【教職】政治学33003・43006は、別ledger `planner_official_mapping_overrides_2026.json` で法律学科の政治学へ接続した。`official_source_verified` / `officialVerified:true` を使う。35009 日本史特講（日本仏教史）（地理）はこのmanual ledgerへ追加し、地理学科の同名mappingだけへ限定接続する。35009 / HIS300TEと公式資料の44533を直接同一視できないため、`manual_curated` / `officialVerified:false`を維持する。現在はmanual_review 8件（史学演習のみ）、unresolved 38件、outside_mapping_scope 30件。根拠・ページは[特殊ケース](planner-special-cases-2026.md)を参照。

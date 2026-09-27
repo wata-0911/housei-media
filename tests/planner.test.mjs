@@ -12,7 +12,7 @@ function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
   return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
 }
-const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedYear: 2026, plannedTerm: null });
+const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedYear: 2026, plannedTerm: null, earnedOrder: null });
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
@@ -196,7 +196,7 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 2 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 3 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
@@ -328,7 +328,7 @@ test('category totals conserve overall credits and unknown counts across every o
     }
     assert.equal(rows.reduce((sum, row) => sum + row.count, 0), 686);
     assert.equal(rows.find(r => r.category === '教職等・通常カリキュラム対象外').count, 30);
-    assert.ok(rows.find(r => r.category === '対応情報を確認中').count >= 9);
+    assert.ok(rows.find(r => r.category === '対応情報を確認中').count >= 8);
   }
 });
 
@@ -382,19 +382,19 @@ test('matching common and selected scope mappings count each offering once for a
   }
 });
 
-test('manual curated ledger resolves only the 52 approved offerings and preserves source identity', () => {
+test('manual curated ledger resolves only the 53 approved offerings and preserves source identity', () => {
   assert.equal(manualMappingOverrideLedger.provenance, 'manual_curated');
   assert.equal(manualMappingOverrideLedger.officialVerified, false);
   const curatedIds = manualMappingOverrideLedger.overrides.flatMap(entry => entry.offeringIds);
-  assert.equal(curatedIds.length, 52);
-  assert.equal(new Set(curatedIds).size, 52);
+  assert.equal(curatedIds.length, 53);
+  assert.equal(new Set(curatedIds).size, 53);
   assert.equal(rawCatalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 93);
-  assert.equal(catalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 39);
-  assert.equal(catalog.metadata.unresolvedOfferingCount, 39);
-  assert.equal(catalog.metadata.catalogCoverage.matchedOfferingCount, 647);
-  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 9);
+  assert.equal(catalog.offerings.filter(o => o.resolutionStatus !== 'matched').length, 38);
+  assert.equal(catalog.metadata.unresolvedOfferingCount, 38);
+  assert.equal(catalog.metadata.catalogCoverage.matchedOfferingCount, 648);
+  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 8);
   assert.equal(catalog.metadata.catalogCoverage.outsideMappingScopeOfferingCount, 30);
-  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1229);
+  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1230);
   for (const entry of manualMappingOverrideLedger.overrides) {
     for (const offeringId of entry.offeringIds) {
       const raw = rawOfferingsById.get(offeringId);
@@ -456,16 +456,14 @@ test('history [S] overrides retain every candidate mapping and classify only in 
   }
 });
 
-test('information and computer offerings preserve distinct names while ambiguous history stays unresolved', () => {
+test('information and computer offerings preserve distinct names while only history seminars stay unresolved', () => {
   const information = catalog.offerings.filter(o => /^(情報学入門|コンピュータ入門)［[1-6]］［(表計算|データ演習|データベース)］/.test(o.name));
   assert.equal(information.length, 16);
   assert.ok(information.every(o => o.resolutionStatus === 'matched' && o.mappingIds.length > 0));
   assert.ok(information.every(o => rawOfferingsById.get(o.id).name === o.name));
 
-  const held = catalog.offerings.filter(o =>
-    /^史学演習（(日本|西洋|東洋)）/.test(o.name)
-    || o.name.startsWith('日本史特講（日本仏教史）（地理）'));
-  assert.equal(held.length, 9);
+  const held = catalog.offerings.filter(o => /^史学演習（(日本|西洋|東洋)）/.test(o.name));
+  assert.equal(held.length, 8);
   assert.ok(held.every(o => o.resolutionStatus === 'manual_review' && o.mappingIds.length === 0));
 });
 
@@ -495,7 +493,7 @@ test('general education other is a normal category even with a null course ident
 test('outside mapping and manual review keep distinct labels and remain saveable', () => {
   for (const [status, label, count] of [
     ['outside_mapping_scope', '教職等・通常カリキュラム対象外', 30],
-    ['manual_review', '対応情報を確認中', 9],
+    ['manual_review', '対応情報を確認中', 8],
   ]) {
     const offerings = catalog.offerings.filter(o => o.resolutionStatus === status);
     assert.equal(offerings.length, count);
@@ -537,14 +535,16 @@ test('cleanup preserves every field and UI classification of all 627 previously 
 });
 
 const cleanupCatalog = { ...catalog, offerings: catalog.offerings.map(o =>
-  officialMappingOverrideLedger.overrides.some(entry => entry.offeringIds.includes(o.id)) ? rawOfferingsById.get(o.id) : o) };
+  (officialMappingOverrideLedger.overrides.some(entry => entry.offeringIds.includes(o.id)) || o.classCode === '35009')
+    ? rawOfferingsById.get(o.id) : o) };
 const cleanupOfferingsById = new Map(cleanupCatalog.offerings.map(o => [o.id, o]));
 
 test('audit covers exactly the 29 remaining offerings, and only the 18 safe decisions enter the ledger', () => {
   const expected = beforeCleanupCatalog.offerings.filter(o => o.resolutionStatus === 'manual_review');
   assert.equal(expected.length, 29);
   assert.deepEqual(cleanupAudit.offerings.map(o => o.offeringId).sort(), expected.map(o => o.id).sort());
-  const added = manualMappingOverrideLedger.overrides.slice(beforeCleanupLedger.overrides.length);
+  const added = manualMappingOverrideLedger.overrides.slice(beforeCleanupLedger.overrides.length)
+    .filter(entry => entry.ruleId.startsWith('cleanup_2026_'));
   assert.equal(added.length, 18);
   assert.ok(added.every(entry => entry.offeringIds.length === 1));
   const safe = cleanupAudit.offerings.filter(o => o.proposedDecision === 'safe_manual_curated');
@@ -628,7 +628,7 @@ test('information retains all seven professional scopes and computer only econom
   }
 });
 
-test('historical materials use the single grouped mapping while seminar sequence and geography qualifier remain held', () => {
+test('historical materials use the single grouped mapping while seminar sequence remains held and 35009 stays geography-only', () => {
   const materials = catalog.offerings.filter(o => /^歴史資料学（日本(近代|近世)）/.test(o.name));
   assert.equal(materials.length, 2);
   const expectedId = 'e50dd61e-27ef-4e93-afe7-9c61624661b7';
@@ -640,9 +640,56 @@ test('historical materials use the single grouped mapping while seminar sequence
   for (const offering of materials) assert.deepEqual(offering.mappingIds, [expectedId]);
   const held = catalog.offerings.filter(o => o.resolutionStatus === 'manual_review');
   assert.equal(held.filter(o => o.name.startsWith('史学演習')).length, 8);
-  assert.equal(held.filter(o => o.name.startsWith('日本史特講（日本仏教史）（地理）')).length, 1);
+  assert.equal(held.filter(o => o.name.startsWith('日本史特講（日本仏教史）（地理）')).length, 0);
   assert.equal(held.filter(o => o.name.startsWith('【教職】政治学')).length, 0);
   assert.ok(held.every(o => o.mappingIds.length === 0));
+  const geographyScope = '4d450b06-fb99-4bf2-a769-fe5f68dd337a';
+  const historyScope = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  const buddhism = catalog.offerings.find(o => o.classCode === '35009');
+  assert.deepEqual(buddhism.mappingIds, ['540bd399-8d5a-4133-adf7-2668b266b2e1']);
+  assert.equal(createCreditClassifier(catalog, geographyScope)(buddhism), '専門教育');
+  assert.equal(createCreditClassifier(catalog, historyScope)(buddhism), '選択した所属のカリキュラム対象外');
+});
+
+test('history seminars use recorded completion order, never offering order, and cap graduation credits at four completions', () => {
+  const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  const seminars = catalog.offerings.filter(o => /^史学演習（(日本|西洋|東洋)）/.test(o.name));
+  const card = (items, id) => calculateGraduationProgress(items, catalog, scope).cards.find(row => row.requirementId === id);
+  const required = 'history-seminar-required-elective';
+  const elective = 'history-seminar-elective';
+  const earned = (count) => seminars.slice(0, count).map((offering, index) => ({ ...item(offering.id, 'earned'), earnedOrder: index < 4 ? index + 1 : null }));
+
+  assert.deepEqual([card(earned(1), required).earned, card(earned(1), elective).earned], [2, 0]);
+  assert.deepEqual([card(earned(2), required).earned, card(earned(2), elective).earned], [4, 0]);
+  assert.deepEqual([card(earned(3), required).earned, card(earned(3), elective).earned], [4, 2]);
+  assert.deepEqual([card(earned(4), required).earned, card(earned(4), elective).earned], [4, 4]);
+  assert.deepEqual([card(earned(5), required).earned, card(earned(5), elective).earned], [4, 4]);
+
+  const pending = [{ ...item(seminars[0].id, 'planned'), earnedOrder: null }, { ...item(seminars[1].id, 'in_progress'), earnedOrder: null }];
+  assert.deepEqual([card(pending, required).earned, card(pending, elective).earned], [0, 0]);
+  assert.equal(card(pending, required).status, 'unsatisfied');
+  const unknown = [{ ...item(seminars[0].id, 'earned'), earnedOrder: null }];
+  assert.equal(card(unknown, required).status, 'unknown');
+  assert.match(card(unknown, required).reason, /修得順が未確定/);
+});
+
+test('history seminar completion order is unique, consecutive, earned-only, and v1 state migrates without inference', () => {
+  const seminars = catalog.offerings.filter(o => /^史学演習（/.test(o.name));
+  const state = { ...initialState(), items: [
+    { ...item(seminars[0].id, 'earned'), earnedOrder: 1 },
+    { ...item(seminars[1].id, 'earned'), earnedOrder: 2 },
+  ] };
+  assert.equal(validateState(state, catalog), true);
+  assert.equal(validateState({ ...state, items: [{ ...state.items[0], earnedOrder: 2 }, state.items[1]] }, catalog), false);
+  assert.equal(validateState({ ...state, items: [{ ...state.items[0], earnedOrder: 1 }, { ...state.items[1], earnedOrder: 3 }] }, catalog), false);
+  assert.equal(validateState({ ...state, items: [{ ...state.items[0], status: 'planned' }] }, catalog), false);
+  const v1 = { schemaVersion: 1, selectedScopeId: null, items: [{ offeringId: seminars[0].id, status: 'earned', plannedYear: 2026, plannedTerm: null }], todos: [] };
+  const store = memoryStore(JSON.stringify(v1));
+  const loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.state.schemaVersion, 2);
+  assert.equal(loaded.state.items[0].earnedOrder, null);
+  assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
 });
 
 test('cleanup coverage and audit before/after counts reconcile independently', () => {
@@ -650,7 +697,7 @@ test('cleanup coverage and audit before/after counts reconcile independently', (
   const after = cleanupCatalog.offerings;
   assert.equal(before.filter(o => o.resolutionStatus !== 'matched').length, 59);
   assert.equal(after.filter(o => o.resolutionStatus !== 'matched').length, 41);
-  assert.equal(catalog.metadata.unresolvedOfferingCount, 39);
+  assert.equal(catalog.metadata.unresolvedOfferingCount, 38);
   assert.equal(after.filter(o => o.resolutionStatus === 'manual_review').length, 11);
   assert.equal(after.filter(o => o.resolutionStatus === 'matched').length, 645);
   assert.equal(after.reduce((n, o) => n + o.mappingIds.length, 0), 1227);
@@ -707,10 +754,10 @@ test('official political science mappings count only for law and preserve earned
       }
     }
   }
-  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 9);
+  assert.equal(catalog.metadata.catalogCoverage.manualReviewOfferingCount, 8);
   assert.deepEqual(catalog.offerings.filter(o => o.resolutionStatus === 'manual_review').map(o => o.classCode).sort(),
-    ['15005', '25003', '25004', '35002', '35003', '35007', '35009', '35015', '45006']);
+    ['15005', '25003', '25004', '35002', '35003', '35007', '35015', '45006']);
   assert.equal(catalog.metadata.catalogCoverage.outsideMappingScopeOfferingCount, 30);
-  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1229);
+  assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1230);
   assert.equal(validateCatalog(catalog), true);
 });
