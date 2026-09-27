@@ -257,12 +257,36 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
 type Totals = { earned: number; inProgress: number; planned: number; courses: Set<string> };
 const emptyTotals = (): Totals => ({ earned: 0, inProgress: 0, planned: 0, courses: new Set() });
 
-function addTotals(totals: Totals, item: PlannerItem, offering: Offering) {
+function addOfferingTotals(totals: Totals, item: PlannerItem, offering: Offering) {
   if (item.status === 'earned') {
     totals.earned += offering.credits!;
     totals.courses.add(offering.id);
   } else if (item.status === 'in_progress') totals.inProgress += offering.credits!;
   else if (item.status === 'planned') totals.planned += offering.credits!;
+}
+
+type CurriculumEntry = {
+  mapping: Mapping;
+  earned: number;
+  inProgress: number;
+  planned: number;
+};
+
+const REPEATABLE_PROFESSIONAL_NAMES = ['総合特講', '法律学特講', '経済学特講', '演習', '歴史資料学'];
+
+function isRepeatableProfessionalOffering(offering: Offering) {
+  return REPEATABLE_PROFESSIONAL_NAMES.some(name => offering.name === name || offering.name.startsWith(`${name}（`));
+}
+
+function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
+  totals.inProgress += entry.inProgress;
+  totals.planned += entry.planned;
+  // A mapping becomes one completed curriculum course only after all of its
+  // official curriculum credits have been earned across its offerings.
+  if (entry.earned >= entry.mapping.curriculumCredits!) {
+    totals.earned += entry.mapping.curriculumCredits!;
+    totals.courses.add(entry.mapping.mappingId);
+  }
 }
 
 /**
@@ -278,7 +302,10 @@ function professionalCards(
   const buckets = new Map<string, Totals>();
   const bucket = (name: string) => buckets.get(name) ?? (buckets.set(name, emptyTotals()), buckets.get(name)!);
   const ambiguous = new Set<string>();
-  const addTo = (name: string, item: PlannerItem, offering: Offering) => addTotals(bucket(name), item, offering);
+  const incompleteMetadata = new Set<string>();
+  const repeatable = new Set<string>();
+  const entries = new Map<string, CurriculumEntry>();
+  const addTo = (name: string, item: PlannerItem, offering: Offering) => addOfferingTotals(bucket(name), item, offering);
 
   for (const item of items) {
     const offering = offerings.get(item.offeringId);
@@ -290,15 +317,32 @@ function professionalCards(
     if (types.length > 1) { ambiguous.add(offering.id); continue; }
     const type = types[0];
     if (!type) continue;
-    addTo(type, item, offering);
-    for (const field of new Set(mappings.filter(mapping => mapping.requirementType === type).map(mapping => mapping.field).filter((field): field is string => field !== null))) {
-      addTo(`${type}:${field}`, item, offering);
-    }
+    const fields = [...new Set(mappings.filter(mapping => mapping.requirementType === type).map(mapping => mapping.field))];
+    if (fields.length > 1) { ambiguous.add(offering.id); continue; }
+    // Multiple identical mapping edges describe one curriculum row, not several courses.
+    const mapping = [...mappings].sort((a, b) => a.mappingId.localeCompare(b.mappingId))[0];
+    if (mapping.curriculumCredits === null) { incompleteMetadata.add(mapping.mappingId); continue; }
+    if (isRepeatableProfessionalOffering(offering)) { repeatable.add(mapping.mappingId); continue; }
+    const entry = entries.get(mapping.mappingId) ?? {
+      mapping, earned: 0, inProgress: 0, planned: 0,
+    };
+    if (item.status === 'earned') entry.earned += offering.credits;
+    else if (item.status === 'in_progress') entry.inProgress += offering.credits;
+    else entry.planned += offering.credits;
+    entries.set(mapping.mappingId, entry);
+  }
+
+  for (const entry of entries.values()) {
+    const type = entry.mapping.requirementType!;
+    addCurriculumTotals(bucket(type), entry);
+    if (entry.mapping.field !== null) addCurriculumTotals(bucket(`${type}:${entry.mapping.field}`), entry);
   }
 
   const baseReason = hasUnresolvedEarned
     ? '修得済みに対応関係を確認中の科目があります'
-    : ambiguous.size ? '専門教育の区分が複数ある科目があるため自動配分を保留しています' : null;
+    : ambiguous.size ? '専門教育の区分が複数ある科目があるため自動配分を保留しています'
+      : incompleteMetadata.size ? 'カリキュラム科目の構成単位が未設定のため卒業算入を保留しています'
+        : repeatable.size ? '複数回の卒業算入があり得る科目を安全に判定できないため保留しています' : null;
   const make = (id: string, label: string, totals: Totals, target: number | null, satisfied: boolean,
     details?: ProgressCard['details'], note?: string, reason = baseReason): ProgressCard => ({
     requirementId: id, label, ruleType: 'professional_group',
