@@ -35,6 +35,7 @@ export type GraduationProgress = {
 
 export type ProgressCard = RequirementProgress & {
   details?: Array<{ label: string; earned: number; inProgress: number; planned: number; target: number; schooling?: number; unit?: 'credits' | 'courses' }>;
+  partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
   note?: string;
 };
 
@@ -267,6 +268,7 @@ function addOfferingTotals(totals: Totals, item: PlannerItem, offering: Offering
 
 type CurriculumEntry = {
   mapping: Mapping;
+  label: string;
   earned: number;
   inProgress: number;
   planned: number;
@@ -276,6 +278,14 @@ const REPEATABLE_PROFESSIONAL_NAMES = ['総合特講', '法律学特講', '経�
 
 function isRepeatableProfessionalOffering(offering: Offering) {
   return REPEATABLE_PROFESSIONAL_NAMES.some(name => offering.name === name || offering.name.startsWith(`${name}（`));
+}
+
+function curriculumCourseLabel(offering: Offering) {
+  // Delivery and department qualifiers describe an offering, rather than the
+  // curriculum course being completed across multiple offerings.
+  return offering.name
+    .replace(/（(?:春期|夏期|秋期|冬期)?スクーリング）$/, '')
+    .replace(/（地理）$/, '');
 }
 
 function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
@@ -338,7 +348,7 @@ function professionalCards(
       continue;
     }
     const entry = entries.get(mapping.mappingId) ?? {
-      mapping, earned: 0, inProgress: 0, planned: 0,
+      mapping, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0,
     };
     if (item.status === 'earned') entry.earned += offering.credits;
     else if (item.status === 'in_progress') entry.inProgress += offering.credits;
@@ -370,6 +380,16 @@ function professionalCards(
   const detail = (label: string, totals: Totals, target: number, unit: 'credits' | 'courses' = 'credits') =>
     ({ label, earned: unit === 'courses' ? totals.courses.size : totals.earned, inProgress: totals.inProgress, planned: totals.planned, target, unit });
   const normal = (name: string) => bucket(name);
+  const partialCourses = (type: string): ProgressCard['partialCourses'] => [...entries.values()]
+    .filter(entry => entry.mapping.requirementType === type
+      && entry.earned > 0 && entry.earned < entry.mapping.curriculumCredits!)
+    .map(entry => ({
+      mappingId: entry.mapping.mappingId,
+      label: entry.label,
+      earned: entry.earned,
+      target: entry.mapping.curriculumCredits!,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'ja'));
   const overflow = (from: Totals, threshold: number) => Math.max(0, from.earned - threshold);
   const withOverflow = (own: Totals, from: Totals, threshold: number): Totals => ({ ...own, earned: own.earned + overflow(from, threshold) });
 
@@ -377,10 +397,10 @@ function professionalCards(
     const required = normal('必修'), requiredElective = normal('選択必修');
     const elective = withOverflow(normal('選択'), requiredElective, 20);
     return [
-      make('professional-required', '専門教育：必修', required, 20, required.earned >= 20),
-      make('professional-required-elective', '専門教育：選択必修', requiredElective, 20, requiredElective.earned >= 20),
-      make('professional-elective', '専門教育：選択', elective, 24, elective.earned >= 24, undefined,
-        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 20)}単位。超過分は選択必修の達成値には重ねて算入しません。`),
+      { ...make('professional-required', '専門教育：必修', required, 20, required.earned >= 20), partialCourses: partialCourses('必修') },
+      { ...make('professional-required-elective', '専門教育：選択必修', requiredElective, 20, requiredElective.earned >= 20), partialCourses: partialCourses('選択必修') },
+      { ...make('professional-elective', '専門教育：選択', elective, 24, elective.earned >= 24, undefined,
+        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 20)}単位。超過分は選択必修の達成値には重ねて算入しません。`), partialCourses: partialCourses('選択') },
     ];
   }
 
@@ -402,12 +422,12 @@ function professionalCards(
     const fields = ['日本', '東洋', '西洋'].map(field => ({ label: `${field}史`, totals: normal(`選択:${field}史の分野`) }));
     const fieldMet = fields.every(field => field.totals.courses.size >= 1);
     return [
-      make('professional-history-required', '専門教育：必修', required, 16, required.earned >= 16),
-      make('professional-history-schooling-required-elective', '専門教育：スクーリング選択必修', schoolingRequired, 8, schoolingRequired.earned >= 8,
-        undefined, '史学演習1・2はこの枠へ算入します。', orderReason),
-      make('professional-history-elective', '専門教育：選択', elective, 50, elective.earned >= 50 && fieldMet,
+      { ...make('professional-history-required', '専門教育：必修', required, 16, required.earned >= 16), partialCourses: partialCourses('必修') },
+      { ...make('professional-history-schooling-required-elective', '専門教育：スクーリング選択必修', schoolingRequired, 8, schoolingRequired.earned >= 8,
+        undefined, '史学演習1・2はこの枠へ算入します。', orderReason), partialCourses: partialCourses('スクーリング選択必修') },
+      { ...make('professional-history-elective', '専門教育：選択', elective, 50, elective.earned >= 50 && fieldMet,
         fields.map(field => detail(`${field.label}から1科目以上`, field.totals, 1, 'courses')),
-        '史学演習3・4はこの枠へ算入します。50単位に加え、日本・東洋・西洋史から各1科目が必要です。', orderReason),
+        '史学演習3・4はこの枠へ算入します。50単位に加え、日本・東洋・西洋史から各1科目が必要です。', orderReason), partialCourses: partialCourses('選択') },
     ];
   }
 
@@ -417,13 +437,13 @@ function professionalCards(
     const human = normal('選択必修:人文地理の分野'), natural = normal('選択必修:自然地理の分野'), regional = normal('選択必修:地誌・その他の分野');
     const fieldsMet = human.earned >= 8 && human.courses.size >= 2 && natural.earned >= 8 && natural.courses.size >= 2 && regional.earned >= 16;
     return [
-      make('professional-geography-required', '専門教育：必修', required, 12, required.earned >= 12),
-      make('professional-geography-schooling-required', '専門教育：スクーリング必修', schooling, 6, schooling.earned >= 6),
-      make('professional-geography-required-elective', '専門教育：選択必修', requiredElective, 36, requiredElective.earned >= 36 && fieldsMet,
+      { ...make('professional-geography-required', '専門教育：必修', required, 12, required.earned >= 12), partialCourses: partialCourses('必修') },
+      { ...make('professional-geography-schooling-required', '専門教育：スクーリング必修', schooling, 6, schooling.earned >= 6), partialCourses: partialCourses('スクーリング必修') },
+      { ...make('professional-geography-required-elective', '専門教育：選択必修', requiredElective, 36, requiredElective.earned >= 36 && fieldsMet,
         [detail('人文地理：2科目・8単位以上', human, 8), detail('自然地理：2科目・8単位以上', natural, 8), detail('地誌・その他：16単位以上', regional, 16)],
-        '人文・自然はそれぞれ科目数も満たす必要があります。2013年度以前の救済措置は自動判定しません。'),
-      make('professional-geography-elective', '専門教育：選択', elective, 12, elective.earned >= 12, undefined,
-        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 36)}単位。個別特講・現地研究の上限は次の機能で判定します。`),
+        '人文・自然はそれぞれ科目数も満たす必要があります。2013年度以前の救済措置は自動判定しません。'), partialCourses: partialCourses('選択必修') },
+      { ...make('professional-geography-elective', '専門教育：選択', elective, 12, elective.earned >= 12, undefined,
+        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 36)}単位。個別特講・現地研究の上限は次の機能で判定します。`), partialCourses: partialCourses('選択') },
     ];
   }
 
@@ -432,11 +452,11 @@ function professionalCards(
     const elective = withOverflow(normal('選択'), requiredElective, 32);
     const qualifies = requiredElective.earned >= 32 && requiredElective.courses.size >= 8;
     return [
-      make('professional-law-required-elective', '専門教育：選択必修', requiredElective, 32, qualifies,
-        [detail('選択必修科目数', requiredElective, 8, 'courses')], '8科目かつ32単位が必要です。'),
-      makeKnownUnknown('professional-law-elective', '専門教育：選択（卒業算入見込み）', elective, undefined,
+      { ...make('professional-law-required-elective', '専門教育：選択必修', requiredElective, 32, qualifies,
+        [detail('選択必修科目数', requiredElective, 8, 'courses')], '8科目かつ32単位が必要です。'), partialCourses: partialCourses('選択必修') },
+      { ...makeKnownUnknown('professional-law-elective', '専門教育：選択（卒業算入見込み）', elective, undefined,
         `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 32)}単位。卒業論文の選択により必要単位が50/54単位で変わるため、ここでは達成判定しません。`,
-        '卒業論文の選択状況をPlannerStateで保持していないため自動判定できません。'),
+        '卒業論文の選択状況をPlannerStateで保持していないため自動判定できません。'), partialCourses: partialCourses('選択') },
       make('professional-law-schooling', '専門教育：スクーリング', emptyTotals(), 8, false, undefined,
         '＊印以外のみを数える必要があります。現行offeringには＊印を識別するデータがないため自動判定しません。',
         '＊印除外と4単位科目の部分修得例外を安全に識別できません。'),
@@ -447,10 +467,10 @@ function professionalCards(
   const requiredElective = normal('選択必修');
   const elective = withOverflow(normal('選択'), requiredElective, threshold);
   return [
-    make(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-required-elective`, '専門教育：選択必修', requiredElective, threshold, requiredElective.earned >= threshold),
-    makeKnownUnknown(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-elective`, '専門教育：選択（卒業算入見込み）', elective, undefined,
+    { ...make(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-required-elective`, '専門教育：選択必修', requiredElective, threshold, requiredElective.earned >= threshold), partialCourses: partialCourses('選択必修') },
+    { ...makeKnownUnknown(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-elective`, '専門教育：選択（卒業算入見込み）', elective, undefined,
       `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位。専門教育82単位には卒業論文を含むため、ここでは達成判定しません。`,
-      '卒業論文を含む選択必要量の内訳をPlannerStateで安全に判定できません。'),
+      '卒業論文を含む選択必要量の内訳をPlannerStateで安全に判定できません。'), partialCourses: partialCourses('選択') },
   ];
 }
 

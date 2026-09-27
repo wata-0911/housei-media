@@ -873,11 +873,23 @@ test('professional progress completes curriculum mappings before counting credit
   ]);
   const card = (items, id) => calculateGraduationProgress(items, geography.catalog, geography.scope).cards.find(row => row.requirementId === id);
 
-  assert.equal(card([item('buddhism-summer', 'earned')], 'professional-geography-elective').earned, 0);
+  const partial = card([item('buddhism-summer', 'earned')], 'professional-geography-elective');
+  assert.equal(partial.earned, 0);
+  assert.deepEqual(partial.partialCourses, [{
+    mappingId: 'buddhism', label: 'buddhism-summer', earned: 2, target: 4,
+  }]);
   const completed = card([item('buddhism-summer', 'earned'), item('buddhism-winter', 'earned')], 'professional-geography-elective');
   assert.equal(completed.earned, 4);
   assert.equal(completed.details, undefined);
-  assert.equal(card([item('buddhism-summer', 'planned'), item('buddhism-winter', 'in_progress')], 'professional-geography-elective').earned, 0);
+  assert.deepEqual(completed.partialCourses, []);
+  const referenceOnly = card([item('buddhism-summer', 'planned'), item('buddhism-winter', 'in_progress')], 'professional-geography-elective');
+  assert.equal(referenceOnly.earned, 0);
+  assert.deepEqual(referenceOnly.partialCourses, []);
+  for (const status of ['waiting', 'failed', 'dropped']) {
+    const terminal = card([item('buddhism-summer', status)], 'professional-geography-elective');
+    assert.equal(terminal.earned, 0);
+    assert.deepEqual(terminal.partialCourses, []);
+  }
 
   const geographyRequired = card([
     item('human-summer', 'earned'), item('human-winter', 'earned'),
@@ -1012,7 +1024,11 @@ test('35009 needs its full geography curriculum mapping before entering professi
   const geography = '4d450b06-fb99-4bf2-a769-fe5f68dd337a';
   const buddhism = catalog.offerings.find(o => o.classCode === '35009');
   const geo = calculateGraduationProgress([item(buddhism.id, 'earned')], catalog, geography);
-  assert.equal(geo.cards.find(row => row.requirementId === 'professional-geography-elective').earned, 0);
+  const elective = geo.cards.find(row => row.requirementId === 'professional-geography-elective');
+  assert.equal(elective.earned, 0);
+  assert.deepEqual(elective.partialCourses, [{
+    mappingId: '540bd399-8d5a-4133-adf7-2668b266b2e1', label: '日本史特講（日本仏教史）', earned: 2, target: 4,
+  }]);
   const history = '118c5183-6aec-4fa1-905a-265f25d86db1';
   assert.equal(calculateGraduationProgress([item(buddhism.id, 'earned')], catalog, history).cards.find(row => row.requirementId === 'professional-history-elective').earned, 0);
 });
