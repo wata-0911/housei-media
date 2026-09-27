@@ -11,6 +11,7 @@ import { summarizeCredits } from '../planner/calculations';
 import { initialState, loadState, recoverState, saveState, STORAGE_KEY, type LoadResult } from '../planner/storage';
 import type { PlannerItem, PlannerState } from '../planner/plannerCatalog';
 import { calculateGraduationProgress } from '../planner/graduationProgress';
+import { removePlannerItem, restorePlannerItem, type RemovedPlannerItem } from '../planner/removeUndo';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -30,6 +31,7 @@ export default function PlannerPage() {
   const [loaded, setLoaded] = useState(readSavedState);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [undoItem, setUndoItem] = useState<RemovedPlannerItem | null>(null);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId);
@@ -44,15 +46,17 @@ export default function PlannerPage() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  function commit(next: PlannerState, message: string) {
-    if (loaded.error) return;
+  function commit(next: PlannerState, message: string): boolean {
+    if (loaded.error) return false;
     try {
       const raw = saveState(window.localStorage, next, loaded.raw, catalog);
       setLoaded({ state: next, raw, error: null });
       setSaveError(null);
       setNotice(message);
+      return true;
     } catch (error) {
       setSaveError(`${error instanceof Error ? error.message : '保存できませんでした。'} 変更は反映していません。保存設定・空き容量を確認し、再操作してください。`);
+      return false;
     }
   }
 
@@ -65,6 +69,27 @@ export default function PlannerPage() {
     commit({ ...state, items: state.items.map(item => item.offeringId === id
       ? { ...item, ...patch, ...(patch.status && patch.status !== 'earned' ? { earnedOrder: null } : {}) }
       : item) }, '履修計画を保存しました。');
+  }
+
+  function removeItem(id: string) {
+    const removed = removePlannerItem(state.items, id);
+    if (!removed) return;
+    const offering = offeringsById.get(id);
+    if (commit({ ...state, items: state.items.filter(item => item.offeringId !== id) }, `「${offering?.name ?? '科目'}」を履修計画から削除しました。`)) {
+      setUndoItem(removed);
+    }
+  }
+
+  function undoRemove() {
+    if (!undoItem) return;
+    const restoredItems = restorePlannerItem(state.items, undoItem);
+    const offering = offeringsById.get(undoItem.item.offeringId);
+    if (restoredItems === null) {
+      setUndoItem(null);
+      setNotice(`「${offering?.name ?? '科目'}」はすでに履修計画へ追加されているため、元に戻しませんでした。`);
+      return;
+    }
+    if (commit({ ...state, items: restoredItems }, `「${offering?.name ?? '科目'}」を履修計画に元に戻しました。`)) setUndoItem(null);
   }
 
   function recover() {
@@ -106,10 +131,13 @@ export default function PlannerPage() {
       <CreditSummary summary={summarizeCredits(state.items, offeringsById)} />
       {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId)} />}
       {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}
-      <p role="status" className="text-sm text-[#002255] min-h-5">{notice}</p>
+      <div className="min-h-5 text-sm text-[#002255]">
+        <p role="status" className="inline">{notice}</p>
+        {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
+      </div>
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         <CourseSearch classify={classify} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} />
-        <PlannedCourseList classify={classify} items={state.items} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} />
+        <PlannedCourseList classify={classify} items={state.items} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} />
       </div>
     </div>
   </div>;

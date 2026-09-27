@@ -8,7 +8,7 @@ import { isHistorySeminar, historySeminarField } from '../../planner/historySemi
 const statuses: Record<PlannerItem['status'], string> = {
   planned: '計画中', in_progress: '履修中', waiting: '結果待ち', earned: '修得済み', failed: '不合格', dropped: '取りやめ',
 };
-type Props = { classify: ReturnType<typeof createCreditClassifier>; items: PlannerItem[]; offerings: Map<string, Offering>; disabled: boolean; onChange: (id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) => void };
+type Props = { classify: ReturnType<typeof createCreditClassifier>; items: PlannerItem[]; offerings: Map<string, Offering>; disabled: boolean; onChange: (id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) => void; onRemove: (id: string) => void };
 const control = 'w-full min-w-0 border border-gray-300 rounded-sm p-2 bg-white disabled:opacity-50';
 
 function YearEditor({ item, disabled, onChange }: { item: PlannerItem; disabled: boolean; onChange: Props['onChange'] }) {
@@ -31,7 +31,7 @@ function YearEditor({ item, disabled, onChange }: { item: PlannerItem; disabled:
   </form>;
 }
 
-export default function PlannedCourseList({ classify, items, offerings, disabled, onChange }: Props) {
+export default function PlannedCourseList({ classify, items, offerings, disabled, onChange, onRemove }: Props) {
   const terms = termOptions([...offerings.values()]);
   return <section aria-labelledby="planned-heading" className="bg-white border border-gray-200 p-5 sm:p-7 min-w-0">
     <h2 id="planned-heading" className="text-xl text-[#002255]">年間履修計画 <span className="text-sm">{items.length}件</span></h2>
@@ -49,7 +49,14 @@ export default function PlannedCourseList({ classify, items, offerings, disabled
             const nextOrder = ([1, 2, 3, 4] as const).find(order => !usedOrders.has(order));
             const legacyTerm = item.plannedTerm !== null && !terms.includes(item.plannedTerm);
             return <li key={item.offeringId} className="py-4 min-w-0">
-              <h5 className="font-medium break-words">{offering.name}</h5>
+              <div className="flex items-start justify-between gap-3">
+                <h5 className="min-w-0 font-medium break-words">{offering.name}</h5>
+                <button type="button" onClick={() => onRemove(item.offeringId)} disabled={disabled} aria-label={`${offering.name}を履修計画から削除`} title={`${offering.name}を履修計画から削除`} className="shrink-0 rounded-sm p-2 text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50" >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-2" focusable="false">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16m-10 4v6m4-6v6M9 7l1-2h4l1 2m-8 0 1 13h8l1-13" />
+                  </svg>
+                </button>
+              </div>
               <p className="text-sm text-gray-600 my-2">開講期：{offering.period ?? '未分類'} / {offering.classCode ?? 'クラス未設定'} / {offering.credits === null ? '単位数不明' : `${offering.credits}単位`}</p>
               <ClassificationLabel value={classify(offering)} />
               {seminar && <p className="mt-2 break-words text-sm text-gray-600">史学演習の分野：{historySeminarField(offering) ?? '未確認'} / 修得順：{item.status === 'earned' ? (item.earnedOrder ?? '未確定') : '未確定（修得済み後に記録）'}</p>}
