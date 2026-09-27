@@ -187,7 +187,7 @@ function groupedCards(
         totals.earned += offering.credits!;
         if (offering.method === 'schooling') totals.schooling += offering.credits!;
       } else if (item.status === 'in_progress') totals.inProgress += offering.credits!;
-      else totals.planned += offering.credits!;
+      else if (item.status === 'planned') totals.planned += offering.credits!;
     };
     if (mappings.some(mapping => mapping.category === '一般教育')) {
       add(general);
@@ -342,7 +342,7 @@ function professionalCards(
     };
     if (item.status === 'earned') entry.earned += offering.credits;
     else if (item.status === 'in_progress') entry.inProgress += offering.credits;
-    else entry.planned += offering.credits;
+    else if (item.status === 'planned') entry.planned += offering.credits;
     entries.set(mapping.mappingId, entry);
   }
 

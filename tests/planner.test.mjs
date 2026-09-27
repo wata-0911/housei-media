@@ -144,6 +144,13 @@ test('grouped requirements use earned credits, one language, and one mapped offe
     const physical = card([item('health', status)], 'physical');
     assert.equal(physical.status, status === 'earned' ? 'satisfied' : 'unsatisfied');
   }
+  for (const status of ['waiting', 'failed', 'dropped']) {
+    const general = card([item('literature', status)], 'general');
+    assert.deepEqual(
+      { earned: general.earned, inProgress: general.inProgress, planned: general.planned, status: general.status },
+      { earned: 0, inProgress: 0, planned: 0, status: 'unsatisfied' },
+    );
+  }
   assert.equal(card([item('sport', 'earned')], 'physical').status, 'satisfied');
   assert.equal(card([item('literature', 'earned'), item('general-other', 'earned')], 'general').status, 'unsatisfied');
   assert.equal(card([item('english2', 'earned'), item('englishS1', 'earned'), item('englishS2', 'earned')], 'foreign').status, 'satisfied');
@@ -879,6 +886,33 @@ test('professional progress completes curriculum mappings before counting credit
   assert.equal(geographyRequired.details[0].earned, 4);
   assert.equal(geographyRequired.details[0].unit, 'credits');
   assert.equal(geographyRequired.status, 'unsatisfied');
+});
+
+test('professional cards count only earned, in-progress, and planned statuses', () => {
+  const fixture = professionalFixture('法律学科', [['required-elective', '選択必修']], [
+    ['professional-course', 4, ['required-elective']],
+  ]);
+  const card = status => calculateGraduationProgress([item('professional-course', status)], fixture.catalog, fixture.scope).cards
+    .find(row => row.requirementId === 'professional-law-required-elective');
+
+  for (const [status, expected] of [
+    ['earned', { earned: 4, inProgress: 0, planned: 0 }],
+    ['in_progress', { earned: 0, inProgress: 4, planned: 0 }],
+    ['planned', { earned: 0, inProgress: 0, planned: 4 }],
+  ]) {
+    const current = card(status);
+    assert.deepEqual(
+      { earned: current.earned, inProgress: current.inProgress, planned: current.planned },
+      expected,
+    );
+  }
+  for (const status of ['waiting', 'failed', 'dropped']) {
+    const current = card(status);
+    assert.deepEqual(
+      { earned: current.earned, inProgress: current.inProgress, planned: current.planned, status: current.status },
+      { earned: 0, inProgress: 0, planned: 0, status: 'unsatisfied' },
+    );
+  }
 });
 
 test('professional mapping aggregation counts duplicate edges once and safely holds incomplete metadata', () => {
