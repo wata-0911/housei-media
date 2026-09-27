@@ -969,11 +969,24 @@
       ],
       "additionalProperties": false
     },
+    "PublicCourse": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": ".*\\S.*" },
+        "status": { "enum": ["planned", "in_progress", "waiting", "earned", "failed", "dropped"] },
+        "plannedYear": { "anyOf": [{ "type": "integer" }, { "type": "null" }] },
+        "plannedTerm": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "credits": { "const": 2 }
+      },
+      "required": ["id", "title", "status", "plannedYear", "plannedTerm", "credits"],
+      "additionalProperties": false
+    },
     "PlannerState": {
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 2
+          "const": 3
         },
         "selectedScopeId": {
           "anyOf": [
@@ -993,6 +1006,10 @@
             "$ref": "#/$defs/PlannerItem"
           }
         },
+        "publicCourses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PublicCourse" }
+        },
         "todos": {
           "type": "array",
           "items": {
@@ -1004,6 +1021,7 @@
         "schemaVersion",
         "selectedScopeId",
         "items",
+        "publicCourses",
         "todos"
       ],
       "additionalProperties": false

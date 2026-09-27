@@ -1,4 +1,4 @@
-import type { Mapping, Offering, PlannerCatalog, PlannerItem } from './plannerCatalog';
+import type { Mapping, Offering, PlannerCatalog, PlannerItem, PublicCourse } from './plannerCatalog';
 import { createMappingResolver } from './plannerHelpers';
 import { summarizeCredits } from './calculations';
 
@@ -56,7 +56,7 @@ export function createCreditClassifier(catalog: PlannerCatalog, scopeId: string 
   };
 }
 
-export function summarizeCategories(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null) {
+export function summarizeCategories(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = []) {
   const offerings = new Map(catalog.offerings.map(o => [o.id, o]));
   const classify = createCreditClassifier(catalog, scopeId);
   const grouped = new Map<CreditClassification, PlannerItem[]>([...creditCategories, ...classificationStates].map(c => [c, []]));
@@ -65,5 +65,15 @@ export function summarizeCategories(items: PlannerItem[], catalog: PlannerCatalo
     if (!offering) throw new Error(`Unknown offering: ${item.offeringId}`);
     grouped.get(classify(offering))!.push(item);
   }
-  return [...creditCategories, ...classificationStates].map(category => ({ category, count: grouped.get(category)!.length, ...summarizeCredits(grouped.get(category)!, offerings) }));
+  return [...creditCategories, ...classificationStates].map(category => {
+    const summary = summarizeCredits(grouped.get(category)!, offerings);
+    // Public courses are actual completed professional credits even when the
+    // separate graduation cap excludes their excess from graduation counting.
+    if (category === '専門教育') {
+      const count = publicCourses.length;
+      for (const status of ['earned', 'in_progress', 'planned'] as const) summary[status] += publicCourses.filter(course => course.status === status).length * 2;
+      return { category, count: grouped.get(category)!.length + count, ...summary };
+    }
+    return { category, count: grouped.get(category)!.length, ...summary };
+  });
 }

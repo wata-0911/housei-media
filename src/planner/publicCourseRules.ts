@@ -1,15 +1,4 @@
-import type { Mapping, Offering, PlannerCatalog, PlannerItem, StructuredRequirement } from './plannerCatalog';
-
-/**
- * The curriculum tables name a single "other faculty / other department public
- * course" row, but the 2026 snapshot does not retain an ID for that row.  Do
- * not infer it from an offering's faculty or department: that would include
- * ordinary cross-department mappings and teacher-training offerings.
- *
- * Add only mapping IDs verified against the official public-course notice here.
- * Keeping this empty is deliberate until that source-to-mapping bridge exists.
- */
-export const OFFICIAL_PUBLIC_COURSE_MAPPING_IDS_2026: Readonly<Record<string, readonly string[]>> = {};
+import type { PlannerCatalog, PublicCourse, StructuredRequirement } from './plannerCatalog';
 
 export type PublicCourseLimit = {
   maxCredits: number;
@@ -18,16 +7,14 @@ export type PublicCourseLimit = {
 };
 
 export type PublicCourseProgress = {
-  status: 'satisfied' | 'unsatisfied' | 'unknown';
-  earnedCredits: number | null;
-  countedCredits: number | null;
-  earnedCourses: number | null;
-  countedCourses: number | null;
-  inProgressCredits: number | null;
-  plannedCredits: number | null;
+  earnedCredits: number;
+  countedCredits: number;
+  earnedCourses: number;
+  countedCourses: number;
+  inProgressCredits: number;
+  plannedCredits: number;
   limit: PublicCourseLimit;
-  excludedCredits: number | null;
-  reason: string | null;
+  excludedCredits: number;
 };
 
 export function isPublicCourseLimitRequirement(requirement: StructuredRequirement) {
@@ -49,50 +36,16 @@ export function publicCourseLimitFor(catalog: PlannerCatalog, scopeId: string): 
   };
 }
 
-function totals(entries: Array<{ item: PlannerItem; offering: Offering }>, status: PlannerItem['status']) {
-  return entries.filter(entry => entry.item.status === status)
-    .reduce((sum, entry) => sum + entry.offering.credits!, 0);
-}
-
-/** Apply both official caps, one completed offering at a time in plan order. */
-export function evaluatePublicCourseLimit(
-  items: PlannerItem[], offerings: Map<string, Offering>, mappingIds: ReadonlySet<string>, limit: PublicCourseLimit,
-): PublicCourseProgress {
-  if (mappingIds.size === 0) {
-    return {
-      status: 'unknown', earnedCredits: null, countedCredits: null, earnedCourses: null, countedCourses: null,
-      inProgressCredits: null, plannedCredits: null, excludedCredits: null, limit,
-      reason: '公開科目を表す公式mapping IDが2026カタログにないため、所属情報だけでは安全に識別できません。',
-    };
-  }
-  const entries = items.flatMap(item => {
-    const offering = offerings.get(item.offeringId);
-    if (!offering || offering.resolutionStatus !== 'matched' || offering.credits === null) return [];
-    // PlannerState prohibits duplicate offering IDs. One matching edge is enough:
-    // duplicate mapping edges must never create a second counted course.
-    return offering.mappingIds.some(id => mappingIds.has(id)) ? [{ item, offering }] : [];
-  });
-  const earned = entries.filter(entry => entry.item.status === 'earned');
-  let countedCredits = 0;
-  let countedCourses = 0;
-  for (const entry of earned) {
-    if (countedCourses >= limit.maxCourses || countedCredits + entry.offering.credits! > limit.maxCredits) continue;
-    countedCourses += 1;
-    countedCredits += entry.offering.credits!;
-  }
-  const earnedCredits = totals(entries, 'earned');
+/** Public-course records are explicit user-owned data, not catalog offerings. */
+export function evaluatePublicCourseLimit(publicCourses: PublicCourse[], limit: PublicCourseLimit): PublicCourseProgress {
+  const earned = publicCourses.filter(course => course.status === 'earned');
+  const countedCourses = Math.min(earned.length, limit.maxCourses);
+  const earnedCredits = earned.length * 2;
+  const countedCredits = countedCourses * 2;
   return {
-    status: earnedCredits <= limit.maxCredits && earned.length <= limit.maxCourses ? 'satisfied' : 'unsatisfied',
     earnedCredits, countedCredits, earnedCourses: earned.length, countedCourses,
-    inProgressCredits: totals(entries, 'in_progress'), plannedCredits: totals(entries, 'planned'),
-    excludedCredits: earnedCredits - countedCredits, limit, reason: null,
+    inProgressCredits: publicCourses.filter(course => course.status === 'in_progress').length * 2,
+    plannedCredits: publicCourses.filter(course => course.status === 'planned').length * 2,
+    excludedCredits: earnedCredits - countedCredits, limit,
   };
-}
-
-export function publicCourseMappingIdsFor(scopeId: string) {
-  return new Set(OFFICIAL_PUBLIC_COURSE_MAPPING_IDS_2026[scopeId] ?? []);
-}
-
-export function isExplicitPublicCourseMapping(mapping: Mapping, scopeId: string) {
-  return publicCourseMappingIdsFor(scopeId).has(mapping.mappingId);
 }

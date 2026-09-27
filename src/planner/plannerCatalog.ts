@@ -188,10 +188,21 @@ export type PlannerTodo = {
   done: boolean;
 };
 
+export type PublicCourse = {
+  id: string;
+  title: string;
+  status: "planned" | "in_progress" | "waiting" | "earned" | "failed" | "dropped";
+  plannedYear: number | null;
+  plannedTerm: string | null;
+  /** Public courses are always recorded as a two-credit enrollment. */
+  credits: 2;
+};
+
 export type PlannerState = {
-  schemaVersion: 2;
+  schemaVersion: 3;
   selectedScopeId: string | null;
   items: Array<PlannerItem>;
+  publicCourses: Array<PublicCourse>;
   todos: Array<PlannerTodo>;
 };
 

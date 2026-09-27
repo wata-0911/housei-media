@@ -8,7 +8,7 @@ import { summarizeCredits, searchOfferings } from '../src/planner/calculations.t
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
-import { removePlannerItem, restorePlannerItem } from '../src/planner/removeUndo.ts';
+import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/removeUndo.ts';
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
 
 function memoryStore(raw = null) {
@@ -16,6 +16,7 @@ function memoryStore(raw = null) {
   return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
 }
 const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedYear: 2026, plannedTerm: null, earnedOrder: null });
+const publicCourse = (id, status = 'planned', title = `公開科目 ${id}`) => ({ id, title, status, plannedYear: 2026, plannedTerm: null, credits: 2 });
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
@@ -35,6 +36,14 @@ test('only the latest removal is undoable and restoring never duplicates a re-ad
   assert.equal(firstRemoved.item.offeringId, 'one');
   assert.deepEqual(restorePlannerItem([], latestRemoved), [item('two')]);
   assert.equal(restorePlannerItem([item('two')], latestRemoved), null);
+});
+
+test('a removed public course restores every field at its original index', () => {
+  const courses = [publicCourse('11111111-1111-4111-8111-111111111111', 'planned', '先頭'), publicCourse('22222222-2222-4222-8222-222222222222', 'earned', '法律学特講［○○］')];
+  const removed = removePublicCourse(courses, courses[1].id);
+  assert.deepEqual(removed, { course: courses[1], index: 1 });
+  assert.deepEqual(restorePublicCourse([courses[0]], removed), courses);
+  assert.equal(restorePublicCourse(courses, removed), null);
 });
 
 test('a failed removal save leaves the saved plan unchanged for a later retry', () => {
@@ -63,43 +72,28 @@ test('2026 public-course limits are eight courses and sixteen credits for every 
   }
 });
 
-test('public-course cap counts earned only, applies both limits, and never double-counts mapping edges', () => {
-  const offering = (id, credits = 2, mappingIds = ['public-map']) => ({ ...first, id, credits, mappingIds, resolutionStatus: 'matched' });
-  const offerings = new Map([
-    ...Array.from({ length: 9 }, (_, index) => [`public-${index}`, offering(`public-${index}`, 2, ['public-map', 'public-map'])]),
-    ['planned', offering('planned')], ['progress', offering('progress')],
-    ['waiting', offering('waiting')], ['failed', offering('failed')], ['dropped', offering('dropped')],
-  ]);
+test('public-course cap counts explicit earned records only and excludes a ninth course', () => {
   const progress = evaluatePublicCourseLimit([
-    ...Array.from({ length: 9 }, (_, index) => item(`public-${index}`, 'earned')),
-    item('planned', 'planned'), item('progress', 'in_progress'),
-    item('waiting', 'waiting'), item('failed', 'failed'), item('dropped', 'dropped'),
-  ], offerings, new Set(['public-map']), { maxCredits: 16, maxCourses: 8, sourcePage: 1 });
+    ...Array.from({ length: 9 }, (_, index) => publicCourse(`00000000-0000-4000-8000-00000000000${index}`, 'earned')),
+    publicCourse('10000000-0000-4000-8000-000000000000', 'planned'), publicCourse('20000000-0000-4000-8000-000000000000', 'in_progress'),
+    publicCourse('30000000-0000-4000-8000-000000000000', 'waiting'), publicCourse('40000000-0000-4000-8000-000000000000', 'failed'), publicCourse('50000000-0000-4000-8000-000000000000', 'dropped'),
+  ], { maxCredits: 16, maxCourses: 8, sourcePage: 1 });
   assert.deepEqual(progress, {
-    status: 'unsatisfied', earnedCredits: 18, countedCredits: 16, earnedCourses: 9, countedCourses: 8,
+    earnedCredits: 18, countedCredits: 16, earnedCourses: 9, countedCourses: 8,
     inProgressCredits: 2, plannedCredits: 2, excludedCredits: 2,
-    limit: { maxCredits: 16, maxCourses: 8, sourcePage: 1 }, reason: null,
+    limit: { maxCredits: 16, maxCourses: 8, sourcePage: 1 },
   });
 });
 
-test('public-course cap never partially counts a course when the credit cap has no room', () => {
-  const offerings = new Map([
-    ['four-a', { ...first, id: 'four-a', credits: 4, mappingIds: ['public-map'], resolutionStatus: 'matched' }],
-    ['four-b', { ...first, id: 'four-b', credits: 4, mappingIds: ['public-map'], resolutionStatus: 'matched' }],
-  ]);
-  const progress = evaluatePublicCourseLimit([item('four-a', 'earned'), item('four-b', 'earned')], offerings,
-    new Set(['public-map']), { maxCredits: 6, maxCourses: 8, sourcePage: 1 });
-  assert.equal(progress.countedCredits, 4);
-  assert.equal(progress.countedCourses, 1);
-  assert.equal(progress.excludedCredits, 4);
-});
-
-test('the current catalog keeps public-course progress unknown until official mapping IDs are supplied', () => {
+test('explicit public courses have a calculable cap card and feed counted credits into professional elective', () => {
   const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
-  const card = calculateGraduationProgress([], catalog, scope).cards.find(row => row.ruleType === 'public_course_limit');
-  assert.equal(card.status, 'unknown');
-  assert.match(card.reason, /公式mapping ID/);
+  const courses = Array.from({ length: 9 }, (_, index) => publicCourse(`60000000-0000-4000-8000-00000000000${index}`, 'earned'));
+  const progress = calculateGraduationProgress([], catalog, scope, courses);
+  const card = progress.cards.find(row => row.ruleType === 'public_course_limit');
+  assert.equal(card.status, 'satisfied');
   assert.equal(card.target, 16);
+  assert.equal(card.publicCourse.excludedCredits, 2);
+  assert.equal(progress.cards.find(row => row.requirementId === 'professional-law-elective').earned, 16);
 });
 
 test('partial graduation progress uses earned only and includes common plus selected scope', () => {
@@ -281,13 +275,16 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 3 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 4 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
     JSON.stringify({ ...valid, items: [{ ...item(first.id), status: 'invalid' }] }),
     JSON.stringify({ ...valid, items: [{ ...item(first.id), plannedYear: '2026' }] }),
     JSON.stringify({ ...valid, todos: null }),
+    JSON.stringify({ ...valid, publicCourses: [publicCourse('70000000-0000-4000-8000-000000000000', 'earned', '   ')] }),
+    JSON.stringify({ ...valid, publicCourses: [{ ...publicCourse('80000000-0000-4000-8000-000000000000'), title: ' a ' }] }),
+    JSON.stringify({ ...valid, publicCourses: [{ ...publicCourse('90000000-0000-4000-8000-000000000000'), credits: 4 }] }),
   ];
   for (const raw of invalid) {
     const store = memoryStore(raw);
@@ -297,6 +294,14 @@ test('invalid JSON, schema version, references, duplicate items and invalid fiel
     assert.equal(store.getItem(STORAGE_KEY), raw);
     assert.deepEqual(result.state, initialState());
   }
+});
+
+test('public courses remain actual earned professional credits beyond the graduation cap', () => {
+  const scope = catalog.programs.find(program => program.department === '商業学科').scopeId;
+  const courses = Array.from({ length: 9 }, (_, index) => publicCourse(`a0000000-0000-4000-8000-00000000000${index}`, 'earned'));
+  const professional = summarizeCategories([], catalog, scope, courses).find(row => row.category === '専門教育');
+  assert.equal(professional.count, 9);
+  assert.equal(professional.earned, 18);
 });
 
 test('credit totals exclude waiting/failed/dropped, unknown count covers all statuses', () => {
@@ -758,7 +763,7 @@ test('history seminars use recorded completion order, never offering order, and 
   assert.match(card(unknown, required).reason, /修得順が未確定/);
 });
 
-test('history seminar completion order is unique, consecutive, earned-only, and v1 state migrates without inference', () => {
+test('history seminar completion order is unique, consecutive, earned-only, and prior state versions migrate without inference', () => {
   const seminars = catalog.offerings.filter(o => /^史学演習（/.test(o.name));
   const state = { ...initialState(), items: [
     { ...item(seminars[0].id, 'earned'), earnedOrder: 1 },
@@ -772,9 +777,16 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   const store = memoryStore(JSON.stringify(v1));
   const loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 2);
+  assert.equal(loaded.state.schemaVersion, 3);
   assert.equal(loaded.state.items[0].earnedOrder, null);
+  assert.deepEqual(loaded.state.publicCourses, []);
   assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
+  const v2 = { ...loaded.state, schemaVersion: 2 };
+  delete v2.publicCourses;
+  const v2Loaded = loadState(memoryStore(JSON.stringify(v2)), catalog);
+  assert.equal(v2Loaded.error, null);
+  assert.equal(v2Loaded.state.schemaVersion, 3);
+  assert.deepEqual(v2Loaded.state.publicCourses, []);
 });
 
 test('cleanup coverage and audit before/after counts reconcile independently', () => {
