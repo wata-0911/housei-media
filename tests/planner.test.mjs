@@ -8,6 +8,7 @@ import { summarizeCredits, searchOfferings } from '../src/planner/calculations.t
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
+import { removePlannerItem, restorePlannerItem } from '../src/planner/removeUndo.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -17,6 +18,33 @@ const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedY
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
+
+test('removing one planned item preserves every other item and its order', () => {
+  const removedItem = { offeringId: 'second', status: 'earned', plannedYear: 2028, plannedTerm: '秋期', earnedOrder: 3 };
+  const items = [item('first'), removedItem, { ...item('third'), status: 'failed', plannedYear: null }];
+  const removed = removePlannerItem(items, 'second');
+  assert.deepEqual(removed, { item: removedItem, index: 1 });
+  assert.deepEqual(items.filter(current => current.offeringId !== 'second'), [items[0], items[2]]);
+  assert.deepEqual(restorePlannerItem(items.filter(current => current.offeringId !== 'second'), removed), items);
+});
+
+test('only the latest removal is undoable and restoring never duplicates a re-added offering', () => {
+  const firstRemoved = removePlannerItem([item('one'), item('two')], 'one');
+  const latestRemoved = removePlannerItem([item('two')], 'two');
+  assert.equal(firstRemoved.item.offeringId, 'one');
+  assert.deepEqual(restorePlannerItem([], latestRemoved), [item('two')]);
+  assert.equal(restorePlannerItem([item('two')], latestRemoved), null);
+});
+
+test('a failed removal save leaves the saved plan unchanged for a later retry', () => {
+  const state = { ...initialState(), items: [item(first.id), item(catalog.offerings[1].id)] };
+  const raw = JSON.stringify(state);
+  const store = { getItem: () => raw, setItem() { throw new Error('quota'); } };
+  const removed = removePlannerItem(state.items, first.id);
+  assert.throws(() => saveState(store, { ...state, items: state.items.filter(current => current.offeringId !== first.id) }, raw, catalog), /quota/);
+  assert.deepEqual(loadState(store, catalog).state, state);
+  assert.deepEqual(removed, { item: state.items[0], index: 0 });
+});
 
 test('catalog preserves all 686 offerings, 348 null course IDs and incomplete graduation coverage', () => {
   assert.equal(catalog.offerings.length, 686);
