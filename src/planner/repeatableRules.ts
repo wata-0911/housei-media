@@ -7,5 +7,9 @@ export const REPEATABLE_CREDIT_RULES = [
   ['商業学科', '経済学特講', 8, 4], ['商業学科', '経営学特講', 16, 8], ['商業学科', '総合特講', 16, 8], ['商業学科', '演習', 4, 2],
 ] as const;
 export function repeatableRule(department: string, offering: Offering) {
-  return REPEATABLE_CREDIT_RULES.find(([d, name]) => d === department && (offering.name === name || offering.name.startsWith(`${name}（`)));
+  return REPEATABLE_CREDIT_RULES.find(([d, name]) => d === department && (
+    offering.name === name
+    || offering.name.startsWith(`${name}（`)
+    || offering.name.startsWith(`${name}［`)
+  ));
 }

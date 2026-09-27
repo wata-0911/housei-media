@@ -7,6 +7,7 @@ import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
+import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -969,6 +970,33 @@ test('geography field course minimums and official repeatable professional limit
     .cards.find(row => row.requirementId === 'professional-economics-required-elective');
   assert.equal(counted.status, 'unsatisfied');
   assert.equal(counted.earned, 4);
+});
+
+test('repeatable professional rules recognize only exact, parenthesized, and bracketed course names', () => {
+  const offering = name => ({ ...first, name });
+  assert.deepEqual(repeatableRule('経済学科', offering('経済学特講')), ['経済学科', '経済学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('経済学特講（前期週末スクーリング）')), ['経済学科', '経済学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('経済学特講［経済社会統計］（秋期スクーリング）')), ['経済学科', '経済学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('経営学特講［航空輸送概論］（秋期スクーリング）')), ['経済学科', '経営学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('演習［キャリアデザイン］（春期スクーリング）')), ['経済学科', '演習', 4, 2]);
+  assert.deepEqual(repeatableRule('商業学科', offering('総合特講［東南アジア現代史］(後期メディア)')), ['商業学科', '総合特講', 16, 8]);
+  assert.equal(repeatableRule('経済学科', offering('経済学特講演習（春期）')), undefined);
+  assert.equal(repeatableRule('経済学科', offering('経済学特講【経済社会統計】')), undefined);
+});
+
+test('catalog audit: every bracketed repeatable offering is covered by its department rule', () => {
+  const scopeByDepartment = new Map(rawCatalog.programs.map(program => [program.department, program.scopeId]));
+  let audited = 0;
+  for (const [department, name] of REPEATABLE_CREDIT_RULES) {
+    const scopeId = scopeByDepartment.get(department);
+    const mappingIds = new Set(rawCatalog.mappings.filter(mapping => mapping.scopeId === scopeId).map(mapping => mapping.mappingId));
+    const bracketed = rawCatalog.offerings.filter(offering => offering.name.startsWith(`${name}［`)
+      && offering.mappingIds.some(mappingId => mappingIds.has(mappingId)));
+    assert.ok(bracketed.length > 0, `${department} ${name} should have catalog coverage`);
+    for (const offering of bracketed) assert.ok(repeatableRule(department, offering), `${department}: ${offering.name}`);
+    audited += bracketed.length;
+  }
+  assert.equal(audited, 36); // 18 unique offerings, applied across the departments where each is valid.
 });
 
 test('unresolved planned and in-progress professional offerings do not hold current progress', () => {
