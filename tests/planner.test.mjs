@@ -761,3 +761,100 @@ test('official political science mappings count only for law and preserve earned
   assert.equal(catalog.metadata.catalogCoverage.mappingEdgeCount, 1230);
   assert.equal(validateCatalog(catalog), true);
 });
+
+function professionalFixture(department, mappingRows, offeringRows) {
+  const program = catalog.programs.find(p => p.department === department);
+  const baseMap = catalog.mappings[0];
+  const baseOffering = catalog.offerings[0];
+  return {
+    scope: program.scopeId,
+    catalog: {
+      ...catalog,
+      mappings: mappingRows.map(([mappingId, requirementType, field = null]) => ({
+        ...baseMap, mappingId, scopeId: program.scopeId, category: '専門教育', requirementType, field,
+      })),
+      offerings: offeringRows.map(([id, credits, mappingIds, method = 'correspondence']) => ({
+        ...baseOffering, id, name: id, credits, method, resolutionStatus: 'matched', mappingIds,
+      })),
+      requirements: [],
+    },
+  };
+}
+
+test('Japanese literature transfers only required-elective excess and ignores planned/in-progress for completion', () => {
+  const fixture = professionalFixture('日本文学科', [
+    ['required', '必修'], ['required-elective', '選択必修'], ['elective', '選択'],
+  ], [
+    ['required-20', 20, ['required']], ...[1, 2, 3, 4, 5, 6, 7].map(n => [`re-${n}`, 4, ['required-elective']]),
+  ]);
+  const card = (items, id) => calculateGraduationProgress(items, fixture.catalog, fixture.scope).cards.find(row => row.requirementId === id);
+  for (const [count, excess] of [[5, 0], [6, 4], [7, 8]]) {
+    const items = [item('required-20', 'earned'), ...Array.from({ length: count }, (_, i) => item(`re-${i + 1}`, 'earned'))];
+    assert.equal(card(items, 'professional-required-elective').status, 'satisfied');
+    assert.equal(card(items, 'professional-elective').earned, excess);
+  }
+  const referenceOnly = [...Array.from({ length: 7 }, (_, i) => item(`re-${i + 1}`, i < 3 ? 'planned' : 'in_progress'))];
+  assert.equal(card(referenceOnly, 'professional-required-elective').earned, 0);
+  assert.equal(card(referenceOnly, 'professional-required-elective').status, 'unsatisfied');
+});
+
+test('history and geography grouped professional rules require their fields and avoid double counting', () => {
+  const history = professionalFixture('史学科', [
+    ['required', '必修'], ['schooling', 'スクーリング選択必修'],
+    ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['west', '選択', '西洋史の分野'],
+  ], [
+    ['required-16', 16, ['required']], ['schooling-8', 8, ['schooling'], 'schooling'], ['jp-50', 50, ['jp']],
+    ['east-2', 2, ['east']], ['west-2', 2, ['west']],
+  ]);
+  const historyCard = (items, id) => calculateGraduationProgress(items, history.catalog, history.scope).cards.find(row => row.requirementId === id);
+  const incomplete = [item('required-16', 'earned'), item('schooling-8', 'earned'), item('jp-50', 'earned')];
+  assert.equal(historyCard(incomplete, 'professional-history-required').status, 'satisfied');
+  assert.equal(historyCard(incomplete, 'professional-history-schooling-required-elective').status, 'satisfied');
+  assert.equal(historyCard(incomplete, 'professional-history-elective').status, 'unsatisfied');
+  assert.equal(historyCard([...incomplete, item('east-2', 'earned'), item('west-2', 'earned')], 'professional-history-elective').status, 'satisfied');
+
+  const geography = professionalFixture('地理学科', [
+    ['human-a', '選択必修', '人文地理の分野'], ['human-b', '選択必修', '人文地理の分野'],
+    ['natural-a', '選択必修', '自然地理の分野'], ['natural-b', '選択必修', '自然地理の分野'],
+    ['regional', '選択必修', '地誌・その他の分野'], ['duplicate-regional', '選択必修', '地誌・その他の分野'],
+  ], [
+    ['human-1', 4, ['human-a']], ['human-2', 4, ['human-b']], ['natural-1', 4, ['natural-a']], ['natural-2', 4, ['natural-b']],
+    ['regional-16', 16, ['regional', 'duplicate-regional']],
+  ]);
+  const geoItems = geography.catalog.offerings.map(o => item(o.id, 'earned'));
+  const geoCard = calculateGraduationProgress(geoItems, geography.catalog, geography.scope).cards.find(row => row.requirementId === 'professional-geography-required-elective');
+  assert.equal(geoCard.earned, 32); // duplicate mapping edge is one 16-credit offering, never 32 credits.
+  assert.equal(geoCard.status, 'unsatisfied');
+});
+
+test('law, economics and commerce use their official required-elective thresholds and overflow', () => {
+  for (const [department, threshold, prefix] of [['法律学科', 32, 'law'], ['経済学科', 24, 'economics'], ['商業学科', 20, 'commerce']]) {
+    const fixture = professionalFixture(department, [['required-elective', '選択必修'], ['elective', '選択']], [
+      ...Array.from({ length: threshold / 4 + 1 }, (_, i) => [`required-${i}`, 4, ['required-elective']]),
+      ['outside', 8, []], ['manual', 8, []],
+    ]);
+    fixture.catalog.offerings.find(o => o.id === 'outside').resolutionStatus = 'outside_mapping_scope';
+    fixture.catalog.offerings.find(o => o.id === 'manual').resolutionStatus = 'manual_review';
+    const earned = fixture.catalog.offerings.filter(o => o.id.startsWith('required-')).map(o => item(o.id, 'earned'));
+    const progress = calculateGraduationProgress(earned, fixture.catalog, fixture.scope);
+    const required = progress.cards.find(row => row.requirementId === `professional-${prefix}-required-elective`);
+    const elective = progress.cards.find(row => row.requirementId === `professional-${prefix}-elective`);
+    assert.equal(required.status, 'satisfied');
+    assert.equal(required.earned, threshold);
+    assert.equal(elective.earned, 4);
+    assert.equal(progress.graduationCheckComplete, false);
+  }
+  const law = professionalFixture('法律学科', [['required-elective', '選択必修']], Array.from({ length: 8 }, (_, i) => [`law-${i}`, 4, ['required-elective']]));
+  const required = calculateGraduationProgress(law.catalog.offerings.map(o => item(o.id, 'earned')), law.catalog, law.scope).cards.find(row => row.requirementId === 'professional-law-required-elective');
+  assert.equal(required.details[0].earned, 8);
+  assert.equal(required.status, 'satisfied');
+});
+
+test('35009 contributes to geography elective only, while unresolved offerings do not enter professional buckets', () => {
+  const geography = '4d450b06-fb99-4bf2-a769-fe5f68dd337a';
+  const buddhism = catalog.offerings.find(o => o.classCode === '35009');
+  const geo = calculateGraduationProgress([item(buddhism.id, 'earned')], catalog, geography);
+  assert.equal(geo.cards.find(row => row.requirementId === 'professional-geography-elective').earned, 2);
+  const history = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  assert.equal(calculateGraduationProgress([item(buddhism.id, 'earned')], catalog, history).cards.find(row => row.requirementId === 'professional-history-elective').earned, 0);
+});

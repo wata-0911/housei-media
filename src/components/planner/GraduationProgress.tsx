@@ -16,10 +16,10 @@ export default function GraduationProgress({ progress }: { progress: Progress })
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {evaluated.map(row => <article key={row.requirementId} className="min-w-0 border border-gray-200 p-4">
         <h3 className="break-words font-medium text-[#002255]">{row.label}</h3>
-        <p className="mt-2 text-lg"><span className="font-semibold">{row.earned}</span> / {row.target}{row.unit === 'courses' ? '科目' : '単位'}</p>
+        <p className="mt-2 text-lg"><span className="font-semibold">{row.earned ?? '—'}</span> / {row.target === null ? '個別要件により変動' : `${row.target}${row.unit === 'courses' ? '科目' : '単位'}`}</p>
         <p className={`mt-1 text-sm font-medium ${row.status === 'satisfied' ? 'text-emerald-700' : 'text-amber-700'}`}>{statusLabel(row.status, row.earned, row.target, row.unit)}</p>
         <p className="mt-2 break-words text-xs leading-relaxed text-gray-600">参考：履修中 {row.inProgress}{row.unit === 'courses' ? '科目' : '単位'} / 計画中 {row.planned}{row.unit === 'courses' ? '科目' : '単位'}</p>
-        {row.details && <ul className="mt-3 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{row.details.map(detail => <li key={detail.label} className="break-words">{detail.label}：{detail.earned} / {detail.target}単位（履修中 {detail.inProgress}・計画中 {detail.planned}{detail.schooling !== undefined ? `・修得済みスクーリング ${detail.schooling}` : ''}）</li>)}</ul>}
+        {row.details && <ul className="mt-3 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{row.details.map(detail => <li key={detail.label} className="break-words">{detail.label}：{detail.earned} / {detail.target}{detail.unit === 'courses' ? '科目' : '単位'}（履修中 {detail.inProgress}・計画中 {detail.planned}{detail.schooling !== undefined ? `・修得済みスクーリング ${detail.schooling}` : ''}）</li>)}</ul>}
         {row.note && <p className="mt-2 break-words text-xs leading-relaxed text-gray-600">{row.note}</p>}
       </article>)}
     </div>
