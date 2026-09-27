@@ -530,6 +530,10 @@ function professionalCards(
     const elective = withOverflow(normal('選択'), requiredElective, 36);
     const human = normal('選択必修:人文地理の分野'), natural = normal('選択必修:自然地理の分野'), regional = normal('選択必修:地誌・その他の分野');
     const fieldsMet = human.earned >= 8 && human.courses.size >= 2 && natural.earned >= 8 && natural.courses.size >= 2 && regional.earned >= 16;
+    const specialEarned = (kind: string) => specialRows.filter(row => row.kind === kind && row.item.status === 'earned')
+      .reduce((sum, row) => sum + row.offering.credits!, 0);
+    const fieldStudyEarned = specialEarned('field-study');
+    const geographyLectureEarned = specialEarned('geography-lecture');
     return [
       { ...make('professional-geography-required', '専門教育：必修', required, 12, required.earned >= 12), partialCourses: partialCourses('必修') },
       { ...make('professional-geography-schooling-required', '専門教育：スクーリング必修', schooling, 6, schooling.earned >= 6), partialCourses: partialCourses('スクーリング必修') },
@@ -537,7 +541,7 @@ function professionalCards(
         [detail('人文地理：2科目・8単位以上', human, 8), detail('自然地理：2科目・8単位以上', natural, 8), detail('地誌・その他：16単位以上', regional, 16)],
         '人文・自然はそれぞれ科目数も満たす必要があります。2013年度以前の救済措置は自動判定しません。'), partialCourses: partialCourses('選択必修') },
       { ...make('professional-geography-elective', '専門教育：選択', elective, 12, elective.earned >= 12, undefined,
-        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 36)}単位。個別特講・現地研究の上限は次の機能で判定します。`), partialCourses: partialCourses('選択') },
+        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 36)}単位。現地研究は必修2単位＋選択2単位まで${fieldStudyEarned > 4 ? `（超過${fieldStudyEarned - 4}単位は修得済みだが卒業算入外）` : ''}。人文・自然地理学特講は合算4単位まで${geographyLectureEarned > 4 ? `（超過${geographyLectureEarned - 4}単位は修得済みだが卒業算入外）` : ''}。`), partialCourses: partialCourses('選択') },
     ];
   }
 
