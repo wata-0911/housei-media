@@ -950,7 +950,7 @@ test('professional mapping aggregation counts duplicate edges once and safely ho
   assert.equal(duplicateCard.earned, 4);
 });
 
-test('geography field course minimums and repeatable professional courses stay on the safe side', () => {
+test('geography field course minimums and official repeatable professional limits apply', () => {
   const geography = professionalFixture('地理学科', [
     ['human', '選択必修', '人文地理の分野', 8], ['natural', '選択必修', '自然地理の分野', 8],
     ['regional', '選択必修', '地誌・その他の分野', 20],
@@ -965,10 +965,10 @@ test('geography field course minimums and repeatable professional courses stay o
 
   const repeatable = professionalFixture('経済学科', [['lecture', '選択必修', null, 4]], [['lecture', 4, ['lecture']]]);
   repeatable.catalog.offerings[0].name = '総合特講（経済学）';
-  const held = calculateGraduationProgress([item('lecture', 'earned')], repeatable.catalog, repeatable.scope)
+  const counted = calculateGraduationProgress([item('lecture', 'earned')], repeatable.catalog, repeatable.scope)
     .cards.find(row => row.requirementId === 'professional-economics-required-elective');
-  assert.equal(held.status, 'unknown');
-  assert.match(held.reason, /複数回の卒業算入/);
+  assert.equal(counted.status, 'unsatisfied');
+  assert.equal(counted.earned, 4);
 });
 
 test('unresolved planned and in-progress professional offerings do not hold current progress', () => {

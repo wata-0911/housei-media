@@ -8,6 +8,7 @@ import type {
 } from './plannerCatalog';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
+import { repeatableRule } from './repeatableRules';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -37,6 +38,7 @@ export type ProgressCard = RequirementProgress & {
   details?: Array<{ label: string; earned: number; inProgress: number; planned: number; target: number; schooling?: number; unit?: 'credits' | 'courses' }>;
   partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
   note?: string;
+  repeatableCourses?: Array<{ label: string; earned: number; counted: number; limit: number; courses: number; limitCourses: number }>;
 };
 
 const GROUP_RULES = new Set([
@@ -274,12 +276,6 @@ type CurriculumEntry = {
   planned: number;
 };
 
-const REPEATABLE_PROFESSIONAL_NAMES = ['総合特講', '法律学特講', '経済学特講', '演習', '歴史資料学'];
-
-function isRepeatableProfessionalOffering(offering: Offering) {
-  return REPEATABLE_PROFESSIONAL_NAMES.some(name => offering.name === name || offering.name.startsWith(`${name}（`));
-}
-
 function curriculumCourseLabel(offering: Offering) {
   // Delivery and department qualifiers describe an offering, rather than the
   // curriculum course being completed across multiple offerings.
@@ -313,7 +309,8 @@ function professionalCards(
   const bucket = (name: string) => buckets.get(name) ?? (buckets.set(name, emptyTotals()), buckets.get(name)!);
   const ambiguous = new Set<string>();
   const incompleteMetadata = new Set<string>();
-  const repeatable = new Set<string>();
+  const legacyRepeatable = new Set<string>();
+  const repeatables = new Map<string, { name: string; type: string; limit: number; limitCourses: number; earned: number; inProgress: number; planned: number; courses: Set<string> }>();
   const entries = new Map<string, CurriculumEntry>();
   const addTo = (name: string, item: PlannerItem, offering: Offering) => addOfferingTotals(bucket(name), item, offering);
 
@@ -343,8 +340,18 @@ function professionalCards(
       if (item.status === 'earned') incompleteMetadata.add(mapping.mappingId);
       continue;
     }
-    if (isRepeatableProfessionalOffering(offering)) {
-      if (item.status === 'earned') repeatable.add(mapping.mappingId);
+    const rule = repeatableRule(program.department!, offering);
+    if (rule) {
+      const [, name, limit, limitCourses] = rule;
+      const repeat = repeatables.get(`${type}:${name}`) ?? { name, type, limit, limitCourses, earned: 0, inProgress: 0, planned: 0, courses: new Set<string>() };
+      if (item.status === 'earned') { repeat.earned += offering.credits; repeat.courses.add(offering.id); }
+      else if (item.status === 'in_progress') repeat.inProgress += offering.credits;
+      else if (item.status === 'planned') repeat.planned += offering.credits;
+      repeatables.set(`${type}:${name}`, repeat);
+      continue;
+    }
+    if (['法律学特講', '歴史資料学'].some(name => offering.name === name || offering.name.startsWith(`${name}（`))) {
+      if (item.status === 'earned') legacyRepeatable.add(mapping.mappingId);
       continue;
     }
     const entry = entries.get(mapping.mappingId) ?? {
@@ -361,18 +368,26 @@ function professionalCards(
     addCurriculumTotals(bucket(type), entry);
     if (entry.mapping.field !== null) addCurriculumTotals(bucket(`${type}:${entry.mapping.field}`), entry);
   }
+  for (const repeat of repeatables.values()) {
+    const totals = bucket(repeat.type);
+    totals.earned += Math.min(repeat.earned, repeat.limit);
+    totals.inProgress += repeat.inProgress;
+    totals.planned += repeat.planned;
+    [...repeat.courses].slice(0, repeat.limitCourses).forEach(id => totals.courses.add(id));
+  }
 
   const baseReason = hasUnresolvedEarned
     ? '修得済みに対応関係を確認中の科目があります'
     : ambiguous.size ? '専門教育の区分が複数ある科目があるため自動配分を保留しています'
-      : incompleteMetadata.size ? 'カリキュラム科目の構成単位が未設定のため卒業算入を保留しています'
-        : repeatable.size ? '複数回の卒業算入があり得る科目を安全に判定できないため保留しています' : null;
+        : incompleteMetadata.size ? 'カリキュラム科目の構成単位が未設定のため卒業算入を保留しています'
+        : legacyRepeatable.size ? '複数回の卒業算入があり得る科目を安全に判定できないため保留しています' : null;
   const make = (id: string, label: string, totals: Totals, target: number | null, satisfied: boolean,
     details?: ProgressCard['details'], note?: string, reason = baseReason): ProgressCard => ({
     requirementId: id, label, ruleType: 'professional_group',
     status: reason ? 'unknown' : satisfied ? 'satisfied' : 'unsatisfied',
     earned: reason ? null : target === null ? totals.earned : Math.min(target, totals.earned),
     inProgress: totals.inProgress, planned: totals.planned, target, unit: 'credits', reason, details, note,
+    repeatableCourses: [...repeatables.values()].filter(repeat => repeat.type === label.split('：').at(-1)).map(repeat => ({ label: repeat.name, earned: repeat.earned, counted: Math.min(repeat.earned, repeat.limit), limit: repeat.limit, courses: repeat.courses.size, limitCourses: repeat.limitCourses })),
   });
   const makeKnownUnknown = (id: string, label: string, totals: Totals, details: ProgressCard['details'] | undefined, note: string, reason: string) => ({
     ...make(id, label, totals, null, false, details, note, reason), earned: totals.earned,
