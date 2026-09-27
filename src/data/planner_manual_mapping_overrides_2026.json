@@ -359,6 +359,28 @@
         "e50dd61e-27ef-4e93-afe7-9c61624661b7"
       ],
       "reason": "しおりp.53 iで歴史資料学の1〜6は授業内容によらず修得順と確認。catalogの日本近代/日本近世はいずれもschooling・2単位で、p.52の単一の集合mapping「歴史資料学1〜6」（史学科・専門教育・選択・field null）に対応する。集合mapping内の番号は割り当てず、個別offeringも統合しない。過去matcherの候補空はこの集合mappingを拾えていなかったため補完。 Audit: docs/planner-mapping-cleanup-audit-2026.json; classCode=45010; evidence=catalog, mapping table, other."
+    },
+    {
+      "ruleId": "special_case_2026_class_35009_geography",
+      "approvedPattern": "日本史特講（日本仏教史）（地理）（夏期スクーリング）",
+      "targetCourseName": "日本史特講（日本仏教史）",
+      "offeringIds": [
+        "52bd7373-7f4e-4db8-bd65-1096d8365389"
+      ],
+      "mappingIds": [
+        "540bd399-8d5a-4133-adf7-2668b266b2e1"
+      ],
+      "reason": "利用者の限定承認により、35009 / HIS300TEを文学部地理学科の日本史特講（日本仏教史）へだけ対応付ける。2026年度公式教職資料は地理学科の科目コードとして括弧内44533を示し、地理学科の科目一覧にも同科目4単位44533を掲載する。一方、35009 / HIS300TEと44533の個別の完全一致は資料に直接記載されないため、officialVerifiedにはせずmanual_curatedとして記録する。史学科mappingへは接続しない。offering名・classCode・subjectCode・courseIdは変更しない。 Audit: docs/planner-special-cases-2026.md; evidence=shiori2026202-214.pdf, geography curriculum row, user-approved scope.",
+      "evidence": [
+        {
+          "title": "法政大学通信教育部 2026年度 教職課程関係資料",
+          "url": "https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026202-214.pdf",
+          "printedPages": [
+            1
+          ],
+          "finding": "日本史特講（日本仏教史）4単位は34525（44533）と掲載され、注記で括弧外は地理学科以外、括弧内は地理学科の教職生が取得する場合の科目コードと説明される。地理学科の科目一覧にも同科目4単位44533を掲載する。35009 / HIS300TEと44533の個別対応は直接明記されない。"
+        }
+      ]
     }
   ]
 }

@@ -1,6 +1,6 @@
 # Planner mapping cleanup 2026：29件監査
 
-> この監査はcleanup時点の記録（manual_review 11件）。後続の[公式教職資料確認](planner-teacher-training-source-gap.md)で政治学2件を解決し、現在は9件。JSON監査も当時の記録として保持する。
+> この監査はcleanup時点の記録（manual_review 11件）。後続の[公式教職資料確認](planner-teacher-training-source-gap.md)で政治学2件を解決し9件となり、さらに[35009の地理学科限定対応](planner-special-cases-2026.md)で現在は8件（史学演習8件のみ）。JSON監査はcleanup当時の記録として保持する。
 
 基準: `dev` `21c9663`（年間計画MVPのPR #2 merge済み）。判定日: 2026-09-22。
 

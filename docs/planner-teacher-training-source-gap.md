@@ -22,7 +22,7 @@
 
 新しい公式確認ledgerは `provenance: official_source_verified` / `officialVerified: true` とし、出典・ページ・照合理由を保持する。これは公式資料を確認した実装上の対応付けであり、大学が個別classCodeのmappingを認証したことを意味しない。既存52件の `manual_curated` / `officialVerified: false` は変更しない。resolutionStatusの追加はなく、2件は既存の `matched` を使う。
 
-manual_reviewは **11 → 9**、unresolvedは **41 → 39**、matchedは **645 → 647**。残る9件は史学演習8件（15005、25003、25004、35002、35003、35007、35015、45006）と日本史特講（日本仏教史）（地理）1件（35009）。史学演習の修得順割当は未実装。outside_mapping_scopeの30件は変更せず、通常進捗へ加算しない。`graduationCheckComplete=false` を維持する。
+この時点ではmanual_reviewは **11 → 9**、unresolvedは **41 → 39**、matchedは **645 → 647** となった。後続の[35009地理学科限定対応](planner-special-cases-2026.md)により、現在はmanual_review 8件（史学演習8件のみ）、unresolved 38件、matched 648件である。outside_mapping_scopeの30件は変更せず、通常進捗へ加算しない。`graduationCheckComplete=false` を維持する。
 
 法律学科の専門教育の単位集計では各開講2単位を対象とする。ただし現在の卒業進捗カードは卒論選択等のDSL条件を未対応としているため、法律学科の専門教育要件は引き続き `unknown`（判定保留）。mapping解決と条件評価の実装済み範囲を区別する。
 

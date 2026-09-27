@@ -2,14 +2,14 @@
 
 ## 35009 日本史特講（日本仏教史）（地理）
 
-`35009` / `HIS300TE` / offeringId `52bd7373-7f4e-4db8-bd65-1096d8365389` remains `manual_review` with no mapping.
+`35009` / `HIS300TE` / offeringId `52bd7373-7f4e-4db8-bd65-1096d8365389` is a `manual_curated` override to the Literature Faculty Geography Department mapping `540bd399-8d5a-4133-adf7-2668b266b2e1` only. In a selected Geography scope it classifies as `専門教育`; it does not connect to the History Department mapping `4a866661-9fe2-4a98-a02e-5eccf97ff513`.
 
 - Catalog source: <https://syllabus.hosei.ac.jp/web/preview.php?no_id=2602699&nendo=2026&gakubueng=TKS&t_mode=pc>
-- Candidate mappings remain the History Department Japanese-history row (`4a866661-9fe2-4a98-a02e-5eccf97ff513`) and the Geography Department row (`540bd399-8d5a-4133-adf7-2668b266b2e1`).
-- The 2026 catalog, mapping audit, and 学習のしおり identify those candidates but do not state whether the offering suffix `（地理）` limits the class to Geography or is merely a display note.
-- The public syllabus URL was rechecked on 2026-09-26; the source returned HTTP 403 from this environment. It therefore supplied no additional primary evidence.
+- The 2026 official teacher-training material [`shiori2026202-214.pdf`](https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026202-214.pdf) lists `日本史特講（日本仏教史） 4 34525 ※4 / （44533）`. Its note says that the unparenthesized code is for teacher-training students outside Geography and the parenthesized code is for Geography teacher-training students. The Geography Department course list also includes `日本史特講（日本仏教史） 4 44533`.
+- These sources establish the Geography-specific curriculum target strongly enough for the user-approved, Geography-only mapping. They do not directly state a one-to-one identity between `35009` / `HIS300TE` and `44533`; the ledger therefore remains `provenance: manual_curated` and `officialVerified: false`.
+- The public syllabus URL still returned HTTP 403 when rechecked on 2026-09-26. It supplies no additional primary evidence.
 
-No override is added. A syllabus page or official course-offering material that explicitly states the target department (or explains the suffix) is required before mapping it.
+The override preserves the offering name, classCode, subjectCode, and courseId. It must not be widened to History or another scope without new evidence.
 
 ## 史学演習
 
