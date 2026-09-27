@@ -7,6 +7,7 @@ import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
+import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -950,7 +951,7 @@ test('professional mapping aggregation counts duplicate edges once and safely ho
   assert.equal(duplicateCard.earned, 4);
 });
 
-test('geography field course minimums and repeatable professional courses stay on the safe side', () => {
+test('geography field course minimums and official repeatable professional limits apply', () => {
   const geography = professionalFixture('地理学科', [
     ['human', '選択必修', '人文地理の分野', 8], ['natural', '選択必修', '自然地理の分野', 8],
     ['regional', '選択必修', '地誌・その他の分野', 20],
@@ -965,26 +966,100 @@ test('geography field course minimums and repeatable professional courses stay o
 
   const repeatable = professionalFixture('経済学科', [['lecture', '選択必修', null, 4]], [['lecture', 4, ['lecture']]]);
   repeatable.catalog.offerings[0].name = '総合特講（経済学）';
-  const held = calculateGraduationProgress([item('lecture', 'earned')], repeatable.catalog, repeatable.scope)
+  const counted = calculateGraduationProgress([item('lecture', 'earned')], repeatable.catalog, repeatable.scope)
     .cards.find(row => row.requirementId === 'professional-economics-required-elective');
-  assert.equal(held.status, 'unknown');
-  assert.match(held.reason, /複数回の卒業算入/);
+  assert.equal(counted.status, 'unsatisfied');
+  assert.equal(counted.earned, 4);
+});
+
+test('repeatable professional rules recognize only exact, parenthesized, and bracketed course names', () => {
+  const offering = name => ({ ...first, name });
+  assert.deepEqual(repeatableRule('経済学科', offering('経済学特講')), ['経済学科', '経済学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('経済学特講（前期週末スクーリング）')), ['経済学科', '経済学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('経済学特講［経済社会統計］（秋期スクーリング）')), ['経済学科', '経済学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('経営学特講［航空輸送概論］（秋期スクーリング）')), ['経済学科', '経営学特講', 8, 4]);
+  assert.deepEqual(repeatableRule('経済学科', offering('演習［キャリアデザイン］（春期スクーリング）')), ['経済学科', '演習', 4, 2]);
+  assert.deepEqual(repeatableRule('商業学科', offering('総合特講［東南アジア現代史］(後期メディア)')), ['商業学科', '総合特講', 16, 8]);
+  assert.equal(repeatableRule('経済学科', offering('経済学特講演習（春期）')), undefined);
+  assert.equal(repeatableRule('経済学科', offering('経済学特講【経済社会統計】')), undefined);
+});
+
+test('catalog audit: every bracketed repeatable offering is covered by its department rule', () => {
+  const scopeByDepartment = new Map(rawCatalog.programs.map(program => [program.department, program.scopeId]));
+  let audited = 0;
+  for (const [department, name] of REPEATABLE_CREDIT_RULES) {
+    const scopeId = scopeByDepartment.get(department);
+    const mappingIds = new Set(rawCatalog.mappings.filter(mapping => mapping.scopeId === scopeId).map(mapping => mapping.mappingId));
+    const bracketed = rawCatalog.offerings.filter(offering => offering.name.startsWith(`${name}［`)
+      && offering.mappingIds.some(mappingId => mappingIds.has(mappingId)));
+    if (bracketed.length === 0) continue; // 歴史資料学 has no 2026 ［…］ offering; exact/（…） is separately tested.
+    for (const offering of bracketed) assert.ok(repeatableRule(department, offering), `${department}: ${offering.name}`);
+    audited += bracketed.length;
+  }
+  assert.equal(audited, 39); // 21 unique offerings, applied across the departments where each is valid.
+});
+
+test('2026 common, history, geography, and law special credit transfers follow their source pages', () => {
+  const commonScope = catalog.programs.find(program => program.isCommon).scopeId;
+  const geoScope = catalog.programs.find(program => program.department === '地理学科').scopeId;
+  const commonMap = { ...catalog.mappings[0], mappingId: 'basic', scopeId: commonScope, category: '一般教育', field: 'その他', requirementType: null };
+  const common = { ...catalog, mappings: [commonMap], requirements: [], offerings: [1, 2, 3].map(n => ({
+    ...catalog.offerings[0], id: `basic-${n}`, name: `基礎特講（${n}）`, credits: 2, resolutionStatus: 'matched', mappingIds: ['basic'],
+  })) };
+  const commonCard = calculateGraduationProgress(common.offerings.map(offering => item(offering.id, 'earned')), common, geoScope).cards.find(row => row.requirementId === 'group-general');
+  assert.equal(commonCard.earned, 4);
+  assert.match(commonCard.note, /2単位は修得済みだが卒業算入外/);
+
+  const history = professionalFixture('史学科', [['any', '選択']], [
+    ['jp-correspondence', 4, ['any']], ['jp-schooling', 2, ['any'], 'schooling'],
+    ['east-correspondence', 4, ['any']], ['east-schooling', 2, ['any'], 'schooling'],
+    ['west-correspondence', 4, ['any']], ['west-schooling', 2, ['any'], 'schooling'],
+  ]);
+  for (const offering of history.catalog.offerings) offering.name = offering.id.startsWith('jp') ? '日本史概説' : offering.id.startsWith('east') ? '東洋史概説' : '西洋史概説';
+  const historyCards = calculateGraduationProgress(history.catalog.offerings.map(offering => item(offering.id, 'earned')), history.catalog, history.scope).cards;
+  assert.equal(historyCards.find(row => row.requirementId === 'professional-history-required').earned, 12);
+  assert.equal(historyCards.find(row => row.requirementId === 'professional-history-schooling-required-elective').earned, 6);
+
+  const geography = professionalFixture('地理学科', [['any', '選択']], [
+    ...[1, 2, 3, 4].map(n => [`field-${n}`, 1, ['any'], 'schooling']),
+    ...[1, 2].map(n => [`chorography-${n}`, 2, ['any'], 'schooling']),
+    ...[1, 2, 3].map(n => [`human-${n}`, 2, ['any'], 'schooling']),
+    ...[1, 2, 3].map(n => [`natural-${n}`, 2, ['any'], 'schooling']),
+    ...[1, 2, 3].map(n => [`lecture-${n}`, 2, ['any'], 'schooling']),
+  ]);
+  for (const offering of geography.catalog.offerings) offering.name = offering.id.startsWith('field') ? '現地研究'
+    : offering.id.startsWith('chorography') ? '地誌学特講' : offering.id.startsWith('human') ? '人文地理学演習'
+      : offering.id.startsWith('natural') ? '自然地理学演習' : '人文地理学特講';
+  const geoCards = calculateGraduationProgress(geography.catalog.offerings.map(offering => item(offering.id, 'earned')), geography.catalog, geography.scope).cards;
+  assert.equal(geoCards.find(row => row.requirementId === 'professional-geography-schooling-required').earned, 6);
+  assert.equal(geoCards.find(row => row.requirementId === 'professional-geography-required-elective').earned, 6);
+  assert.equal(geoCards.find(row => row.requirementId === 'professional-geography-elective').earned, 12);
+
+  const law = professionalFixture('法律学科', [
+    ...Array.from({ length: 8 }, (_, n) => [`complete-${n}`, '選択必修', null, 4]),
+    ['partial', '選択', null, 4], ['lecture', '選択', null, 2],
+  ], [
+    ...Array.from({ length: 8 }, (_, n) => [`complete-${n}`, 4, [`complete-${n}`]]),
+    ['partial', 2, ['partial'], 'schooling'], ...Array.from({ length: 5 }, (_, n) => [`lecture-${n}`, 2, ['lecture'], 'schooling']),
+  ]);
+  for (const offering of law.catalog.offerings) if (offering.id.startsWith('lecture-')) offering.name = '法律学特講（夏期スクーリング）';
+  const lawCards = calculateGraduationProgress(law.catalog.offerings.map(offering => item(offering.id, 'earned')), law.catalog, law.scope).cards;
+  assert.equal(lawCards.find(row => row.requirementId === 'professional-law-required-elective').earned, 32);
+  assert.equal(lawCards.find(row => row.requirementId === 'professional-law-elective').earned, 10); // 8 capped 法律学特講 + 2 allowed partial.
+});
+
+test('special transfer cards use planned/in-progress only as reference and ignore terminal statuses', () => {
+  const geography = professionalFixture('地理学科', [['any', '選択']], [['field', 1, ['any'], 'schooling']]);
+  geography.catalog.offerings[0].name = '現地研究（夏期スクーリング）';
+  const card = status => calculateGraduationProgress([item('field', status)], geography.catalog, geography.scope).cards
+    .find(row => row.requirementId === 'professional-geography-schooling-required');
+  assert.deepEqual([card('planned').earned, card('planned').planned], [0, 1]);
+  assert.deepEqual([card('in_progress').earned, card('in_progress').inProgress], [0, 1]);
+  for (const status of ['waiting', 'failed', 'dropped']) assert.deepEqual([card(status).earned, card(status).inProgress, card(status).planned], [0, 0, 0]);
 });
 
 test('unresolved planned and in-progress professional offerings do not hold current progress', () => {
   const cases = [
-    {
-      name: 'repeatable',
-      fixture: () => {
-        const fixture = professionalFixture('法律学科', [['known', '選択必修'], ['repeatable', '選択必修']], [
-          ['known', 4, ['known']], ['repeatable', 4, ['repeatable']],
-        ]);
-        fixture.catalog.offerings.find(offering => offering.id === 'repeatable').name = '法律学特講（春期）';
-        return fixture;
-      },
-      offeringId: 'repeatable',
-      reason: /複数回の卒業算入/,
-    },
     {
       name: 'missing curriculum credits',
       fixture: () => professionalFixture('法律学科', [['known', '選択必修'], ['incomplete', '選択必修', null, null]], [

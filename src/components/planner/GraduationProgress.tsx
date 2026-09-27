@@ -24,6 +24,7 @@ export default function GraduationProgress({ progress }: { progress: Progress })
           <p className="font-medium text-[#002255]">未完成のカリキュラム科目（卒業算入前）</p>
           <ul className="mt-1 space-y-1">{row.partialCourses.map(course => <li key={course.mappingId} className="break-words">{course.label} {course.earned} / {course.target}単位（あと{course.target - course.earned}単位で卒業算入）</li>)}</ul>
         </div>}
+        {row.repeatableCourses && row.repeatableCourses.length > 0 && <ul className="mt-3 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{row.repeatableCourses.map(course => <li key={course.label}>{course.label} {course.counted} / {course.limit}単位（{Math.min(course.courses, course.limitCourses)} / {course.limitCourses}回）{course.earned > course.counted ? `。超過${course.earned - course.counted}単位は卒業算入外` : ''}</li>)}</ul>}
         {row.note && <p className="mt-2 break-words text-xs leading-relaxed text-gray-600">{row.note}</p>}
       </article>)}
     </div>

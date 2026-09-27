@@ -8,6 +8,7 @@ import type {
 } from './plannerCatalog';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
+import { repeatableRule } from './repeatableRules';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -37,6 +38,7 @@ export type ProgressCard = RequirementProgress & {
   details?: Array<{ label: string; earned: number; inProgress: number; planned: number; target: number; schooling?: number; unit?: 'credits' | 'courses' }>;
   partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
   note?: string;
+  repeatableCourses?: Array<{ label: string; earned: number; counted: number; limit: number; courses: number; limitCourses: number }>;
 };
 
 const GROUP_RULES = new Set([
@@ -176,6 +178,7 @@ function groupedCards(
   const general = empty();
   const fields = new Map(['人文', '社会', '自然'].map(field => [field, empty()]));
   const physical = empty();
+  const basicLecture = empty();
   const physicalEarned = new Set<string>();
   const languages = new Map(['英語', '独語', '仏語'].map(language => [language, empty()]));
   for (const item of items) {
@@ -191,7 +194,14 @@ function groupedCards(
       else if (item.status === 'planned') totals.planned += offering.credits!;
     };
     if (mappings.some(mapping => mapping.category === '一般教育')) {
-      add(general);
+      // 学習のしおり p.45: 基礎特講 is countable only twice / four credits.
+      // Keep its excess out of the common-education total while still reporting it.
+      if (offering.name === '基礎特講' || offering.name.startsWith('基礎特講（') || offering.name.startsWith('基礎特講［')) {
+        add(basicLecture);
+        if (item.status === 'earned') general.earned += Math.max(0, Math.min(4, basicLecture.earned) - Math.min(4, basicLecture.earned - offering.credits));
+        else if (item.status === 'in_progress') general.inProgress += offering.credits;
+        else if (item.status === 'planned') general.planned += offering.credits;
+      } else add(general);
       for (const [field, totals] of fields) {
         if (mappings.some(mapping => mapping.category === '一般教育' && mapping.field === field)) add(totals);
       }
@@ -217,7 +227,7 @@ function groupedCards(
   const generalDetails = [...fields].map(([field, totals]) => detail(field, totals, 8));
   const generalCard = make('group-general', '一般教育', general, 36,
     general.earned >= 36 && [...fields.values()].every(totals => totals.earned >= 8), generalDetails,
-    '36単位のうち人文・社会・自然を各8単位以上。算入上限36単位');
+    `36単位のうち人文・社会・自然を各8単位以上。算入上限36単位。基礎特講は${Math.min(4, basicLecture.earned)} / 4単位（${basicLecture.earned > 4 ? `${basicLecture.earned - 4}単位は修得済みだが卒業算入外` : '2回まで算入'}）。`);
   const physicalCard = make('group-physical', '保健体育', physical, 2, physicalEarned.size > 0, undefined,
     '健康・スポーツ科学概論 または スポーツ総合演習を1科目。算入上限2単位');
   const candidates = [...languages].filter(([, totals]) => totals.earned >= 4 && totals.schooling >= 2);
@@ -272,13 +282,8 @@ type CurriculumEntry = {
   earned: number;
   inProgress: number;
   planned: number;
+  earnedSchooling: number;
 };
-
-const REPEATABLE_PROFESSIONAL_NAMES = ['総合特講', '法律学特講', '経済学特講', '演習', '歴史資料学'];
-
-function isRepeatableProfessionalOffering(offering: Offering) {
-  return REPEATABLE_PROFESSIONAL_NAMES.some(name => offering.name === name || offering.name.startsWith(`${name}（`));
-}
 
 function curriculumCourseLabel(offering: Offering) {
   // Delivery and department qualifiers describe an offering, rather than the
@@ -313,15 +318,34 @@ function professionalCards(
   const bucket = (name: string) => buckets.get(name) ?? (buckets.set(name, emptyTotals()), buckets.get(name)!);
   const ambiguous = new Set<string>();
   const incompleteMetadata = new Set<string>();
-  const repeatable = new Set<string>();
+  const legacyRepeatable = new Set<string>();
+  const repeatables = new Map<string, { name: string; type: string; limit: number; limitCourses: number; earned: number; inProgress: number; planned: number; courses: Set<string> }>();
   const entries = new Map<string, CurriculumEntry>();
   const addTo = (name: string, item: PlannerItem, offering: Offering) => addOfferingTotals(bucket(name), item, offering);
+  const specialRows: Array<{ kind: string; item: PlannerItem; offering: Offering }> = [];
+  const isNamed = (offering: Offering, name: string) => offering.name === name
+    || offering.name.startsWith(`${name}（`) || offering.name.startsWith(`${name}［`) || offering.name.startsWith(`${name}[`);
 
   for (const item of items) {
     const offering = offerings.get(item.offeringId);
     if (!offering || offering.resolutionStatus !== 'matched' || offering.credits === null) continue;
     // History seminars are allocated by the learner's confirmed completion order below.
     if (program.department === '史学科' && isHistorySeminar(offering)) continue;
+    if (program.department === '史学科' && ['日本史概説', '東洋史概説', '西洋史概説'].some(name => isNamed(offering, name))) {
+      specialRows.push({ kind: 'history-overview', item, offering });
+      continue;
+    }
+    if (program.department === '地理学科') {
+      const kind = isNamed(offering, '現地研究') ? 'field-study'
+        : isNamed(offering, '地誌学特講') ? 'chorography'
+          : isNamed(offering, '人文地理学演習') ? 'human-seminar'
+            : isNamed(offering, '自然地理学演習') ? 'natural-seminar'
+              : isNamed(offering, '人文地理学特講') || isNamed(offering, '自然地理学特講') ? 'geography-lecture' : null;
+      if (kind) {
+        specialRows.push({ kind, item, offering });
+        continue;
+      }
+    }
     const mappings = eligibleMappings(offering).filter(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育');
     const types = [...new Set(mappings.map(mapping => mapping.requirementType).filter((type): type is string => type !== null))];
     // Only completed courses affect today's graduation judgement.  An unresolved
@@ -343,17 +367,79 @@ function professionalCards(
       if (item.status === 'earned') incompleteMetadata.add(mapping.mappingId);
       continue;
     }
-    if (isRepeatableProfessionalOffering(offering)) {
-      if (item.status === 'earned') repeatable.add(mapping.mappingId);
+    const rule = repeatableRule(program.department!, offering);
+    if (rule) {
+      const [, name, limit, limitCourses] = rule;
+      const repeat = repeatables.get(`${type}:${name}`) ?? { name, type, limit, limitCourses, earned: 0, inProgress: 0, planned: 0, courses: new Set<string>() };
+      if (item.status === 'earned') { repeat.earned += offering.credits; repeat.courses.add(offering.id); }
+      else if (item.status === 'in_progress') repeat.inProgress += offering.credits;
+      else if (item.status === 'planned') repeat.planned += offering.credits;
+      repeatables.set(`${type}:${name}`, repeat);
+      continue;
+    }
+    if (['法律学特講', '歴史資料学'].some(name => offering.name === name || offering.name.startsWith(`${name}（`))) {
+      if (item.status === 'earned') legacyRepeatable.add(mapping.mappingId);
       continue;
     }
     const entry = entries.get(mapping.mappingId) ?? {
-      mapping, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0,
+      mapping, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0, earnedSchooling: 0,
     };
-    if (item.status === 'earned') entry.earned += offering.credits;
+    if (item.status === 'earned') {
+      entry.earned += offering.credits;
+      if (offering.method === 'schooling') entry.earnedSchooling += offering.credits;
+    }
     else if (item.status === 'in_progress') entry.inProgress += offering.credits;
     else if (item.status === 'planned') entry.planned += offering.credits;
     entries.set(mapping.mappingId, entry);
+  }
+
+  const addCredits = (name: string, item: PlannerItem, offering: Offering, credits: number) => {
+    if (credits <= 0) return;
+    const totals = bucket(name);
+    if (item.status === 'earned') {
+      totals.earned += credits;
+      totals.courses.add(offering.id);
+    } else if (item.status === 'in_progress') totals.inProgress += credits;
+    else if (item.status === 'planned') totals.planned += credits;
+  };
+  // These transfers are stated in the 2026 curriculum tables. They are based on
+  // completed-credit quantities, so unlike 史学演習 they do not need a learner-entered order.
+  const distribute = (rows: typeof specialRows, allocations: Array<[string, number]>) => {
+    for (const status of ['earned', 'in_progress', 'planned'] as const) {
+      const used = allocations.map(() => 0);
+      for (const row of rows.filter(candidate => candidate.item.status === status)) {
+        let remaining = row.offering.credits!;
+        for (const [index, [name, cap]] of allocations.entries()) {
+          const room = cap === Infinity ? remaining : Math.max(0, cap - used[index]);
+          const amount = Math.min(remaining, room);
+          addCredits(name, row.item, row.offering, amount);
+          if (name.startsWith('選択必修:')) addCredits('選択必修', row.item, row.offering, amount);
+          remaining -= amount;
+          used[index] += amount;
+          if (remaining === 0) break;
+        }
+      }
+    }
+  };
+  if (program.department === '史学科') {
+    // p.53 c: for each overview, the first two schooling credits are the
+    // schooling-elective course; any further credits are its required namesake.
+    for (const name of ['日本史概説', '東洋史概説', '西洋史概説']) {
+      const rows = specialRows.filter(row => row.kind === 'history-overview' && isNamed(row.offering, name));
+      const schooling = rows.filter(row => row.offering.method === 'schooling');
+      const other = rows.filter(row => row.offering.method !== 'schooling');
+      distribute(schooling, [['スクーリング選択必修', 2], ['必修', Infinity]]);
+      distribute(other, [['必修', Infinity]]);
+    }
+  }
+  if (program.department === '地理学科') {
+    // 学習のしおり p.55 d/i. The named destination courses in the table are
+    // graduation buckets, not separate offerings to add alongside these credits.
+    distribute(specialRows.filter(row => row.kind === 'field-study'), [['スクーリング必修', 2], ['選択', 2]]);
+    distribute(specialRows.filter(row => row.kind === 'chorography'), [['選択必修:地誌・その他の分野', 2], ['選択', Infinity]]);
+    distribute(specialRows.filter(row => row.kind === 'human-seminar'), [['スクーリング必修', 2], ['選択必修:人文地理の分野', 2], ['選択', Infinity]]);
+    distribute(specialRows.filter(row => row.kind === 'natural-seminar'), [['スクーリング必修', 2], ['選択必修:自然地理の分野', 2], ['選択', Infinity]]);
+    distribute(specialRows.filter(row => row.kind === 'geography-lecture'), [['選択', 4]]);
   }
 
   for (const entry of entries.values()) {
@@ -361,18 +447,26 @@ function professionalCards(
     addCurriculumTotals(bucket(type), entry);
     if (entry.mapping.field !== null) addCurriculumTotals(bucket(`${type}:${entry.mapping.field}`), entry);
   }
+  for (const repeat of repeatables.values()) {
+    const totals = bucket(repeat.type);
+    totals.earned += Math.min(repeat.earned, repeat.limit);
+    totals.inProgress += repeat.inProgress;
+    totals.planned += repeat.planned;
+    [...repeat.courses].slice(0, repeat.limitCourses).forEach(id => totals.courses.add(id));
+  }
 
   const baseReason = hasUnresolvedEarned
     ? '修得済みに対応関係を確認中の科目があります'
     : ambiguous.size ? '専門教育の区分が複数ある科目があるため自動配分を保留しています'
-      : incompleteMetadata.size ? 'カリキュラム科目の構成単位が未設定のため卒業算入を保留しています'
-        : repeatable.size ? '複数回の卒業算入があり得る科目を安全に判定できないため保留しています' : null;
+        : incompleteMetadata.size ? 'カリキュラム科目の構成単位が未設定のため卒業算入を保留しています'
+        : legacyRepeatable.size ? '複数回の卒業算入があり得る科目を安全に判定できないため保留しています' : null;
   const make = (id: string, label: string, totals: Totals, target: number | null, satisfied: boolean,
     details?: ProgressCard['details'], note?: string, reason = baseReason): ProgressCard => ({
     requirementId: id, label, ruleType: 'professional_group',
     status: reason ? 'unknown' : satisfied ? 'satisfied' : 'unsatisfied',
     earned: reason ? null : target === null ? totals.earned : Math.min(target, totals.earned),
     inProgress: totals.inProgress, planned: totals.planned, target, unit: 'credits', reason, details, note,
+    repeatableCourses: [...repeatables.values()].filter(repeat => repeat.type === label.split('：').at(-1)).map(repeat => ({ label: repeat.name, earned: repeat.earned, counted: Math.min(repeat.earned, repeat.limit), limit: repeat.limit, courses: repeat.courses.size, limitCourses: repeat.limitCourses })),
   });
   const makeKnownUnknown = (id: string, label: string, totals: Totals, details: ProgressCard['details'] | undefined, note: string, reason: string) => ({
     ...make(id, label, totals, null, false, details, note, reason), earned: totals.earned,
@@ -436,6 +530,10 @@ function professionalCards(
     const elective = withOverflow(normal('選択'), requiredElective, 36);
     const human = normal('選択必修:人文地理の分野'), natural = normal('選択必修:自然地理の分野'), regional = normal('選択必修:地誌・その他の分野');
     const fieldsMet = human.earned >= 8 && human.courses.size >= 2 && natural.earned >= 8 && natural.courses.size >= 2 && regional.earned >= 16;
+    const specialEarned = (kind: string) => specialRows.filter(row => row.kind === kind && row.item.status === 'earned')
+      .reduce((sum, row) => sum + row.offering.credits!, 0);
+    const fieldStudyEarned = specialEarned('field-study');
+    const geographyLectureEarned = specialEarned('geography-lecture');
     return [
       { ...make('professional-geography-required', '専門教育：必修', required, 12, required.earned >= 12), partialCourses: partialCourses('必修') },
       { ...make('professional-geography-schooling-required', '専門教育：スクーリング必修', schooling, 6, schooling.earned >= 6), partialCourses: partialCourses('スクーリング必修') },
@@ -443,19 +541,26 @@ function professionalCards(
         [detail('人文地理：2科目・8単位以上', human, 8), detail('自然地理：2科目・8単位以上', natural, 8), detail('地誌・その他：16単位以上', regional, 16)],
         '人文・自然はそれぞれ科目数も満たす必要があります。2013年度以前の救済措置は自動判定しません。'), partialCourses: partialCourses('選択必修') },
       { ...make('professional-geography-elective', '専門教育：選択', elective, 12, elective.earned >= 12, undefined,
-        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 36)}単位。個別特講・現地研究の上限は次の機能で判定します。`), partialCourses: partialCourses('選択') },
+        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 36)}単位。現地研究は必修2単位＋選択2単位まで${fieldStudyEarned > 4 ? `（超過${fieldStudyEarned - 4}単位は修得済みだが卒業算入外）` : ''}。人文・自然地理学特講は合算4単位まで${geographyLectureEarned > 4 ? `（超過${geographyLectureEarned - 4}単位は修得済みだが卒業算入外）` : ''}。`), partialCourses: partialCourses('選択') },
     ];
   }
 
   if (program.department === '法律学科') {
     const requiredElective = normal('選択必修');
-    const elective = withOverflow(normal('選択'), requiredElective, 32);
     const qualifies = requiredElective.earned >= 32 && requiredElective.courses.size >= 8;
+    // p.47 b: after the eight completed required-elective courses / 32 credits,
+    // a 2-credit schooling completion of a 4-credit required-elective or elective
+    // course can count toward graduation. Do not generalize this to other partials.
+    const permittedPartial = qualifies ? [...entries.values()]
+      .filter(entry => ['選択必修', '選択'].includes(entry.mapping.requirementType ?? '')
+        && entry.mapping.curriculumCredits === 4 && entry.earned === 2 && entry.earnedSchooling === 2)
+      .reduce((sum, entry) => sum + entry.earned, 0) : 0;
+    const elective = { ...withOverflow(normal('選択'), requiredElective, 32), earned: withOverflow(normal('選択'), requiredElective, 32).earned + permittedPartial };
     return [
       { ...make('professional-law-required-elective', '専門教育：選択必修', requiredElective, 32, qualifies,
         [detail('選択必修科目数', requiredElective, 8, 'courses')], '8科目かつ32単位が必要です。'), partialCourses: partialCourses('選択必修') },
       { ...makeKnownUnknown('professional-law-elective', '専門教育：選択（卒業算入見込み）', elective, undefined,
-        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 32)}単位。卒業論文の選択により必要単位が50/54単位で変わるため、ここでは達成判定しません。`,
+        `純粋な選択 ${normal('選択').earned}単位 + 選択必修超過 ${overflow(requiredElective, 32)}単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 ${permittedPartial}単位。卒業論文の選択により必要単位が50/54単位で変わるため、ここでは達成判定しません。`,
         '卒業論文の選択状況をPlannerStateで保持していないため自動判定できません。'), partialCourses: partialCourses('選択') },
       make('professional-law-schooling', '専門教育：スクーリング', emptyTotals(), 8, false, undefined,
         '＊印以外のみを数える必要があります。現行offeringには＊印を識別するデータがないため自動判定しません。',
