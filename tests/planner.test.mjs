@@ -925,6 +925,55 @@ test('geography field course minimums and repeatable professional courses stay o
   assert.match(held.reason, /複数回の卒業算入/);
 });
 
+test('unresolved planned and in-progress professional offerings do not hold current progress', () => {
+  const cases = [
+    {
+      name: 'repeatable',
+      fixture: () => {
+        const fixture = professionalFixture('法律学科', [['known', '選択必修'], ['repeatable', '選択必修']], [
+          ['known', 4, ['known']], ['repeatable', 4, ['repeatable']],
+        ]);
+        fixture.catalog.offerings.find(offering => offering.id === 'repeatable').name = '法律学特講（春期）';
+        return fixture;
+      },
+      offeringId: 'repeatable',
+      reason: /複数回の卒業算入/,
+    },
+    {
+      name: 'missing curriculum credits',
+      fixture: () => professionalFixture('法律学科', [['known', '選択必修'], ['incomplete', '選択必修', null, null]], [
+        ['known', 4, ['known']], ['incomplete', 4, ['incomplete']],
+      ]),
+      offeringId: 'incomplete',
+      reason: /構成単位が未設定/,
+    },
+    {
+      name: 'multiple professional mappings',
+      fixture: () => professionalFixture('法律学科', [
+        ['known', '選択必修'], ['ambiguous-required', '選択必修'], ['ambiguous-elective', '選択'],
+      ], [
+        ['known', 4, ['known']], ['ambiguous', 4, ['ambiguous-required', 'ambiguous-elective']],
+      ]),
+      offeringId: 'ambiguous',
+      reason: /区分が複数/,
+    },
+  ];
+  for (const { name, fixture: createFixture, offeringId, reason } of cases) {
+    const fixture = createFixture();
+    const card = items => calculateGraduationProgress(items, fixture.catalog, fixture.scope).cards
+      .find(row => row.requirementId === 'professional-law-required-elective');
+    for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress']]) {
+      const current = card([item('known', 'earned'), item(offeringId, status)]);
+      assert.equal(current.status, 'unsatisfied', `${name}: ${status} must not hold the card`);
+      assert.equal(current.earned, 4);
+      assert.equal(current[key], 0, `${name}: ${status} must not be guessed into a bucket`);
+    }
+    const held = card([item('known', 'earned'), item(offeringId, 'earned')]);
+    assert.equal(held.status, 'unknown', `${name}: earned still holds the card`);
+    assert.match(held.reason, reason);
+  }
+});
+
 test('35009 needs its full geography curriculum mapping before entering professional elective', () => {
   const geography = '4d450b06-fb99-4bf2-a769-fe5f68dd337a';
   const buddhism = catalog.offerings.find(o => o.classCode === '35009');

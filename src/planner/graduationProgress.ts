@@ -314,15 +314,29 @@ function professionalCards(
     if (program.department === '史学科' && isHistorySeminar(offering)) continue;
     const mappings = eligibleMappings(offering).filter(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育');
     const types = [...new Set(mappings.map(mapping => mapping.requirementType).filter((type): type is string => type !== null))];
-    if (types.length > 1) { ambiguous.add(offering.id); continue; }
+    // Only completed courses affect today's graduation judgement.  An unresolved
+    // future course must not put an otherwise evaluable professional card on hold.
+    if (types.length > 1) {
+      if (item.status === 'earned') ambiguous.add(offering.id);
+      continue;
+    }
     const type = types[0];
     if (!type) continue;
     const fields = [...new Set(mappings.filter(mapping => mapping.requirementType === type).map(mapping => mapping.field))];
-    if (fields.length > 1) { ambiguous.add(offering.id); continue; }
+    if (fields.length > 1) {
+      if (item.status === 'earned') ambiguous.add(offering.id);
+      continue;
+    }
     // Multiple identical mapping edges describe one curriculum row, not several courses.
     const mapping = [...mappings].sort((a, b) => a.mappingId.localeCompare(b.mappingId))[0];
-    if (mapping.curriculumCredits === null) { incompleteMetadata.add(mapping.mappingId); continue; }
-    if (isRepeatableProfessionalOffering(offering)) { repeatable.add(mapping.mappingId); continue; }
+    if (mapping.curriculumCredits === null) {
+      if (item.status === 'earned') incompleteMetadata.add(mapping.mappingId);
+      continue;
+    }
+    if (isRepeatableProfessionalOffering(offering)) {
+      if (item.status === 'earned') repeatable.add(mapping.mappingId);
+      continue;
+    }
     const entry = entries.get(mapping.mappingId) ?? {
       mapping, earned: 0, inProgress: 0, planned: 0,
     };
