@@ -14,8 +14,9 @@ import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
 import { stateForScopeChange, supportsThesisSelection, thesisPolicyForScope } from '../src/planner/thesisSelection.ts';
 import { completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaShareViewModel, setTotalLessons, toggleLesson } from '../src/planner/mediaSchooling.ts';
-import { COURSE_GRADES, evaluationFor, evaluationItems, evaluationSummary } from '../src/planner/courseEvaluations.ts';
+import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, usesLegacyReportEvaluation } from '../src/planner/courseEvaluations.ts';
 import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/correspondenceProgress.ts';
+import { correspondenceRequirementFor, structuredRequirementCount } from '../src/planner/correspondenceRequirements.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -1083,7 +1084,7 @@ test('course evaluations follow current annual plan, preserve orphans for safe r
   };
   const items = [{ ...item(media.id, 'planned'), plannedYear: 2027 }, item(nonMedia.id, 'earned')];
   assert.deepEqual(evaluationItems(items, offeringsById).map(entry => entry.offeringId), [media.id, nonMedia.id]);
-  assert.deepEqual(evaluationSummary(items, evaluations), { reportsEntered: 2, schoolingsEntered: 1, total: 2 });
+  assert.deepEqual(evaluationSummary(items, evaluations, offeringsById), { reportsEntered: 1, reportEligibleTotal: 1, schoolingsEntered: 1 });
   assert.deepEqual(evaluationItems(items.filter(entry => entry.offeringId !== media.id), offeringsById).map(entry => entry.offeringId), [nonMedia.id]);
   assert.deepEqual(evaluationFor(media.id, evaluations), evaluations[media.id]);
   assert.equal(items[0].status, 'planned');
@@ -1091,6 +1092,21 @@ test('course evaluations follow current annual plan, preserve orphans for safe r
   const before = calculateGraduationProgress(items, catalog, null, [], 'undecided');
   const after = calculateGraduationProgress(items, catalog, null, [], 'undecided');
   assert.deepEqual(after, before);
+});
+
+test('correspondence offerings use per-report progress, not the legacy report evaluation controls or summary', () => {
+  const correspondence = catalog.offerings.find(offering => offering.name === '債権総論' && offering.method === 'correspondence');
+  const schooling = catalog.offerings.find(offering => offering.method === 'schooling');
+  const evaluations = {
+    [correspondence.id]: { offeringId: correspondence.id, reportGrade: 'D', schoolingGrade: null },
+    [schooling.id]: { offeringId: schooling.id, reportGrade: 'A+', schoolingGrade: 'B-' },
+  };
+  const items = [item(correspondence.id), item(schooling.id)];
+  assert.equal(usesLegacyReportEvaluation(correspondence), false);
+  assert.equal(usesLegacyReportEvaluation(schooling), true);
+  assert.equal(evaluationIsUnrated(correspondence, evaluationFor(correspondence.id, evaluations)), false);
+  assert.equal(evaluationIsUnrated(schooling, evaluationFor(schooling.id, evaluations)), false);
+  assert.deepEqual(evaluationSummary(items, evaluations, offeringsById), { reportsEntered: 1, reportEligibleTotal: 1, schoolingsEntered: 1 });
 });
 
 test('law thesis selection safely switches catalog targets without showing both branches', () => {
@@ -1593,6 +1609,16 @@ test('correspondence progress separates report resubmission, eligibility, and ea
   const passedReports = { ...saved, reports: saved.reports.map(report => ({ ...report, status: 'passed', grade: 'C-' })) };
   assert.equal(correspondenceCreditResult({ ...passedReports, examGrade: 'D' }).examPassed, false);
   assert.equal(correspondenceCreditResult({ ...passedReports, examGrade: 'C-' }).creditEarned, true);
+});
+
+test('structured correspondence requirements are keyed by offering ID only', () => {
+  const mapped = catalog.offerings.find(current => current.id === '04050f27-c605-44c1-ae02-785c42114cd3');
+  assert.equal(structuredRequirementCount, 10);
+  assert.deepEqual(correspondenceRequirementFor(mapped), { requiredReports: 2, sourcePage: 39, sourceLabel: '法律-1' });
+  assert.equal(correspondenceRequirementFor({ ...mapped, id: 'same-name-different-offering' }), null);
+  assert.equal(correspondenceRequirementFor({ ...mapped, method: 'schooling' }), null);
+  assert.equal(correspondenceRequirementFor(catalog.offerings.find(current => current.id === '0266ca03-b3ac-4e19-813a-2abfa866a551')), null);
+  assert.equal(correspondenceRequirementFor(catalog.offerings.find(current => current.id === '4ab48e97-5f24-4017-b9b5-6d64dc38ccd6')), null);
 });
 
 test('unknown correspondence requirements never claim credit and v6 migration retains all prior fields', () => {

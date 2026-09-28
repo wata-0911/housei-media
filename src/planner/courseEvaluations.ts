@@ -12,11 +12,22 @@ export function evaluationItems(items: PlannerItem[], offerings: Map<string, Off
   return items.filter(item => offerings.has(item.offeringId));
 }
 
-export function evaluationSummary(items: PlannerItem[], evaluations: Record<string, CourseEvaluation>) {
-  const present = items.map(item => evaluationFor(item.offeringId, evaluations));
+/** Correspondence report results are recorded per report in the correspondence tab. */
+export function usesLegacyReportEvaluation(offering: Offering): boolean {
+  return offering.method !== 'correspondence';
+}
+
+export function evaluationIsUnrated(offering: Offering, evaluation: CourseEvaluation): boolean {
+  return (usesLegacyReportEvaluation(offering) && evaluation.reportGrade === null)
+    || (offering.method === 'schooling' && evaluation.schoolingGrade === null);
+}
+
+export function evaluationSummary(items: PlannerItem[], evaluations: Record<string, CourseEvaluation>, offerings: Map<string, Offering>) {
+  const present = items.map(item => ({ offering: offerings.get(item.offeringId)!, evaluation: evaluationFor(item.offeringId, evaluations) }));
+  const reportEligible = present.filter(entry => usesLegacyReportEvaluation(entry.offering));
   return {
-    reportsEntered: present.filter(entry => entry.reportGrade !== null).length,
-    schoolingsEntered: present.filter(entry => entry.schoolingGrade !== null).length,
-    total: present.length,
+    reportsEntered: reportEligible.filter(entry => entry.evaluation.reportGrade !== null).length,
+    reportEligibleTotal: reportEligible.length,
+    schoolingsEntered: present.filter(entry => entry.evaluation.schoolingGrade !== null).length,
   };
 }

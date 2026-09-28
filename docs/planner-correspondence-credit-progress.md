@@ -15,11 +15,11 @@
 
 ## 設題総覧の構造化
 
-現段階では、Catalogの科目名と設題総覧の表記が完全一致し、内容を目視確認した12科目のみを補助データ化した。名称揺れ・同名別科目・特殊リポートノート科目は自動確定していない。Catalog 686件は変更していない。
+現段階では、Catalogの具体的な `offeringId` と設題総覧の表記を1対1で確認できた10件のみを補助データ化した。名称揺れ・同名別科目・特殊リポートノート科目は自動確定していない。Catalog 686件は変更していない。
 
-- 安全にmapping: 12件
-- ambiguous/manual review: 0件（自動マッピング対象に含めない）
-- unknown: 通信学習offering 251件のうち239件
+- 安全にmapping: 10件（`requirementsByOfferingId`）
+- ambiguous/manual review: 5 offerings（`経営学総論Ⅰ` 2件、`会社法` 3件。同名のため設題総覧との1対1根拠を確定できず、自動マッピング対象に含めない）
+- unknown: 通信学習offering 251件のうち241件
 
 これは全冊子の科目表を機械的に名称照合するだけでは、同名科目と特殊条件を安全に区別できないためである。今後対応表を増やす場合も、科目ごとの設題総覧ページ、設題数、Catalog offeringとの1対1根拠を併記する。
 
@@ -31,6 +31,6 @@
 
 stateは schemaVersion 7。v6からv7では `correspondenceProgress: {}` のみを追加し、items、publicCourses、selectedScopeId、thesisSelection、earnedOrder、mediaSchoolingProgress、courseEvaluations、todosをそのまま保持する。localStorage keyは `hosei-planner:v1` のまま。
 
-既存 `courseEvaluations.reportGrade` は通信リポート進捗へ複製・変換しない。特に既存の `D` を `再提出` に変えない。利用者は通信学習タブで、設題ごとの状態を明示的に記録する。
+既存 `courseEvaluations.reportGrade` は通信リポート進捗へ複製・変換しない。特に既存の `D` を `再提出` に変えない。保存済みの値は保持するが、通信学習科目では「評価・成績」タブで編集・集計せず、通信学習判定にも使わない。利用者は通信学習タブで、設題ごとの状態を明示的に記録する。
 
 通信進捗は年間履修計画から科目を削除してもstate内にorphanとして保持され、同一offeringのUndoまたは再追加時に復元される。公開科目は対象外である。
