@@ -3,6 +3,7 @@ import schema from './planner_catalog_2026.schema.json';
 import type { PlannerCatalog, PlannerState } from './plannerCatalog';
 import { isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { isMediaSchooling } from './mediaSchooling';
+import { isCorrespondenceOffering, validCorrespondenceProgress } from './correspondenceProgress';
 
 const ajv = new Ajv2020({ allErrors: true });
 ajv.addFormat('uuid', /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -20,6 +21,7 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
   const offeringMap = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const progress = Object.entries(value.mediaSchoolingProgress);
   const evaluations = Object.entries(value.courseEvaluations);
+  const correspondence = Object.entries(value.correspondenceProgress);
   return (value.selectedScopeId === null || catalog.programs.some(p => p.scopeId === value.selectedScopeId))
     && ids.every(id => offerings.has(id)) && new Set(ids).size === ids.length
     && new Set(todoIds).size === todoIds.length
@@ -30,6 +32,7 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
       && new Set(course.lessons.map(lesson => lesson.lesson)).size === course.lessons.length
       && course.lessons.every(lesson => course.totalLessons === null || lesson.lesson <= course.totalLessons))
     && evaluations.every(([id, evaluation]) => id === evaluation.offeringId && offerings.has(id))
+    && correspondence.every(([id, progress]) => id === progress.offeringId && offerings.has(id) && isCorrespondenceOffering(offeringMap.get(id)) && validCorrespondenceProgress(progress))
     && value.items.every(item => {
       const seminar = isHistorySeminar(offeringMap.get(item.offeringId));
       return seminar ? (item.status === 'earned' || item.earnedOrder === null) : item.earnedOrder === null;
