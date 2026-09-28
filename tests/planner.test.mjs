@@ -10,6 +10,7 @@ import { calculateGraduationProgress } from '../src/planner/graduationProgress.t
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/removeUndo.ts';
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
+import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -61,6 +62,29 @@ test('catalog preserves all 686 offerings, 348 null course IDs and incomplete gr
   assert.equal(catalog.offerings.filter(o => o.courseId === null).length, 348);
   assert.equal(catalog.metadata.graduationCheckComplete, false);
   assert.equal(validateCatalog({ ...catalog, metadata: { ...catalog.metadata, graduationCheckComplete: true } }), false);
+});
+
+test('public course is a search-only synthetic result, not a catalog offering', () => {
+  assert.equal(matchesPublicCourseSearch('公開科目'), true);
+  assert.equal(matchesPublicCourseSearch('公開'), true);
+  assert.equal(matchesPublicCourseSearch('政治学'), false);
+  assert.equal(matchesPublicCourseSearch(''), false);
+  assert.equal(catalog.offerings.length, 686);
+  assert.equal(catalog.offerings.some(offering => offering.name === PUBLIC_COURSE_TITLE), false);
+});
+
+test('a public course can be added repeatedly with the agreed initial values', () => {
+  const firstPublic = createPublicCourse('11111111-1111-4111-8111-111111111111');
+  const secondPublic = createPublicCourse('22222222-2222-4222-8222-222222222222');
+  assert.deepEqual(firstPublic, { id: firstPublic.id, title: '公開科目', status: 'planned', plannedYear: 2026, plannedTerm: null, credits: 2 });
+  assert.equal([firstPublic, secondPublic].length, 2);
+});
+
+test('public course names are saved as real names and reject an empty title', () => {
+  assert.equal(normalizePublicCourseTitle(' 法律学特講［○○］ '), '法律学特講［○○］');
+  assert.equal(isValidPublicCourseTitle('法律学特講［○○］'), true);
+  assert.equal(isValidPublicCourseTitle(''), false);
+  assert.equal(isValidPublicCourseTitle('a'.repeat(201)), false);
 });
 
 test('2026 public-course limits are eight courses and sixteen credits for every documented department', () => {

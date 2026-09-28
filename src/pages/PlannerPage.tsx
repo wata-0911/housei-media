@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import CourseSearch from '../components/planner/CourseSearch';
 import PlannedCourseList from '../components/planner/PlannedCourseList';
-import PublicCourseList from '../components/planner/PublicCourseList';
 import ProgramSettings from '../components/planner/ProgramSettings';
 import CategorySummary from '../components/planner/CategorySummary';
 import { createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
@@ -13,6 +12,7 @@ import { initialState, loadState, recoverState, saveState, STORAGE_KEY, type Loa
 import type { PlannerItem, PlannerState, PublicCourse } from '../planner/plannerCatalog';
 import { calculateGraduationProgress } from '../planner/graduationProgress';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
+import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/publicCourses';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -76,16 +76,14 @@ export default function PlannerPage() {
     return crypto.randomUUID();
   }
 
-  function addPublicCourse(title: string) {
-    const normalized = title.trim();
-    if (!normalized || normalized.length > 200) return;
-    const course: PublicCourse = { id: newPublicCourseId(), title: normalized, status: 'planned', plannedYear: 2026, plannedTerm: null, credits: 2 };
+  function addPublicCourse() {
+    const course = createPublicCourse(newPublicCourseId());
     commit({ ...state, publicCourses: [...state.publicCourses, course] }, `「${course.title}」を公開科目として追加・保存しました。`);
   }
 
   function changePublicCourse(id: string, patch: Partial<Omit<PublicCourse, 'id' | 'credits'>>) {
-    const title = patch.title === undefined ? undefined : patch.title.trim();
-    if (title !== undefined && (!title || title.length > 200)) return;
+    const title = patch.title === undefined ? undefined : normalizePublicCourseTitle(patch.title);
+    if (title !== undefined && !isValidPublicCourseTitle(title)) return;
     commit({ ...state, publicCourses: state.publicCourses.map(course => course.id === id ? { ...course, ...patch, ...(title === undefined ? {} : { title }) } : course) }, '公開科目を保存しました。');
   }
 
@@ -163,9 +161,8 @@ export default function PlannerPage() {
         {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
       </div>
       <div className="grid lg:grid-cols-2 gap-6 items-start">
-        <CourseSearch classify={classify} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} />
-        <PlannedCourseList classify={classify} items={state.items} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} />
-        {state.selectedScopeId !== null && <PublicCourseList courses={state.publicCourses} disabled={loaded.error !== null} onAdd={addPublicCourse} onChange={changePublicCourse} onRemove={removePublic} />}
+        <CourseSearch classify={classify} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
+        <PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} />
       </div>
     </div>
   </div>;
