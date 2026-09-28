@@ -66,6 +66,9 @@ export function completedMediaLessons(course: MediaCourseProgress): number {
 export type MediaShareTemplate = 'progress' | 'progress_with_assessments';
 export type MediaShareCourse = { name: string; videoCompletedCount: number; testCompletedCount: number; totalLessons: number | null; videoDone: boolean; testDone: boolean; assessments: MediaAssessment[] };
 export type MediaShareGroup = { deliveryCategory: '前期メディア' | '後期メディア'; courses: MediaShareCourse[]; totalVideoCompleted: number; totalTestCompleted: number; totalLessons: number | null; unconfiguredCourses: number };
+export type MediaShareAssessmentLine = { label: string; date: string; completed: boolean };
+export type MediaSharePresentationCourse = Omit<MediaShareCourse, 'assessments'> & { assessmentLines: MediaShareAssessmentLine[] };
+export type MediaSharePresentationGroup = Omit<MediaShareGroup, 'courses'> & { courses: MediaSharePresentationCourse[] };
 
 export function mediaShareViewModel(items: PlannerItem[], offerings: Map<string, Offering>, progress: Record<string, MediaCourseProgress>): MediaShareGroup[] {
   const groups = new Map<MediaShareGroup['deliveryCategory'], MediaShareGroup>();
@@ -90,14 +93,36 @@ export function mediaShareViewModel(items: PlannerItem[], offerings: Map<string,
   });
 }
 
+/**
+ * The text post and PNG deliberately consume this same model. Template A returns
+ * no assessment lines, preserving its established output and visual layout.
+ */
+export function mediaSharePresentation(groups: MediaShareGroup[], template: MediaShareTemplate): MediaSharePresentationGroup[] {
+  return groups.map(group => ({
+    ...group,
+    courses: group.courses.map(course => ({
+      name: course.name,
+      videoCompletedCount: course.videoCompletedCount,
+      testCompletedCount: course.testCompletedCount,
+      totalLessons: course.totalLessons,
+      videoDone: course.videoDone,
+      testDone: course.testDone,
+      assessmentLines: template === 'progress_with_assessments'
+        ? course.assessments.map(assessment => ({ label: assessmentLabel(assessment), date: assessmentDateLabel(assessment), completed: assessment.completed }))
+        : [],
+    })),
+  }));
+}
+
 export function mediaSharePost(groups: MediaShareGroup[], comment = '', template: MediaShareTemplate = 'progress'): string {
-  const lines = groups.flatMap((group, index) => [
+  const presentation = mediaSharePresentation(groups, template);
+  const lines = presentation.flatMap((group, index) => [
     ...(index === 0 ? [] : ['']), `${group.deliveryCategory}進捗`,
     ...group.courses.flatMap(course => [
       course.totalLessons === null
         ? `・${course.name}  動画 ${course.videoCompletedCount}回・テスト ${course.testCompletedCount}回（全回数未設定）`
         : `・${course.name}  動画 ${course.videoCompletedCount}/${course.totalLessons}${course.videoDone ? ' ✅' : ''}・テスト ${course.testCompletedCount}/${course.totalLessons}${course.testDone ? ' ✅' : ''}`,
-      ...(template === 'progress_with_assessments' ? course.assessments.map(assessment => `  ${assessmentLabel(assessment)}  ${assessmentDateLabel(assessment)}  ${assessment.completed ? '実施済み ✅' : '未実施'}`) : []),
+      ...course.assessmentLines.map(assessment => `  ${assessment.label}  ${assessment.date}  ${assessment.completed ? '実施済み ✅' : '未実施'}`),
     ]),
     ...(group.totalLessons === null ? ['全回数未設定の科目あり'] : [`動画トータル  ${group.totalVideoCompleted}/${group.totalLessons}`, `テストトータル  ${group.totalTestCompleted}/${group.totalLessons}`]),
   ]);

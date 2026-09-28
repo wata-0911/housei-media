@@ -13,7 +13,7 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
 import { stateForScopeChange, supportsThesisSelection, thesisPolicyForScope } from '../src/planner/thesisSelection.ts';
-import { addAssessment, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/mediaSchooling.ts';
+import { addAssessment, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaSharePresentation, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/mediaSchooling.ts';
 import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, usesLegacyReportEvaluation } from '../src/planner/courseEvaluations.ts';
 import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/correspondenceProgress.ts';
 import { correspondenceRequirementFor, structuredRequirementCount } from '../src/planner/correspondenceRequirements.ts';
@@ -993,7 +993,7 @@ test('media share view model groups current media plan items, preserves order, a
   const progress = {
     [secondTerm.id]: { offeringId: secondTerm.id, totalLessons: 3, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }, { lesson: 2, videoCompleted: true, testCompleted: true }, { lesson: 3, videoCompleted: true, testCompleted: false }] },
     [firstTerm.id]: { offeringId: firstTerm.id, totalLessons: 2, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: true }, { lesson: 2, videoCompleted: true, testCompleted: true }] },
-    orphan: { offeringId: 'orphan', totalLessons: 99, lessons: [] },
+    orphan: { offeringId: 'orphan', totalLessons: 99, lessons: [], assessments: [{ id: 'orphan-final', type: 'final', label: '期末試験', scheduledDate: '2026-12-20', completed: false }] },
   };
   assert.equal(completedMediaLessons(progress[firstTerm.id]), 2);
   const groups = mediaShareViewModel(items, offeringsById, progress);
@@ -1006,8 +1006,48 @@ test('media share view model groups current media plan items, preserves order, a
   assert.match(post, /動画トータル  3\/3/);
   assert.match(post, /テストトータル  1\/3/);
   assert.match(post, /\n\nあと少し$/);
-  assert.doesNotMatch(post, /orphan|#法政通信/);
+  assert.doesNotMatch(post, /orphan|#法政通信|2026\/12\/20/);
   assert.equal(mediaShareIntentUrl(post), `https://x.com/intent/post?text=${encodeURIComponent(post)}`);
+});
+
+test('media share keeps the established progress template and derives both text and PNG data from the selected presentation', () => {
+  const media = catalog.offerings.filter(isMediaSchooling);
+  const firstTerm = media.find(offering => offering.deliveryCategory === '前期メディア');
+  const secondTerm = media.find(offering => offering.deliveryCategory === '後期メディア');
+  const groups = mediaShareViewModel([item(firstTerm.id), item(secondTerm.id)], offeringsById, {
+    [firstTerm.id]: {
+      offeringId: firstTerm.id, totalLessons: 14,
+      lessons: Array.from({ length: 14 }, (_, index) => ({ lesson: index + 1, videoCompleted: true, testCompleted: true })),
+      assessments: [
+        { id: 'midterm', type: 'midterm', label: 'unused', scheduledDate: '2026-06-10', completed: true },
+        { id: 'final', type: 'final', label: 'unused', scheduledDate: null, completed: false },
+        { id: 'other-1', type: 'other', label: 'レポート発表', scheduledDate: '2026-07-01', completed: true },
+        { id: 'other-2', type: 'other', label: '長い名称でも折り返して表示する評価予定', scheduledDate: null, completed: false },
+      ],
+    },
+    [secondTerm.id]: { offeringId: secondTerm.id, totalLessons: 15, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }], assessments: [] },
+    orphan: { offeringId: 'orphan', totalLessons: 14, lessons: [], assessments: [{ id: 'hidden', type: 'midterm', label: '中間試験', scheduledDate: '2026-01-01', completed: true }] },
+  });
+  const existing = mediaSharePost(groups, 'あと少し');
+  assert.equal(existing, `${firstTerm.deliveryCategory}進捗\n・${firstTerm.name}  動画 14/14 ✅・テスト 14/14 ✅\n動画トータル  14/14\nテストトータル  14/14\n\n${secondTerm.deliveryCategory}進捗\n・${secondTerm.name}  動画 1/15・テスト 0/15\n動画トータル  1/15\nテストトータル  0/15\n\nあと少し`);
+  assert.deepEqual(mediaSharePresentation(groups, 'progress').flatMap(group => group.courses.map(course => course.assessmentLines)), [[], []]);
+
+  const withAssessments = mediaSharePresentation(groups, 'progress_with_assessments');
+  assert.deepEqual(withAssessments[0].courses[0].assessmentLines, [
+    { label: '中間試験', date: '2026/06/10', completed: true },
+    { label: '期末試験', date: '日程未設定', completed: false },
+    { label: 'レポート発表', date: '2026/07/01', completed: true },
+    { label: '長い名称でも折り返して表示する評価予定', date: '日程未設定', completed: false },
+  ]);
+  assert.deepEqual(withAssessments[1].courses[0].assessmentLines, []);
+  const post = mediaSharePost(groups, 'あと少し', 'progress_with_assessments');
+  assert.match(post, /中間試験  2026\/06\/10  実施済み ✅/);
+  assert.match(post, /期末試験  日程未設定  未実施/);
+  assert.match(post, /レポート発表  2026\/07\/01  実施済み ✅/);
+  assert.match(post, /長い名称でも折り返して表示する評価予定  日程未設定  未実施/);
+  assert.match(post, /動画 1\/15・テスト 0\/15/);
+  assert.match(post, /\n\nあと少し$/);
+  assert.doesNotMatch(post, /2026\/01\/01/);
 });
 
 test('media share does not invent a category denominator when any course has no lesson total', () => {
@@ -1021,6 +1061,7 @@ test('media share does not invent a category denominator when any course has no 
   assert.ok(post.includes(`・${media[1].name}  動画 1回・テスト 0回（全回数未設定）`));
   assert.match(post, /全回数未設定の科目あり/);
   assert.doesNotMatch(post, /トータル  2\/3/);
+  assert.equal(mediaSharePost(groups, '', 'progress_with_assessments'), post);
 });
 
 test('media share keeps video and test completion states independent in each course', () => {
