@@ -19,6 +19,7 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
   const publicCourseIds = value.publicCourses.map(course => course.id);
   const offeringMap = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const progress = Object.entries(value.mediaSchoolingProgress);
+  const evaluations = Object.entries(value.courseEvaluations);
   return (value.selectedScopeId === null || catalog.programs.some(p => p.scopeId === value.selectedScopeId))
     && ids.every(id => offerings.has(id)) && new Set(ids).size === ids.length
     && new Set(todoIds).size === todoIds.length
@@ -28,6 +29,7 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
     && progress.every(([id, course]) => id === course.offeringId && offerings.has(id) && isMediaSchooling(offeringMap.get(id))
       && new Set(course.lessons.map(lesson => lesson.lesson)).size === course.lessons.length
       && course.lessons.every(lesson => course.totalLessons === null || lesson.lesson <= course.totalLessons))
+    && evaluations.every(([id, evaluation]) => id === evaluation.offeringId && offerings.has(id))
     && value.items.every(item => {
       const seminar = isHistorySeminar(offeringMap.get(item.offeringId));
       return seminar ? (item.status === 'earned' || item.earnedOrder === null) : item.earnedOrder === null;

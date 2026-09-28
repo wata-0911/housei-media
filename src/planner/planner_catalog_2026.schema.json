@@ -986,7 +986,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 5
+          "const": 6
         },
         "selectedScopeId": {
           "anyOf": [
@@ -1043,6 +1043,19 @@
             "required": ["offeringId", "totalLessons", "lessons"],
             "additionalProperties": false
           }
+        },
+        "courseEvaluations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "offeringId": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+              "reportGrade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"] }, { "type": "null" }] },
+              "schoolingGrade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"] }, { "type": "null" }] }
+            },
+            "required": ["offeringId", "reportGrade", "schoolingGrade"],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -1052,7 +1065,8 @@
         "items",
         "publicCourses",
         "todos",
-        "mediaSchoolingProgress"
+        "mediaSchoolingProgress",
+        "courseEvaluations"
       ],
       "additionalProperties": false
     },

@@ -3,7 +3,7 @@ import { validateState } from './validation';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 5, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {} });
+export const initialState = (): PlannerState => ({ schemaVersion: 6, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {} });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null };
 
@@ -35,8 +35,9 @@ function migrateState(value: unknown): unknown {
   } : state;
   const v3 = v2.schemaVersion === 2 ? { ...v2, schemaVersion: 3, publicCourses: [] } : v2;
   const v4 = v3.schemaVersion === 3 ? { ...v3, schemaVersion: 4, thesisSelection: 'undecided' } : v3;
-  if (v4.schemaVersion !== 4) return value;
-  return { ...v4, schemaVersion: 5, mediaSchoolingProgress: {} };
+  const v5 = v4.schemaVersion === 4 ? { ...v4, schemaVersion: 5, mediaSchoolingProgress: {} } : v4;
+  if (v5.schemaVersion !== 5) return value;
+  return { ...v5, schemaVersion: 6, courseEvaluations: {} };
 }
 
 // Compare before writes so another tab's changes are not silently replaced.
