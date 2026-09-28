@@ -1,11 +1,12 @@
 import type { PlannerCatalog, ThesisSelection } from '../../planner/plannerCatalog';
 import { selectablePrograms } from '../../planner/annualPlan';
-import { supportsThesisSelection } from '../../planner/thesisSelection';
+import { supportsThesisSelection, thesisPolicyForScope } from '../../planner/thesisSelection';
 
 type Props = { catalog: PlannerCatalog; scopeId: string | null; thesisSelection: ThesisSelection; disabled: boolean; onChange: (scopeId: string | null) => void; onThesisSelectionChange: (selection: ThesisSelection) => void };
 export default function ProgramSettings({ catalog, scopeId, thesisSelection, disabled, onChange, onThesisSelectionChange }: Props) {
   const programs = selectablePrograms(catalog);
   const legacyCommon = catalog.programs.find(p => p.scopeId === scopeId && p.isCommon);
+  const thesisPolicy = thesisPolicyForScope(catalog, scopeId);
   return <section className="bg-white border border-gray-200 p-5 sm:p-7" aria-labelledby="program-heading">
     <h2 id="program-heading" className="text-xl text-[#002255] mb-3">所属設定</h2>
     <label htmlFor="program-scope" className="block text-sm mb-2">学部 / 学科 / コース</label>
@@ -25,6 +26,8 @@ export default function ProgramSettings({ catalog, scopeId, thesisSelection, dis
       </div>
       <p className="text-sm text-gray-600 mt-2">卒論の選択により、一部の専門教育の必要単位が変わります。</p>
     </fieldset>}
+    {thesisPolicy === 'required' && <p className="mt-5 max-w-xl border-l-4 border-[#002255] bg-blue-50 p-3 text-sm leading-relaxed text-[#002255]">卒業論文はこの学科の卒業要件に含まれます。進捗は卒業要件の部分進捗で確認できます。</p>}
+    {thesisPolicy === 'unknown' && scopeId !== null && !legacyCommon && <p className="mt-5 max-w-xl border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">卒業論文の扱いは現在自動判定対象外です。公式の単位分岐を安全に確認できるまで、履修する／しないは選択できません。</p>}
     {legacyCommon && <p className="text-sm text-amber-800 mt-2">以前の共通scope設定を保持しています。区分別集計を表示するには所属を選択してください。</p>}
   </section>;
 }

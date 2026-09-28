@@ -12,7 +12,7 @@ import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePubli
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
-import { stateForScopeChange, supportsThesisSelection } from '../src/planner/thesisSelection.ts';
+import { stateForScopeChange, supportsThesisSelection, thesisPolicyForScope } from '../src/planner/thesisSelection.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -934,13 +934,39 @@ test('law thesis selection safely switches catalog targets without showing both 
   }
 });
 
-test('only the law scope exposes a thesis choice and changing affiliation clears it', () => {
+test('thesis policy distinguishes optional, required, and unknown scopes; only optional exposes a choice', () => {
   const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const literature = catalog.programs.find(program => program.department === '日本文学科' && program.course === '文学コース').scopeId;
   const commerce = catalog.programs.find(program => program.department === '商業学科').scopeId;
+  assert.equal(thesisPolicyForScope(catalog, law), 'optional');
+  assert.equal(thesisPolicyForScope(catalog, literature), 'required');
+  assert.equal(thesisPolicyForScope(catalog, commerce), 'unknown');
   assert.equal(supportsThesisSelection(catalog, law), true);
+  assert.equal(supportsThesisSelection(catalog, literature), false);
   assert.equal(supportsThesisSelection(catalog, commerce), false);
   const state = { ...initialState(), selectedScopeId: law, thesisSelection: 'selected', items: [item(first.id)] };
   assert.deepEqual(stateForScopeChange(state, commerce), { ...state, selectedScopeId: commerce, thesisSelection: 'undecided' });
+});
+
+test('required thesis has an 8-credit card, keeps unsupported guidance unknown, and does not double count professional categories', () => {
+  const literature = catalog.programs.find(program => program.department === '日本文学科' && program.course === '文学コース').scopeId;
+  const empty = calculateGraduationProgress([], catalog, literature);
+  const thesisCard = empty.cards.find(row => row.label === '卒業論文');
+  assert.equal(thesisCard.target, 8);
+  assert.equal(thesisCard.status, 'unknown');
+  assert.match(thesisCard.reason, /mapping/);
+  const guidance = empty.requirements.find(row => row.label === '卒業論文第1次指導');
+  assert.equal(guidance.status, 'unknown');
+  assert.match(guidance.reason, /条件または例外/);
+
+  const mapping = catalog.mappings.find(current => current.scopeId === literature && current.category === '専門教育' && current.requirementType === '必修');
+  const offering = { ...catalog.offerings[0], id: 'required-thesis-fixture', name: '卒業論文', credits: 8, resolutionStatus: 'matched', mappingIds: [mapping.mappingId] };
+  const fixture = { ...catalog, offerings: [...catalog.offerings, offering] };
+  const progress = calculateGraduationProgress([item(offering.id, 'earned')], fixture, literature);
+  assert.equal(progress.cards.find(row => row.label === '卒業論文').status, 'satisfied');
+  assert.equal(progress.cards.find(row => row.label === '卒業論文').earned, 8);
+  assert.equal(progress.cards.find(row => row.requirementId === 'professional-required').earned, 0);
+  assert.equal(progress.graduationCheckComplete, false);
 });
 
 test('cleanup coverage and audit before/after counts reconcile independently', () => {

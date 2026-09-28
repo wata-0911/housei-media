@@ -12,6 +12,7 @@ import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
+import { thesisPolicyForScope } from './thesisSelection';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -70,7 +71,7 @@ function unknown(requirement: Requirement, reason: string): RequirementProgress 
     label: requirement.status === 'unsupported' ? requirement.scopeLabel : requirementLabel(requirement),
     ruleType: requirement.status === 'unsupported' ? 'unsupported' : requirement.ruleType,
     status: 'unknown', earned: null, inProgress: null, planned: null,
-    target: requirement.value, unit: null, reason,
+    target: requirement.value, unit: requirement.status === 'structured' ? unitFor(requirement) : null, reason,
   };
 }
 
@@ -395,6 +396,9 @@ function professionalCards(
   for (const item of items) {
     const offering = offerings.get(item.offeringId);
     if (!offering || offering.resolutionStatus !== 'matched' || offering.credits === null) continue;
+    // A required thesis is tracked by its own 8-credit requirement card. Do not
+    // let a future thesis offering also inflate a professional-category bucket.
+    if (thesisPolicyForScope(catalog, scopeId) === 'required' && offering.name === '卒業論文') continue;
     // History seminars are allocated by the learner's confirmed completion order below.
     if (program.department === '史学科' && isHistorySeminar(offering)) continue;
     if (program.department === '史学科' && ['日本史概説', '東洋史概説', '西洋史概説'].some(name => isNamed(offering, name))) {
@@ -712,11 +716,20 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
     return [evaluateStructured(withoutThesisCondition(requirement), items, offerings, eligibleMappings, hasUnresolvedEarned)];
   });
+  const requiredThesisCards = thesisPolicyForScope(catalog, scopeId) !== 'required' ? [] : requirements
+    .filter(row => {
+      const source = catalog.requirements.find(requirement => requirement.id === row.requirementId);
+      return source?.status === 'structured' && source.ruleType === 'required_course' && source.target.course_name === '卒業論文';
+    })
+    .map(row => ({ ...row, note: row.status === 'unknown'
+      ? '2026年度の開講snapshotに卒業論文の対応科目・mappingがないため、単位数は表示しつつ修得進捗は判定保留です。'
+      : '卒業論文の単位のみを追跡します。専門教育の区分別カードには重ねて算入しません。' }));
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
   const professional = professionalCards(items, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, thesisSelection);
   const cards = [
     ...groupedCards(items, offerings, eligibleMappings, hasUnresolvedEarned),
     ...professional,
+    ...requiredThesisCards,
     ...publicCourse.cards,
     ...(scopeId === HISTORY_SCOPE_ID ? historySeminarCards(items, offerings) : []),
     ...requirements.filter(row => row.status !== 'unknown' && row.ruleType !== 'max_credits'
