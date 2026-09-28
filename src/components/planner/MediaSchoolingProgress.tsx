@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { mediaPlanItems, mediaProgressSummary, progressFor, setTotalLessons, toggleLesson } from '../../planner/mediaSchooling';
+import { mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, setTotalLessons, toggleLesson } from '../../planner/mediaSchooling';
 import type { MediaCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
+import MediaProgressShareModal from './MediaProgressShareModal';
 
 type Props = {
   items: PlannerItem[];
@@ -49,6 +50,8 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
 
 export default function MediaSchoolingProgress({ items, offerings, progress, disabled, onChange }: Props) {
   const mediaItems = mediaPlanItems(items, offerings);
+  const [isSharing, setIsSharing] = useState(false);
+  const shareGroups = mediaShareViewModel(items, offerings, progress);
   if (mediaItems.length === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
-  return <section aria-labelledby="media-heading" className="space-y-4"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">{mediaItems.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={onChange} />)}</section>;
+  return <section aria-labelledby="media-heading" className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">{mediaItems.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div><button type="button" onClick={() => setIsSharing(true)} className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">全科目を共有</button></div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={onChange} />)}{isSharing && <MediaProgressShareModal groups={shareGroups} onClose={() => setIsSharing(false)} />}</section>;
 }
