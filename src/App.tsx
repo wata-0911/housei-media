@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -20,6 +20,8 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProfileCard from './pages/member';
 import NotFound from './pages/NotFound'
 
+const PlannerPage = lazy(() => import('./pages/PlannerPage'));
+
 type PageMetaEntry = {
   title: string
   description: string
@@ -30,6 +32,11 @@ const pageMeta: Record<string, PageMetaEntry> = {
     title: '法政通信メディア | 勉強・就職・学生生活の情報まとめ',
     description:
       '法政大学通信教育部の学生向け情報サイト。単位修得、リポート・試験、スクーリング、就職活動など学生生活に役立つ情報を掲載しています。',
+  },
+
+  '/planner': {
+    title: '2026 履修プランナー | 法政通信メディア',
+    description: '2026年の科目検索・履修計画・進捗と単位の記録。卒業判定には対応していません。',
   },
 
   '/qa': {
@@ -139,6 +146,7 @@ export default function App() {
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/planner" element={<Suspense fallback={<p role="status" className="p-8 text-center">履修プランナーを読み込み中…</p>}><PlannerPage /></Suspense>} />
             <Route path="/qa" element={<QA />} />
             <Route path="/contact" element={<Contact />} />
             {/* 創立者からのメッセージページへのルーティング */}

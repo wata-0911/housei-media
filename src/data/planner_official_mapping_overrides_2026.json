@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "academicYear": 2026,
+  "provenance": "official_source_verified",
+  "officialVerified": true,
+  "approvedBy": "official_source_review_2026-09-23",
+  "overrides": [
+    {
+      "ruleId": "teacher_political_science_law_2026",
+      "approvedPattern": "classCode 33003 / 43006（【教職】政治学）",
+      "targetCourseName": "政治学",
+      "offeringIds": [
+        "81911901-205b-49ff-8efc-a0440bf15309",
+        "4bf76def-db1f-46c8-a3bc-df3f8cac1164"
+      ],
+      "mappingIds": [
+        "f49de1e6-82ae-4b86-8c0a-453ef41995ce"
+      ],
+      "reason": "公式手引きの卒業単位算入規則・政治学（S）2単位と通常教育課程表を照合し、法律学科の専門教育・選択へ接続する。他学科・共通scopeへは接続しない。offering identityは変更しない。免許要件の判定や重複履修の許可を意味しない。",
+      "evidence": [
+        {
+          "title": "法政大学通信教育部 教員免許状取得の手引き［新法］（2026年3月修正）",
+          "url": "https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/202604tebiki.pdf",
+          "printedPages": [
+            3,
+            8,
+            41
+          ],
+          "finding": "PDF通算6・11・44ページ。教職専門科目は卒業所要単位外。教科専門科目は所属学科の教育課程表にない場合に卒業所要単位外。法律学科・高校公民（2022年度以降）の政治学（S）は2単位、法学（日本国憲法）・法学・国際法総論3科目の代わりに1科目必修、1回2単位まで計上。"
+        },
+        {
+          "title": "法政大学通信教育部 2026年度 学習のしおり",
+          "url": "https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026.pdf",
+          "printedPages": [
+            46
+          ],
+          "finding": "法律学科の通常教育課程表に政治学2単位、専門教育・スクーリング選択科目を掲載。既存mappingと照合。"
+        }
+      ]
+    }
+  ]
+}
