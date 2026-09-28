@@ -271,6 +271,53 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
 type Totals = { earned: number; inProgress: number; planned: number; courses: Set<string> };
 const emptyTotals = (): Totals => ({ earned: 0, inProgress: 0, planned: 0, courses: new Set() });
 
+type ElectiveOverflowRule = { threshold: number; requiredCourses: number | null };
+
+/**
+ * The curriculum table is the source of truth for an 選択必修 excess transfer.
+ * Do not duplicate department-specific thresholds in the card implementation:
+ * a stale constant here could make the displayed elective bucket disagree with
+ * the structured official rule retained in the catalog.
+ */
+function electiveOverflowRule(catalog: PlannerCatalog, scopeId: string): ElectiveOverflowRule | null {
+  const requirement = catalog.requirements.find((candidate): candidate is StructuredRequirement =>
+    candidate.status === 'structured'
+      && candidate.scopeId === scopeId
+      && candidate.ruleType === 'overflow_credit_transfer'
+      && candidate.target.curriculum_category === '専門教育'
+      && candidate.target.requirement_type === '選択'
+      && candidate.conditions?.transfer === 'excess_only'
+      && candidate.conditions.double_count === false
+      && candidate.conditions.from?.curriculum_category === '専門教育'
+      && candidate.conditions.from?.requirement_type === '選択必修'
+      && candidate.conditions.to?.curriculum_category === '専門教育'
+      && candidate.conditions.to?.requirement_type === '選択'
+      && typeof candidate.conditions.threshold?.credits === 'number'
+      && candidate.conditions.threshold.credits >= 0,
+  );
+  if (!requirement) return null;
+  return {
+    threshold: requirement.conditions!.threshold!.credits,
+    requiredCourses: typeof requirement.conditions!.requires_completed_courses === 'number'
+      ? requirement.conditions!.requires_completed_courses
+      : null,
+  };
+}
+
+function requiredElectiveCreditTarget(catalog: PlannerCatalog, scopeId: string): number | null {
+  const requirement = catalog.requirements.find((candidate): candidate is StructuredRequirement =>
+    candidate.status === 'structured'
+      && candidate.scopeId === scopeId
+      && candidate.ruleType === 'min_credits'
+      && candidate.target.curriculum_category === '専門教育'
+      && candidate.target.requirement_type === '選択必修'
+      && candidate.target.curriculum_field === undefined
+      && typeof candidate.value === 'number'
+      && candidate.value >= 0,
+  );
+  return requirement?.value ?? null;
+}
+
 function addOfferingTotals(totals: Totals, item: PlannerItem, offering: Offering) {
   if (item.status === 'earned') {
     totals.earned += offering.credits!;
@@ -463,6 +510,11 @@ function professionalCards(
     : ambiguous.size ? '専門教育の区分が複数ある科目があるため自動配分を保留しています'
         : incompleteMetadata.size ? 'カリキュラム科目の構成単位が未設定のため卒業算入を保留しています'
         : legacyRepeatable.size ? '複数回の卒業算入があり得る科目を安全に判定できないため保留しています' : null;
+  const overflowRule = electiveOverflowRule(catalog, scopeId);
+  const requiredElectiveTarget = requiredElectiveCreditTarget(catalog, scopeId);
+  const overflowRuleReason = overflowRule === null
+    ? '選択必修超過分を選択へ算入する公式ルールを安全に特定できません。'
+    : baseReason;
   const make = (id: string, label: string, totals: Totals, target: number | null, satisfied: boolean,
     details?: ProgressCard['details'], note?: string, reason = baseReason): ProgressCard => ({
     requirementId: id, label, ruleType: 'professional_group',
@@ -497,12 +549,14 @@ function professionalCards(
 
   if (program.department === '日本文学科') {
     const required = normal('必修'), requiredElective = normal('選択必修');
-    const elective = withOverflow(normal('選択'), requiredElective, 20);
+    const requiredElectiveTargetValue = requiredElectiveTarget ?? 20;
+    const threshold = overflowRule?.threshold ?? 0;
+    const elective = withOverflow(normal('選択'), requiredElective, threshold);
     return [
       { ...make('professional-required', '専門教育：必修', required, 20, required.earned >= 20), partialCourses: partialCourses('必修') },
-      { ...make('professional-required-elective', '専門教育：選択必修', requiredElective, 20, requiredElective.earned >= 20), partialCourses: partialCourses('選択必修') },
+      { ...make('professional-required-elective', '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, requiredElective.earned >= requiredElectiveTargetValue), partialCourses: partialCourses('選択必修') },
       { ...make('professional-elective', '専門教育：選択', elective, 24, elective.earned >= 24, undefined,
-        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, 20)}単位${publicCourseBreakdown()}。超過分は選択必修の達成値には重ねて算入しません。`), partialCourses: partialCourses('選択') },
+        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。超過分は選択必修の達成値には重ねて算入しません。`, overflowRuleReason), partialCourses: partialCourses('選択') },
     ];
   }
 
@@ -535,7 +589,9 @@ function professionalCards(
 
   if (program.department === '地理学科') {
     const required = normal('必修'), schooling = normal('スクーリング必修'), requiredElective = normal('選択必修');
-    const elective = withOverflow(normal('選択'), requiredElective, 36);
+    const requiredElectiveTargetValue = requiredElectiveTarget ?? 36;
+    const threshold = overflowRule?.threshold ?? 0;
+    const elective = withOverflow(normal('選択'), requiredElective, threshold);
     const human = normal('選択必修:人文地理の分野'), natural = normal('選択必修:自然地理の分野'), regional = normal('選択必修:地誌・その他の分野');
     const fieldsMet = human.earned >= 8 && human.courses.size >= 2 && natural.earned >= 8 && natural.courses.size >= 2 && regional.earned >= 16;
     const specialEarned = (kind: string) => specialRows.filter(row => row.kind === kind && row.item.status === 'earned')
@@ -545,17 +601,20 @@ function professionalCards(
     return [
       { ...make('professional-geography-required', '専門教育：必修', required, 12, required.earned >= 12), partialCourses: partialCourses('必修') },
       { ...make('professional-geography-schooling-required', '専門教育：スクーリング必修', schooling, 6, schooling.earned >= 6), partialCourses: partialCourses('スクーリング必修') },
-      { ...make('professional-geography-required-elective', '専門教育：選択必修', requiredElective, 36, requiredElective.earned >= 36 && fieldsMet,
+      { ...make('professional-geography-required-elective', '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, requiredElective.earned >= requiredElectiveTargetValue && fieldsMet,
         [detail('人文地理：2科目・8単位以上', human, 8), detail('自然地理：2科目・8単位以上', natural, 8), detail('地誌・その他：16単位以上', regional, 16)],
         '人文・自然はそれぞれ科目数も満たす必要があります。2013年度以前の救済措置は自動判定しません。'), partialCourses: partialCourses('選択必修') },
       { ...make('professional-geography-elective', '専門教育：選択', elective, 12, elective.earned >= 12, undefined,
-        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, 36)}単位${publicCourseBreakdown()}。現地研究は必修2単位＋選択2単位まで${fieldStudyEarned > 4 ? `（超過${fieldStudyEarned - 4}単位は修得済みだが卒業算入外）` : ''}。人文・自然地理学特講は合算4単位まで${geographyLectureEarned > 4 ? `（超過${geographyLectureEarned - 4}単位は修得済みだが卒業算入外）` : ''}。`), partialCourses: partialCourses('選択') },
+        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。現地研究は必修2単位＋選択2単位まで${fieldStudyEarned > 4 ? `（超過${fieldStudyEarned - 4}単位は修得済みだが卒業算入外）` : ''}。人文・自然地理学特講は合算4単位まで${geographyLectureEarned > 4 ? `（超過${geographyLectureEarned - 4}単位は修得済みだが卒業算入外）` : ''}。`, overflowRuleReason), partialCourses: partialCourses('選択') },
     ];
   }
 
   if (program.department === '法律学科') {
     const requiredElective = normal('選択必修');
-    const qualifies = requiredElective.earned >= 32 && requiredElective.courses.size >= 8;
+    const requiredElectiveTargetValue = requiredElectiveTarget ?? 32;
+    const threshold = overflowRule?.threshold ?? 0;
+    const requiredCourses = overflowRule?.requiredCourses ?? 0;
+    const qualifies = requiredElective.earned >= requiredElectiveTargetValue && requiredElective.courses.size >= requiredCourses;
     // p.47 b: after the eight completed required-elective courses / 32 credits,
     // a 2-credit schooling completion of a 4-credit required-elective or elective
     // course can count toward graduation. Do not generalize this to other partials.
@@ -563,27 +622,29 @@ function professionalCards(
       .filter(entry => ['選択必修', '選択'].includes(entry.mapping.requirementType ?? '')
         && entry.mapping.curriculumCredits === 4 && entry.earned === 2 && entry.earnedSchooling === 2)
       .reduce((sum, entry) => sum + entry.earned, 0) : 0;
-    const elective = { ...withOverflow(normal('選択'), requiredElective, 32), earned: withOverflow(normal('選択'), requiredElective, 32).earned + permittedPartial };
+    const overflowElective = withOverflow(normal('選択'), requiredElective, threshold);
+    const elective = { ...overflowElective, earned: overflowElective.earned + permittedPartial };
     return [
-      { ...make('professional-law-required-elective', '専門教育：選択必修', requiredElective, 32, qualifies,
+      { ...make('professional-law-required-elective', '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, qualifies,
         [detail('選択必修科目数', requiredElective, 8, 'courses')], '8科目かつ32単位が必要です。'), partialCourses: partialCourses('選択必修') },
       { ...makeKnownUnknown('professional-law-elective', '専門教育：選択（卒業算入見込み）', elective, undefined,
-        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, 32)}単位${publicCourseBreakdown()} + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 ${permittedPartial}単位。卒業論文の選択により必要単位が50/54単位で変わるため、ここでは達成判定しません。`,
-        '卒業論文の選択状況をPlannerStateで保持していないため自動判定できません。'), partialCourses: partialCourses('選択') },
+        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()} + ${requiredCourses}科目${threshold}単位達成後に認められる4単位科目のスクーリング部分修得 ${permittedPartial}単位。卒業論文の選択により必要単位が50/54単位で変わるため、ここでは達成判定しません。`,
+        overflowRule === null ? (overflowRuleReason ?? '選択必修超過分の公式ルールを確認できません。') : '卒業論文の選択状況をPlannerStateで保持していないため自動判定できません。'), partialCourses: partialCourses('選択') },
       make('professional-law-schooling', '専門教育：スクーリング', emptyTotals(), 8, false, undefined,
         '＊印以外のみを数える必要があります。現行offeringには＊印を識別するデータがないため自動判定しません。',
         '＊印除外と4単位科目の部分修得例外を安全に識別できません。'),
     ];
   }
 
-  const threshold = program.department === '経済学科' ? 24 : 20;
+  const threshold = overflowRule?.threshold ?? 0;
+  const requiredElectiveTargetValue = requiredElectiveTarget ?? threshold;
   const requiredElective = normal('選択必修');
   const elective = withOverflow(normal('選択'), requiredElective, threshold);
   return [
-    { ...make(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-required-elective`, '専門教育：選択必修', requiredElective, threshold, requiredElective.earned >= threshold), partialCourses: partialCourses('選択必修') },
+    { ...make(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-required-elective`, '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, requiredElective.earned >= requiredElectiveTargetValue), partialCourses: partialCourses('選択必修') },
     { ...makeKnownUnknown(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-elective`, '専門教育：選択（卒業算入見込み）', elective, undefined,
         `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。専門教育82単位には卒業論文を含むため、ここでは達成判定しません。`,
-      '卒業論文を含む選択必要量の内訳をPlannerStateで安全に判定できません。'), partialCourses: partialCourses('選択') },
+      overflowRule === null ? (overflowRuleReason ?? '選択必修超過分の公式ルールを確認できません。') : '卒業論文を含む選択必要量の内訳をPlannerStateで安全に判定できません。'), partialCourses: partialCourses('選択') },
   ];
 }
 

@@ -902,7 +902,17 @@ function professionalFixture(department, mappingRows, offeringRows) {
       offerings: offeringRows.map(([id, credits, mappingIds, method = 'correspondence']) => ({
         ...baseOffering, id, name: id, credits, method, resolutionStatus: 'matched', mappingIds,
       })),
-      requirements: [],
+      // Professional cards read the official overflow definition rather than
+      // copying a department threshold into the fixture.
+      requirements: catalog.requirements.filter(requirement => requirement.status === 'structured'
+        && requirement.scopeId === program.scopeId
+        && (requirement.ruleType === 'overflow_credit_transfer'
+          || (requirement.ruleType === 'min_credits'
+            && requirement.target.curriculum_category === '専門教育'
+            && requirement.target.requirement_type === '選択必修'))).map(requirement => ({
+        ...requirement,
+        conditions: structuredClone(requirement.conditions),
+      })),
     },
   };
 }
@@ -974,6 +984,21 @@ test('law, economics and commerce use their official required-elective threshold
   const required = calculateGraduationProgress(law.catalog.offerings.map(o => item(o.id, 'earned')), law.catalog, law.scope).cards.find(row => row.requirementId === 'professional-law-required-elective');
   assert.equal(required.details[0].earned, 8);
   assert.equal(required.status, 'satisfied');
+});
+
+test('professional overflow is driven by the structured official rule and never double counts its threshold', () => {
+  const fixture = professionalFixture('商業学科', [
+    ...Array.from({ length: 7 }, (_, index) => [`required-${index}`, '選択必修']), ['elective', '選択'],
+  ], Array.from({ length: 7 }, (_, index) => [`required-${index}`, 4, [`required-${index}`]]));
+  const rule = fixture.catalog.requirements.find(requirement => requirement.ruleType === 'overflow_credit_transfer');
+  rule.conditions.threshold.credits = 24;
+  const items = fixture.catalog.offerings.map(offering => item(offering.id, 'earned'));
+  const progress = calculateGraduationProgress(items, fixture.catalog, fixture.scope);
+  const required = progress.cards.find(row => row.requirementId === 'professional-commerce-required-elective');
+  const elective = progress.cards.find(row => row.requirementId === 'professional-commerce-elective');
+  assert.equal(required.earned, 20); // the 20-credit requirement remains capped at its own target
+  assert.equal(elective.earned, 4); // 28 earned - catalog transfer threshold 24
+  assert.equal(progress.graduationCheckComplete, false);
 });
 
 test('professional progress completes curriculum mappings before counting credits or courses', () => {
