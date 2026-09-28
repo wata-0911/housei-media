@@ -188,6 +188,18 @@ export type PlannerTodo = {
   done: boolean;
 };
 
+export type MediaLessonProgress = {
+  lesson: number;
+  videoCompleted: boolean;
+  testCompleted: boolean;
+};
+
+export type MediaCourseProgress = {
+  offeringId: string;
+  totalLessons: number | null;
+  lessons: Array<MediaLessonProgress>;
+};
+
 export type PublicCourse = {
   id: string;
   title: string;
@@ -199,12 +211,14 @@ export type PublicCourse = {
 };
 
 export type PlannerState = {
-  schemaVersion: 4;
+  schemaVersion: 5;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
   publicCourses: Array<PublicCourse>;
   todos: Array<PlannerTodo>;
+  /** Kept after plan removal so a later re-add/Undo restores the learner's progress. */
+  mediaSchoolingProgress: Record<string, MediaCourseProgress>;
 };
 
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';
