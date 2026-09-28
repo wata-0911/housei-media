@@ -200,6 +200,16 @@ export type MediaCourseProgress = {
   offeringId: string;
   totalLessons: number | null;
   lessons: Array<MediaLessonProgress>;
+  assessments: Array<MediaAssessment>;
+};
+
+export type MediaAssessment = {
+  id: string;
+  type: 'midterm' | 'final' | 'other';
+  /** Used for `other`; retained for the other types too so a record can be edited safely. */
+  label: string;
+  scheduledDate: string | null;
+  completed: boolean;
 };
 
 export type CourseGrade = 'S' | 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D';
@@ -239,7 +249,7 @@ export type PublicCourse = {
 };
 
 export type PlannerState = {
-  schemaVersion: 8;
+  schemaVersion: 9;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;

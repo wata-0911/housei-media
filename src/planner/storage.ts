@@ -3,7 +3,7 @@ import { validateState } from './validation';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 8, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {} });
+export const initialState = (): PlannerState => ({ schemaVersion: 9, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {} });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null };
 
@@ -36,15 +36,22 @@ function migrateState(value: unknown): unknown {
   const v3 = v2.schemaVersion === 2 ? { ...v2, schemaVersion: 3, publicCourses: [] } : v2;
   const v4 = v3.schemaVersion === 3 ? { ...v3, schemaVersion: 4, thesisSelection: 'undecided' } : v3;
   const v5 = v4.schemaVersion === 4 ? { ...v4, schemaVersion: 5, mediaSchoolingProgress: {} } : v4;
-  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7) return value;
+  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7 && v5.schemaVersion !== 8) return value;
   const v6 = v5.schemaVersion === 5 ? { ...v5, schemaVersion: 6, courseEvaluations: {} } : v5;
   const v7 = v6.schemaVersion === 6 ? { ...v6, schemaVersion: 7, correspondenceProgress: {} } : v6;
+  if (v7.schemaVersion === 8) return {
+    ...v7,
+    schemaVersion: 9,
+    mediaSchoolingProgress: typeof v7.mediaSchoolingProgress === 'object' && v7.mediaSchoolingProgress !== null && !Array.isArray(v7.mediaSchoolingProgress)
+      ? Object.fromEntries(Object.entries(v7.mediaSchoolingProgress).map(([id, progress]) => [id, typeof progress === 'object' && progress !== null && !Array.isArray(progress) ? { ...progress as Record<string, unknown>, assessments: [] } : progress]))
+      : v7.mediaSchoolingProgress,
+  };
   if (v7.schemaVersion !== 7) return value;
   // Keep all existing records and intentionally leave finalGrade empty: legacy
   // report/schooling grades represent different assessment stages.
   return {
     ...v7,
-    schemaVersion: 8,
+    schemaVersion: 9,
     items: (v7.items as unknown[]).map(item => typeof item === 'object' && item !== null && !Array.isArray(item)
       ? { ...item as Record<string, unknown>, studyYear: null } : item),
     publicCourses: Array.isArray(v7.publicCourses) ? v7.publicCourses.map(course => typeof course === 'object' && course !== null && !Array.isArray(course)
@@ -52,6 +59,9 @@ function migrateState(value: unknown): unknown {
     courseEvaluations: typeof v7.courseEvaluations === 'object' && v7.courseEvaluations !== null && !Array.isArray(v7.courseEvaluations)
       ? Object.fromEntries(Object.entries(v7.courseEvaluations).map(([id, evaluation]) => [id, typeof evaluation === 'object' && evaluation !== null && !Array.isArray(evaluation) ? { ...evaluation as Record<string, unknown>, finalGrade: null } : evaluation]))
       : v7.courseEvaluations,
+    mediaSchoolingProgress: typeof v7.mediaSchoolingProgress === 'object' && v7.mediaSchoolingProgress !== null && !Array.isArray(v7.mediaSchoolingProgress)
+      ? Object.fromEntries(Object.entries(v7.mediaSchoolingProgress).map(([id, progress]) => [id, typeof progress === 'object' && progress !== null && !Array.isArray(progress) ? { ...progress as Record<string, unknown>, assessments: [] } : progress]))
+      : v7.mediaSchoolingProgress,
   };
 }
 

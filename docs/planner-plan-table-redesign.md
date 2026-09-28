@@ -27,7 +27,13 @@ v8で `CourseEvaluation.finalGrade` を追加した。これは科目として�
 - `courseEvaluations.finalGrade`: 科目の最終評価
 - `courseEvaluations.reportGrade` / `schoolingGrade`: 既存のmethod別・legacy記録として保持
 
-v7からv8への移行では、既存データを保持し、`studyYear` と `finalGrade` はすべて `null` で追加する。legacy評価から最終評価を自動算出・移行しない。localStorage keyは引き続き `hosei-planner:v1`。
+v7からv8への移行では、既存データを保持し、`studyYear` と `finalGrade` はすべて `null` で追加する。legacy評価から最終評価を自動算出・移行しない。続くv9では各既存メディア進捗に空の `assessments` 配列を追加する。localStorage keyは引き続き `hosei-planner:v1`。
+
+## メディアの講義回数と試験予定
+
+`totalLessons` は科目ごとに任意で、未設定時に14回を仮定しない。入力では14回・15回を選べ、その他の回数も手入力できる。将来、安全に科目別の一次情報を対応付けられた場合だけ自動設定できるよう、値は引き続き進捗stateに保持する。
+
+メディアの試験・評価予定も任意である。`assessments` は中間試験、期末試験、その他の名称・日程・実施済み状態を記録するだけであり、科目ごとの試験有無や方式・日付をアプリ側で推測しない。利用時は常に最新の「法政通信」を確認する。共有画面では既存の進捗のみテンプレートを維持し、必要な場合だけ試験予定を含めるテンプレートを選べる。
 
 ## 表・公開科目・削除
 
