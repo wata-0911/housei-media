@@ -13,6 +13,7 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
 import { stateForScopeChange, supportsThesisSelection, thesisPolicyForScope } from '../src/planner/thesisSelection.ts';
+import { isMediaSchooling, mediaPlanItems, mediaProgressSummary, setTotalLessons, toggleLesson } from '../src/planner/mediaSchooling.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -419,7 +420,7 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 5 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 6 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
@@ -921,7 +922,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   const store = memoryStore(JSON.stringify(v1));
   const loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 4);
+  assert.equal(loaded.state.schemaVersion, 5);
   assert.equal(loaded.state.items[0].earnedOrder, null);
   assert.deepEqual(loaded.state.publicCourses, []);
   assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
@@ -929,22 +930,62 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   delete v2.publicCourses;
   const v2Loaded = loadState(memoryStore(JSON.stringify(v2)), catalog);
   assert.equal(v2Loaded.error, null);
-  assert.equal(v2Loaded.state.schemaVersion, 4);
+  assert.equal(v2Loaded.state.schemaVersion, 5);
   assert.deepEqual(v2Loaded.state.publicCourses, []);
 });
 
-test('v3 state migrates to v4 without losing saved planner data, and validation permits only thesis choices', () => {
+test('v3 state migrates through v5 without losing saved planner data, and validation permits only thesis choices', () => {
   const current = { ...initialState(), selectedScopeId: catalog.programs[0].scopeId, items: [item(first.id)], publicCourses: [publicCourse('11111111-1111-4111-8111-111111111111')], todos: [{ id: first.id, offeringId: null, text: '保持', done: false }] };
   const v3 = { ...current, schemaVersion: 3 };
   delete v3.thesisSelection;
   const loaded = loadState(memoryStore(JSON.stringify(v3)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 4);
+  assert.equal(loaded.state.schemaVersion, 5);
   assert.equal(loaded.state.thesisSelection, 'undecided');
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: current.items, publicCourses: current.publicCourses, todos: current.todos, selectedScopeId: current.selectedScopeId });
   assert.equal(validateState({ ...current, thesisSelection: 'selected' }, catalog), true);
   assert.equal(validateState({ ...current, thesisSelection: 'not_selected' }, catalog), true);
   assert.equal(validateState({ ...current, thesisSelection: 'maybe' }, catalog), false);
+});
+
+test('media schooling uses structured method and delivery category, not course names', () => {
+  const media = catalog.offerings.find(isMediaSchooling);
+  const nonMedia = catalog.offerings.find(offering => !isMediaSchooling(offering));
+  assert.ok(media);
+  assert.equal(media.method, 'schooling');
+  assert.match(media.deliveryCategory, /^(前期|後期)メディア$/);
+  assert.equal(isMediaSchooling({ ...media, name: '別名', deliveryCategory: '夏期' }), false);
+  assert.equal(isMediaSchooling(nonMedia), false);
+  assert.deepEqual(mediaPlanItems([item(media.id), item(nonMedia.id)], offeringsById).map(entry => entry.offeringId), [media.id]);
+});
+
+test('media progress stores independent toggles, calculates rate, safely limits shrinking, and survives plan removal/re-add', () => {
+  const media = catalog.offerings.find(isMediaSchooling);
+  let course = { offeringId: media.id, totalLessons: null, lessons: [] };
+  course = setTotalLessons(course, 3);
+  course = toggleLesson(course, 1, 'videoCompleted');
+  course = toggleLesson(course, 1, 'testCompleted');
+  assert.deepEqual(mediaProgressSummary(course), { video: 1, test: 1, percent: 33 });
+  assert.equal(setTotalLessons(course, 0), null);
+  assert.equal(setTotalLessons(course, null).totalLessons, null);
+  assert.equal(setTotalLessons(course, 0), null);
+  assert.equal(setTotalLessons({ ...course, lessons: [...course.lessons, { lesson: 3, videoCompleted: true, testCompleted: false }] }, 2), null);
+  const state = { ...initialState(), items: [item(media.id)], mediaSchoolingProgress: { [media.id]: course } };
+  assert.equal(validateState(state, catalog), true);
+  assert.deepEqual(mediaPlanItems([], offeringsById), []);
+  assert.equal(state.mediaSchoolingProgress[media.id].lessons[0].videoCompleted, true);
+});
+
+test('v4 migration adds empty media progress without losing items, public courses, thesis choice, or earned order', () => {
+  const media = catalog.offerings.find(isMediaSchooling);
+  const saved = { ...initialState(), schemaVersion: 4, selectedScopeId: catalog.programs[0].scopeId, thesisSelection: 'selected', items: [{ ...item(media.id, 'earned'), earnedOrder: null }], publicCourses: [publicCourse('22222222-2222-4222-8222-222222222222')], todos: [{ id: media.id, offeringId: media.id, text: '保持', done: false }] };
+  delete saved.mediaSchoolingProgress;
+  const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.state.schemaVersion, 5);
+  assert.deepEqual(loaded.state.mediaSchoolingProgress, {});
+  assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
+  assert.deepEqual(calculateGraduationProgress(loaded.state.items, catalog, loaded.state.selectedScopeId, loaded.state.publicCourses, loaded.state.thesisSelection), calculateGraduationProgress(saved.items, catalog, saved.selectedScopeId, saved.publicCourses, saved.thesisSelection));
 });
 
 test('law thesis selection safely switches catalog targets without showing both branches', () => {

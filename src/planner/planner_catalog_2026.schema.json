@@ -986,7 +986,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 4
+          "const": 5
         },
         "selectedScopeId": {
           "anyOf": [
@@ -1018,6 +1018,31 @@
           "items": {
             "$ref": "#/$defs/PlannerTodo"
           }
+        },
+        "mediaSchoolingProgress": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "offeringId": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+              "totalLessons": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 200 }, { "type": "null" }] },
+              "lessons": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "lesson": { "type": "integer", "minimum": 1, "maximum": 200 },
+                    "videoCompleted": { "type": "boolean" },
+                    "testCompleted": { "type": "boolean" }
+                  },
+                  "required": ["lesson", "videoCompleted", "testCompleted"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["offeringId", "totalLessons", "lessons"],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -1026,7 +1051,8 @@
         "thesisSelection",
         "items",
         "publicCourses",
-        "todos"
+        "todos",
+        "mediaSchoolingProgress"
       ],
       "additionalProperties": false
     },
