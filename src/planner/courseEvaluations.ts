@@ -5,7 +5,7 @@ export const COURSE_GRADES: CourseGrade[] = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B
 export const gradeLabel = (grade: CourseGrade) => grade.replace('+', '＋').replace('-', '－');
 
 export function evaluationFor(offeringId: string, evaluations: Record<string, CourseEvaluation>): CourseEvaluation {
-  return evaluations[offeringId] ?? { offeringId, reportGrade: null, schoolingGrade: null };
+  return evaluations[offeringId] ?? { offeringId, finalGrade: null, reportGrade: null, schoolingGrade: null };
 }
 
 export function evaluationItems(items: PlannerItem[], offerings: Map<string, Offering>): PlannerItem[] {

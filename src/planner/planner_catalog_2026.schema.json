@@ -916,8 +916,8 @@
               "type": "null"
             }
           ]
-        }
-        ,
+        },
+        "studyYear": { "anyOf": [{ "enum": [1, 2, 3, 4] }, { "type": "null" }] },
         "earnedOrder": {
           "anyOf": [
             { "enum": [1, 2, 3, 4] },
@@ -930,6 +930,7 @@
         "status",
         "plannedYear",
         "plannedTerm",
+        "studyYear",
         "earnedOrder"
       ],
       "additionalProperties": false
@@ -977,16 +978,18 @@
         "status": { "enum": ["planned", "in_progress", "waiting", "earned", "failed", "dropped"] },
         "plannedYear": { "anyOf": [{ "type": "integer" }, { "type": "null" }] },
         "plannedTerm": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "studyYear": { "anyOf": [{ "enum": [1, 2, 3, 4] }, { "type": "null" }] },
+        "finalGrade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"] }, { "type": "null" }] },
         "credits": { "const": 2 }
       },
-      "required": ["id", "title", "status", "plannedYear", "plannedTerm", "credits"],
+      "required": ["id", "title", "status", "plannedYear", "plannedTerm", "studyYear", "finalGrade", "credits"],
       "additionalProperties": false
     },
     "PlannerState": {
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 7
+          "const": 8
         },
         "selectedScopeId": {
           "anyOf": [
@@ -1050,10 +1053,11 @@
             "type": "object",
             "properties": {
               "offeringId": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+              "finalGrade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"] }, { "type": "null" }] },
               "reportGrade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"] }, { "type": "null" }] },
               "schoolingGrade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"] }, { "type": "null" }] }
             },
-            "required": ["offeringId", "reportGrade", "schoolingGrade"],
+            "required": ["offeringId", "finalGrade", "reportGrade", "schoolingGrade"],
             "additionalProperties": false
           }
         },
