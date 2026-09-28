@@ -9,9 +9,10 @@ import GraduationProgress from '../components/planner/GraduationProgress';
 import { catalog, offeringsById } from '../planner/catalog';
 import { summarizeCredits } from '../planner/calculations';
 import { initialState, loadState, recoverState, saveState, STORAGE_KEY, type LoadResult } from '../planner/storage';
-import type { PlannerItem, PlannerState } from '../planner/plannerCatalog';
+import type { PlannerItem, PlannerState, PublicCourse } from '../planner/plannerCatalog';
 import { calculateGraduationProgress } from '../planner/graduationProgress';
-import { removePlannerItem, restorePlannerItem, type RemovedPlannerItem } from '../planner/removeUndo';
+import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
+import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/publicCourses';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -31,10 +32,10 @@ export default function PlannerPage() {
   const [loaded, setLoaded] = useState(readSavedState);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
-  const [undoItem, setUndoItem] = useState<RemovedPlannerItem | null>(null);
+  const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
-  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId);
+  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -71,25 +72,49 @@ export default function PlannerPage() {
       : item) }, '履修計画を保存しました。');
   }
 
+  function newPublicCourseId() {
+    return crypto.randomUUID();
+  }
+
+  function addPublicCourse() {
+    const course = createPublicCourse(newPublicCourseId());
+    commit({ ...state, publicCourses: [...state.publicCourses, course] }, `「${course.title}」を公開科目として追加・保存しました。`);
+  }
+
+  function changePublicCourse(id: string, patch: Partial<Omit<PublicCourse, 'id' | 'credits'>>) {
+    const title = patch.title === undefined ? undefined : normalizePublicCourseTitle(patch.title);
+    if (title !== undefined && !isValidPublicCourseTitle(title)) return;
+    commit({ ...state, publicCourses: state.publicCourses.map(course => course.id === id ? { ...course, ...patch, ...(title === undefined ? {} : { title }) } : course) }, '公開科目を保存しました。');
+  }
+
   function removeItem(id: string) {
     const removed = removePlannerItem(state.items, id);
     if (!removed) return;
     const offering = offeringsById.get(id);
     if (commit({ ...state, items: state.items.filter(item => item.offeringId !== id) }, `「${offering?.name ?? '科目'}」を履修計画から削除しました。`)) {
-      setUndoItem(removed);
+      setUndoItem({ kind: 'item', removed });
     }
+  }
+
+  function removePublic(id: string) {
+    const removed = removePublicCourse(state.publicCourses, id);
+    if (!removed) return;
+    if (commit({ ...state, publicCourses: state.publicCourses.filter(course => course.id !== id) }, `「${removed.course.title}」を公開科目から削除しました。`)) setUndoItem({ kind: 'publicCourse', removed });
   }
 
   function undoRemove() {
     if (!undoItem) return;
-    const restoredItems = restorePlannerItem(state.items, undoItem);
-    const offering = offeringsById.get(undoItem.item.offeringId);
-    if (restoredItems === null) {
-      setUndoItem(null);
-      setNotice(`「${offering?.name ?? '科目'}」はすでに履修計画へ追加されているため、元に戻しませんでした。`);
+    if (undoItem.kind === 'item') {
+      const restored = restorePlannerItem(state.items, undoItem.removed);
+      const label = offeringsById.get(undoItem.removed.item.offeringId)?.name ?? '科目';
+      if (restored === null) { setUndoItem(null); setNotice(`「${label}」はすでに履修計画へ追加されているため、元に戻しませんでした。`); return; }
+      if (commit({ ...state, items: restored }, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
       return;
     }
-    if (commit({ ...state, items: restoredItems }, `「${offering?.name ?? '科目'}」を履修計画に元に戻しました。`)) setUndoItem(null);
+    const restored = restorePublicCourse(state.publicCourses, undoItem.removed);
+    const label = undoItem.removed.course.title;
+    if (restored === null) { setUndoItem(null); setNotice(`「${label}」はすでに履修計画へ追加されているため、元に戻しませんでした。`); return; }
+    if (commit({ ...state, publicCourses: restored }, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
   }
 
   function recover() {
@@ -128,16 +153,16 @@ export default function PlannerPage() {
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
       <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} disabled={loaded.error !== null} onChange={selectedScopeId => commit({ ...state, selectedScopeId }, '所属を保存しました。')} />
-      <CreditSummary summary={summarizeCredits(state.items, offeringsById)} />
-      {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId)} />}
+      <CreditSummary summary={summarizeCredits(state.items, offeringsById, state.publicCourses)} />
+      {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses)} />}
       {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}
       <div className="min-h-5 text-sm text-[#002255]">
         <p role="status" className="inline">{notice}</p>
         {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
       </div>
       <div className="grid lg:grid-cols-2 gap-6 items-start">
-        <CourseSearch classify={classify} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} />
-        <PlannedCourseList classify={classify} items={state.items} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} />
+        <CourseSearch classify={classify} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
+        <PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} />
       </div>
     </div>
   </div>;

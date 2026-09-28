@@ -1,14 +1,24 @@
 import ClassificationLabel from './ClassificationLabel';
 import type { createCreditClassifier } from '../../planner/annualPlan';
 import { useState } from 'react';
-import type { Offering, PlannerItem } from '../../planner/plannerCatalog';
+import type { Offering, PlannerItem, PublicCourse } from '../../planner/plannerCatalog';
 import { groupAnnualPlan, termOptions } from '../../planner/annualPlan';
 import { isHistorySeminar, historySeminarField } from '../../planner/historySeminar';
 
 const statuses: Record<PlannerItem['status'], string> = {
   planned: '計画中', in_progress: '履修中', waiting: '結果待ち', earned: '修得済み', failed: '不合格', dropped: '取りやめ',
 };
-type Props = { classify: ReturnType<typeof createCreditClassifier>; items: PlannerItem[]; offerings: Map<string, Offering>; disabled: boolean; onChange: (id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) => void; onRemove: (id: string) => void };
+type Props = {
+  classify: ReturnType<typeof createCreditClassifier>;
+  items: PlannerItem[];
+  publicCourses: PublicCourse[];
+  offerings: Map<string, Offering>;
+  disabled: boolean;
+  onChange: (id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) => void;
+  onRemove: (id: string) => void;
+  onChangePublicCourse: (id: string, patch: Partial<Omit<PublicCourse, 'id' | 'credits'>>) => void;
+  onRemovePublicCourse: (id: string) => void;
+};
 const control = 'w-full min-w-0 border border-gray-300 rounded-sm p-2 bg-white disabled:opacity-50';
 
 function YearEditor({ item, disabled, onChange }: { item: PlannerItem; disabled: boolean; onChange: Props['onChange'] }) {
@@ -31,15 +41,59 @@ function YearEditor({ item, disabled, onChange }: { item: PlannerItem; disabled:
   </form>;
 }
 
-export default function PlannedCourseList({ classify, items, offerings, disabled, onChange, onRemove }: Props) {
+function PublicCourseYearEditor({ course, disabled, onChange }: { course: PublicCourse; disabled: boolean; onChange: Props['onChangePublicCourse'] }) {
+  const [draft, setDraft] = useState(course.plannedYear?.toString() ?? '');
+  const [error, setError] = useState('');
+  return <form onSubmit={event => {
+    event.preventDefault();
+    const year = draft.trim() === '' ? null : Number(draft);
+    if (year !== null && (!/^\d{4}$/.test(draft) || year < 1900 || year > 9999)) { setError('年度は1900〜9999の整数で入力してください。'); return; }
+    setError(''); onChange(course.id, { plannedYear: year });
+  }}>
+    <label htmlFor={`public-year-${course.id}`} className="block text-sm mb-1">計画年度</label>
+    <div className="flex gap-2"><input id={`public-year-${course.id}`} inputMode="numeric" value={draft} disabled={disabled} onChange={event => setDraft(event.target.value)} placeholder="未設定" className={control} />
+      <button type="submit" disabled={disabled} className="shrink-0 border border-[#002255] px-2 text-sm disabled:opacity-50">保存</button></div>
+    {error && <p role="alert" className="text-sm text-red-700 mt-1">{error}</p>}
+  </form>;
+}
+
+function PublicCourseRow({ course, disabled, onChange, onRemove }: { course: PublicCourse; disabled: boolean; onChange: Props['onChangePublicCourse']; onRemove: Props['onRemovePublicCourse'] }) {
+  const [title, setTitle] = useState(course.title);
+  const [titleError, setTitleError] = useState('');
+  const saveTitle = () => {
+    const normalized = title.trim();
+    if (!normalized) { setTitleError('科目名を入力してください。'); return; }
+    if (normalized.length > 200) { setTitleError('科目名は200文字以内で入力してください。'); return; }
+    setTitleError(''); setTitle(normalized); onChange(course.id, { title: normalized });
+  };
+  return <li className="py-4 min-w-0">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0"><h5 className="font-medium break-words">{course.title}</h5><p className="text-sm text-gray-600 my-2">他学部・他学科公開科目 / 2単位</p></div>
+      <button type="button" onClick={() => onRemove(course.id)} disabled={disabled} aria-label={`${course.title}を履修計画から削除`} title={`${course.title}を履修計画から削除`} className="shrink-0 rounded-sm p-2 text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50">🗑</button>
+    </div>
+    <p className="text-xs leading-relaxed text-amber-800 bg-amber-50 p-3 mb-3">同じ実開講を通常のcatalog科目と公開科目の両方に登録すると二重記録になります。どちらか一方だけを追加してください。</p>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div><label htmlFor={`public-title-${course.id}`} className="block text-sm mb-1">科目名</label>
+        <input id={`public-title-${course.id}`} value={title} maxLength={200} disabled={disabled} onChange={event => { setTitle(event.target.value); setTitleError(''); }} onBlur={saveTitle} className={control} aria-describedby={titleError ? `public-title-error-${course.id}` : undefined} />
+        {titleError && <p id={`public-title-error-${course.id}`} role="alert" className="text-sm text-red-700 mt-1">{titleError}</p>}</div>
+      <PublicCourseYearEditor key={`${course.id}-${course.plannedYear}`} course={course} disabled={disabled} onChange={onChange} />
+      <div><label htmlFor={`public-term-${course.id}`} className="block text-sm mb-1">計画期</label><input id={`public-term-${course.id}`} value={course.plannedTerm ?? ''} disabled={disabled} placeholder="未設定" onChange={event => onChange(course.id, { plannedTerm: event.target.value || null })} className={control} /></div>
+      <div><label htmlFor={`public-status-${course.id}`} className="block text-sm mb-1">履修状態</label><select id={`public-status-${course.id}`} value={course.status} disabled={disabled} onChange={event => onChange(course.id, { status: event.target.value as PublicCourse['status'] })} className={control}>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+    </div>
+  </li>;
+}
+
+export default function PlannedCourseList({ classify, items, publicCourses, offerings, disabled, onChange, onRemove, onChangePublicCourse, onRemovePublicCourse }: Props) {
   const terms = termOptions([...offerings.values()]);
+  const annualGroups = groupAnnualPlan(items, offerings);
+  const years = [...new Set([...items.map(item => item.plannedYear), ...publicCourses.map(course => course.plannedYear)])].sort((a, b) => a === null ? 1 : b === null ? -1 : a - b);
   return <section aria-labelledby="planned-heading" className="bg-white border border-gray-200 p-5 sm:p-7 min-w-0">
-    <h2 id="planned-heading" className="text-xl text-[#002255]">年間履修計画 <span className="text-sm">{items.length}件</span></h2>
+    <h2 id="planned-heading" className="text-xl text-[#002255]">年間履修計画 <span className="text-sm">{items.length + publicCourses.length}件</span></h2>
     <p className="text-sm text-gray-600 mt-3">計画年度・元データの開講区分ごとに表示します。計画期は予定の記録で、開講区分は変更しません。2026年以外の開講は保証されません。</p>
-    {items.length === 0 && <p className="text-gray-600 text-sm mt-5">科目を検索して、履修計画に追加してください。</p>}
-    {groupAnnualPlan(items, offerings).map(({ year, groups }) => <div key={year ?? 'unset'} className="mt-6">
+    {items.length + publicCourses.length === 0 && <p className="text-gray-600 text-sm mt-5">科目を検索して、履修計画に追加してください。</p>}
+    {years.map(year => <div key={year ?? 'unset'} className="mt-6">
       <h3 className="text-lg text-[#002255] border-b-2 border-[#002255] pb-2">{year === null ? '年度未設定' : `${year}年度`}</h3>
-      {groups.map(group => <div key={group.label} className="mt-4">
+      {(annualGroups.find(group => group.year === year)?.groups ?? []).map(group => <div key={group.label} className="mt-4">
         <h4 className="bg-slate-50 px-3 py-2 text-[#002255]">{group.label} <span className="text-sm">{group.items.length}件</span></h4>
         <ul className="divide-y divide-gray-100">
           {group.items.map(item => {
@@ -87,6 +141,12 @@ export default function PlannedCourseList({ classify, items, offerings, disabled
           })}
         </ul>
       </div>)}
+      {publicCourses.filter(course => course.plannedYear === year).length > 0 && <div className="mt-4">
+        <h4 className="bg-slate-50 px-3 py-2 text-[#002255]">公開科目 <span className="text-sm">{publicCourses.filter(course => course.plannedYear === year).length}件</span></h4>
+        <ul className="divide-y divide-gray-100">
+          {publicCourses.filter(course => course.plannedYear === year).map(course => <PublicCourseRow key={course.id} course={course} disabled={disabled} onChange={onChangePublicCourse} onRemove={onRemovePublicCourse} />)}
+        </ul>
+      </div>}
     </div>)}
   </section>;
 }

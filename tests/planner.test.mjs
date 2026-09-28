@@ -8,13 +8,16 @@ import { summarizeCredits, searchOfferings } from '../src/planner/calculations.t
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
-import { removePlannerItem, restorePlannerItem } from '../src/planner/removeUndo.ts';
+import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/removeUndo.ts';
+import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
+import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
   return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
 }
 const item = (offeringId, status = 'planned') => ({ offeringId, status, plannedYear: 2026, plannedTerm: null, earnedOrder: null });
+const publicCourse = (id, status = 'planned', title = `公開科目 ${id}`) => ({ id, title, status, plannedYear: 2026, plannedTerm: null, credits: 2 });
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
@@ -36,6 +39,14 @@ test('only the latest removal is undoable and restoring never duplicates a re-ad
   assert.equal(restorePlannerItem([item('two')], latestRemoved), null);
 });
 
+test('a removed public course restores every field at its original index', () => {
+  const courses = [publicCourse('11111111-1111-4111-8111-111111111111', 'planned', '先頭'), publicCourse('22222222-2222-4222-8222-222222222222', 'earned', '法律学特講［○○］')];
+  const removed = removePublicCourse(courses, courses[1].id);
+  assert.deepEqual(removed, { course: courses[1], index: 1 });
+  assert.deepEqual(restorePublicCourse([courses[0]], removed), courses);
+  assert.equal(restorePublicCourse(courses, removed), null);
+});
+
 test('a failed removal save leaves the saved plan unchanged for a later retry', () => {
   const state = { ...initialState(), items: [item(first.id), item(catalog.offerings[1].id)] };
   const raw = JSON.stringify(state);
@@ -51,6 +62,62 @@ test('catalog preserves all 686 offerings, 348 null course IDs and incomplete gr
   assert.equal(catalog.offerings.filter(o => o.courseId === null).length, 348);
   assert.equal(catalog.metadata.graduationCheckComplete, false);
   assert.equal(validateCatalog({ ...catalog, metadata: { ...catalog.metadata, graduationCheckComplete: true } }), false);
+});
+
+test('public course is a search-only synthetic result, not a catalog offering', () => {
+  assert.equal(matchesPublicCourseSearch('公開科目'), true);
+  assert.equal(matchesPublicCourseSearch('公開'), true);
+  assert.equal(matchesPublicCourseSearch('政治学'), false);
+  assert.equal(matchesPublicCourseSearch(''), false);
+  assert.equal(catalog.offerings.length, 686);
+  assert.equal(catalog.offerings.some(offering => offering.name === PUBLIC_COURSE_TITLE), false);
+});
+
+test('a public course can be added repeatedly with the agreed initial values', () => {
+  const firstPublic = createPublicCourse('11111111-1111-4111-8111-111111111111');
+  const secondPublic = createPublicCourse('22222222-2222-4222-8222-222222222222');
+  assert.deepEqual(firstPublic, { id: firstPublic.id, title: '公開科目', status: 'planned', plannedYear: 2026, plannedTerm: null, credits: 2 });
+  assert.equal([firstPublic, secondPublic].length, 2);
+});
+
+test('public course names are saved as real names and reject an empty title', () => {
+  assert.equal(normalizePublicCourseTitle(' 法律学特講［○○］ '), '法律学特講［○○］');
+  assert.equal(isValidPublicCourseTitle('法律学特講［○○］'), true);
+  assert.equal(isValidPublicCourseTitle(''), false);
+  assert.equal(isValidPublicCourseTitle('a'.repeat(201)), false);
+});
+
+test('2026 public-course limits are eight courses and sixteen credits for every documented department', () => {
+  for (const department of ['日本文学科', '史学科', '地理学科', '法律学科', '経済学科', '商業学科']) {
+    const scope = catalog.programs.find(program => program.department === department).scopeId;
+    assert.deepEqual(publicCourseLimitFor(catalog, scope), { maxCredits: 16, maxCourses: 8, sourcePage: {
+      日本文学科: 48, 史学科: 53, 地理学科: 55, 法律学科: 47, 経済学科: 57, 商業学科: 59,
+    }[department] });
+  }
+});
+
+test('public-course cap counts explicit earned records only and excludes a ninth course', () => {
+  const progress = evaluatePublicCourseLimit([
+    ...Array.from({ length: 9 }, (_, index) => publicCourse(`00000000-0000-4000-8000-00000000000${index}`, 'earned')),
+    publicCourse('10000000-0000-4000-8000-000000000000', 'planned'), publicCourse('20000000-0000-4000-8000-000000000000', 'in_progress'),
+    publicCourse('30000000-0000-4000-8000-000000000000', 'waiting'), publicCourse('40000000-0000-4000-8000-000000000000', 'failed'), publicCourse('50000000-0000-4000-8000-000000000000', 'dropped'),
+  ], { maxCredits: 16, maxCourses: 8, sourcePage: 1 });
+  assert.deepEqual(progress, {
+    earnedCredits: 18, countedCredits: 16, earnedCourses: 9, countedCourses: 8,
+    inProgressCredits: 2, plannedCredits: 2, excludedCredits: 2,
+    limit: { maxCredits: 16, maxCourses: 8, sourcePage: 1 },
+  });
+});
+
+test('explicit public courses have a calculable cap card and feed counted credits into professional elective', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const courses = Array.from({ length: 9 }, (_, index) => publicCourse(`60000000-0000-4000-8000-00000000000${index}`, 'earned'));
+  const progress = calculateGraduationProgress([], catalog, scope, courses);
+  const card = progress.cards.find(row => row.ruleType === 'public_course_limit');
+  assert.equal(card.status, 'satisfied');
+  assert.equal(card.target, 16);
+  assert.equal(card.publicCourse.excludedCredits, 2);
+  assert.equal(progress.cards.find(row => row.requirementId === 'professional-law-elective').earned, 16);
 });
 
 test('partial graduation progress uses earned only and includes common plus selected scope', () => {
@@ -232,13 +299,16 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 3 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 4 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
     JSON.stringify({ ...valid, items: [{ ...item(first.id), status: 'invalid' }] }),
     JSON.stringify({ ...valid, items: [{ ...item(first.id), plannedYear: '2026' }] }),
     JSON.stringify({ ...valid, todos: null }),
+    JSON.stringify({ ...valid, publicCourses: [publicCourse('70000000-0000-4000-8000-000000000000', 'earned', '   ')] }),
+    JSON.stringify({ ...valid, publicCourses: [{ ...publicCourse('80000000-0000-4000-8000-000000000000'), title: ' a ' }] }),
+    JSON.stringify({ ...valid, publicCourses: [{ ...publicCourse('90000000-0000-4000-8000-000000000000'), credits: 4 }] }),
   ];
   for (const raw of invalid) {
     const store = memoryStore(raw);
@@ -248,6 +318,14 @@ test('invalid JSON, schema version, references, duplicate items and invalid fiel
     assert.equal(store.getItem(STORAGE_KEY), raw);
     assert.deepEqual(result.state, initialState());
   }
+});
+
+test('public courses remain actual earned professional credits beyond the graduation cap', () => {
+  const scope = catalog.programs.find(program => program.department === '商業学科').scopeId;
+  const courses = Array.from({ length: 9 }, (_, index) => publicCourse(`a0000000-0000-4000-8000-00000000000${index}`, 'earned'));
+  const professional = summarizeCategories([], catalog, scope, courses).find(row => row.category === '専門教育');
+  assert.equal(professional.count, 9);
+  assert.equal(professional.earned, 18);
 });
 
 test('credit totals exclude waiting/failed/dropped, unknown count covers all statuses', () => {
@@ -709,7 +787,7 @@ test('history seminars use recorded completion order, never offering order, and 
   assert.match(card(unknown, required).reason, /修得順が未確定/);
 });
 
-test('history seminar completion order is unique, consecutive, earned-only, and v1 state migrates without inference', () => {
+test('history seminar completion order is unique, consecutive, earned-only, and prior state versions migrate without inference', () => {
   const seminars = catalog.offerings.filter(o => /^史学演習（/.test(o.name));
   const state = { ...initialState(), items: [
     { ...item(seminars[0].id, 'earned'), earnedOrder: 1 },
@@ -723,9 +801,16 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   const store = memoryStore(JSON.stringify(v1));
   const loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 2);
+  assert.equal(loaded.state.schemaVersion, 3);
   assert.equal(loaded.state.items[0].earnedOrder, null);
+  assert.deepEqual(loaded.state.publicCourses, []);
   assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
+  const v2 = { ...loaded.state, schemaVersion: 2 };
+  delete v2.publicCourses;
+  const v2Loaded = loadState(memoryStore(JSON.stringify(v2)), catalog);
+  assert.equal(v2Loaded.error, null);
+  assert.equal(v2Loaded.state.schemaVersion, 3);
+  assert.deepEqual(v2Loaded.state.publicCourses, []);
 });
 
 test('cleanup coverage and audit before/after counts reconcile independently', () => {

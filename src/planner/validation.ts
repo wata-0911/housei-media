@@ -15,10 +15,13 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
   const offerings = new Set(catalog.offerings.map(o => o.id));
   const ids = value.items.map(item => item.offeringId);
   const todoIds = value.todos.map(todo => todo.id);
+  const publicCourseIds = value.publicCourses.map(course => course.id);
   const offeringMap = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   return (value.selectedScopeId === null || catalog.programs.some(p => p.scopeId === value.selectedScopeId))
     && ids.every(id => offerings.has(id)) && new Set(ids).size === ids.length
     && new Set(todoIds).size === todoIds.length
+    && new Set(publicCourseIds).size === publicCourseIds.length
+    && value.publicCourses.every(course => course.title === course.title.trim() && course.title.length <= 200 && course.credits === 2)
     && value.todos.every(todo => todo.offeringId === null || offerings.has(todo.offeringId))
     && value.items.every(item => {
       const seminar = isHistorySeminar(offeringMap.get(item.offeringId));
