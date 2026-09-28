@@ -264,6 +264,34 @@ test('partial progress treats null credits, unsupported and special conditions a
   assert.ok(progress.requirements.every(row => row.status === 'unknown'));
 });
 
+test('structured course-count conditions require completed curriculum courses and never turn null-value guidance into credits', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const base = catalog.mappings[0];
+  const fixture = {
+    ...catalog,
+    mappings: [
+      { ...base, mappingId: 'first-course', scopeId: scope, category: '専門教育', field: null, requirementType: '選択必修', curriculumCredits: 4 },
+      { ...base, mappingId: 'second-course', scopeId: scope, category: '専門教育', field: null, requirementType: '選択必修', curriculumCredits: 4 },
+    ],
+    offerings: [
+      { ...catalog.offerings[0], id: 'first-part', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
+      { ...catalog.offerings[0], id: 'first-rest', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
+      { ...catalog.offerings[0], id: 'second', credits: 4, resolutionStatus: 'matched', mappingIds: ['second-course'] },
+    ],
+    requirements: [
+      { id: 'eight-credits-two-courses', ruleId: 'eight-credits-two-courses', scopeId: scope, sourcePage: 47, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育', requirement_type: '選択必修' }, value: 8, unit: 'credits', conditions: { full_course_credits_required: true, min_courses: 2 } },
+      { id: 'guidance', ruleId: 'guidance', scopeId: scope, sourcePage: 47, status: 'structured', ruleType: 'required_course', target: { course_name: '卒業論文一般指導' }, value: null, unit: null, conditions: { before: '卒業論文' } },
+    ],
+  };
+  const evaluate = items => calculateGraduationProgress(items, fixture, scope).requirements;
+  assert.deepEqual(evaluate([item('first-part', 'earned'), item('second', 'earned')]).map(row => row.status), ['unsatisfied', 'unknown']);
+  const completed = evaluate([item('first-part', 'earned'), item('first-rest', 'earned'), item('second', 'earned')]);
+  assert.equal(completed[0].status, 'satisfied');
+  assert.equal(completed[0].earned, 8);
+  assert.equal(completed[1].earned, null);
+  assert.match(completed[1].reason, /条件または例外|必要値/);
+});
+
 test('one offering with duplicate matching mappings is counted once and outside-scope offerings are excluded', () => {
   const scope = catalog.programs.find(program => !program.isCommon).scopeId;
   const base = catalog.mappings[0];
@@ -1015,7 +1043,11 @@ test('official political science mappings count only for law and preserve earned
         if (!law) assert.deepEqual(progress, empty);
         else {
           const actual = progress.requirements.filter(r => r.label.startsWith('専門教育'));
-          assert.ok(actual.length > 0 && actual.every(r => r.status === 'unknown'));
+          assert.ok(actual.length > 0);
+          // The 8-course / 32-credit condition is now evaluated as a completed
+          // curriculum-course count. Other law conditions remain deliberately held.
+          assert.ok(actual.some(r => r.status === 'unsatisfied'));
+          assert.ok(actual.some(r => r.status === 'unknown'));
           const summary = summarizeCategories([item(offering.id, status)], catalog, lawScope).find(r => r.category === '専門教育');
           assert.equal(summary.earned, status === 'earned' ? 2 : 0);
           // Isolate mapping eligibility from the intentionally unsupported law DSL conditions.

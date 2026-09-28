@@ -31,9 +31,9 @@ export default function GraduationProgress({ progress }: { progress: Progress })
       </article>)}
     </div>
     <details className="mt-6 border border-gray-200 bg-slate-50 p-4">
-      <summary className="cursor-pointer font-medium text-[#002255]">自動判定できない要件：{unknown.length}件</summary>
+      <summary className="cursor-pointer font-medium text-[#002255]">確認が必要な条件：{unknown.length}件</summary>
       <ul className="mt-3 space-y-2 text-sm">
-        {progress.unknownReasons.map(item => <li key={item.reason} className="break-words">{item.reason}：{item.count}件</li>)}
+        {progress.unknownReasons.map(item => <li key={item.reason} className="break-words"><p>{item.reason}：{item.count}件</p>{item.labels.length > 0 && <p className="mt-1 text-xs leading-relaxed text-gray-600">対象例：{item.labels.join('、')}</p>}</li>)}
       </ul>
     </details>
     <p className="mt-3 text-xs text-gray-600">自動評価 {progress.evaluableCount}件 / 判定保留 {progress.unknownCount}件</p>

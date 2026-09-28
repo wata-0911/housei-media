@@ -35,7 +35,8 @@ export type GraduationProgress = {
   cards: ProgressCard[];
   evaluableCount: number;
   unknownCount: number;
-  unknownReasons: Array<{ reason: string; count: number }>;
+  /** One summary row per reason keeps procedure/mapping warnings from becoming a wall of cards. */
+  unknownReasons: Array<{ reason: string; count: number; labels: string[] }>;
 };
 
 export type ProgressCard = RequirementProgress & {
@@ -54,11 +55,14 @@ const GROUP_RULES = new Set([
 ]);
 
 const CONDITION_ALLOWLIST: Partial<Record<StructuredRequirement['ruleType'], string[][]>> = {
-  min_credits: [[], ['full_course_credits_required']],
-  max_credits: [[], ['max_enrollments']],
+  // Every condition listed here has a corresponding calculation below.  This
+  // is deliberately not a list of conditions that are merely harmless to
+  // ignore: an unimplemented condition must keep its requirement unknown.
+  min_credits: [[], ['full_course_credits_required'], ['min_courses'], ['full_course_credits_required', 'min_courses']],
+  max_credits: [[], ['max_enrollments'], ['aggregate', 'max_enrollments']],
   exact_credits: [[]],
   min_courses: [[]],
-  min_schooling_credits: [[]],
+  min_schooling_credits: [[], ['min_courses']],
   required_course: [[], ['full_course_credits_required']],
   choose_one: [['choose_count', 'options']],
 };
@@ -150,14 +154,38 @@ function evaluateStructured(
     if (!offering) throw new Error(`Unknown offering: ${item.offeringId}`);
     if (offering.resolutionStatus !== 'matched') return [];
     const mappings = eligibleMappings(offering);
-    return mappings.some(mapping => mappingMatches(mapping, requirement)
-      && (targetMappingIds === null || targetMappingIds.has(mapping.mappingId))) ? [{ item, offering }] : [];
+    const matchingMappings = mappings.filter(mapping => mappingMatches(mapping, requirement)
+      && (targetMappingIds === null || targetMappingIds.has(mapping.mappingId)));
+    if (requirement.conditions?.method && offering.method !== requirement.conditions.method) return [];
+    return matchingMappings.length ? [{ item, offering, mappings: matchingMappings }] : [];
   });
 
   if (hasUnresolvedEarned) return unknown(requirement, '修得済みに対応関係を確認中の科目があります');
   if (matched.some(({ offering }) => offering.credits === null)) return unknown(requirement, '対象科目に単位数不明の開講があります');
 
+  const completedMappings = new Map<string, { mapping: Mapping; earned: number; inProgress: number; planned: number }>();
+  for (const row of matched) {
+    for (const mapping of row.mappings) {
+      const entry = completedMappings.get(mapping.mappingId) ?? {
+        mapping, earned: 0, inProgress: 0, planned: 0,
+      };
+      if (row.item.status === 'earned') entry.earned += row.offering.credits!;
+      else if (row.item.status === 'in_progress') entry.inProgress += row.offering.credits!;
+      else if (row.item.status === 'planned') entry.planned += row.offering.credits!;
+      completedMappings.set(mapping.mappingId, entry);
+    }
+  }
+  if (requirement.conditions?.full_course_credits_required
+    && [...completedMappings.values()].some(entry => entry.mapping.curriculumCredits === null)) {
+    return unknown(requirement, '科目構成単位が不明のため全単位修得条件を判定できません');
+  }
   const total = (status: PlannerItem['status']) => {
+    if (requirement.conditions?.full_course_credits_required) {
+      return [...completedMappings.values()].reduce((sum, entry) => {
+        const credits = entry[status === 'earned' ? 'earned' : status === 'in_progress' ? 'inProgress' : 'planned'];
+        return sum + (credits >= entry.mapping.curriculumCredits! ? entry.mapping.curriculumCredits! : 0);
+      }, 0);
+    }
     const rows = matched.filter(row => row.item.status === status);
     if (unit === 'courses') return new Set(rows.map(row => row.offering.id)).size;
     return rows.reduce((sum, row) => sum + row.offering.credits!, 0);
@@ -165,11 +193,20 @@ function evaluateStructured(
   const earned = total('earned');
   const inProgress = total('in_progress');
   const planned = total('planned');
+  const completedCourseCount = [...completedMappings.values()].filter(entry =>
+    entry.earned >= (entry.mapping.curriculumCredits ?? Number.POSITIVE_INFINITY)).length;
+  const minimumCourses = requirement.conditions?.min_courses;
+  const maximumEnrollments = requirement.conditions?.max_enrollments;
+  // A credit requirement with a course-count condition must meet both parts.
+  // This is especially important for law's 8 courses / 32 credits rule.
+  const meetsMinimumCourses = minimumCourses === undefined || completedCourseCount >= minimumCourses;
+  const respectsMaximumEnrollments = maximumEnrollments === undefined || completedCourseCount <= maximumEnrollments;
+  const creditStatus = evaluateStatus(requirement.ruleType, earned, requirement.value);
   return {
     requirementId: requirement.id,
     label: requirementLabel(requirement),
     ruleType: requirement.ruleType,
-    status: evaluateStatus(requirement.ruleType, earned, requirement.value),
+    status: creditStatus === 'satisfied' && meetsMinimumCourses && respectsMaximumEnrollments ? 'satisfied' : 'unsatisfied',
     earned, inProgress, planned, target: requirement.value, unit, reason: null,
   };
 }
@@ -736,10 +773,13 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')
       && !professional.length),
   ];
-  const reasons = new Map<string, number>();
+  const reasons = new Map<string, { count: number; labels: string[] }>();
   for (const row of requirements.filter(row => row.status === 'unknown')) {
     const reason = row.reason ?? '自動判定できません';
-    reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+    const summary = reasons.get(reason) ?? { count: 0, labels: [] };
+    summary.count += 1;
+    if (summary.labels.length < 3 && !summary.labels.includes(row.label)) summary.labels.push(row.label);
+    reasons.set(reason, summary);
   }
   return {
     graduationCheckComplete: false,
@@ -747,6 +787,6 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     cards,
     evaluableCount: requirements.filter(row => row.status !== 'unknown').length,
     unknownCount: requirements.filter(row => row.status === 'unknown').length,
-    unknownReasons: [...reasons].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+    unknownReasons: [...reasons].map(([reason, summary]) => ({ reason, ...summary })).sort((a, b) => b.count - a.count),
   };
 }
