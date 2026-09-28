@@ -40,16 +40,40 @@ export function completedMediaLessons(course: MediaCourseProgress): number {
   return course.lessons.filter(lesson => lesson.videoCompleted && lesson.testCompleted).length;
 }
 
-export function mediaSharePost(courseName: string, deliveryCategory: string | null, course: MediaCourseProgress): string {
-  const summary = mediaProgressSummary(course);
-  const total = course.totalLessons === null ? '未設定' : `${course.totalLessons}回`;
-  const completed = course.totalLessons === null ? '—' : `${completedMediaLessons(course)}/${course.totalLessons}回`;
-  return [
-    `【メディアスクーリング進捗】`,
-    courseName,
-    deliveryCategory ?? 'メディアスクーリング',
-    `進捗 ${completed}（全${total}）`,
-    `動画 ${summary.video}回 / テスト ${summary.test}回 / 総合 ${summary.percent === null ? '—' : `${summary.percent}%`}`,
-    '#法政通信 #メディアスクーリング',
-  ].join('\n');
+export type MediaShareCourse = { name: string; videoCompleted: number; totalLessons: number | null; isVideoComplete: boolean };
+export type MediaShareGroup = { deliveryCategory: '前期メディア' | '後期メディア'; courses: MediaShareCourse[]; totalVideoCompleted: number; totalLessons: number | null; unconfiguredCourses: number };
+
+export function mediaShareViewModel(items: PlannerItem[], offerings: Map<string, Offering>, progress: Record<string, MediaCourseProgress>): MediaShareGroup[] {
+  const groups = new Map<MediaShareGroup['deliveryCategory'], MediaShareGroup>();
+  for (const item of mediaPlanItems(items, offerings)) {
+    const offering = offerings.get(item.offeringId)!;
+    const deliveryCategory = offering.deliveryCategory as MediaShareGroup['deliveryCategory'];
+    const course = progressFor(item.offeringId, progress);
+    const videoCompleted = mediaProgressSummary(course).video;
+    const row: MediaShareCourse = { name: offering.name, videoCompleted, totalLessons: course.totalLessons, isVideoComplete: course.totalLessons !== null && videoCompleted === course.totalLessons };
+    const group = groups.get(deliveryCategory) ?? { deliveryCategory, courses: [], totalVideoCompleted: 0, totalLessons: 0, unconfiguredCourses: 0 };
+    group.courses.push(row);
+    group.totalVideoCompleted += videoCompleted;
+    if (course.totalLessons === null) group.unconfiguredCourses += 1;
+    else group.totalLessons = (group.totalLessons ?? 0) + course.totalLessons;
+    groups.set(deliveryCategory, group);
+  }
+  const categoryOrder: MediaShareGroup['deliveryCategory'][] = ['前期メディア', '後期メディア'];
+  return categoryOrder.flatMap(category => {
+    const group = groups.get(category);
+    return group ? [{ ...group, totalLessons: group.unconfiguredCourses === 0 ? group.totalLessons : null }] : [];
+  });
+}
+
+export function mediaSharePost(groups: MediaShareGroup[], comment = ''): string {
+  const lines = groups.flatMap((group, index) => [
+    ...(index === 0 ? [] : ['']), `${group.deliveryCategory}進捗`,
+    ...group.courses.map(course => course.totalLessons === null ? `・${course.name}  動画 ${course.videoCompleted}回（全回数未設定）` : `・${course.name}  ${course.videoCompleted}/${course.totalLessons}${course.isVideoComplete ? ' ✅' : ''}`),
+    group.totalLessons === null ? '全回数未設定の科目あり' : `トータル  ${group.totalVideoCompleted}/${group.totalLessons}`,
+  ]);
+  return [...lines, ...(comment.trim() ? ['', comment.trim()] : [])].join('\n');
+}
+
+export function mediaShareIntentUrl(post: string): string {
+  return `https://x.com/intent/post?text=${encodeURIComponent(post)}`;
 }

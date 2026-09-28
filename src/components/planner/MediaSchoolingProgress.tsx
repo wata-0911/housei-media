@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { mediaPlanItems, mediaProgressSummary, progressFor, setTotalLessons, toggleLesson } from '../../planner/mediaSchooling';
+import { mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, setTotalLessons, toggleLesson } from '../../planner/mediaSchooling';
 import type { MediaCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
 import MediaProgressShareModal from './MediaProgressShareModal';
 
@@ -17,7 +17,6 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
   const [draft, setDraft] = useState(saved.totalLessons?.toString() ?? '');
   const [error, setError] = useState('');
   const summary = mediaProgressSummary(saved);
-  const [isSharing, setIsSharing] = useState(false);
   const saveTotal = () => {
     const value = draft.trim() === '' ? null : Number(draft);
     if (value !== null && (!Number.isInteger(value) || value < 1 || value > 200)) { setError('全回数は1〜200の整数で入力してください。'); return; }
@@ -35,7 +34,7 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
       <button type="button" disabled={disabled} onClick={saveTotal} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">保存</button>
     </div>
     {error && <p role="alert" className="mt-1 text-sm text-red-700">{error}</p>}
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><div className="grid min-w-0 flex-1 grid-cols-3 gap-2 text-sm"><p>動画 {saved.totalLessons === null ? `${summary.video}/—` : `${summary.video}/${saved.totalLessons}`}</p><p>テスト {saved.totalLessons === null ? `${summary.test}/—` : `${summary.test}/${saved.totalLessons}`}</p><p>総合 {summary.percent === null ? '—' : `${summary.percent}%`}</p></div><button type="button" onClick={() => setIsSharing(true)} className="shrink-0 border border-[#002255] px-3 py-2 text-sm text-[#002255]">共有</button></div>
+    <div className="mt-4 grid grid-cols-3 gap-2 text-sm"><p>動画 {saved.totalLessons === null ? `${summary.video}/—` : `${summary.video}/${saved.totalLessons}`}</p><p>テスト {saved.totalLessons === null ? `${summary.test}/—` : `${summary.test}/${saved.totalLessons}`}</p><p>総合 {summary.percent === null ? '—' : `${summary.percent}%`}</p></div>
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
     {saved.totalLessons === null ? <p className="mt-5 text-sm text-gray-600">全回数を設定すると、各回の動画とテストの進捗を記録できます。</p> : <div className="mt-5 space-y-2">
       {Array.from({ length: saved.totalLessons }, (_, index) => index + 1).map(lesson => {
@@ -46,12 +45,13 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
         </div>;
       })}
     </div>}
-    {isSharing && <MediaProgressShareModal offering={offering} progress={saved} onClose={() => setIsSharing(false)} />}
   </article>;
 }
 
 export default function MediaSchoolingProgress({ items, offerings, progress, disabled, onChange }: Props) {
   const mediaItems = mediaPlanItems(items, offerings);
+  const [isSharing, setIsSharing] = useState(false);
+  const shareGroups = mediaShareViewModel(items, offerings, progress);
   if (mediaItems.length === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
-  return <section aria-labelledby="media-heading" className="space-y-4"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">{mediaItems.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={onChange} />)}</section>;
+  return <section aria-labelledby="media-heading" className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">{mediaItems.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div><button type="button" onClick={() => setIsSharing(true)} className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">全科目を共有</button></div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={onChange} />)}{isSharing && <MediaProgressShareModal groups={shareGroups} onClose={() => setIsSharing(false)} />}</section>;
 }

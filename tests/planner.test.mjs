@@ -13,7 +13,7 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
 import { stateForScopeChange, supportsThesisSelection, thesisPolicyForScope } from '../src/planner/thesisSelection.ts';
-import { completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaSharePost, setTotalLessons, toggleLesson } from '../src/planner/mediaSchooling.ts';
+import { completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaShareViewModel, setTotalLessons, toggleLesson } from '../src/planner/mediaSchooling.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -976,18 +976,42 @@ test('media progress stores independent toggles, calculates rate, safely limits 
   assert.equal(state.mediaSchoolingProgress[media.id].lessons[0].videoCompleted, true);
 });
 
-test('media share copy uses public course details and concise progress without internal identifiers', () => {
-  const course = { offeringId: 'private-id', totalLessons: 3, lessons: [
-    { lesson: 1, videoCompleted: true, testCompleted: true },
-    { lesson: 2, videoCompleted: true, testCompleted: false },
-  ] };
-  assert.equal(completedMediaLessons(course), 1);
-  const post = mediaSharePost('法学入門', '前期メディア', course);
-  assert.match(post, /法学入門/);
-  assert.match(post, /進捗 1\/3回/);
-  assert.match(post, /動画 2回 \/ テスト 1回 \/ 総合 50%/);
-  assert.match(post, /#法政通信 #メディアスクーリング/);
-  assert.doesNotMatch(post, /private-id/);
+test('media share view model groups current media plan items, preserves order, and omits orphan/non-media data', () => {
+  const media = catalog.offerings.filter(isMediaSchooling);
+  const firstTerm = media.find(offering => offering.deliveryCategory === '前期メディア');
+  const secondTerm = media.find(offering => offering.deliveryCategory === '後期メディア');
+  const nonMedia = catalog.offerings.find(offering => !isMediaSchooling(offering));
+  const items = [item(secondTerm.id), item(nonMedia.id), item(firstTerm.id)];
+  const progress = {
+    [secondTerm.id]: { offeringId: secondTerm.id, totalLessons: 3, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }, { lesson: 2, videoCompleted: true, testCompleted: true }, { lesson: 3, videoCompleted: true, testCompleted: false }] },
+    [firstTerm.id]: { offeringId: firstTerm.id, totalLessons: 2, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: true }, { lesson: 2, videoCompleted: true, testCompleted: true }] },
+    orphan: { offeringId: 'orphan', totalLessons: 99, lessons: [] },
+  };
+  assert.equal(completedMediaLessons(progress[firstTerm.id]), 2);
+  const groups = mediaShareViewModel(items, offeringsById, progress);
+  assert.deepEqual(groups.map(group => group.deliveryCategory), ['前期メディア', '後期メディア']);
+  assert.deepEqual(groups.map(group => group.courses.map(course => course.name)), [[firstTerm.name], [secondTerm.name]]);
+  assert.deepEqual(groups.map(group => [group.totalVideoCompleted, group.totalLessons, group.courses[0].isVideoComplete]), [[2, 2, true], [3, 3, true]]);
+  const post = mediaSharePost(groups, 'あと少し');
+  assert.match(post, /前期メディア進捗/);
+  assert.ok(post.includes(`・${firstTerm.name}  2/2 ✅`));
+  assert.match(post, /トータル  3\/3/);
+  assert.match(post, /\n\nあと少し$/);
+  assert.doesNotMatch(post, /orphan|#法政通信/);
+  assert.equal(mediaShareIntentUrl(post), `https://x.com/intent/post?text=${encodeURIComponent(post)}`);
+});
+
+test('media share does not invent a category denominator when any course has no lesson total', () => {
+  const media = catalog.offerings.filter(isMediaSchooling).filter(offering => offering.deliveryCategory === '前期メディア').slice(0, 2);
+  const groups = mediaShareViewModel(media.map(offering => item(offering.id)), offeringsById, {
+    [media[0].id]: { offeringId: media[0].id, totalLessons: 3, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }] },
+    [media[1].id]: { offeringId: media[1].id, totalLessons: null, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }] },
+  });
+  assert.equal(groups[0].totalLessons, null);
+  const post = mediaSharePost(groups);
+  assert.ok(post.includes(`・${media[1].name}  動画 1回（全回数未設定）`));
+  assert.match(post, /全回数未設定の科目あり/);
+  assert.doesNotMatch(post, /トータル  2\/3/);
 });
 
 test('v4 migration adds empty media progress without losing items, public courses, thesis choice, or earned order', () => {
