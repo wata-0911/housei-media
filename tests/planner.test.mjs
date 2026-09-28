@@ -11,6 +11,7 @@ import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatab
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/removeUndo.ts';
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
+import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -21,6 +22,96 @@ const publicCourse = (id, status = 'planned', title = `公開科目 ${id}`) => (
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
+
+test('year eligibility uses the common mapping for a first-year offering', () => {
+  const offering = catalog.offerings.find(current => current.name === '健康・スポーツ科学概論');
+  const common = catalog.programs.find(program => program.isCommon).scopeId;
+  assert.equal(yearEligibility(offering, common, 1, catalog), 'eligible');
+  assert.equal(yearEligibility(offering, common, 4, catalog), 'eligible');
+  assert.equal(eligibilityYearsLabel(offering, common, catalog), '履修可能学年: 1〜4年');
+});
+
+test('year eligibility distinguishes ineligible and eligible years through the selected scope mapping', () => {
+  const offering = catalog.offerings.find(current => current.name === '債権総論');
+  const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  assert.equal(yearEligibility(offering, law, 1, catalog), 'ineligible');
+  assert.equal(yearEligibility(offering, law, 2, catalog), 'ineligible');
+  assert.equal(yearEligibility(offering, law, 3, catalog), 'eligible');
+  assert.equal(yearEligibility(offering, law, 4, catalog), 'eligible');
+});
+
+test('a selected scope can resolve mapping-only 2-to-4 year data', () => {
+  const scope = catalog.programs.find(program => program.department === '商業学科').scopeId;
+  const base = catalog.offerings[0];
+  const fixture = {
+    ...catalog,
+    mappings: [{ ...catalog.mappings[0], mappingId: 'scope-map', scopeId: scope, eligibleYears: [2, 3, 4] }],
+    offerings: [{ ...base, id: 'mapping-only', resolutionStatus: 'matched', eligibleYears: null, mappingIds: ['scope-map'] }],
+  };
+  assert.equal(yearEligibility(fixture.offerings[0], scope, 1, fixture), 'ineligible');
+  assert.equal(yearEligibility(fixture.offerings[0], scope, 2, fixture), 'eligible');
+  assert.equal(yearEligibility(fixture.offerings[0], scope, 3, fixture), 'eligible');
+  assert.equal(yearEligibility(fixture.offerings[0], scope, 4, fixture), 'eligible');
+});
+
+test('null, conflicting, and same-scope multi-edge year data are safely unknown', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const base = catalog.offerings[0];
+  const nullFixture = { ...catalog, offerings: [{ ...base, id: 'null-years', resolutionStatus: 'matched', eligibleYears: null, mappingIds: [] }] };
+  assert.equal(yearEligibility(nullFixture.offerings[0], null, 1, nullFixture), 'unknown');
+
+  const conflictFixture = {
+    ...catalog,
+    mappings: [{ ...catalog.mappings[0], mappingId: 'conflict', scopeId: scope, eligibleYears: [2, 3, 4] }],
+    offerings: [{ ...base, id: 'conflict-offering', resolutionStatus: 'matched', eligibleYears: [1, 2, 3, 4], mappingIds: ['conflict'] }],
+  };
+  assert.equal(yearEligibility(conflictFixture.offerings[0], scope, 2, conflictFixture), 'unknown');
+
+  const multiEdgeFixture = {
+    ...catalog,
+    mappings: [
+      { ...catalog.mappings[0], mappingId: 'edge-one', scopeId: scope, eligibleYears: [2, 3, 4] },
+      { ...catalog.mappings[0], mappingId: 'edge-two', scopeId: scope, eligibleYears: [3, 4] },
+    ],
+    offerings: [{ ...base, id: 'multi-edge', resolutionStatus: 'matched', eligibleYears: null, mappingIds: ['edge-one', 'edge-two'] }],
+  };
+  assert.equal(yearEligibility(multiEdgeFixture.offerings[0], scope, 3, multiEdgeFixture), 'unknown');
+});
+
+test('manual-review and outside-scope offerings never become eligible from year data', () => {
+  const base = catalog.offerings[0];
+  for (const resolutionStatus of ['manual_review', 'outside_mapping_scope']) {
+    const fixture = { ...catalog, offerings: [{ ...base, resolutionStatus, eligibleYears: [1, 2, 3, 4], mappingIds: [] }] };
+    assert.equal(yearEligibility(fixture.offerings[0], null, 1, fixture), 'unknown');
+  }
+});
+
+test('text search and year filtering are ANDed, all-years preserves results, and synthetic public courses are unknown', () => {
+  const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const queried = searchOfferings(catalog.offerings, '債権総論');
+  assert.ok(queried.length > 0);
+  assert.equal(filterOfferingsByYear(queried, law, 2, false, catalog).length, 0);
+  assert.equal(filterOfferingsByYear(queried, law, 3, false, catalog).length, queried.length);
+  assert.deepEqual(filterOfferingsByYear(queried, law, null, false, catalog), queried);
+  assert.equal(showSyntheticPublicCourse(null, false), true);
+  assert.equal(showSyntheticPublicCourse(2, false), false);
+  assert.equal(showSyntheticPublicCourse(2, true), true);
+});
+
+test('unknown catalog offerings appear only when the unknown toggle is enabled', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const base = catalog.offerings[0];
+  const fixture = {
+    ...catalog,
+    mappings: [{ ...catalog.mappings[0], mappingId: 'known-map', scopeId: scope, eligibleYears: [2, 3, 4] }],
+    offerings: [
+      { ...base, id: 'known', name: '検索対象', resolutionStatus: 'matched', eligibleYears: null, mappingIds: ['known-map'] },
+      { ...base, id: 'unknown', name: '検索対象（保留）', resolutionStatus: 'manual_review', eligibleYears: null, mappingIds: [] },
+    ],
+  };
+  assert.deepEqual(filterOfferingsByYear(fixture.offerings, scope, 2, false, fixture).map(offering => offering.id), ['known']);
+  assert.deepEqual(filterOfferingsByYear(fixture.offerings, scope, 2, true, fixture).map(offering => offering.id), ['known', 'unknown']);
+});
 
 test('removing one planned item preserves every other item and its order', () => {
   const removedItem = { offeringId: 'second', status: 'earned', plannedYear: 2028, plannedTerm: '秋期', earnedOrder: 3 };
