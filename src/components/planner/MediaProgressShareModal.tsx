@@ -28,11 +28,15 @@ async function copyText(text: string) {
 function ProgressGroups({ groups }: { groups: MediaShareGroup[] }) {
   return <div className="space-y-6">{groups.map(group => <section key={group.deliveryCategory} className="border-t border-[#dfd4c5] pt-4 first:border-t-0 first:pt-0">
     <h4 className="font-semibold text-[#002255]">{group.deliveryCategory}進捗</h4>
-    <ul className="mt-2 space-y-1.5">{group.courses.map((course, index) => <li key={`${course.name}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 bg-white px-3 py-2 text-sm">
-      <span className="min-w-0 leading-snug [line-break:strict]">{course.name}</span>
-      <span className="shrink-0 whitespace-nowrap tabular-nums">{course.totalLessons === null ? `動画 ${course.videoCompleted}回` : `${course.videoCompleted}/${course.totalLessons}`}{course.isVideoComplete ? ' ✅' : ''}</span>
+    <ul className="mt-2 space-y-2">{group.courses.map((course, index) => <li key={`${course.name}-${index}`} className="bg-white px-3 py-2.5 text-sm">
+      <span className="block max-w-full break-words leading-snug [line-break:strict]">{course.name}</span>
+      <span className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 tabular-nums sm:justify-end">
+        {course.totalLessons === null
+          ? <><span className="whitespace-nowrap">動画 {course.videoCompletedCount}回</span><span className="whitespace-nowrap">テスト {course.testCompletedCount}回（全回数未設定）</span></>
+          : <><span className="whitespace-nowrap">動画 {course.videoCompletedCount}/{course.totalLessons}{course.videoDone ? ' ✅' : ''}</span><span className="whitespace-nowrap">テスト {course.testCompletedCount}/{course.totalLessons}{course.testDone ? ' ✅' : ''}</span></>}
+      </span>
     </li>)}</ul>
-    <p className="mt-2 text-right text-sm font-semibold tabular-nums">{group.totalLessons === null ? '全回数未設定の科目あり' : `トータル  ${group.totalVideoCompleted}/${group.totalLessons}`}</p>
+    <div className="mt-2 text-right text-sm font-semibold tabular-nums">{group.totalLessons === null ? <p>全回数未設定の科目あり</p> : <><p>動画トータル  {group.totalVideoCompleted}/{group.totalLessons}</p><p>テストトータル  {group.totalTestCompleted}/{group.totalLessons}</p></>}</div>
   </section>)}</div>;
 }
 
