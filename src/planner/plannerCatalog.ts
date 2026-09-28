@@ -199,12 +199,15 @@ export type PublicCourse = {
 };
 
 export type PlannerState = {
-  schemaVersion: 3;
+  schemaVersion: 4;
   selectedScopeId: string | null;
+  thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
   publicCourses: Array<PublicCourse>;
   todos: Array<PlannerTodo>;
 };
+
+export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';
 
 export type RequirementEvaluation = {
   requirementId: string;
