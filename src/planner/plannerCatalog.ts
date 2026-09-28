@@ -200,6 +200,15 @@ export type MediaCourseProgress = {
   lessons: Array<MediaLessonProgress>;
 };
 
+export type CourseGrade = 'S' | 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D';
+
+/** Evaluation records belong to a catalog offering, which is unique in the annual plan. */
+export type CourseEvaluation = {
+  offeringId: string;
+  reportGrade: CourseGrade | null;
+  schoolingGrade: CourseGrade | null;
+};
+
 export type PublicCourse = {
   id: string;
   title: string;
@@ -211,7 +220,7 @@ export type PublicCourse = {
 };
 
 export type PlannerState = {
-  schemaVersion: 5;
+  schemaVersion: 6;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
@@ -219,6 +228,8 @@ export type PlannerState = {
   todos: Array<PlannerTodo>;
   /** Kept after plan removal so a later re-add/Undo restores the learner's progress. */
   mediaSchoolingProgress: Record<string, MediaCourseProgress>;
+  /** Kept after plan removal so a later re-add/Undo restores the learner's evaluation. */
+  courseEvaluations: Record<string, CourseEvaluation>;
 };
 
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';

@@ -15,6 +15,7 @@ import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePubli
 import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/publicCourses';
 import { stateForScopeChange } from '../planner/thesisSelection';
 import MediaSchoolingProgress from '../components/planner/MediaSchoolingProgress';
+import CourseEvaluations from '../components/planner/CourseEvaluations';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -35,7 +36,7 @@ export default function PlannerPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
-  const [activeTab, setActiveTab] = useState<'annual' | 'media'>('annual');
+  const [activeTab, setActiveTab] = useState<'annual' | 'media' | 'evaluations'>('annual');
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection);
@@ -77,6 +78,10 @@ export default function PlannerPage() {
 
   function changeMediaProgress(offeringId: string, progress: PlannerState['mediaSchoolingProgress'][string]) {
     commit({ ...state, mediaSchoolingProgress: { ...state.mediaSchoolingProgress, [offeringId]: progress } }, 'メディアスクーリングの進捗を保存しました。');
+  }
+
+  function changeEvaluation(offeringId: string, evaluation: PlannerState['courseEvaluations'][string]) {
+    commit({ ...state, courseEvaluations: { ...state.courseEvaluations, [offeringId]: evaluation } }, '評価記録を保存しました。履修ステータスは変更していません。');
   }
 
   function newPublicCourseId() {
@@ -169,13 +174,16 @@ export default function PlannerPage() {
         <p role="status" className="inline">{notice}</p>
         {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
       </div>
-      <div role="tablist" aria-label="履修プランナーの表示" className="flex border-b border-gray-300">
-        <button type="button" role="tab" aria-selected={activeTab === 'annual'} onClick={() => setActiveTab('annual')} className={`px-4 py-3 text-sm ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
-        <button type="button" role="tab" aria-selected={activeTab === 'media'} onClick={() => setActiveTab('media')} className={`px-4 py-3 text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディアスクーリング</button>
+      <div role="tablist" aria-label="履修プランナーの表示" className="grid grid-cols-3 border-b border-gray-300">
+        <button type="button" role="tab" aria-selected={activeTab === 'annual'} onClick={() => setActiveTab('annual')} className={`min-w-0 px-2 py-3 text-sm sm:px-4 ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'media'} onClick={() => setActiveTab('media')} className={`min-w-0 px-2 py-3 text-sm sm:px-4 ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'evaluations'} onClick={() => setActiveTab('evaluations')} className={`min-w-0 px-2 py-3 text-sm sm:px-4 ${activeTab === 'evaluations' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>評価・成績</button>
       </div>
       {activeTab === 'annual'
         ? <div className="grid lg:grid-cols-2 gap-6 items-start"><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} /></div>
-        : <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} disabled={loaded.error !== null} onChange={changeMediaProgress} />}
+        : activeTab === 'media'
+          ? <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} disabled={loaded.error !== null} onChange={changeMediaProgress} />
+          : <CourseEvaluations items={state.items} offerings={offeringsById} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeEvaluation} />}
     </div>
   </div>;
 }
