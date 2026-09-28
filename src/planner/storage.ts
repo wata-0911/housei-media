@@ -3,7 +3,7 @@ import { validateState } from './validation';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 6, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {} });
+export const initialState = (): PlannerState => ({ schemaVersion: 7, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {} });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null };
 
@@ -36,8 +36,9 @@ function migrateState(value: unknown): unknown {
   const v3 = v2.schemaVersion === 2 ? { ...v2, schemaVersion: 3, publicCourses: [] } : v2;
   const v4 = v3.schemaVersion === 3 ? { ...v3, schemaVersion: 4, thesisSelection: 'undecided' } : v3;
   const v5 = v4.schemaVersion === 4 ? { ...v4, schemaVersion: 5, mediaSchoolingProgress: {} } : v4;
-  if (v5.schemaVersion !== 5) return value;
-  return { ...v5, schemaVersion: 6, courseEvaluations: {} };
+  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6) return value;
+  const v6 = v5.schemaVersion === 5 ? { ...v5, schemaVersion: 6, courseEvaluations: {} } : v5;
+  return { ...v6, schemaVersion: 7, correspondenceProgress: {} };
 }
 
 // Compare before writes so another tab's changes are not silently replaced.

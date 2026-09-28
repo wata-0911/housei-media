@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { COURSE_GRADES, evaluationFor, evaluationItems, evaluationSummary, gradeLabel } from '../../planner/courseEvaluations';
+import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, gradeLabel, usesLegacyReportEvaluation } from '../../planner/courseEvaluations';
 import type { CourseEvaluation, CourseGrade, Offering, PlannerItem } from '../../planner/plannerCatalog';
 
 type Props = {
@@ -27,7 +27,7 @@ function EvaluationCard({ item, offering, saved, disabled, onChange }: { item: P
     <h3 className="break-words text-lg font-medium text-[#002255]">{offering.name}</h3>
     <p className="mt-1 break-words text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {item.plannedTerm ?? offering.period ?? '期未設定'} / {offering.deliveryCategory ?? (offering.method === 'schooling' ? 'スクーリング' : '通信')} / {statusLabels[item.status]}</p>
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      <GradeSelect label="リポート評価" value={saved.reportGrade} disabled={disabled} onChange={grade => change('reportGrade', grade)} />
+      {usesLegacyReportEvaluation(offering) ? <GradeSelect label="リポート評価" value={saved.reportGrade} disabled={disabled} onChange={grade => change('reportGrade', grade)} /> : <p className="rounded-sm bg-[#f5f7fa] p-3 text-sm text-gray-700">リポート評価は「通信学習」タブで設題ごとに記録します。</p>}
       {offering.method === 'schooling' && <GradeSelect label="スクーリング評価" value={saved.schoolingGrade} disabled={disabled} onChange={grade => change('schoolingGrade', grade)} />}
     </div>
   </article>;
@@ -36,11 +36,11 @@ function EvaluationCard({ item, offering, saved, disabled, onChange }: { item: P
 export default function CourseEvaluations({ items, offerings, evaluations, disabled, onChange }: Props) {
   const [onlyUnrated, setOnlyUnrated] = useState(false);
   const allItems = evaluationItems(items, offerings);
-  const summary = evaluationSummary(allItems, evaluations);
+  const summary = evaluationSummary(allItems, evaluations, offerings);
   const visibleItems = allItems.filter(item => !onlyUnrated || (() => {
     const saved = evaluationFor(item.offeringId, evaluations);
     const offering = offerings.get(item.offeringId)!;
-    return saved.reportGrade === null || (offering.method === 'schooling' && saved.schoolingGrade === null);
+    return evaluationIsUnrated(offering, saved);
   })());
   const groups = new Map<number | null, PlannerItem[]>();
   for (const item of visibleItems) groups.set(item.plannedYear, [...(groups.get(item.plannedYear) ?? []), item]);
@@ -50,7 +50,7 @@ export default function CourseEvaluations({ items, offerings, evaluations, disab
     <div className="border border-gray-200 bg-white p-4 sm:p-6">
       <h2 id="evaluation-heading" className="text-xl text-[#002255]">評価・成績</h2>
       <p className="mt-2 text-sm text-gray-600">評価記録は履修ステータスや卒業要件へ自動反映されません。</p>
-      <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><p>リポート: 入力済み {summary.reportsEntered} / {summary.total}</p><p>スクーリング: 入力済み {summary.schoolingsEntered} / {allItems.filter(item => offerings.get(item.offeringId)?.method === 'schooling').length}</p></div>
+      <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><p>リポート: 入力済み {summary.reportsEntered} / {summary.reportEligibleTotal}</p><p>スクーリング: 入力済み {summary.schoolingsEntered} / {allItems.filter(item => offerings.get(item.offeringId)?.method === 'schooling').length}</p></div>
       <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyUnrated} onChange={event => setOnlyUnrated(event.target.checked)} />未評価のみ表示</label>
     </div>
     {allItems.length === 0 ? <div className="border border-gray-200 bg-white p-5 text-sm text-gray-600">年間履修計画に科目を追加すると、ここで評価を記録できます。</div> : orderedGroups.length === 0 ? <div className="border border-gray-200 bg-white p-5 text-sm text-gray-600">未評価の科目はありません。</div> : orderedGroups.map(([year, group]) => <section key={year ?? 'unset'} aria-label={year === null ? '年度未設定' : `${year}年度`} className="space-y-3"><h3 className="text-base text-[#002255]">{year === null ? '年度未設定' : `${year}年度`}</h3><div className="grid gap-4 lg:grid-cols-2">{group.map(item => <EvaluationCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={evaluationFor(item.offeringId, evaluations)} disabled={disabled} onChange={onChange} />)}</div></section>)}

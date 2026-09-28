@@ -209,6 +209,19 @@ export type CourseEvaluation = {
   schoolingGrade: CourseGrade | null;
 };
 
+/** Report results use the university's `再提出`, never the course-grade D. */
+export type ReportPassingGrade = Exclude<CourseGrade, 'D'>;
+export type ReportProgressStatus = 'not_submitted' | 'submitted' | 'grading' | 'resubmit' | 'passed';
+export type ReportProgress = { reportNumber: number; status: ReportProgressStatus; grade: ReportPassingGrade | null };
+export type CorrespondenceCourseProgress = {
+  offeringId: string;
+  /** null means that the 2026 source could not be mapped safely. */
+  requiredReports: number | null;
+  reports: Array<ReportProgress>;
+  /** null is unattempted; D is a failed credit examination. */
+  examGrade: CourseGrade | null;
+};
+
 export type PublicCourse = {
   id: string;
   title: string;
@@ -220,7 +233,7 @@ export type PublicCourse = {
 };
 
 export type PlannerState = {
-  schemaVersion: 6;
+  schemaVersion: 7;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
@@ -230,6 +243,8 @@ export type PlannerState = {
   mediaSchoolingProgress: Record<string, MediaCourseProgress>;
   /** Kept after plan removal so a later re-add/Undo restores the learner's evaluation. */
   courseEvaluations: Record<string, CourseEvaluation>;
+  /** Kept after plan removal so a later re-add/Undo restores the learner's progress. */
+  correspondenceProgress: Record<string, CorrespondenceCourseProgress>;
 };
 
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';
