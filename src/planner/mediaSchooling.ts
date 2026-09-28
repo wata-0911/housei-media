@@ -35,3 +35,21 @@ export function mediaProgressSummary(course: MediaCourseProgress): { video: numb
   const test = course.lessons.filter(lesson => lesson.testCompleted).length;
   return { video, test, percent: course.totalLessons === null ? null : Math.round(((video + test) / (course.totalLessons * 2)) * 100) };
 }
+
+export function completedMediaLessons(course: MediaCourseProgress): number {
+  return course.lessons.filter(lesson => lesson.videoCompleted && lesson.testCompleted).length;
+}
+
+export function mediaSharePost(courseName: string, deliveryCategory: string | null, course: MediaCourseProgress): string {
+  const summary = mediaProgressSummary(course);
+  const total = course.totalLessons === null ? '未設定' : `${course.totalLessons}回`;
+  const completed = course.totalLessons === null ? '—' : `${completedMediaLessons(course)}/${course.totalLessons}回`;
+  return [
+    `【メディアスクーリング進捗】`,
+    courseName,
+    deliveryCategory ?? 'メディアスクーリング',
+    `進捗 ${completed}（全${total}）`,
+    `動画 ${summary.video}回 / テスト ${summary.test}回 / 総合 ${summary.percent === null ? '—' : `${summary.percent}%`}`,
+    '#法政通信 #メディアスクーリング',
+  ].join('\n');
+}

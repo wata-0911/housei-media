@@ -13,7 +13,7 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
 import { stateForScopeChange, supportsThesisSelection, thesisPolicyForScope } from '../src/planner/thesisSelection.ts';
-import { isMediaSchooling, mediaPlanItems, mediaProgressSummary, setTotalLessons, toggleLesson } from '../src/planner/mediaSchooling.ts';
+import { completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaSharePost, setTotalLessons, toggleLesson } from '../src/planner/mediaSchooling.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -974,6 +974,20 @@ test('media progress stores independent toggles, calculates rate, safely limits 
   assert.equal(validateState(state, catalog), true);
   assert.deepEqual(mediaPlanItems([], offeringsById), []);
   assert.equal(state.mediaSchoolingProgress[media.id].lessons[0].videoCompleted, true);
+});
+
+test('media share copy uses public course details and concise progress without internal identifiers', () => {
+  const course = { offeringId: 'private-id', totalLessons: 3, lessons: [
+    { lesson: 1, videoCompleted: true, testCompleted: true },
+    { lesson: 2, videoCompleted: true, testCompleted: false },
+  ] };
+  assert.equal(completedMediaLessons(course), 1);
+  const post = mediaSharePost('法学入門', '前期メディア', course);
+  assert.match(post, /法学入門/);
+  assert.match(post, /進捗 1\/3回/);
+  assert.match(post, /動画 2回 \/ テスト 1回 \/ 総合 50%/);
+  assert.match(post, /#法政通信 #メディアスクーリング/);
+  assert.doesNotMatch(post, /private-id/);
 });
 
 test('v4 migration adds empty media progress without losing items, public courses, thesis choice, or earned order', () => {
