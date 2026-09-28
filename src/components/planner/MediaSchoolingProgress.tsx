@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, setTotalLessons, toggleLesson } from '../../planner/mediaSchooling';
-import type { MediaCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
+import { addAssessment, assessmentLabel, mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../../planner/mediaSchooling';
+import type { MediaAssessment, MediaCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
 import MediaProgressShareModal from './MediaProgressShareModal';
 
 type Props = {
@@ -24,6 +24,15 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     if (next === null) { setError('完了済みの回があるため、その回より小さくは設定できません。'); return; }
     setError(''); onChange(item.offeringId, next);
   };
+  const chooseTotal = (totalLessons: number) => {
+    const next = setTotalLessons(saved, totalLessons);
+    if (next === null) { setError('完了済みの回があるため、その回より小さくは設定できません。'); return; }
+    setDraft(String(totalLessons)); setError(''); onChange(item.offeringId, next);
+  };
+  const addNewAssessment = () => {
+    const assessment: MediaAssessment = { id: crypto.randomUUID(), type: 'midterm', label: '中間試験', scheduledDate: null, completed: false };
+    onChange(item.offeringId, addAssessment(saved, assessment));
+  };
   return <article className="border border-gray-200 bg-white p-4 sm:p-6 min-w-0">
     <h3 className="font-medium text-lg break-words text-[#002255]">{offering.name}</h3>
     <p className="mt-1 text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {item.plannedTerm ?? offering.period ?? '期未設定'} / {statusLabels[item.status]}</p>
@@ -33,6 +42,7 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
       </label>
       <button type="button" disabled={disabled} onClick={saveTotal} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">保存</button>
     </div>
+    <div className="mt-2 flex flex-wrap gap-2 text-sm"><span className="self-center text-gray-600">よくある回数:</span><button type="button" disabled={disabled} onClick={() => chooseTotal(14)} className="border border-gray-300 px-3 py-1 disabled:opacity-50">14回</button><button type="button" disabled={disabled} onClick={() => chooseTotal(15)} className="border border-gray-300 px-3 py-1 disabled:opacity-50">15回</button><button type="button" disabled={disabled} onClick={() => { setDraft(''); setError(''); }} className="border border-gray-300 px-3 py-1 disabled:opacity-50">その他</button><span className="self-center text-xs text-gray-500">その他は上の入力欄に回数を入力</span></div>
     {error && <p role="alert" className="mt-1 text-sm text-red-700">{error}</p>}
     <div className="mt-4 grid grid-cols-3 gap-2 text-sm"><p>動画 {saved.totalLessons === null ? `${summary.video}/—` : `${summary.video}/${saved.totalLessons}`}</p><p>テスト {saved.totalLessons === null ? `${summary.test}/—` : `${summary.test}/${saved.totalLessons}`}</p><p>総合 {summary.percent === null ? '—' : `${summary.percent}%`}</p></div>
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
@@ -45,6 +55,15 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
         </div>;
       })}
     </div>}
+    <section className="mt-6 border-t border-gray-200 pt-4" aria-label={`${offering.name}の試験・評価予定`}>
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="font-medium text-[#002255]">試験・評価予定</h4><p className="mt-1 text-xs text-gray-600">試験の有無・方式・日程は科目ごとに異なります。最新の「法政通信」を確認してください。</p></div><button type="button" disabled={disabled} onClick={addNewAssessment} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">試験を追加</button></div>
+      {(saved.assessments ?? []).length > 0 && <div className="mt-3 space-y-3">{(saved.assessments ?? []).map(assessment => <div key={assessment.id} className="grid gap-2 border border-gray-200 bg-slate-50 p-3 sm:grid-cols-[9rem_minmax(0,1fr)_10rem_auto] sm:items-end">
+        <label className="text-xs">種類<select value={assessment.type} disabled={disabled} onChange={event => { const type = event.target.value as MediaAssessment['type']; onChange(item.offeringId, updateAssessment(saved, assessment.id, { type, label: type === 'midterm' ? '中間試験' : type === 'final' ? '期末試験' : assessment.label || 'その他の試験' })); }} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm"><option value="midterm">中間試験</option><option value="final">期末試験</option><option value="other">その他</option></select></label>
+        {assessment.type === 'other' ? <label className="text-xs">名称<input value={assessment.label} maxLength={200} disabled={disabled} onChange={event => onChange(item.offeringId, updateAssessment(saved, assessment.id, { label: event.target.value }))} onBlur={event => { if (!event.target.value.trim()) onChange(item.offeringId, updateAssessment(saved, assessment.id, { label: 'その他の試験' })); }} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label> : <p className="pb-2 text-sm">{assessmentLabel(assessment)}</p>}
+        <label className="text-xs">予定日<input type="date" value={assessment.scheduledDate ?? ''} disabled={disabled} onChange={event => onChange(item.offeringId, updateAssessment(saved, assessment.id, { scheduledDate: event.target.value || null }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label>
+        <div className="flex items-center justify-between gap-3 pb-2"><label className="flex items-center gap-1 whitespace-nowrap text-sm"><input type="checkbox" checked={assessment.completed} disabled={disabled} onChange={() => onChange(item.offeringId, updateAssessment(saved, assessment.id, { completed: !assessment.completed }))} />実施済み</label><button type="button" disabled={disabled} onClick={() => onChange(item.offeringId, removeAssessment(saved, assessment.id))} className="text-sm text-red-700 underline disabled:opacity-50">削除</button></div>
+      </div>)}</div>}
+    </section>
   </article>;
 }
 

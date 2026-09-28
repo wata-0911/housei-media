@@ -6,7 +6,7 @@ import type { CorrespondenceCourseProgress, Offering, PlannerItem } from '../../
 type Props = { items: PlannerItem[]; offerings: Map<string, Offering>; progress: Record<string, CorrespondenceCourseProgress>; disabled: boolean; onChange: (offeringId: string, progress: CorrespondenceCourseProgress) => void };
 const statusLabel = { not_submitted: '未提出', submitted: '提出済み', grading: '添削中', resubmit: '再提出', passed: '合格' } as const;
 
-function Card({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: CorrespondenceCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
+export function CorrespondenceDetails({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: CorrespondenceCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
   const result = correspondenceCreditResult(saved);
   const requirement = correspondenceRequirementFor(offering);
   return <article className="min-w-0 border border-gray-200 bg-white p-4 sm:p-6">
@@ -21,5 +21,5 @@ function Card({ item, offering, saved, disabled, onChange }: { item: PlannerItem
 
 export default function CorrespondenceProgress({ items, offerings, progress, disabled, onChange }: Props) {
   const courseItems = correspondencePlanItems(items, offerings);
-  return <section aria-labelledby="correspondence-heading" className="space-y-4"><div className="border border-gray-200 bg-white p-4 sm:p-6"><h2 id="correspondence-heading" className="text-xl text-[#002255]">通信学習</h2><p className="mt-2 text-sm text-gray-600">リポートと単位修得試験を記録します。科目の履修ステータスや卒業要件には自動反映しません。</p></div>{courseItems.length === 0 ? <div className="border border-gray-200 bg-white p-5 text-sm text-gray-600">年間履修計画に通信学習科目を追加すると、ここで進捗を記録できます。</div> : <div className="grid gap-4 lg:grid-cols-2">{courseItems.map(item => { const offering = offerings.get(item.offeringId)!; return <Card key={item.offeringId} item={item} offering={offering} saved={progressForCorrespondence(offering, progress)} disabled={disabled} onChange={onChange} />; })}</div>}</section>;
+  return <section aria-labelledby="correspondence-heading" className="space-y-4"><div className="border border-gray-200 bg-white p-4 sm:p-6"><h2 id="correspondence-heading" className="text-xl text-[#002255]">通信学習</h2><p className="mt-2 text-sm text-gray-600">リポートと単位修得試験を記録します。科目の履修ステータスや卒業要件には自動反映しません。</p></div>{courseItems.length === 0 ? <div className="border border-gray-200 bg-white p-5 text-sm text-gray-600">年間履修計画に通信学習科目を追加すると、ここで進捗を記録できます。</div> : <div className="grid gap-4 lg:grid-cols-2">{courseItems.map(item => { const offering = offerings.get(item.offeringId)!; return <CorrespondenceDetails key={item.offeringId} item={item} offering={offering} saved={progressForCorrespondence(offering, progress)} disabled={disabled} onChange={onChange} />; })}</div>}</section>;
 }

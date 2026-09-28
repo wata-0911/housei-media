@@ -27,6 +27,8 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
     && new Set(todoIds).size === todoIds.length
     && new Set(publicCourseIds).size === publicCourseIds.length
     && value.publicCourses.every(course => course.title === course.title.trim() && course.title.length <= 200 && course.credits === 2)
+    && value.items.every(item => item.plannedYear === null || (Number.isInteger(item.plannedYear) && item.plannedYear >= 1000 && item.plannedYear <= 9999))
+    && value.publicCourses.every(course => course.plannedYear === null || (Number.isInteger(course.plannedYear) && course.plannedYear >= 1000 && course.plannedYear <= 9999))
     && value.todos.every(todo => todo.offeringId === null || offerings.has(todo.offeringId))
     && progress.every(([id, course]) => id === course.offeringId && offerings.has(id) && isMediaSchooling(offeringMap.get(id))
       && new Set(course.lessons.map(lesson => lesson.lesson)).size === course.lessons.length

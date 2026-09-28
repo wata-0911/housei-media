@@ -177,6 +177,8 @@ export type PlannerItem = {
   status: "planned" | "in_progress" | "waiting" | "earned" | "failed" | "dropped";
   plannedYear: number | null;
   plannedTerm: string | null;
+  /** The learner's year of study, deliberately separate from plannedYear. */
+  studyYear: 1 | 2 | 3 | 4 | null;
   /** Only used for 2026 史学演習 offerings. The learner records the confirmed completion order. */
   earnedOrder: 1 | 2 | 3 | 4 | null;
 };
@@ -198,6 +200,16 @@ export type MediaCourseProgress = {
   offeringId: string;
   totalLessons: number | null;
   lessons: Array<MediaLessonProgress>;
+  assessments: Array<MediaAssessment>;
+};
+
+export type MediaAssessment = {
+  id: string;
+  type: 'midterm' | 'final' | 'other';
+  /** Used for `other`; retained for the other types too so a record can be edited safely. */
+  label: string;
+  scheduledDate: string | null;
+  completed: boolean;
 };
 
 export type CourseGrade = 'S' | 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D';
@@ -205,6 +217,8 @@ export type CourseGrade = 'S' | 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | '
 /** Evaluation records belong to a catalog offering, which is unique in the annual plan. */
 export type CourseEvaluation = {
   offeringId: string;
+  /** Course-level result entered by the learner; never inferred from method-specific grades. */
+  finalGrade: CourseGrade | null;
   reportGrade: CourseGrade | null;
   schoolingGrade: CourseGrade | null;
 };
@@ -228,12 +242,14 @@ export type PublicCourse = {
   status: "planned" | "in_progress" | "waiting" | "earned" | "failed" | "dropped";
   plannedYear: number | null;
   plannedTerm: string | null;
+  studyYear: 1 | 2 | 3 | 4 | null;
+  finalGrade: CourseGrade | null;
   /** Public courses are always recorded as a two-credit enrollment. */
   credits: 2;
 };
 
 export type PlannerState = {
-  schemaVersion: 7;
+  schemaVersion: 9;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;

@@ -13,7 +13,7 @@ export function matchesPublicCourseSearch(query: string) {
 }
 
 export function createPublicCourse(id: string): PublicCourse {
-  return { id, title: PUBLIC_COURSE_TITLE, status: 'planned', plannedYear: 2026, plannedTerm: null, credits: 2 };
+  return { id, title: PUBLIC_COURSE_TITLE, status: 'planned', plannedYear: 2026, plannedTerm: null, studyYear: null, finalGrade: null, credits: 2 };
 }
 
 export function normalizePublicCourseTitle(title: string) {
