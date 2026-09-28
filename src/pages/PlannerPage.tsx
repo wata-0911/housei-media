@@ -13,6 +13,7 @@ import type { PlannerItem, PlannerState, PublicCourse } from '../planner/planner
 import { calculateGraduationProgress } from '../planner/graduationProgress';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
 import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/publicCourses';
+import { stateForScopeChange } from '../planner/thesisSelection';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -35,7 +36,7 @@ export default function PlannerPage() {
   const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
-  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses);
+  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -152,7 +153,9 @@ export default function PlannerPage() {
         </div>
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
-      <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} disabled={loaded.error !== null} onChange={selectedScopeId => commit({ ...state, selectedScopeId }, '所属を保存しました。')} />
+      <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} thesisSelection={state.thesisSelection} disabled={loaded.error !== null}
+        onChange={selectedScopeId => commit(stateForScopeChange(state, selectedScopeId), '所属を保存しました。卒業論文の選択は未定に戻しました。')}
+        onThesisSelectionChange={thesisSelection => commit({ ...state, thesisSelection }, '卒業論文の選択を保存しました。')} />
       <CreditSummary summary={summarizeCredits(state.items, offeringsById, state.publicCourses)} />
       {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses)} />}
       {selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}

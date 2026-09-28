@@ -1,8 +1,9 @@
-import type { PlannerCatalog } from '../../planner/plannerCatalog';
+import type { PlannerCatalog, ThesisSelection } from '../../planner/plannerCatalog';
 import { selectablePrograms } from '../../planner/annualPlan';
+import { supportsThesisSelection } from '../../planner/thesisSelection';
 
-type Props = { catalog: PlannerCatalog; scopeId: string | null; disabled: boolean; onChange: (scopeId: string | null) => void };
-export default function ProgramSettings({ catalog, scopeId, disabled, onChange }: Props) {
+type Props = { catalog: PlannerCatalog; scopeId: string | null; thesisSelection: ThesisSelection; disabled: boolean; onChange: (scopeId: string | null) => void; onThesisSelectionChange: (selection: ThesisSelection) => void };
+export default function ProgramSettings({ catalog, scopeId, thesisSelection, disabled, onChange, onThesisSelectionChange }: Props) {
   const programs = selectablePrograms(catalog);
   const legacyCommon = catalog.programs.find(p => p.scopeId === scopeId && p.isCommon);
   return <section className="bg-white border border-gray-200 p-5 sm:p-7" aria-labelledby="program-heading">
@@ -15,6 +16,15 @@ export default function ProgramSettings({ catalog, scopeId, disabled, onChange }
       </optgroup>)}
     </select>
     <p className="text-sm text-gray-600 mt-3">所属は区分別集計に使用します。すべての開講科目を引き続き検索・追加できます。</p>
+    {supportsThesisSelection(catalog, scopeId) && <fieldset className="mt-5 max-w-xl">
+      <legend className="text-sm mb-2">卒業論文</legend>
+      <div className="flex flex-wrap gap-2">
+        {[['undecided', '未定'], ['selected', '履修する'], ['not_selected', '履修しない']].map(([value, label]) => <label key={value} className="border border-gray-300 px-3 py-2 text-sm has-[:checked]:border-[#002255] has-[:checked]:bg-blue-50">
+          <input type="radio" name="thesis-selection" value={value} checked={thesisSelection === value} disabled={disabled} onChange={() => onThesisSelectionChange(value as ThesisSelection)} className="mr-2" />{label}
+        </label>)}
+      </div>
+      <p className="text-sm text-gray-600 mt-2">卒論の選択により、一部の専門教育の必要単位が変わります。</p>
+    </fieldset>}
     {legacyCommon && <p className="text-sm text-amber-800 mt-2">以前の共通scope設定を保持しています。区分別集計を表示するには所属を選択してください。</p>}
   </section>;
 }

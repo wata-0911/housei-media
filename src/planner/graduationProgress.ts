@@ -6,6 +6,7 @@ import type {
   PublicCourse,
   Requirement,
   StructuredRequirement,
+  ThesisSelection,
 } from './plannerCatalog';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
@@ -170,6 +171,21 @@ function evaluateStructured(
     status: evaluateStatus(requirement.ruleType, earned, requirement.value),
     earned, inProgress, planned, target: requirement.value, unit, reason: null,
   };
+}
+
+function thesisCondition(requirement: StructuredRequirement, selection: ThesisSelection): 'active' | 'inactive' | 'undecided' {
+  const expected = requirement.conditions?.when?.thesis_selected;
+  if (expected === undefined) return 'active';
+  if (selection === 'undecided') return 'undecided';
+  return expected === (selection === 'selected') ? 'active' : 'inactive';
+}
+
+function withoutThesisCondition(requirement: StructuredRequirement): StructuredRequirement {
+  const conditions = { ...requirement.conditions };
+  delete conditions.when;
+  // This annotates the selected branch; it does not introduce an additional calculation.
+  delete conditions.includes_thesis;
+  return { ...requirement, conditions: Object.keys(conditions).length ? conditions : null };
 }
 
 function groupedCards(
@@ -360,7 +376,7 @@ function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
  */
 function professionalCards(
   items: PlannerItem[], catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>,
-  eligibleMappings: (offering: Offering) => Mapping[], hasUnresolvedEarned: boolean, publicCourseCredits: number,
+  eligibleMappings: (offering: Offering) => Mapping[], hasUnresolvedEarned: boolean, publicCourseCredits: number, thesisSelection: ThesisSelection,
 ): ProgressCard[] {
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId);
   if (!program || !['日本文学科', '史学科', '地理学科', '法律学科', '経済学科', '商業学科'].includes(program.department ?? '')) return [];
@@ -624,12 +640,22 @@ function professionalCards(
       .reduce((sum, entry) => sum + entry.earned, 0) : 0;
     const overflowElective = withOverflow(normal('選択'), requiredElective, threshold);
     const elective = { ...overflowElective, earned: overflowElective.earned + permittedPartial };
+    const thesisValue = (ruleId: string) => catalog.requirements.find((rule): rule is StructuredRequirement =>
+      rule.status === 'structured' && rule.scopeId === scopeId && rule.ruleId === ruleId)?.value ?? null;
+    const selected = thesisSelection === 'selected';
+    const electiveTarget = thesisSelection === 'undecided' ? null : thesisValue(selected ? 'law_elective_with_thesis_min_credits' : 'law_elective_without_thesis_min_credits');
+    const totalTarget = thesisSelection === 'undecided' ? null : thesisValue(selected ? 'law_total_with_thesis_min_credits' : 'law_total_without_thesis_min_credits');
+    const total = { ...requiredElective, earned: requiredElective.earned + normal('選択').earned + permittedPartial };
+    const undecidedReason = '卒論有無が未定のため、必要単位を判定できません。';
     return [
       { ...make('professional-law-required-elective', '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, qualifies,
         [detail('選択必修科目数', requiredElective, 8, 'courses')], '8科目かつ32単位が必要です。'), partialCourses: partialCourses('選択必修') },
-      { ...makeKnownUnknown('professional-law-elective', '専門教育：選択（卒業算入見込み）', elective, undefined,
-        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()} + ${requiredCourses}科目${threshold}単位達成後に認められる4単位科目のスクーリング部分修得 ${permittedPartial}単位。卒業論文の選択により必要単位が50/54単位で変わるため、ここでは達成判定しません。`,
-        overflowRule === null ? (overflowRuleReason ?? '選択必修超過分の公式ルールを確認できません。') : '卒業論文の選択状況をPlannerStateで保持していないため自動判定できません。'), partialCourses: partialCourses('選択') },
+      ...(thesisSelection === 'undecided' ? [{ ...makeKnownUnknown('professional-law-elective', '専門教育：選択（卒業算入見込み）', elective, undefined,
+        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()} + ${requiredCourses}科目${threshold}単位達成後に認められる4単位科目のスクーリング部分修得 ${permittedPartial}単位。`, undecidedReason), partialCourses: partialCourses('選択') },
+        makeKnownUnknown('professional-law-total', '専門教育：合計（卒業算入見込み）', total, undefined, '卒論の選択により必要単位が変わります。', undecidedReason)] : [
+        { ...make('professional-law-elective', '専門教育：選択', elective, electiveTarget, electiveTarget !== null && elective.earned >= electiveTarget,
+          undefined, `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()} + ${requiredCourses}科目${threshold}単位達成後に認められる4単位科目のスクーリング部分修得 ${permittedPartial}単位。`, overflowRuleReason), partialCourses: partialCourses('選択') },
+        make('professional-law-total', '専門教育：合計', total, totalTarget, totalTarget !== null && total.earned >= totalTarget, undefined, '選択必修・選択の卒業算入見込み合計です。', baseReason)]),
       make('professional-law-schooling', '専門教育：スクーリング', emptyTotals(), 8, false, undefined,
         '＊印以外のみを数える必要があります。現行offeringには＊印を識別するデータがないため自動判定しません。',
         '＊印除外と4単位科目の部分修得例外を安全に識別できません。'),
@@ -667,7 +693,7 @@ function publicCourseCard(publicCourses: PublicCourse[], catalog: PlannerCatalog
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = []): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided'): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return { graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [] };
@@ -679,12 +705,15 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const hasUnresolvedEarned = items.some(item => item.status === 'earned'
     && offerings.get(item.offeringId)?.resolutionStatus === 'manual_review'
     && !(scopeId === HISTORY_SCOPE_ID && isHistorySeminar(offerings.get(item.offeringId))));
-  const requirements = requirementsForScope(catalog, scopeId).map(requirement =>
-    requirement.status === 'unsupported'
-      ? unknown(requirement, requirement.reason || '未対応の要件です')
-      : evaluateStructured(requirement, items, offerings, eligibleMappings, hasUnresolvedEarned));
+  const requirements = requirementsForScope(catalog, scopeId).flatMap(requirement => {
+    if (requirement.status === 'unsupported') return [unknown(requirement, requirement.reason || '未対応の要件です')];
+    const condition = thesisCondition(requirement, thesisSelection);
+    if (condition === 'inactive') return [];
+    if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
+    return [evaluateStructured(withoutThesisCondition(requirement), items, offerings, eligibleMappings, hasUnresolvedEarned)];
+  });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
-  const professional = professionalCards(items, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0);
+  const professional = professionalCards(items, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, thesisSelection);
   const cards = [
     ...groupedCards(items, offerings, eligibleMappings, hasUnresolvedEarned),
     ...professional,

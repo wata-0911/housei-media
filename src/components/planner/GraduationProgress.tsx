@@ -26,6 +26,7 @@ export default function GraduationProgress({ progress }: { progress: Progress })
         </div>}
         {row.repeatableCourses && row.repeatableCourses.length > 0 && <ul className="mt-3 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{row.repeatableCourses.map(course => <li key={course.label}>{course.label} {course.counted} / {course.limit}単位（{Math.min(course.courses, course.limitCourses)} / {course.limitCourses}回）{course.earned > course.counted ? `。超過${course.earned - course.counted}単位は卒業算入外` : ''}</li>)}</ul>}
         {row.publicCourse && <p className="mt-3 border-t border-gray-100 pt-2 text-xs leading-relaxed text-gray-700">{row.publicCourse.countedCredits} / {row.publicCourse.limitCredits}単位（{row.publicCourse.countedCourses} / {row.publicCourse.limitCourses}科目）{row.publicCourse.excludedCredits > 0 ? `。超過${row.publicCourse.excludedCredits}単位は卒業算入外` : ''}</p>}
+        {row.reason && <p className="mt-2 break-words text-xs leading-relaxed text-amber-800">{row.reason}</p>}
         {row.note && <p className="mt-2 break-words text-xs leading-relaxed text-gray-600">{row.note}</p>}
       </article>)}
     </div>

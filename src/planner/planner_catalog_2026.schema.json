@@ -986,7 +986,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 3
+          "const": 4
         },
         "selectedScopeId": {
           "anyOf": [
@@ -999,6 +999,9 @@
               "type": "null"
             }
           ]
+        },
+        "thesisSelection": {
+          "enum": ["undecided", "selected", "not_selected"]
         },
         "items": {
           "type": "array",
@@ -1020,6 +1023,7 @@
       "required": [
         "schemaVersion",
         "selectedScopeId",
+        "thesisSelection",
         "items",
         "publicCourses",
         "todos"

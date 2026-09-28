@@ -3,7 +3,7 @@ import { validateState } from './validation';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 3, selectedScopeId: null, items: [], publicCourses: [], todos: [] });
+export const initialState = (): PlannerState => ({ schemaVersion: 4, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [] });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null };
 
@@ -33,8 +33,9 @@ function migrateState(value: unknown): unknown {
       ? { ...item as Record<string, unknown>, earnedOrder: null }
       : item),
   } : state;
-  if (v2.schemaVersion !== 2) return value;
-  return { ...v2, schemaVersion: 3, publicCourses: [] };
+  const v3 = v2.schemaVersion === 2 ? { ...v2, schemaVersion: 3, publicCourses: [] } : v2;
+  if (v3.schemaVersion !== 3) return value;
+  return { ...v3, schemaVersion: 4, thesisSelection: 'undecided' };
 }
 
 // Compare before writes so another tab's changes are not silently replaced.
