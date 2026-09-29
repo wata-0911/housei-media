@@ -19,6 +19,7 @@ import { correspondenceCreditResult, progressForCorrespondence, setReportStatus 
 import { correspondenceRequirementFor, structuredRequirementCount } from '../src/planner/correspondenceRequirements.ts';
 import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planTable.ts';
 import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
+import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -1776,4 +1777,20 @@ test('planner export CSV writes UTF-8 BOM, headers, RFC4180 escaping, and leaves
   assert.match(csv, /法学部 \/ 法律学科,,,,"科目,/);
   assert.ok(csv.includes('\r\n'));
   assert.equal(plannerExportFileName(new Date(2026, 8, 29)), 'hosei-planner-2026-09-29');
+});
+
+test('grade import contract accepts only complete v1 extension JSON and has no final grade field', () => {
+  const schooling = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
+  const value = {
+    schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [{
+      rawName: '論理学', categoryRaw: '***一般教育人文分野',
+      compositionCredits: { raw: '4', value: 4 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '', value: null },
+      reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })),
+      creditExam: { rawDate: '2026/07/01', rawCredits: '*4', rawGrade: 'D', date: '2026-07-01', credits: null, grade: 'D', pendingMarker: true }, schoolings: [schooling, schooling],
+    }],
+  };
+  assert.equal(isHoseiGradeImportV1(value), true);
+  assert.equal('finalGrade' in value.courses[0], false);
+  assert.equal(isHoseiGradeImportV1({ ...value, schemaVersion: 2 }), false);
+  assert.equal(isHoseiGradeImportV1({ ...value, courses: [{ ...value.courses[0], reports: [] }] }), false);
 });
