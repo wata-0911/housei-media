@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { isHoseiGradeImportV1, type HoseiGradeImportV1 } from '../../planner/gradeImportContract';
 import { importPreview, type ImportPreviewUnit, type ImportedStudyRecord } from '../../planner/gradeImportApply';
 import type { Offering } from '../../planner/plannerCatalog';
 
-export default function GradeImportPanel({ offerings, existing, disabled, onApply }: { offerings: Offering[]; existing: ImportedStudyRecord[]; disabled: boolean; onApply: (units: ImportPreviewUnit[]) => void }) {
+export default function GradeImportPanel({ offerings, existing, disabled, onApply, directImport, onDirectResult }: { offerings: Offering[]; existing: ImportedStudyRecord[]; disabled: boolean; onApply: (units: ImportPreviewUnit[]) => void; directImport?: unknown; onDirectResult?: (result: { ok: boolean; courseCount?: number }) => void }) {
   const [text, setText] = useState(''); const [error, setError] = useState(''); const [units, setUnits] = useState<ImportPreviewUnit[] | null>(null);
   function read(value: string) { try { const parsed: unknown = JSON.parse(value); if (!isHoseiGradeImportV1(parsed)) throw new Error('JSON が成績表 contract v1 を満たしていません。'); setUnits(importPreview(parsed as HoseiGradeImportV1, offerings, existing)); setError(''); } catch (e) { setError(e instanceof Error ? e.message : 'JSON を読み込めません。'); setUnits(null); } }
+  useEffect(() => { if (directImport === undefined) return; if (!isHoseiGradeImportV1(directImport)) { setError('拡張機能から受信した成績データが contract v1 を満たしていません。反映していません。'); setUnits(null); onDirectResult?.({ ok: false }); return; } setText(''); setUnits(importPreview(directImport, offerings, existing)); setError(''); onDirectResult?.({ ok: true, courseCount: directImport.courses.length }); }, [directImport, offerings, existing, onDirectResult]);
   function update(index: number, patch: Partial<ImportPreviewUnit>) { setUnits(current => current?.map((unit, i) => i === index ? { ...unit, ...patch, yearSource: patch.academicYear !== undefined && unit.yearSource !== 'source' ? 'manual' : unit.yearSource } : unit) ?? null); }
   return <section className="border border-[#002255] bg-white p-4 space-y-3" aria-label="成績データを取り込む">
     <h2 className="text-lg text-[#002255]">成績データを取り込む</h2><p className="text-sm">この画面ではまだ保存しません。法政IDなどcontract外の値は保存されません。</p>
+    {directImport !== undefined && !error && units && <p role="status" className="border border-blue-200 bg-blue-50 p-2 text-sm">拡張機能から成績データを受信しました。内容を確認してから反映してください。</p>}
     <label className="block text-sm">JSONファイル <input disabled={disabled} type="file" accept="application/json,.json" className="mt-1 block max-w-full" onChange={e => { const file = e.target.files?.[0]; if (!file) return; file.text().then(value => { setText(value); read(value); }); }} /></label>
     <label className="block text-sm">またはJSONを貼り付け<textarea disabled={disabled} value={text} onChange={e => setText(e.target.value)} className="mt-1 min-h-24 w-full border p-2 font-mono text-xs" /></label>
     <button type="button" disabled={disabled || !text.trim()} onClick={() => read(text)} className="bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50">読み込み・検証</button>

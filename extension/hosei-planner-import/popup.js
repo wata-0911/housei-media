@@ -1,4 +1,5 @@
 let imported = null;
+const handoff = globalThis.HoseiPlannerHandoffStore;
 const $ = id => document.getElementById(id);
 const status = text => { $('status').textContent = text; };
 const injectAndRead = async tabId => {
@@ -19,3 +20,15 @@ $('read').addEventListener('click', async () => {
 });
 $('copy').addEventListener('click', async () => { if (!imported) return; await navigator.clipboard.writeText(JSON.stringify(imported, null, 2)); status('JSONをコピーしました。'); });
 $('download').addEventListener('click', () => { if (!imported) return; const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([JSON.stringify(imported, null, 2)], { type: 'application/json' })); link.download = 'hosei-grade-import-v1.json'; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); status('JSONを保存しました。'); });
+$('planner').addEventListener('click', async () => {
+  if (!imported) return;
+  $('planner').disabled = true; status('Plannerを開いています…');
+  try {
+    const token = crypto.randomUUID();
+    const stored = await chrome.runtime.sendMessage({ type: 'hosei-grade-handoff-store', token, importData: imported });
+    if (!stored?.ok) throw new Error('handoff_unavailable');
+    await chrome.tabs.create({ url: handoff.plannerUrl(token) });
+    status('Plannerを開きました。内容を確認してから反映してください。');
+  } catch { status('Plannerへ直接渡せませんでした。JSONを保存またはコピーして取り込めます。'); }
+  finally { $('planner').disabled = false; }
+});

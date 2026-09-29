@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import CourseSearch from '../components/planner/CourseSearch';
 import PlannedCourseList from '../components/planner/PlannedCourseList';
 import ProgramSettings from '../components/planner/ProgramSettings';
@@ -19,6 +19,7 @@ import PlannerExportActions from '../components/planner/PlannerExportActions';
 import { plannerExportPresentation } from '../planner/plannerExport';
 import GradeImportPanel from '../components/planner/GradeImportPanel';
 import { applyImport, type ImportPreviewUnit } from '../planner/gradeImportApply';
+import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -41,6 +42,7 @@ export default function PlannerPage() {
   const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
   const [undoImport, setUndoImport] = useState<PlannerState | null>(null);
   const [activeTab, setActiveTab] = useState<'annual' | 'media'>('annual');
+  const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection);
@@ -54,6 +56,21 @@ export default function PlannerPage() {
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  useEffect(() => {
+    const token = gradeHandoffToken(window.location.hash);
+    if (!token) return;
+    const receive = (event: MessageEvent) => {
+      if (event.source !== window || !isGradeHandoffResponse(event.data, token)) return;
+      window.removeEventListener('message', receive);
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+      if (!event.data.ok) { setNotice('拡張機能から成績データを受信できませんでした。JSONを保存またはコピーして取り込めます。'); return; }
+      setDirectImport(event.data.importData);
+    };
+    window.addEventListener('message', receive);
+    window.postMessage({ type: GRADE_HANDOFF_REQUEST, token }, window.location.origin);
+    return () => window.removeEventListener('message', receive);
   }, []);
 
   function commit(next: PlannerState, message: string): boolean {
@@ -150,9 +167,10 @@ export default function PlannerPage() {
   }
   function applyGradeImport(units: ImportPreviewUnit[]) {
     const next = applyImport(state, units);
-    if (commit(next, `${next.importedStudyRecords.length - state.importedStudyRecords.length}件の成績コンポーネントを保存しました。`)) setUndoImport(state);
+    if (commit(next, `${next.importedStudyRecords.length - state.importedStudyRecords.length}件の成績コンポーネントを保存しました。`)) { setUndoImport(state); setDirectImport(undefined); }
   }
   function undoGradeImport() { if (undoImport && commit(undoImport, '直前の成績取り込みを元に戻しました。')) setUndoImport(null); }
+  const onDirectResult = useCallback(({ ok, courseCount }: { ok: boolean; courseCount?: number }) => setNotice(ok ? `拡張機能から${courseCount}科目を受信しました。内容を確認してから反映してください。` : '拡張機能から受信した成績データを検証できませんでした。反映していません。'), []);
 
   return <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen" style={{ fontFamily: '"Noto Serif JP", serif' }}>
     <section className="bg-[#002255] text-white py-12 sm:py-16 text-center px-4">
@@ -191,7 +209,7 @@ export default function PlannerPage() {
         <button type="button" role="tab" aria-selected={activeTab === 'media'} onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
       </div>
       {activeTab === 'annual'
-        ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} disabled={loaded.error !== null} onApply={applyGradeImport} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses)} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}</div>
+        ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses)} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}</div>
         : activeTab === 'media'
           ? <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} disabled={loaded.error !== null} onChange={changeMediaProgress} /> : null}
     </div>
