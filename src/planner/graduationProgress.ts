@@ -744,7 +744,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     return { graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [], importedWarnings: [], importedContributionCount: 0 };
   }
   const catalogOfferings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
-  const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements);
+  const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements, catalog, scopeId);
   const calculationItems = [...items, ...imported.items];
   const offerings = new Map([...catalog.offerings, ...imported.offerings].map(offering => [offering.id, offering]));
   const resolve = createMappingResolver(catalog);
