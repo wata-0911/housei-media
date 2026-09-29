@@ -64,15 +64,15 @@ test('chooses the populated data table over Super Tables header clones and does 
   assert.deepEqual(outcome.diagnostics.tableCandidates.map(candidate => candidate.rowCount), [0, 0, 40, 40]);
 });
 
-test('breaks a different-content course-row tie by non-empty logical cells', () => {
-  const sparse = cells('少ない情報');
-  const complete = cells('多い情報', { 2: '4', 5: '4', 7: '○26/06/01' });
-  const outcome = extractTables([table([sparse]), table([complete])]);
+test('chooses the candidate with the most course rows', () => {
+  const oneCourse = table([cells('候補A')]);
+  const twoCourses = table([cells('候補B-1'), cells('候補B-2')]);
+  const outcome = extractTables([oneCourse, twoCourses]);
   assert.equal(outcome.ok, true);
-  assert.equal(outcome.value.courses[0].rawName, '多い情報');
+  assert.deepEqual(outcome.value.courses.map(course => course.rawName), ['候補B-1', '候補B-2']);
   assert.equal(outcome.diagnostics.selectedCandidateIndex, 1);
-  assert.deepEqual(outcome.diagnostics.tieCandidateIndexes, [0, 1]);
-  assert.equal(outcome.diagnostics.tableCandidates[1].nonEmptyCellCount > outcome.diagnostics.tableCandidates[0].nonEmptyCellCount, true);
+  assert.deepEqual(outcome.diagnostics.tieCandidateIndexes, []);
+  assert.deepEqual(outcome.diagnostics.tableCandidates.map(candidate => candidate.courseRowCount), [1, 2]);
 });
 
 test('supports the original single-table case', () => {
@@ -89,7 +89,7 @@ test('reports a found table with no course rows separately from no table', () =>
     ok: false,
     reason: 'course_rows_not_found',
     diagnostics: {
-      tableCandidates: [{ index: 0, rowCount: 2, valid24RowCount: 2, categoryRowCount: 1, courseRowCount: 0, nonEmptyCellCount: 0 }],
+      tableCandidates: [{ index: 0, rowCount: 2, valid24RowCount: 2, categoryRowCount: 1, courseRowCount: 0 }],
       selectedCandidateIndex: 0,
       tieCandidateIndexes: []
     }

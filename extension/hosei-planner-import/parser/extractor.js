@@ -43,12 +43,11 @@
       rowCount: logicalRows.length,
       valid24RowCount: validRows.length,
       categoryRowCount: validRows.filter(isCategoryRow).length,
-      courseRowCount: courseRows.length,
-      nonEmptyCellCount: courseRows.reduce((count, cells) => count + cells.filter(cell => cell !== '').length, 0)
+      courseRowCount: courseRows.length
     };
   };
   const diagnosticsFor = (candidates, selectedCandidateIndex = null, tieCandidateIndexes = []) => ({
-    tableCandidates: candidates.map(({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount, nonEmptyCellCount }) => ({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount, nonEmptyCellCount })),
+    tableCandidates: candidates.map(({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount }) => ({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount })),
     selectedCandidateIndex,
     tieCandidateIndexes
   });
@@ -56,14 +55,7 @@
     const largestCourseRowCount = Math.max(...candidates.map(candidate => candidate.courseRowCount));
     const tied = candidates.filter(candidate => candidate.courseRowCount === largestCourseRowCount);
     if (tied.length === 1) return { selected: tied[0], tieCandidateIndexes: [] };
-    const distinctContents = new Set(tied.map(candidate => JSON.stringify(candidate.courseRows))).size;
-    if (distinctContents === 1) return { selected: tied[0], tieCandidateIndexes: tied.map(candidate => candidate.index) };
-    const selected = tied.reduce((best, candidate) => {
-      if (candidate.nonEmptyCellCount !== best.nonEmptyCellCount) return candidate.nonEmptyCellCount > best.nonEmptyCellCount ? candidate : best;
-      if (candidate.valid24RowCount !== best.valid24RowCount) return candidate.valid24RowCount > best.valid24RowCount ? candidate : best;
-      return best;
-    });
-    return { selected, tieCandidateIndexes: tied.map(candidate => candidate.index) };
+    return { selected: tied[0], tieCandidateIndexes: tied.map(candidate => candidate.index) };
   };
   const extractCurrentDocument = () => {
     const candidates = Array.from(document.querySelectorAll('table[id="seisekiTabele110"]'), inspectTable);
