@@ -26,14 +26,17 @@ export function correspondenceCreditResult(course: CorrespondenceCourseProgress)
   const reports = course.reports.filter(report => report.reportNumber <= requiredReports);
   if (reports.length !== requiredReports) return { examEligible: null, reportsPassed: null, examPassed: course.examGrade === null ? null : course.examGrade !== 'D', creditEarned: null, reason: '必要リポートの記録が不足しています。' };
   const examEligible = reports.every(report => report.status !== 'not_submitted');
-  const reportsPassed = reports.every(report => report.status === 'passed' && report.grade !== null);
+  // A report's completion state is the source of truth for the progress
+  // workflow. Its optional grade records a known result, but must not prevent
+  // a learner-selected "passed" state from counting as passed.
+  const reportsPassed = reports.every(report => report.status === 'passed');
   const examPassed = course.examGrade === null ? null : course.examGrade !== 'D';
   const creditEarned = examPassed === null ? false : reportsPassed && examPassed;
   return { examEligible, reportsPassed, examPassed, creditEarned, reason: creditEarned ? '必要リポートがすべて合格し、単位修得試験も合格です。' : !examEligible ? '必要リポートがすべて提出済みになると、単位修得試験の受験資格を満たします。' : !reportsPassed ? '単位修得には必要リポートの全件合格が必要です。' : examPassed === null ? '単位修得試験は未受験です。' : '単位修得試験が不合格です。' };
 }
 export function validCorrespondenceProgress(course: CorrespondenceCourseProgress): boolean {
   return (course.requiredReports === null || (Number.isInteger(course.requiredReports) && course.requiredReports >= 1 && course.requiredReports <= 20))
-    && course.reports.every((report: ReportProgress) => Number.isInteger(report.reportNumber) && report.reportNumber >= 1 && REPORT_STATUSES.includes(report.status) && (report.status === 'passed' ? report.grade !== null && REPORT_PASSING_GRADES.includes(report.grade) : report.grade === null))
+    && course.reports.every((report: ReportProgress) => Number.isInteger(report.reportNumber) && report.reportNumber >= 1 && REPORT_STATUSES.includes(report.status) && (report.grade === null || (report.status === 'passed' && REPORT_PASSING_GRADES.includes(report.grade))))
     && new Set(course.reports.map(report => report.reportNumber)).size === course.reports.length
     && (course.examGrade === null || CREDIT_EXAM_GRADES.includes(course.examGrade));
 }

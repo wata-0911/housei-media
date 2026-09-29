@@ -1664,6 +1664,18 @@ test('correspondence progress separates report resubmission, eligibility, and ea
   assert.equal(correspondenceCreditResult({ ...passedReports, examGrade: 'C-' }).creditEarned, true);
 });
 
+test('a passed report counts immediately even when its optional grade is not recorded', () => {
+  const offering = catalog.offerings.find(current => current.name === '債権総論' && current.method === 'correspondence');
+  const saved = progressForCorrespondence(offering, {});
+  const onePassed = setReportStatus(saved, 1, 'passed');
+  const allPassed = setReportStatus(onePassed, 2, 'passed');
+  assert.equal(onePassed.reports[0].grade, null, 'selecting passed does not invent a report grade');
+  assert.equal(correspondenceProgressSummary(onePassed), 'リポート 1/2・試験 未受験');
+  assert.equal(correspondenceCreditResult(allPassed).reportsPassed, true);
+  assert.equal(correspondenceCreditResult({ ...allPassed, examGrade: 'C-' }).creditEarned, true);
+  assert.equal(validateState({ ...initialState(), items: [item(offering.id)], correspondenceProgress: { [offering.id]: allPassed } }, catalog), true);
+});
+
 test('structured correspondence requirements are keyed by offering ID only', () => {
   const mapped = catalog.offerings.find(current => current.id === '04050f27-c605-44c1-ae02-785c42114cd3');
   assert.equal(structuredRequirementCount, 10);
@@ -2074,4 +2086,17 @@ test('unified course view coalesces only safely identified official achievements
   assert.equal(rows[1].displayStatus, 'earned_imported');
   assert.deepEqual(exact, originalExact, 'the display view never rewrites the imported achievement');
   assert.deepEqual(planned, originalPlanned, 'the display view never rewrites the planner item');
+});
+
+test('unified course view preserves an official row when multiple planner offerings share its course identity', () => {
+  const offering = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(offering);
+  const alternate = { ...offering, id: 'same-course-different-offering' };
+  const offerings = new Map([...offeringsById, [alternate.id, alternate]]);
+  const exact = { id: 'official-duplicate-safe', fingerprint: 'official-duplicate-safe', source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: null, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [offering.id] };
+  const rows = createUnifiedCourseRows([item(offering.id), item(alternate.id)], [exact], offerings);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.slice(0, 2).map(row => row.source), ['planner', 'planner']);
+  assert.equal(rows[2].source, 'imported');
+  assert.equal(rows[2].importedAchievements[0], exact);
 });

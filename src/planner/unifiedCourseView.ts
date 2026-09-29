@@ -47,17 +47,21 @@ export function createUnifiedCourseRows(items: PlannerItem[], importedAchievemen
     source: 'planner' as const,
     displayStatus: 'planner' as const,
   }));
-  const plannerRowsByCourseId = new Map<string, UnifiedCourseRow>();
+  const plannerRowsByCourseId = new Map<string, UnifiedCourseRow[]>();
   for (const row of rows) {
     if (!row.plannerItem) continue;
     const courseId = safePlannerCourseId(row.plannerItem, offerings);
-    if (courseId) plannerRowsByCourseId.set(courseId, row);
+    if (courseId) plannerRowsByCourseId.set(courseId, [...(plannerRowsByCourseId.get(courseId) ?? []), row]);
   }
 
   for (const achievement of importedAchievements) {
     if (achievement.earnedCreditsTotal === null || achievement.earnedCreditsTotal <= 0) continue;
     const courseId = safeImportedCourseId(achievement, offerings);
-    const plannerRow = courseId ? plannerRowsByCourseId.get(courseId) : undefined;
+    // Multiple planner offerings may legitimately share one course identity.
+    // Coalesce only the unambiguous one-to-one case; otherwise preserve the
+    // official achievement as its own read-only row.
+    const plannerRows = courseId ? plannerRowsByCourseId.get(courseId) : undefined;
+    const plannerRow = plannerRows?.length === 1 ? plannerRows[0] : undefined;
     if (plannerRow) {
       plannerRow.importedAchievements.push(achievement);
       plannerRow.source = 'planner_imported';

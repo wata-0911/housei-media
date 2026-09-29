@@ -4,7 +4,7 @@ import { gradeLabel } from '../../planner/courseEvaluations';
 import type { CorrespondenceCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
 
 type Props = { items: PlannerItem[]; offerings: Map<string, Offering>; progress: Record<string, CorrespondenceCourseProgress>; disabled: boolean; onChange: (offeringId: string, progress: CorrespondenceCourseProgress) => void };
-const statusLabel = { not_submitted: '未提出', submitted: '提出済み', grading: '添削中', resubmit: '再提出', passed: '合格' } as const;
+const statusLabel = { not_submitted: '未提出', submitted: '提出済み', grading: '添削中', resubmit: '再提出', passed: '合格済み' } as const;
 
 export function CorrespondenceDetails({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: CorrespondenceCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
   const result = correspondenceCreditResult(saved);
