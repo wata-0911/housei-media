@@ -48,6 +48,18 @@ export function importedAchievementDisplayStatus(achievement: ImportedCourseAchi
   return 'pending_imported';
 }
 
+/** Compact source-fact context displayed alongside a retained planner row. */
+export function importedAchievementStatusLabel(achievement: ImportedCourseAchievement, meta: ImportedCourseUserMeta | undefined) {
+  switch (importedAchievementDisplayStatus(achievement, meta)) {
+    case 'earned_imported': return '修得済み（成績表）';
+    case 'failed_imported': return '不合格（成績表）';
+    case 'waiting_imported': return '成績表取込: 結果待ち';
+    case 'in_progress_imported': return '成績表取込: 履修中';
+    case 'pending_imported': return '成績表取込: 判定保留';
+    case 'planner': return '';
+  }
+}
+
 export function createUnifiedCourseRows(items: PlannerItem[], importedAchievements: ImportedCourseAchievement[], offerings: Map<string, Offering>, userMeta: Record<string, ImportedCourseUserMeta> = {}): UnifiedCourseRow[] {
   const rows: UnifiedCourseRow[] = items.map(item => ({
     key: `planner:${item.offeringId}`,
@@ -70,10 +82,10 @@ export function createUnifiedCourseRows(items: PlannerItem[], importedAchievemen
     const courseId = safeImportedCourseId(achievement, offerings);
     // Multiple planner offerings may legitimately share one course identity.
     // Coalesce only the unambiguous one-to-one case; otherwise preserve the
-    // official achievement as its own read-only row.
+    // imported achievement as its own read-only row.
     const plannerRows = courseId ? plannerRowsByCourseId.get(courseId) : undefined;
     const plannerRow = plannerRows?.length === 1 ? plannerRows[0] : undefined;
-    if (displayStatus === 'earned_imported' && plannerRow) {
+    if (plannerRow) {
       plannerRow.importedAchievements.push(achievement);
       plannerRow.source = 'planner_imported';
       continue;

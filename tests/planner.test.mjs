@@ -24,7 +24,7 @@ import { academicYearFromDate, applyImport, groupImportedAchievements, hasCorres
 import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
 import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/importedAchievementCalculations.ts';
 import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
-import { createUnifiedCourseRows } from '../src/planner/unifiedCourseView.ts';
+import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -2103,6 +2103,20 @@ test('unified course view coalesces only safely identified official achievements
   assert.equal(rows[1].displayStatus, 'earned_imported');
   assert.deepEqual(exact, originalExact, 'the display view never rewrites the imported achievement');
   assert.deepEqual(planned, originalPlanned, 'the display view never rewrites the planner item');
+});
+
+test('unified course view coalesces every safely identified imported lifecycle without changing source state', () => {
+  const offering = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(offering);
+  const planned = { ...item(offering.id, 'in_progress'), studyYear: 2 };
+  const imported = (id, earnedCreditsTotal = 0) => ({ id, fingerprint: id, source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: null, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [offering.id] });
+  const inProgress = imported('safe-in-progress'); const waiting = imported('safe-waiting'); const pending = imported('safe-pending'); const earned = imported('safe-earned', 2);
+  const userMeta = { [inProgress.id]: { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 2 }, [waiting.id]: { lifecycleStatus: 'waiting', plannedYear: 2026, plannedTerm: '後期', studyYear: 2 }, [pending.id]: { lifecycleStatus: null, plannedYear: null, plannedTerm: null, studyYear: null }, [earned.id]: { lifecycleStatus: 'waiting', plannedYear: 2026, plannedTerm: '後期', studyYear: 2 } };
+  const originalPlanner = structuredClone(planned); const originalImported = structuredClone([inProgress, waiting, pending, earned]); const originalMeta = structuredClone(userMeta);
+  const rows = createUnifiedCourseRows([planned], [inProgress, waiting, pending, earned], offeringsById, userMeta);
+  assert.equal(rows.length, 1); assert.equal(rows[0].source, 'planner_imported'); assert.deepEqual(rows[0].importedAchievements, [inProgress, waiting, pending, earned]);
+  assert.deepEqual([inProgress, waiting, pending, earned].map(achievement => importedAchievementStatusLabel(achievement, userMeta[achievement.id])), ['成績表取込: 履修中', '成績表取込: 結果待ち', '成績表取込: 判定保留', '修得済み（成績表）']);
+  assert.deepEqual(planned, originalPlanner, 'the view never changes PlannerItem status'); assert.deepEqual([inProgress, waiting, pending, earned], originalImported, 'the view never changes imported source facts'); assert.deepEqual(userMeta, originalMeta, 'the view never changes imported user metadata');
 });
 
 test('unified course view preserves an official row when multiple planner offerings share its course identity', () => {
