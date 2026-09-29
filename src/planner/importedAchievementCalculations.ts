@@ -13,8 +13,9 @@ export type ImportedManagedMedia = { sourceCourseId: string; rawName: string; me
 export type DerivedImportedAchievements = { items: PlannerItem[]; offerings: Offering[]; categoryItems: PlannerItem[]; categoryOfferings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[]; mediaPending: ImportedMediaPending[]; unclassified: ImportedCourseAchievement[]; classifiedCredits: number; categoryOverrides: Map<string, CreditCategory> };
 
 function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering | undefined, courseId: string, offerings: Map<string, Offering>): Offering | undefined {
-  const explicitlyLinked = manuallyLinked && isMediaSchooling(manuallyLinked) ? manuallyLinked : undefined;
-  if (explicitlyLinked) return explicitlyLinked;
+  // An explicit choice always wins.  In particular, a learner's explicit
+  // non-Media choice must not be silently replaced with a derived Media one.
+  if (manuallyLinked) return isMediaSchooling(manuallyLinked) ? manuallyLinked : undefined;
 
   const mediaCandidates = [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
   const terms = group.filter(record => record.method === 'schooling').flatMap(record => [record.term, record.rawTerm]).filter((term): term is string => typeof term === 'string').map(term => term.normalize('NFKC').replace(/\s/g, ''));
@@ -43,7 +44,9 @@ export function managedImportedMedia(rows: ImportedCourseAchievement[], records:
   const usedOfferings = new Set<string>();
   for (const row of rows) {
     const meta = userMeta[row.id];
-    if (!meta?.lifecycleStatus || (row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0)) continue;
+    // Only an explicitly in-progress, not-yet-earned row may create a Media
+    // progress surface.  Waiting and pending rows remain source facts only.
+    if (meta?.lifecycleStatus !== 'in_progress' || (row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0)) continue;
     const group = grouped.get(row.id) ?? [];
     const manual = row.selectionSource === 'manual' && row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
     const safeIdentity = Boolean(row.courseId && (row.selectionSource === 'manual'
@@ -58,7 +61,11 @@ export function managedImportedMedia(rows: ImportedCourseAchievement[], records:
     const candidates = safeIdentity && row.courseId
       ? [...offerings.values()].filter(candidate => candidate.courseId === row.courseId && isMediaSchooling(candidate))
       : [];
-    if (candidates.length > 1 || (!safeIdentity && row.candidateOfferingIds.length > 0)) pending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates: candidates.length ? candidates : row.candidateOfferingIds.flatMap(id => offerings.get(id)).filter((candidate): candidate is Offering => Boolean(candidate && isMediaSchooling(candidate))) });
+    // A safe course identity alone is not proof that a schooling component
+    // was Media.  Keep every unresolved automatic case visible for an
+    // intentional learner confirmation, including a single Media candidate
+    // that conflicts with a normal-schooling candidate.
+    if ((candidates.length > 0 && row.selectionSource !== 'manual') || (!safeIdentity && row.candidateOfferingIds.length > 0)) pending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates: candidates.length ? candidates : row.candidateOfferingIds.flatMap(id => offerings.get(id)).filter((candidate): candidate is Offering => Boolean(candidate && isMediaSchooling(candidate))) });
   }
   return { media, pending };
 }

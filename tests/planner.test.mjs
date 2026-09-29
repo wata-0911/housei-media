@@ -2138,6 +2138,41 @@ test('only safely resolved in-progress imported Media connects to offering-keyed
   assert.equal(managedImportedMedia([ambiguous], [], { [ambiguous.id]: meta[safe.id] }, offeringsById).media.length, 0);
 });
 
+test('in-progress imported Media auto-matches only when its safe identity proves one Media offering', () => {
+  const base = catalog.offerings.find(offering => offering.courseId && offering.resolutionStatus === 'matched' && offering.method === 'schooling');
+  assert.ok(base && base.courseId);
+  const source = (id, patch = {}) => ({ id, fingerprint: id, source: 'hosei_import', rawName: '自動照合科目', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: 0, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: 'safe-auto-course', selectedOfferingId: null, selectionSource: 'none', match: 'exact_unique', candidateOfferingIds: [], ...patch });
+  const record = (sourceCourseId, term = null) => ({ id: `${sourceCourseId}-component`, fingerprint: `${sourceCourseId}-component`, source: 'hosei_import', rawName: '自動照合科目', offeringId: null, match: 'ambiguous', method: 'schooling', academicYear: 2026, yearSource: 'source', rawYear: '26', term, rawTerm: term, date: null, credits: null, grade: null, sourceCourseId, earnedCreditsTotal: 0, schoolingCreditsTotal: 0, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' });
+  const mediaFirst = { ...base, id: 'safe-auto-media-first', courseId: 'safe-auto-course', name: '自動照合科目(前期メディア)', deliveryCategory: '前期メディア' };
+  const mediaSecond = { ...base, id: 'safe-auto-media-second', courseId: 'safe-auto-course', name: '自動照合科目(後期メディア)', deliveryCategory: '後期メディア' };
+  const normal = { ...base, id: 'safe-auto-normal', courseId: 'safe-auto-course', name: '自動照合科目(夏期スクーリング)', deliveryCategory: '夏期スクーリング' };
+  const active = row => ({ [row.id]: { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 1 } });
+
+  const termMatched = source('term-matched');
+  assert.equal(managedImportedMedia([termMatched], [record(termMatched.id, ' 前期メディア ')], active(termMatched), new Map([[mediaFirst.id, mediaFirst], [mediaSecond.id, mediaSecond], [normal.id, normal]])).media[0].offering.id, mediaFirst.id, 'NFKC-normalized term evidence resolves one Media offering without a manual selection');
+
+  const onlyMedia = source('only-media');
+  assert.equal(managedImportedMedia([onlyMedia], [], active(onlyMedia), new Map([[mediaFirst.id, mediaFirst]])).media[0].offering.id, mediaFirst.id, 'one Media candidate without normal-schooling competition is safe');
+
+  const multipleMedia = source('multiple-media');
+  const multiResult = managedImportedMedia([multipleMedia], [], active(multipleMedia), new Map([[mediaFirst.id, mediaFirst], [mediaSecond.id, mediaSecond]]));
+  assert.equal(multiResult.media.length, 0);
+  assert.equal(multiResult.pending[0].sourceCourseId, multipleMedia.id, 'multiple Media candidates require confirmation');
+
+  const normalConflict = source('normal-conflict');
+  const conflictResult = managedImportedMedia([normalConflict], [], active(normalConflict), new Map([[mediaFirst.id, mediaFirst], [normal.id, normal]]));
+  assert.equal(conflictResult.media.length, 0);
+  assert.equal(conflictResult.pending[0].sourceCourseId, normalConflict.id, 'a normal-schooling conflict requires confirmation');
+
+  const waiting = source('waiting');
+  assert.equal(managedImportedMedia([waiting], [], { [waiting.id]: { ...active(waiting)[waiting.id], lifecycleStatus: 'waiting' } }, new Map([[mediaFirst.id, mediaFirst]])).media.length, 0, 'waiting rows do not create progress');
+  const earned = source('earned', { earnedCreditsTotal: 2 });
+  assert.equal(managedImportedMedia([earned], [], active(earned), new Map([[mediaFirst.id, mediaFirst]])).media.length, 0, 'officially earned rows do not create progress');
+
+  const manual = source('manual', { selectedOfferingId: mediaSecond.id, selectionSource: 'manual' });
+  assert.equal(managedImportedMedia([manual], [], active(manual), new Map([[mediaFirst.id, mediaFirst], [mediaSecond.id, mediaSecond]])).media[0].offering.id, mediaSecond.id, 'manual Media selection remains the highest priority');
+});
+
 test('v14 state migrates to v15 without dropping imports, selections, or saved progress', () => {
   const media = catalog.offerings.find(isMediaSchooling);
   assert.ok(media);
