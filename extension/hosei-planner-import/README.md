@@ -14,8 +14,8 @@ Chrome の「パッケージ化されていない拡張機能を読み込む」�
 ## 本番版と開発版
 
 - `manifest.json` は本番Web Store向けです。許可するPlanner originは `https://hosei-tsukyo-media.com/*` だけで、popupには **Plannerで確認** だけを表示します。
-- `manifest.dev.json` は実機テスト専用です。`npm run build:extension-dev` で生成される `extension/hosei-planner-import-dev` をChromeに読み込みます。この版だけが本番originとdev originの両方を許可し、**Planner(dev)で確認** を表示します。
-- dev deployment URL は `planner-target.js` の `dev` target に一箇所だけ定義しています。Vercel URLが変わったら、ここだけ更新した後、開発版を再生成してください。本番manifestへdev originを追加しないでください。
+- `npm run build:extension-dev` は `planner-targets.config.json` を読み、実機テスト用の `extension/hosei-planner-import-dev` を生成します。この版だけが本番originとdev originの両方を許可し、**Planner(dev)で確認** を表示します。
+- dev deployment URL は `extension/hosei-planner-import/planner-targets.config.json` の `dev.origin` に一箇所だけ定義しています。Vercel URLが変わったら、ここだけ更新した後、開発版を再生成してください。本番manifestへdev originを追加しないでください。
 
 ## 本番の実機確認
 
@@ -35,11 +35,11 @@ Chrome の「パッケージ化されていない拡張機能を読み込む」�
 2. Chromeの拡張機能管理画面でデベロッパーモードを有効にし、**パッケージ化されていない拡張機能を読み込む** から生成された `extension/hosei-planner-import-dev` ディレクトリを選ぶ。
 3. 法政の成績確認ページを再読み込みする。
 4. 拡張で **現在の成績表を読み取る** を押し、続けて **Planner(dev)で確認** を押す。
-5. `https://housei-media-egvrrjm8y-htms-projects-5d66bc0c.vercel.app/planner` が開くことを確認する。
+5. 設定済みのdev Plannerの `/planner` が開くことを確認する。
 6. 「拡張機能から○科目を受信しました」と取り込みプレビューが表示されることを確認する。
 7. この時点では計画にまだ反映されていないことを確認する。
 8. 照合先、年度、期、選択状態を確認し、必要な行だけを手動で反映する。
 9. 最初に開いたURLをもう一度開き、同じtokenでは受信できないことを確認する。
-10. dev URLが変わった場合は `extension/hosei-planner-import/planner-target.js` の `dev` target を更新し、手順1から開発版を作り直す。
+10. dev URLが変わった場合は `extension/hosei-planner-import/planner-targets.config.json` の `dev.origin` だけを更新し、手順1から開発版を作り直す。
 
 Super Tables により同じ `id="seisekiTabele110"` の table が複数生成されることがあります。拡張は全候補の `tr.column_even` / `tr.column_odd` を確認し、24 logical cell の科目行が最も多い実データ table を自動選択します。`td.line_y_label` を除いた logical cell が 24 個の row だけを処理し、category row は科目として出力しません。

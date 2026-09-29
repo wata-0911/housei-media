@@ -1,2 +1,6 @@
-// Production extension: only the audited production Planner may receive handoffs.
-globalThis.HoseiPlannerTarget.configure(['prod']);
+// Production extension uses only the audited production Planner.
+(() => {
+  globalThis.HoseiPlannerTargetDefinitions = Object.freeze({
+    prod: Object.freeze({ origin: 'https://hosei-tsukyo-media.com', plannerPath: '/planner', buttonLabel: 'Plannerで確認' }),
+  });
+})();

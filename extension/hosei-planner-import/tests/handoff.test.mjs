@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { createDevelopmentManifest, loadPlannerTargets, renderTargetConfig } from '../../../scripts/planner-targets.mjs';
 
+await import('../planner-target-config.js');
 await import('../planner-target.js');
 await import('../handoff-store.js');
 const handoff = globalThis.HoseiPlannerHandoffStore;
 const targets = globalThis.HoseiPlannerTarget;
 const token = '11111111-1111-4111-8111-111111111111';
-const prodOrigin = 'https://hosei-tsukyo-media.com';
-const devOrigin = 'https://housei-media-egvrrjm8y-htms-projects-5d66bc0c.vercel.app';
+const targetConfig = await loadPlannerTargets();
+const prodOrigin = targetConfig.prod.origin;
+const devOrigin = targetConfig.dev.origin;
 const storage = () => {
   const values = new Map();
   return { values, async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); }, async get(key) { return { [key]: values.get(key) }; }, async remove(key) { values.delete(key); } };
@@ -25,6 +28,7 @@ test('stores a one-time transfer and creates a production URL containing only it
 });
 
 test('creates a dev target URL only in the dev configuration', () => {
+  globalThis.HoseiPlannerTargetDefinitions = Object.freeze(targetConfig);
   targets.configure(['prod', 'dev']);
   assert.equal(handoff.plannerUrl(token, 'dev'), `${devOrigin}/planner#hosei-import=11111111-1111-4111-8111-111111111111`);
   targets.configure(['prod']);
@@ -89,8 +93,9 @@ test('production manifest keeps only the audited production origin and never req
   for (const permission of ['cookies', 'history', 'webRequest', 'tabs']) assert.equal(manifest.permissions.includes(permission), false);
 });
 
-test('development manifest permits exactly the production and development origins with the same narrow permissions', () => {
-  const manifest = JSON.parse(readFileSync(new URL('../manifest.dev.json', import.meta.url), 'utf8'));
+test('development manifest is generated from the target config with the same narrow permissions', () => {
+  const productionManifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const manifest = createDevelopmentManifest(productionManifest, targetConfig);
   assert.deepEqual(manifest.permissions, ['activeTab', 'scripting', 'storage']);
   assert.deepEqual(manifest.host_permissions, [`${prodOrigin}/*`, `${devOrigin}/*`]);
   assert.deepEqual(manifest.content_scripts[0].matches, [`${prodOrigin}/*`, `${devOrigin}/*`]);
@@ -98,11 +103,24 @@ test('development manifest permits exactly the production and development origin
   for (const permission of ['cookies', 'history', 'webRequest', 'tabs']) assert.equal(manifest.permissions.includes(permission), false);
 });
 
+test('a changed dev origin is reflected together in the generated manifest and runtime target config', () => {
+  const fixtureOrigin = 'https://fixture-planner.example';
+  const fixtureTargets = structuredClone(targetConfig);
+  fixtureTargets.dev.origin = fixtureOrigin;
+  const productionManifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const manifest = createDevelopmentManifest(productionManifest, fixtureTargets);
+  const runtimeConfig = renderTargetConfig(fixtureTargets, ['prod', 'dev']);
+  assert.deepEqual(manifest.host_permissions, [`${prodOrigin}/*`, `${fixtureOrigin}/*`]);
+  assert.deepEqual(manifest.content_scripts[0].matches, [`${prodOrigin}/*`, `${fixtureOrigin}/*`]);
+  assert.match(runtimeConfig, new RegExp(fixtureOrigin));
+  assert.doesNotMatch(runtimeConfig, new RegExp(devOrigin));
+});
+
 test('popup retains copy and download fallbacks beside the direct handoff action', () => {
   const popup = readFileSync(new URL('../popup.html', import.meta.url), 'utf8');
   const script = readFileSync(new URL('../popup.js', import.meta.url), 'utf8');
   const target = readFileSync(new URL('../planner-target.js', import.meta.url), 'utf8');
   assert.match(popup, /id="planner-actions"/); assert.match(popup, /id="copy"/); assert.match(popup, /id="download"/);
-  assert.match(target, /Planner\(dev\)で確認/); assert.match(script, /planner-\$\{key\}/);
+  assert.match(target, /HoseiPlannerTargetDefinitions/); assert.match(script, /planner-\$\{key\}/);
   assert.match(script, /navigator\.clipboard\.writeText/); assert.match(script, /hosei-grade-import-v1\.json/);
 });
