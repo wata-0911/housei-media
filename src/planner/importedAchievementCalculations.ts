@@ -63,12 +63,17 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
       categoryOfferings.push(virtual); categoryOverrides.set(id, category);
     }
     const linked = (selectionSource === 'manual' && row.selectedOfferingId ? [row.selectedOfferingId] : row.selectedOfferingId ? [row.selectedOfferingId, ...group.map(record => record.offeringId)] : group.map(record => record.offeringId)).flatMap(id => id ? [offerings.get(id)] : []).filter((offering): offering is Offering => offering !== undefined);
-    const courseIds = new Set(linked.filter(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null).map(offering => offering.courseId!));
+    // A v13 repair may establish a course identity without guessing a single
+    // offering.  It is just as safe as a linked matched offering for category
+    // and graduation mapping.
+    const rowCandidates = row.courseId ? [...offerings.values()].filter(offering => offering.courseId === row.courseId && offering.resolutionStatus === 'matched') : [];
+    const mappingCandidates = [...linked, ...rowCandidates];
+    const courseIds = new Set(mappingCandidates.filter(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null).map(offering => offering.courseId!));
     if (courseIds.size !== 1) { warnings.push({ rawName: row.rawName, reason: linked.length ? '照合先の科目identityまたはカリキュラム対応を一意に確定できません' : '照合先が未設定です' }); if (!category) unclassified.push(row); continue; }
     const courseId = [...courseIds][0];
     const sameCourseEarned = plannedItems.some(item => item.status === 'earned' && offerings.get(item.offeringId)?.courseId === courseId);
     if (sameCourseEarned) { warnings.push({ rawName: row.rawName, reason: '履修計画の修得済み科目と同一identityのため、二重計上を避けて算入しません' }); continue; }
-    const template = linked.find(offering => offering.courseId === courseId && offering.resolutionStatus === 'matched');
+    const template = mappingCandidates.find(offering => offering.courseId === courseId && offering.resolutionStatus === 'matched');
     if (!template || template.credits === null) { warnings.push({ rawName: row.rawName, reason: '照合先の単位数またはカリキュラム対応が不明です' }); if (!category) unclassified.push(row); continue; }
     const schooling = row.schoolingCreditsTotal ?? null;
     // Only an all-schooling completion can safely claim schooling credit from
@@ -83,7 +88,7 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
     const legacyExplicitMedia = sourceRows.length === 0 && group.length === 1 ? linked.find(isMediaSchooling) : undefined;
     const mediaOffering = mediaOfferingFor(group, manuallyLinked ?? legacyExplicitMedia, courseId, offerings);
     if (mediaOffering) media.push({ sourceCourseId: row.id, rawName: row.rawName, academicYear: row.academicYear, term: group.find(record => record.method === 'schooling')?.term ?? null, earnedCreditsTotal: earned, schoolingCreditsTotal: schooling, records: group, offering: mediaOffering });
-    else if (group.some(record => record.method === 'schooling') && selectionSource !== 'manual') {
+    else if ((group.some(record => record.method === 'schooling') || (schooling !== null && schooling > 0 && group.length === 0)) && selectionSource !== 'manual') {
       const candidates = [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
       if (candidates.length) mediaPending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates });
     }

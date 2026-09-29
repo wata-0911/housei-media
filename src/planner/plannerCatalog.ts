@@ -249,7 +249,7 @@ export type PublicCourse = {
 };
 
 export type PlannerState = {
-  schemaVersion: 12;
+  schemaVersion: 13;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;

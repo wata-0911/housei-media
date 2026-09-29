@@ -989,7 +989,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 12
+          "const": 13
         },
         "selectedScopeId": {
           "anyOf": [

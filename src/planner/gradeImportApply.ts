@@ -38,10 +38,15 @@ export function hasCorrespondenceEvidence(course: HoseiGradeImportCourse): boole
 }
 export function importFingerprint(record: Omit<ImportedStudyRecord, 'id' | 'fingerprint' | 'source' | 'offeringId' | 'match'>): string { return JSON.stringify([record.rawName, record.method, record.rawYear, record.rawTerm, record.date, record.credits, record.grade, record.method === 'correspondence' ? record.reports?.map(x => x.raw) : null, record.examGrade ?? null]); }
 function match(name: string, method: ImportMethod, offerings: Offering[]) { const candidates = offerings.filter(o => o.method === method && normalizeImportName(o.name) === normalizeImportName(name)); return { candidates, match: candidates.length === 1 ? 'exact_unique' as const : candidates.length ? 'ambiguous' as const : 'unmatched' as const }; }
-function sourceFingerprint(course: HoseiGradeImportCourse, index: number) { return JSON.stringify([course.rawName, course.categoryRaw, index]); }
-function sameSourceIdentity(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.rawName === b.rawName && a.categoryRaw === b.categoryRaw; }
+function sourceFingerprint(course: HoseiGradeImportCourse, occurrence: number) {
+  const schoolings = course.schoolings.map(slot => [slot.rawYear, slot.rawTerm, slot.rawDate, slot.rawCredits, slot.rawGrade]);
+  const reports = course.reports.map(report => [report.raw, report.status, report.date]);
+  const exam = [course.creditExam.rawDate, course.creditExam.rawCredits, course.creditExam.rawGrade, course.creditExam.pendingMarker];
+  return JSON.stringify(['source-v2', normalizeImportName(course.rawName), course.categoryRaw === null ? null : normalizeImportName(course.categoryRaw), schoolings, reports, exam, occurrence]);
+}
+function sameSourceIdentity(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.fingerprint === b.fingerprint; }
 function sameSourceFacts(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.earnedCreditsTotal === b.earnedCreditsTotal && a.schoolingCreditsTotal === b.schoolingCreditsTotal && a.recognizedExemption === b.recognizedExemption && a.additionalEnrollment === b.additionalEnrollment && a.academicYear === b.academicYear; }
-function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, index: number, offerings: Offering[]): ImportedCourseAchievement {
+function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, occurrence: number, offerings: Offering[]): ImportedCourseAchievement {
   const candidates = offerings.filter(o => normalizeImportName(o.name) === normalizeImportName(course.rawName));
   const courseIds = new Set(candidates.filter(o => o.resolutionStatus === 'matched' && o.courseId !== null).map(o => o.courseId!));
   const courseId = courseIds.size === 1 ? [...courseIds][0] : null;
@@ -49,14 +54,20 @@ function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, ind
   const schooling = course.schoolings.find(slot => slot.rawYear || slot.rawTerm || slot.rawDate || slot.rawCredits || slot.rawGrade);
   const sourceYear = schooling ? schoolingAcademicYear(schooling.year) ?? schoolingAcademicYear(schooling.rawYear) : null;
   const inferred = sourceYear ?? (schooling ? academicYearFromDate(schooling.date ?? capturedAt.slice(0, 10)) : inferredCorrespondenceYear(course, capturedAt).academicYear);
-  return { id: crypto.randomUUID(), fingerprint: sourceFingerprint(course, index), source: 'hosei_import', rawName: course.rawName, categoryRaw: course.categoryRaw, capturedAt, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, academicYear: inferred, yearSource: sourceYear !== null ? 'source' : inferred !== null ? 'inferred' : 'unknown', courseId, selectedOfferingId: representative?.id ?? null, selectionSource: representative ? 'auto' : 'none', match: courseId ? 'exact_unique' : candidates.length ? 'ambiguous' : 'unmatched', candidateOfferingIds: candidates.map(candidate => candidate.id) };
+  return { id: crypto.randomUUID(), fingerprint: sourceFingerprint(course, occurrence), source: 'hosei_import', rawName: course.rawName, categoryRaw: course.categoryRaw, capturedAt, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, academicYear: inferred, yearSource: sourceYear !== null ? 'source' : inferred !== null ? 'inferred' : 'unknown', courseId, selectedOfferingId: representative?.id ?? null, selectionSource: representative ? 'auto' : 'none', match: courseId ? 'exact_unique' : candidates.length ? 'ambiguous' : 'unmatched', candidateOfferingIds: candidates.map(candidate => candidate.id) };
 }
 export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], existing: ImportedStudyRecord[] = [], existingCourses: ImportedCourseAchievement[] = []): ImportPreviewUnit[] {
   const rows: ImportPreviewUnit[] = [];
-  for (const [courseIndex, course] of data.courses.entries()) {
-    const sourceCourse = sourceCourseFor(course, data.capturedAt, courseIndex, offerings);
+  const occurrences = new Map<string, number>();
+  for (const course of data.courses) {
+    const baseFingerprint = sourceFingerprint(course, 0);
+    const occurrence = occurrences.get(baseFingerprint) ?? 0;
+    occurrences.set(baseFingerprint, occurrence + 1);
+    const sourceCourse = sourceCourseFor(course, data.capturedAt, occurrence, offerings);
     const sourceCourseId = sourceCourse.id;
-    const existingCourse = existingCourses.find(value => value.fingerprint === sourceCourse.fingerprint || sameSourceIdentity(value, sourceCourse));
+    const exactExisting = existingCourses.find(value => sameSourceIdentity(value, sourceCourse));
+    const legacyMatches = existingCourses.filter(value => normalizeImportName(value.rawName) === normalizeImportName(sourceCourse.rawName) && value.categoryRaw === sourceCourse.categoryRaw);
+    const existingCourse = exactExisting ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined);
     const sourceDuplicate = existingCourse !== undefined && sameSourceFacts(existingCourse, sourceCourse);
     const aggregate = { sourceCourseId, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, capturedAt: data.capturedAt };
     if (hasCorrespondenceEvidence(course)) {
