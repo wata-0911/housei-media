@@ -33,6 +33,7 @@ test('extracts 24-cell logic and mixed correspondence/schooling courses without 
   assert.equal(first.rawName, '論理学'); assert.deepEqual(first.reports.map(report => report.status), ['passed', 'resubmit', 'processing', 'unknown']);
   assert.deepEqual(first.reports.map(report => report.date), ['2026-06-01', '2026-06-15', null, null]);
   assert.equal(first.creditExam.grade, 'D'); assert.equal(first.creditExam.pendingMarker, true); assert.equal('finalGrade' in first, false);
+  assert.equal(first.creditExam.credits, 4);
   assert.equal(second.schoolings[0].grade, 'C'); assert.equal(second.schoolings[1].grade, 'A+'); assert.equal(second.schoolings[0].date, '2026-08-01');
 });
 

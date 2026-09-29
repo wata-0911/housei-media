@@ -2,7 +2,8 @@
 (() => {
   const GRADES = new Set(['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D']);
   const clean = value => String(value ?? '').replace(/\u00a0/g, ' ').trim();
-  const numberField = raw => ({ raw, value: /^\d+(?:\.\d+)?$/.test(clean(raw)) ? Number(clean(raw)) : null });
+  // `*4` means a pending marker plus four credits, not an unknown credit value.
+  const numberField = raw => { const text = clean(raw).replace(/^\*/, ''); return { raw, value: /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : null }; };
   const grade = raw => GRADES.has(clean(raw)) ? clean(raw) : null;
   const date = raw => {
     const match = clean(raw).match(/^(?:(\d{2})|\d{4})[/.年](\d{1,2})[/.月](\d{1,2})(?:日)?$/);
