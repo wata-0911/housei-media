@@ -3,7 +3,7 @@ import { isMediaSchooling } from './mediaSchooling';
 import { categoryFromImportRaw, type CreditCategory } from './annualPlan';
 import type { ImportedCourseUserMeta, Offering, PlannerItem } from './plannerCatalog';
 import type { PlannerCatalog } from './plannerCatalog';
-import { matchedNameOfferings } from './importedAchievementRepair';
+import { matchedNameOfferings, normalizeImportBaseName } from './importedAchievementRepair';
 
 export type ImportedAchievementWarning = { rawName: string; reason: string };
 export type ImportedMediaAchievement = { sourceCourseId: string; rawName: string; academicYear: number | null; term: string | null; earnedCreditsTotal: number; schoolingCreditsTotal: number | null; records: ImportedStudyRecord[]; offering: Offering };
@@ -32,6 +32,61 @@ function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering
   return undefined;
 }
 
+function oneCourseId(candidates: Offering[]): string | null {
+  const ids = [...new Set(candidates.map(candidate => candidate.courseId).filter((id): id is string => id !== null))];
+  return ids.length === 1 ? ids[0] : null;
+}
+
+/**
+ * A display-time counterpart to the v14 repair.  It deliberately returns an
+ * identity instead of modifying the imported source row: current imports must
+ * benefit from safe NFKC/delivery-suffix repair without turning a derived
+ * conclusion into a source fact.
+ */
+function repairedCourseId(rawName: string, offerings: Map<string, Offering>): string | null {
+  const baseName = normalizeImportBaseName(rawName);
+  const candidates = [...offerings.values()].filter(offering => offering.resolutionStatus === 'matched' && normalizeImportBaseName(offering.name) === baseName);
+  return oneCourseId(candidates);
+}
+
+function mediaCandidatesForCourse(courseId: string | null, offerings: Map<string, Offering>): Offering[] {
+  return courseId === null ? [] : [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
+}
+
+function candidateMedia(row: ImportedCourseAchievement, offerings: Map<string, Offering>): Offering[] {
+  return [...new Map(row.candidateOfferingIds.flatMap(id => offerings.get(id)).filter((offering): offering is Offering => Boolean(offering && offering.resolutionStatus === 'matched' && isMediaSchooling(offering))).map(offering => [offering.id, offering])).values()];
+}
+
+function derivedMediaOffering(row: ImportedCourseAchievement, group: ImportedStudyRecord[], offerings: Map<string, Offering>): Offering | undefined {
+  const selectionSource = row.selectionSource ?? (row.selectedOfferingId ? 'manual' : 'none');
+  const manual = selectionSource === 'manual' && row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
+  // A manual choice is authoritative, including an explicit normal-schooling
+  // selection that intentionally keeps this row out of Media progress.
+  if (manual) return isMediaSchooling(manual) ? manual : undefined;
+
+  // Rule 2: an exact course identity plus explicit Media term evidence is safe.
+  const directCourseId = row.courseId && row.match === 'exact_unique' ? row.courseId : null;
+  const direct = directCourseId ? mediaOfferingFor(group, undefined, directCourseId, offerings) : undefined;
+  if (direct) return direct;
+
+  // Rule 3: reuse the constrained v14 base-name repair as a derived identity.
+  // mediaOfferingFor still rejects normal-schooling competition when no Media
+  // term is present, so names such as English S cannot activate Media alone.
+  const repairedCourse = repairedCourseId(row.rawName, offerings);
+  const repaired = repairedCourse ? mediaOfferingFor(group, undefined, repairedCourse, offerings) : undefined;
+  if (repaired) return repaired;
+
+  // Rule 4: import candidates can establish a single Media offering only when
+  // neither their set nor their resolved course identity has a normal-schooling
+  // competitor.
+  const candidates = candidateMedia(row, offerings);
+  const candidateIds = new Set(row.candidateOfferingIds);
+  const candidateCourseIds = new Set(candidates.map(candidate => candidate.courseId).filter((id): id is string => id !== null));
+  const normalCandidate = [...candidateIds].map(id => offerings.get(id)).some(offering => offering?.resolutionStatus === 'matched' && offering.method === 'schooling' && !isMediaSchooling(offering))
+    || [...offerings.values()].some(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null && candidateCourseIds.has(offering.courseId) && offering.method === 'schooling' && !isMediaSchooling(offering));
+  return candidates.length === 1 && !normalCandidate ? candidates[0] : undefined;
+}
+
 /**
  * Finds a Media offering only from an existing safe course identity or a
  * manual selection. Names alone never activate progress tracking.
@@ -48,24 +103,21 @@ export function managedImportedMedia(rows: ImportedCourseAchievement[], records:
     // progress surface.  Waiting and pending rows remain source facts only.
     if (meta?.lifecycleStatus !== 'in_progress' || (row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0)) continue;
     const group = grouped.get(row.id) ?? [];
-    const manual = row.selectionSource === 'manual' && row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
-    const safeIdentity = Boolean(row.courseId && (row.selectionSource === 'manual'
-      ? manual?.resolutionStatus === 'matched' && manual.courseId === row.courseId
-      : row.match === 'exact_unique'));
-    const offering = safeIdentity && row.courseId ? mediaOfferingFor(group, manual, row.courseId, offerings) : undefined;
+    const selectionSource = row.selectionSource ?? (row.selectedOfferingId ? 'manual' : 'none');
+    const offering = derivedMediaOffering(row, group, offerings);
     if (offering && !usedOfferings.has(offering.id)) {
       media.push({ sourceCourseId: row.id, rawName: row.rawName, meta, offering });
       usedOfferings.add(offering.id);
       continue;
     }
-    const candidates = safeIdentity && row.courseId
-      ? [...offerings.values()].filter(candidate => candidate.courseId === row.courseId && isMediaSchooling(candidate))
-      : [];
+    const directCourseId = row.courseId && row.match === 'exact_unique' ? row.courseId : null;
+    const repairedCourse = repairedCourseId(row.rawName, offerings);
+    const candidates = [...new Map([...mediaCandidatesForCourse(directCourseId, offerings), ...mediaCandidatesForCourse(repairedCourse, offerings), ...candidateMedia(row, offerings)].map(candidate => [candidate.id, candidate])).values()];
     // A safe course identity alone is not proof that a schooling component
     // was Media.  Keep every unresolved automatic case visible for an
     // intentional learner confirmation, including a single Media candidate
     // that conflicts with a normal-schooling candidate.
-    if ((candidates.length > 0 && row.selectionSource !== 'manual') || (!safeIdentity && row.candidateOfferingIds.length > 0)) pending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates: candidates.length ? candidates : row.candidateOfferingIds.flatMap(id => offerings.get(id)).filter((candidate): candidate is Offering => Boolean(candidate && isMediaSchooling(candidate))) });
+    if (candidates.length > 0 && selectionSource !== 'manual') pending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates });
   }
   return { media, pending };
 }

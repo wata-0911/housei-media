@@ -1017,6 +1017,23 @@ test('media share view model groups current media plan items, preserves order, a
   assert.equal(mediaShareIntentUrl(post), `https://x.com/intent/post?text=${encodeURIComponent(post)}`);
 });
 
+test('media share includes imported current Media, deduplicates its offering, and preserves progress', () => {
+  const media = catalog.offerings.filter(isMediaSchooling);
+  const firstTerm = media.find(offering => offering.deliveryCategory === '前期メディア');
+  const secondTerm = media.find(offering => offering.deliveryCategory === '後期メディア');
+  const progress = {
+    [firstTerm.id]: { offeringId: firstTerm.id, totalLessons: 2, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }] },
+    [secondTerm.id]: { offeringId: secondTerm.id, totalLessons: 3, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: true }] },
+  };
+  const importedOnly = mediaShareViewModel([], offeringsById, progress, [{ offering: firstTerm, name: '成績表由来の前期メディア' }]);
+  assert.deepEqual(importedOnly.map(group => group.courses.map(course => course.name)), [['成績表由来の前期メディア']]);
+  assert.deepEqual(importedOnly[0].courses[0], { name: '成績表由来の前期メディア', videoCompletedCount: 1, testCompletedCount: 0, totalLessons: 2, videoDone: false, testDone: false, assessments: [] });
+
+  const combined = mediaShareViewModel([item(firstTerm.id)], offeringsById, progress, [{ offering: firstTerm, name: '重複する取込名' }, { offering: secondTerm, name: '成績表由来の後期メディア' }]);
+  assert.deepEqual(combined.map(group => group.courses.map(course => course.name)), [[firstTerm.name], ['成績表由来の後期メディア']]);
+  assert.match(mediaSharePost(combined), /成績表由来の後期メディア  動画 1\/3・テスト 1\/3/);
+});
+
 test('media share keeps the established progress template and derives both text and PNG data from the selected presentation', () => {
   const media = catalog.offerings.filter(isMediaSchooling);
   const firstTerm = media.find(offering => offering.deliveryCategory === '前期メディア');
@@ -2135,7 +2152,7 @@ test('only safely resolved in-progress imported Media connects to offering-keyed
   const progress = toggleLesson(progressFor(media.id, {}), 1, 'videoCompleted');
   assert.equal(progress.offeringId, media.id, 'the existing offering-keyed media progress is reused');
   const ambiguous = { ...safe, id: 'ambiguous-imported-media', selectedOfferingId: null, selectionSource: 'none', match: 'ambiguous' };
-  assert.equal(managedImportedMedia([ambiguous], [], { [ambiguous.id]: meta[safe.id] }, offeringsById).media.length, 0);
+  assert.equal(managedImportedMedia([ambiguous], [], { [ambiguous.id]: meta[safe.id] }, offeringsById).media.length, 0, 'a candidate remains pending when its course identity has normal-schooling competition');
 });
 
 test('in-progress imported Media auto-matches only when its safe identity proves one Media offering', () => {
@@ -2171,6 +2188,16 @@ test('in-progress imported Media auto-matches only when its safe identity proves
 
   const manual = source('manual', { selectedOfferingId: mediaSecond.id, selectionSource: 'manual' });
   assert.equal(managedImportedMedia([manual], [], active(manual), new Map([[mediaFirst.id, mediaFirst], [mediaSecond.id, mediaSecond]])).media[0].offering.id, mediaSecond.id, 'manual Media selection remains the highest priority');
+
+  const repaired = source('repaired-name', { rawName: '自動照合科目', courseId: null, match: 'ambiguous', candidateOfferingIds: [] });
+  assert.equal(managedImportedMedia([repaired], [], active(repaired), new Map([[mediaFirst.id, mediaFirst]])).media[0].offering.id, mediaFirst.id, 'a safe NFKC/delivery-suffix base-name identity is derived without writing source facts');
+
+  const nfkcMedia = { ...mediaFirst, id: 'nfkc-media', courseId: 'nfkc-course', name: 'データサイエンス入門A(前期メディア)' };
+  const nfkcRepaired = source('nfkc-repaired-name', { rawName: 'データサイエンス入門Ａ', courseId: null, match: 'ambiguous', candidateOfferingIds: [] });
+  assert.equal(managedImportedMedia([nfkcRepaired], [], active(nfkcRepaired), new Map([[nfkcMedia.id, nfkcMedia]])).media[0].offering.id, nfkcMedia.id, 'NFKC repair matches full-width A to a safely unique Media identity');
+
+  const candidateOnly = source('candidate-only', { rawName: '未照合候補', courseId: null, match: 'ambiguous', candidateOfferingIds: [mediaFirst.id] });
+  assert.equal(managedImportedMedia([candidateOnly], [], active(candidateOnly), new Map([[mediaFirst.id, mediaFirst]])).media[0].offering.id, mediaFirst.id, 'one safe Media candidate is derived without a row identity');
 });
 
 test('v14 state migrates to v15 without dropping imports, selections, or saved progress', () => {
