@@ -6,10 +6,10 @@ import type { Offering, PlannerItem } from './plannerCatalog';
 export type ImportedAchievementWarning = { rawName: string; reason: string };
 export type ImportedMediaAchievement = { sourceCourseId: string; rawName: string; academicYear: number | null; term: string | null; earnedCreditsTotal: number; schoolingCreditsTotal: number | null; records: ImportedStudyRecord[]; offering: Offering };
 export type ImportedMediaPending = { sourceCourseId: string; rawName: string; candidates: Offering[] };
-export type DerivedImportedAchievements = { items: PlannerItem[]; offerings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[]; mediaPending: ImportedMediaPending[]; unclassified: ImportedCourseAchievement[]; classifiedCredits: number; categoryOverrides: Map<string, CreditCategory> };
+export type DerivedImportedAchievements = { items: PlannerItem[]; offerings: Offering[]; categoryItems: PlannerItem[]; categoryOfferings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[]; mediaPending: ImportedMediaPending[]; unclassified: ImportedCourseAchievement[]; classifiedCredits: number; categoryOverrides: Map<string, CreditCategory> };
 
-function mediaOfferingFor(group: ImportedStudyRecord[], linked: Offering[], courseId: string, offerings: Map<string, Offering>): Offering | undefined {
-  const explicitlyLinked = linked.find(isMediaSchooling);
+function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering | undefined, courseId: string, offerings: Map<string, Offering>): Offering | undefined {
+  const explicitlyLinked = manuallyLinked && isMediaSchooling(manuallyLinked) ? manuallyLinked : undefined;
   if (explicitlyLinked) return explicitlyLinked;
 
   const mediaCandidates = [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
@@ -45,23 +45,31 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
     group.push(record); groups.set(record.sourceCourseId, group);
   }
   const rows = sourceRows.length ? sourceRows : [...groups.entries()].map(([id, group]) => {
-    const first = group[0]; return { id, fingerprint: `legacy:${id}`, source: 'hosei_import' as const, rawName: first.rawName, categoryRaw: null, capturedAt: first.capturedAt ?? '', earnedCreditsTotal: first.earnedCreditsTotal ?? null, schoolingCreditsTotal: first.schoolingCreditsTotal ?? null, compositionCredits: first.compositionCredits ?? null, recognizedExemption: first.recognizedExemption ?? null, additionalEnrollment: first.additionalEnrollment ?? null, academicYear: first.academicYear, yearSource: first.yearSource, courseId: null, selectedOfferingId: null, match: first.match, candidateOfferingIds: [] };
+    const first = group[0]; return { id, fingerprint: `legacy:${id}`, source: 'hosei_import' as const, rawName: first.rawName, categoryRaw: null, capturedAt: first.capturedAt ?? '', earnedCreditsTotal: first.earnedCreditsTotal ?? null, schoolingCreditsTotal: first.schoolingCreditsTotal ?? null, compositionCredits: first.compositionCredits ?? null, recognizedExemption: first.recognizedExemption ?? null, additionalEnrollment: first.additionalEnrollment ?? null, academicYear: first.academicYear, yearSource: first.yearSource, courseId: null, selectedOfferingId: null, selectionSource: 'none' as const, match: first.match, candidateOfferingIds: [] };
   });
-  const items: PlannerItem[] = [], derivedOfferings: Offering[] = [], media: ImportedMediaAchievement[] = [], mediaPending: ImportedMediaPending[] = [], unclassified: ImportedCourseAchievement[] = [], categoryOverrides = new Map<string, CreditCategory>();
+  const items: PlannerItem[] = [], derivedOfferings: Offering[] = [], categoryItems: PlannerItem[] = [], categoryOfferings: Offering[] = [], media: ImportedMediaAchievement[] = [], mediaPending: ImportedMediaPending[] = [], unclassified: ImportedCourseAchievement[] = [], categoryOverrides = new Map<string, CreditCategory>();
   for (const row of rows) {
+    const selectionSource = row.selectionSource ?? (row.selectedOfferingId ? 'manual' : 'none');
     const group = groups.get(row.id) ?? [];
     const earned = row.earnedCreditsTotal;
     if (earned === null || earned <= 0) continue;
     // A row-level choice is an explicit correction and therefore overrides its
     // detail records, which can legitimately point at separate components.
-    const linked = (row.selectedOfferingId ? [row.selectedOfferingId] : group.map(record => record.offeringId)).flatMap(id => id ? [offerings.get(id)] : []).filter((offering): offering is Offering => offering !== undefined);
+    const category = categoryFromImportRaw(row.categoryRaw);
+    if (category) {
+      const id = `imported-category:${row.id}`;
+      const virtual: Offering = { id, courseId: null, academicYear: 2026, name: row.rawName, method: 'correspondence', subjectCode: null, classCode: null, credits: earned, deliveryCategory: null, period: null, faculty: null, department: null, eligibleYears: null, resolutionStatus: 'manual_review', mappingIds: [], source: { url: null, page: null } };
+      categoryItems.push({ offeringId: id, status: 'earned', plannedYear: row.academicYear, plannedTerm: null, studyYear: null, earnedOrder: null });
+      categoryOfferings.push(virtual); categoryOverrides.set(id, category);
+    }
+    const linked = (selectionSource === 'manual' && row.selectedOfferingId ? [row.selectedOfferingId] : row.selectedOfferingId ? [row.selectedOfferingId, ...group.map(record => record.offeringId)] : group.map(record => record.offeringId)).flatMap(id => id ? [offerings.get(id)] : []).filter((offering): offering is Offering => offering !== undefined);
     const courseIds = new Set(linked.filter(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null).map(offering => offering.courseId!));
-    if (courseIds.size !== 1) { warnings.push({ rawName: row.rawName, reason: linked.length ? '照合先の科目identityまたはカリキュラム対応を一意に確定できません' : '照合先が未設定です' }); unclassified.push(row); continue; }
+    if (courseIds.size !== 1) { warnings.push({ rawName: row.rawName, reason: linked.length ? '照合先の科目identityまたはカリキュラム対応を一意に確定できません' : '照合先が未設定です' }); if (!category) unclassified.push(row); continue; }
     const courseId = [...courseIds][0];
     const sameCourseEarned = plannedItems.some(item => item.status === 'earned' && offerings.get(item.offeringId)?.courseId === courseId);
     if (sameCourseEarned) { warnings.push({ rawName: row.rawName, reason: '履修計画の修得済み科目と同一identityのため、二重計上を避けて算入しません' }); continue; }
     const template = linked.find(offering => offering.courseId === courseId && offering.resolutionStatus === 'matched');
-    if (!template || template.credits === null) { warnings.push({ rawName: row.rawName, reason: '照合先の単位数またはカリキュラム対応が不明です' }); unclassified.push(row); continue; }
+    if (!template || template.credits === null) { warnings.push({ rawName: row.rawName, reason: '照合先の単位数またはカリキュラム対応が不明です' }); if (!category) unclassified.push(row); continue; }
     const schooling = row.schoolingCreditsTotal ?? null;
     // Only an all-schooling completion can safely claim schooling credit from
     // a single aggregate item. Mixed rows remain ordinary earned credit.
@@ -69,14 +77,16 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
     const virtual: Offering = { ...template, id: `imported:${row.id}`, credits: earned, method };
     items.push({ offeringId: virtual.id, status: 'earned', plannedYear: row.academicYear, plannedTerm: group.find(record => record.method === 'schooling')?.term ?? null, studyYear: null, earnedOrder: null });
     derivedOfferings.push(virtual);
-    const category = categoryFromImportRaw(row.categoryRaw);
-    if (category) categoryOverrides.set(virtual.id, category);
-    const mediaOffering = mediaOfferingFor(group, linked, courseId, offerings);
+    if (!category) categoryItems.push(items.at(-1)!);
+    if (!category) categoryOfferings.push(virtual);
+    const manuallyLinked = selectionSource === 'manual' && row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
+    const legacyExplicitMedia = sourceRows.length === 0 && group.length === 1 ? linked.find(isMediaSchooling) : undefined;
+    const mediaOffering = mediaOfferingFor(group, manuallyLinked ?? legacyExplicitMedia, courseId, offerings);
     if (mediaOffering) media.push({ sourceCourseId: row.id, rawName: row.rawName, academicYear: row.academicYear, term: group.find(record => record.method === 'schooling')?.term ?? null, earnedCreditsTotal: earned, schoolingCreditsTotal: schooling, records: group, offering: mediaOffering });
-    else if (group.some(record => record.method === 'schooling') && !row.selectedOfferingId) {
+    else if (group.some(record => record.method === 'schooling') && selectionSource !== 'manual') {
       const candidates = [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
       if (candidates.length) mediaPending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates });
     }
   }
-  return { items, offerings: derivedOfferings, warnings, media, mediaPending, unclassified, classifiedCredits: items.reduce((sum, item) => sum + (derivedOfferings.find(offering => offering.id === item.offeringId)?.credits ?? 0), 0), categoryOverrides };
+  return { items, offerings: derivedOfferings, categoryItems, categoryOfferings, warnings, media, mediaPending, unclassified, classifiedCredits: items.reduce((sum, item) => sum + (derivedOfferings.find(offering => offering.id === item.offeringId)?.credits ?? 0), 0), categoryOverrides };
 }
