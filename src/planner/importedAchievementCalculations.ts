@@ -6,6 +6,23 @@ export type ImportedAchievementWarning = { rawName: string; reason: string };
 export type ImportedMediaAchievement = { sourceCourseId: string; rawName: string; academicYear: number | null; term: string | null; earnedCreditsTotal: number; schoolingCreditsTotal: number | null; records: ImportedStudyRecord[]; offering: Offering };
 export type DerivedImportedAchievements = { items: PlannerItem[]; offerings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[] };
 
+function mediaOfferingFor(group: ImportedStudyRecord[], linked: Offering[], courseId: string, offerings: Map<string, Offering>): Offering | undefined {
+  const explicitlyLinked = linked.find(isMediaSchooling);
+  if (explicitlyLinked) return explicitlyLinked;
+
+  const mediaCandidates = [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
+  const terms = group.filter(record => record.method === 'schooling').flatMap(record => [record.term, record.rawTerm]).filter((term): term is string => typeof term === 'string').map(term => term.normalize('NFKC').replace(/\s/g, ''));
+  const candidatesFor = (category: string) => mediaCandidates.filter(offering => offering.deliveryCategory === category);
+  for (const category of ['前期メディア', '後期メディア']) {
+    if (terms.some(term => term.includes(category))) {
+      const candidates = candidatesFor(category);
+      return candidates.length === 1 ? candidates[0] : undefined;
+    }
+  }
+  if (terms.some(term => term.includes('メディア'))) return mediaCandidates.length === 1 ? mediaCandidates[0] : undefined;
+  return undefined;
+}
+
 /**
  * Converts a saved grade-table row into one calculation-only earned item.  A
  * row's aggregate is the only credit source: component credits are display
@@ -44,7 +61,7 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
     const virtual: Offering = { ...template, id: `imported:${sourceCourseId}`, credits: earned, method };
     items.push({ offeringId: virtual.id, status: 'earned', plannedYear: first.academicYear, plannedTerm: first.term, studyYear: null, earnedOrder: null });
     derivedOfferings.push(virtual);
-    const mediaOffering = linked.find(isMediaSchooling);
+    const mediaOffering = mediaOfferingFor(group, linked, courseId, offerings);
     if (mediaOffering) media.push({ sourceCourseId, rawName: first.rawName, academicYear: first.academicYear, term: group.find(record => record.method === 'schooling')?.term ?? first.term, earnedCreditsTotal: earned, schoolingCreditsTotal: schooling, records: group, offering: mediaOffering });
   }
   return { items, offerings: derivedOfferings, warnings, media };

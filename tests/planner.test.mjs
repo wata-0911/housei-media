@@ -1879,3 +1879,42 @@ test('imported course aggregates count once, reject unsafe links, and expose med
   assert.equal(deriveImportedAchievements([make('dedupe', media.id)], offeringsById, [item(media.id, 'earned')]).items.length, 0);
   assert.equal(deriveImportedAchievements([make('non-media', other.id)], offeringsById, []).media.length, 0);
 });
+
+test('safe imported achievements feed credit and category summaries without changing the plan', () => {
+  const scope = selectablePrograms(catalog)[0].scopeId;
+  const classify = createCreditClassifier(catalog, scope);
+  const offering = catalog.offerings.find(value => value.courseId !== null && value.resolutionStatus === 'matched' && ['一般教育：人文', '一般教育：社会', '一般教育：自然', '一般教育：その他', '外国語', '保健体育', '専門教育'].includes(classify(value)));
+  assert.ok(offering);
+  const record = { id: 'safe-summary', fingerprint: 'safe-summary', source: 'hosei_import', rawName: offering.name, offeringId: offering.id, match: 'exact_unique', method: offering.method, academicYear: 2025, yearSource: 'source', rawYear: '25', term: null, rawTerm: null, date: null, credits: null, grade: 'S', sourceCourseId: 'safe-summary-row', earnedCreditsTotal: 4, schoolingCreditsTotal: null, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, capturedAt: '2026-09-29T00:00:00.000Z' };
+  const stateItems = [item(first.id, 'planned')];
+  const before = structuredClone(stateItems);
+  const derived = deriveImportedAchievements([record], offeringsById, stateItems);
+  const mergedOfferings = new Map([...offeringsById, ...derived.offerings.map(value => [value.id, value])]);
+  const summary = summarizeCredits([...stateItems, ...derived.items], mergedOfferings);
+  assert.equal(summary.earned, 4);
+  assert.equal(summary.in_progress, 0);
+  assert.equal(summary.planned, first.credits ?? 0);
+  assert.deepEqual(stateItems, before, 'calculation-only items never mutate state.items');
+  const row = summarizeCategories(stateItems, catalog, scope, [], derived.items, derived.offerings).find(value => value.category === classify(offering));
+  assert.equal(row.earned, 4);
+  assert.equal(row.in_progress, 0);
+  assert.equal(row.planned, 0);
+  assert.equal(deriveImportedAchievements([{ ...record, id: 'unsafe', sourceCourseId: 'unsafe-row', offeringId: null, match: 'unmatched' }], offeringsById, []).items.length, 0);
+  assert.equal(deriveImportedAchievements([record], offeringsById, [item(offering.id, 'earned')]).items.length, 0, 'planner-earned identity remains deduplicated');
+  assert.equal(calculateGraduationProgress(stateItems, catalog, scope, [], 'undecided', [record]).importedContributionCount, 1);
+});
+
+test('imported media history requires an explicit link or unambiguous media term evidence', () => {
+  const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched');
+  const normal = catalog.offerings.find(value => value.courseId === media.courseId && !isMediaSchooling(value) && value.resolutionStatus === 'matched');
+  assert.ok(media); assert.ok(normal);
+  const make = (id, patch = {}) => ({ id, fingerprint: id, source: 'hosei_import', rawName: normal.name, offeringId: normal.id, match: 'exact_unique', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'S', sourceCourseId: id, earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '2026-09-29T00:00:00.000Z', ...patch });
+  assert.equal(deriveImportedAchievements([make('ordinary')], offeringsById, []).media.length, 0, 'ordinary schooling is not inferred as media');
+  const termMatched = deriveImportedAchievements([make('term-matched', { rawTerm: media.deliveryCategory })], offeringsById, []);
+  assert.equal(termMatched.media.length, 1); assert.equal(termMatched.media[0].offering.id, media.id);
+  const explicit = deriveImportedAchievements([make('explicit', { offeringId: media.id, term: '夏', rawTerm: '夏' })], offeringsById, []);
+  assert.equal(explicit.media.length, 1); assert.equal(explicit.media[0].offering.id, media.id);
+  const duplicateMedia = { ...media, id: 'duplicate-media-candidate' };
+  const ambiguousOfferings = new Map([...offeringsById, [duplicateMedia.id, duplicateMedia]]);
+  assert.equal(deriveImportedAchievements([make('ambiguous', { rawTerm: media.deliveryCategory })], ambiguousOfferings, []).media.length, 0, 'ambiguous media candidates are not auto-selected');
+});

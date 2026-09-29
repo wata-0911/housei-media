@@ -56,11 +56,11 @@ export function createCreditClassifier(catalog: PlannerCatalog, scopeId: string 
   };
 }
 
-export function summarizeCategories(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = []) {
-  const offerings = new Map(catalog.offerings.map(o => [o.id, o]));
+export function summarizeCategories(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], extraItems: PlannerItem[] = [], extraOfferings: Offering[] = []) {
+  const offerings = new Map([...catalog.offerings, ...extraOfferings].map(o => [o.id, o]));
   const classify = createCreditClassifier(catalog, scopeId);
   const grouped = new Map<CreditClassification, PlannerItem[]>([...creditCategories, ...classificationStates].map(c => [c, []]));
-  for (const item of items) {
+  for (const item of [...items, ...extraItems]) {
     const offering = offerings.get(item.offeringId);
     if (!offering) throw new Error(`Unknown offering: ${item.offeringId}`);
     grouped.get(classify(offering))!.push(item);
