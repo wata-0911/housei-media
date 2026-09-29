@@ -1,4 +1,4 @@
-importScripts('planner-target.js', 'handoff-store.js');
+importScripts('planner-target.js', 'planner-target-config.js', 'handoff-store.js');
 const handoff = globalThis.HoseiPlannerHandoffStore;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== 'object') return;
