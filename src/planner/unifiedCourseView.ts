@@ -1,5 +1,5 @@
 import type { ImportedCourseAchievement } from './gradeImportApply';
-import type { Offering, PlannerItem } from './plannerCatalog';
+import type { ImportedCourseUserMeta, Offering, PlannerItem } from './plannerCatalog';
 
 export type UnifiedCourseRow = {
   key: string;
@@ -9,7 +9,8 @@ export type UnifiedCourseRow = {
   offering: Offering | null;
   studyYear: PlannerItem['studyYear'];
   source: 'planner' | 'imported' | 'planner_imported';
-  displayStatus: 'planner' | 'earned_imported';
+  /** Official facts win. Metadata only supplies context for unresolved rows. */
+  displayStatus: 'planner' | 'earned_imported' | 'failed_imported' | 'waiting_imported' | 'in_progress_imported' | 'pending_imported';
 };
 
 function safePlannerCourseId(item: PlannerItem, offerings: Map<string, Offering>) {
@@ -37,7 +38,17 @@ function safeImportedCourseId(row: ImportedCourseAchievement, offerings: Map<str
  * Creates a presentation-only combined view.  It does not write planner
  * state, change final grades, or reuse imported credits for calculations.
  */
-export function createUnifiedCourseRows(items: PlannerItem[], importedAchievements: ImportedCourseAchievement[], offerings: Map<string, Offering>): UnifiedCourseRow[] {
+export function importedAchievementDisplayStatus(achievement: ImportedCourseAchievement, meta: ImportedCourseUserMeta | undefined): UnifiedCourseRow['displayStatus'] {
+  if (achievement.earnedCreditsTotal !== null && achievement.earnedCreditsTotal > 0) return 'earned_imported';
+  // A component grade is not a final grade, so it must never manufacture an
+  // official failure here. Unresolved official rows remain pending unless the
+  // learner adds lifecycle context.
+  if (meta?.lifecycleStatus === 'waiting') return 'waiting_imported';
+  if (meta?.lifecycleStatus === 'in_progress') return 'in_progress_imported';
+  return 'pending_imported';
+}
+
+export function createUnifiedCourseRows(items: PlannerItem[], importedAchievements: ImportedCourseAchievement[], offerings: Map<string, Offering>, userMeta: Record<string, ImportedCourseUserMeta> = {}): UnifiedCourseRow[] {
   const rows: UnifiedCourseRow[] = items.map(item => ({
     key: `planner:${item.offeringId}`,
     plannerItem: item,
@@ -55,14 +66,14 @@ export function createUnifiedCourseRows(items: PlannerItem[], importedAchievemen
   }
 
   for (const achievement of importedAchievements) {
-    if (achievement.earnedCreditsTotal === null || achievement.earnedCreditsTotal <= 0) continue;
+    const displayStatus = importedAchievementDisplayStatus(achievement, userMeta[achievement.id]);
     const courseId = safeImportedCourseId(achievement, offerings);
     // Multiple planner offerings may legitimately share one course identity.
     // Coalesce only the unambiguous one-to-one case; otherwise preserve the
     // official achievement as its own read-only row.
     const plannerRows = courseId ? plannerRowsByCourseId.get(courseId) : undefined;
     const plannerRow = plannerRows?.length === 1 ? plannerRows[0] : undefined;
-    if (plannerRow) {
+    if (displayStatus === 'earned_imported' && plannerRow) {
       plannerRow.importedAchievements.push(achievement);
       plannerRow.source = 'planner_imported';
       continue;
@@ -72,9 +83,9 @@ export function createUnifiedCourseRows(items: PlannerItem[], importedAchievemen
       plannerItem: null,
       importedAchievements: [achievement],
       offering: null,
-      studyYear: null,
+      studyYear: userMeta[achievement.id]?.studyYear ?? null,
       source: 'imported',
-      displayStatus: 'earned_imported',
+      displayStatus,
     });
   }
   return rows;

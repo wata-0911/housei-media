@@ -1,13 +1,15 @@
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { isMediaSchooling } from './mediaSchooling';
 import { categoryFromImportRaw, type CreditCategory } from './annualPlan';
-import type { Offering, PlannerItem } from './plannerCatalog';
+import type { ImportedCourseUserMeta, Offering, PlannerItem } from './plannerCatalog';
 import type { PlannerCatalog } from './plannerCatalog';
 import { matchedNameOfferings } from './importedAchievementRepair';
 
 export type ImportedAchievementWarning = { rawName: string; reason: string };
 export type ImportedMediaAchievement = { sourceCourseId: string; rawName: string; academicYear: number | null; term: string | null; earnedCreditsTotal: number; schoolingCreditsTotal: number | null; records: ImportedStudyRecord[]; offering: Offering };
 export type ImportedMediaPending = { sourceCourseId: string; rawName: string; candidates: Offering[] };
+/** An unresolved grade-table row that has a safe Media offering and learner lifecycle context. */
+export type ImportedManagedMedia = { sourceCourseId: string; rawName: string; meta: ImportedCourseUserMeta; offering: Offering };
 export type DerivedImportedAchievements = { items: PlannerItem[]; offerings: Offering[]; categoryItems: PlannerItem[]; categoryOfferings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[]; mediaPending: ImportedMediaPending[]; unclassified: ImportedCourseAchievement[]; classifiedCredits: number; categoryOverrides: Map<string, CreditCategory> };
 
 function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering | undefined, courseId: string, offerings: Map<string, Offering>): Offering | undefined {
@@ -27,6 +29,38 @@ function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering
   const normalCandidates = [...offerings.values()].filter(offering => offering.courseId === courseId && offering.method === 'schooling' && !isMediaSchooling(offering));
   if (mediaCandidates.length === 1 && normalCandidates.length === 0) return mediaCandidates[0];
   return undefined;
+}
+
+/**
+ * Finds a Media offering only from an existing safe course identity or a
+ * manual selection. Names alone never activate progress tracking.
+ */
+export function managedImportedMedia(rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], userMeta: Record<string, ImportedCourseUserMeta>, offerings: Map<string, Offering>): { media: ImportedManagedMedia[]; pending: ImportedMediaPending[] } {
+  const grouped = new Map<string, ImportedStudyRecord[]>();
+  for (const record of records) if (record.sourceCourseId) grouped.set(record.sourceCourseId, [...(grouped.get(record.sourceCourseId) ?? []), record]);
+  const media: ImportedManagedMedia[] = [];
+  const pending: ImportedMediaPending[] = [];
+  const usedOfferings = new Set<string>();
+  for (const row of rows) {
+    const meta = userMeta[row.id];
+    if (!meta?.lifecycleStatus || (row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0)) continue;
+    const group = grouped.get(row.id) ?? [];
+    const manual = row.selectionSource === 'manual' && row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
+    const safeIdentity = Boolean(row.courseId && (row.selectionSource === 'manual'
+      ? manual?.resolutionStatus === 'matched' && manual.courseId === row.courseId
+      : row.match === 'exact_unique'));
+    const offering = safeIdentity && row.courseId ? mediaOfferingFor(group, manual, row.courseId, offerings) : undefined;
+    if (offering && !usedOfferings.has(offering.id)) {
+      media.push({ sourceCourseId: row.id, rawName: row.rawName, meta, offering });
+      usedOfferings.add(offering.id);
+      continue;
+    }
+    const candidates = safeIdentity && row.courseId
+      ? [...offerings.values()].filter(candidate => candidate.courseId === row.courseId && isMediaSchooling(candidate))
+      : [];
+    if (candidates.length > 1 || (!safeIdentity && row.candidateOfferingIds.length > 0)) pending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates: candidates.length ? candidates : row.candidateOfferingIds.flatMap(id => offerings.get(id)).filter((candidate): candidate is Offering => Boolean(candidate && isMediaSchooling(candidate))) });
+  }
+  return { media, pending };
 }
 
 /**

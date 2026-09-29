@@ -22,6 +22,8 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
   const progress = Object.entries(value.mediaSchoolingProgress);
   const evaluations = Object.entries(value.courseEvaluations);
   const correspondence = Object.entries(value.correspondenceProgress);
+  const importedMeta = Object.entries(value.importedCourseUserMeta);
+  const importedIds = new Set(value.importedCourseAchievements.map(row => row.id));
   return (value.selectedScopeId === null || catalog.programs.some(p => p.scopeId === value.selectedScopeId))
     && ids.every(id => offerings.has(id)) && new Set(ids).size === ids.length
     && new Set(todoIds).size === todoIds.length
@@ -35,6 +37,8 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
       && course.lessons.every(lesson => course.totalLessons === null || lesson.lesson <= course.totalLessons))
     && evaluations.every(([id, evaluation]) => id === evaluation.offeringId && offerings.has(id))
     && correspondence.every(([id, progress]) => id === progress.offeringId && offerings.has(id) && isCorrespondenceOffering(offeringMap.get(id)) && validCorrespondenceProgress(progress))
+    && importedMeta.every(([id, meta]) => importedIds.has(id)
+      && (meta.plannedYear === null || (Number.isInteger(meta.plannedYear) && meta.plannedYear >= 1000 && meta.plannedYear <= 9999)))
     && value.items.every(item => {
       const seminar = isHistorySeminar(offeringMap.get(item.offeringId));
       return seminar ? (item.status === 'earned' || item.earnedOrder === null) : item.earnedOrder === null;
