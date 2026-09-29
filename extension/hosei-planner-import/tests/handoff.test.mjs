@@ -13,6 +13,7 @@ const token = '11111111-1111-4111-8111-111111111111';
 const targetConfig = await loadPlannerTargets();
 const prodOrigin = targetConfig.prod.origin;
 const devOrigin = targetConfig.dev.origin;
+const fixedDevOrigin = 'https://dev.hosei-tsukyo-media.com';
 const targetScript = readFileSync(new URL('../planner-target.js', import.meta.url), 'utf8');
 const handoffScript = readFileSync(new URL('../handoff-store.js', import.meta.url), 'utf8');
 const popupScript = readFileSync(new URL('../popup.js', import.meta.url), 'utf8');
@@ -66,11 +67,12 @@ test('generated production runtime config enables only production and rejects th
 
 test('generated development runtime config enables both targets without manual configuration', () => {
   const context = runtimeFromGeneratedConfig(['prod', 'dev']);
+  assert.equal(devOrigin, fixedDevOrigin);
   assert.deepEqual(Array.from(context.HoseiPlannerTarget.enabled(), target => target.key), ['prod', 'dev']);
   assert.deepEqual(popupTargetLabels(context), ['Plannerで確認', 'Planner(dev)で確認']);
   assert.equal(
     context.HoseiPlannerHandoffStore.plannerUrl(token, 'dev'),
-    `${devOrigin}/planner#hosei-import=11111111-1111-4111-8111-111111111111`,
+    `${fixedDevOrigin}/planner#hosei-import=11111111-1111-4111-8111-111111111111`,
   );
 });
 
@@ -86,6 +88,7 @@ test('authorizes the exact planner pathname, including fragments, but rejects ot
   targets.configure(['prod']);
   const cases = [
     [`${prodOrigin}/planner`, true],
+    [`${prodOrigin}/planner?source=extension`, true],
     [`${prodOrigin}/other`, false],
     [`${prodOrigin}/planner/test`, false],
     [`${prodOrigin}/planner#hosei-import=example`, true],
