@@ -18,6 +18,7 @@ import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, eva
 import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/correspondenceProgress.ts';
 import { correspondenceRequirementFor, structuredRequirementCount } from '../src/planner/correspondenceRequirements.ts';
 import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planTable.ts';
+import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -1719,4 +1720,60 @@ test('media assessments are optional, preserve all supported types, and survive 
   assert.equal(loaded.state.schemaVersion, 9); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
   const state = { ...initialState(), items: [item(media.id)], mediaSchoolingProgress: { [media.id]: withAll } };
   const raw = JSON.stringify(state); assert.deepEqual(loadState(memoryStore(raw), catalog).state.mediaSchoolingProgress[media.id].assessments, withAll.assessments);
+});
+
+test('planner export presentation includes current catalog and public rows in study-year order without exporting orphans', () => {
+  const correspondence = catalog.offerings.find(offering => offering.name === '債権総論' && offering.method === 'correspondence');
+  const unknownCorrespondence = catalog.offerings.find(offering => offering.method === 'correspondence' && offering.name === '社会経済思想史');
+  const schooling = catalog.offerings.find(offering => offering.method === 'schooling' && !isMediaSchooling(offering));
+  const media = catalog.offerings.filter(isMediaSchooling).slice(0, 3);
+  const state = {
+    ...initialState(), selectedScopeId: catalog.programs.find(program => program.department === '法律学科').scopeId,
+    items: [
+      { ...item(correspondence.id, 'failed'), studyYear: 1, plannedYear: 2026, plannedTerm: '前期' },
+      { ...item(media[0].id, 'in_progress'), studyYear: 2, plannedYear: 2027, plannedTerm: '後期' },
+      { ...item(media[1].id, 'waiting'), studyYear: 3, plannedYear: 2028, plannedTerm: null },
+      { ...item(media[2].id, 'dropped'), studyYear: 4, plannedYear: null, plannedTerm: '夏期' },
+      { ...item(unknownCorrespondence.id, 'earned'), studyYear: null, plannedYear: 2029, plannedTerm: '保存済みの時期' },
+      { ...item(schooling.id, 'planned'), studyYear: null, plannedYear: null, plannedTerm: null },
+    ],
+    publicCourses: [{ ...publicCourse('export-public', 'earned', '公開,\"科目\"'), studyYear: 2, plannedYear: 2030, plannedTerm: '通年', finalGrade: 'A+' }],
+    correspondenceProgress: {
+      [correspondence.id]: { ...progressForCorrespondence(correspondence, {}), reports: [{ reportNumber: 1, status: 'passed', grade: 'A' }, { reportNumber: 2, status: 'passed', grade: 'B' }], examGrade: 'A' },
+      [unknownCorrespondence.id]: { offeringId: unknownCorrespondence.id, requiredReports: null, reports: [], examGrade: 'C' },
+      orphan: { offeringId: 'orphan', requiredReports: 2, reports: [], examGrade: 'A' },
+    },
+    mediaSchoolingProgress: {
+      [media[0].id]: { offeringId: media[0].id, totalLessons: 14, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: true }], assessments: [{ id: 'mid', type: 'midterm', label: '中間試験', scheduledDate: '2026-06-10', completed: true }] },
+      [media[1].id]: { offeringId: media[1].id, totalLessons: 15, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }], assessments: [] },
+      [media[2].id]: { offeringId: media[2].id, totalLessons: null, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }], assessments: [{ id: 'other', type: 'other', label: '口頭試問', scheduledDate: null, completed: false }] },
+      orphan: { offeringId: 'orphan', totalLessons: 14, lessons: [], assessments: [{ id: 'hidden', type: 'final', label: '期末試験', scheduledDate: '2026-12-20', completed: false }] },
+    },
+    courseEvaluations: { [correspondence.id]: { offeringId: correspondence.id, finalGrade: 'S', reportGrade: null, schoolingGrade: null } },
+  };
+  const before = JSON.stringify(state);
+  const presentation = plannerExportPresentation(state, catalog);
+  assert.equal(JSON.stringify(state), before);
+  assert.equal(catalog.offerings.length, 686);
+  assert.deepEqual(presentation.rows.map(row => row.studyYear), [1, 2, 2, 3, 4, null, null]);
+  const correspondenceRow = presentation.rows.find(row => row.title === correspondence.name);
+  assert.deepEqual({ year: correspondenceRow.plannedYear, term: correspondenceRow.plannedTerm, final: correspondenceRow.finalGrade, reports: correspondenceRow.passedReports, exam: correspondenceRow.examGrade, result: correspondenceRow.correspondenceResult }, { year: 2026, term: '前期', final: 'S', reports: 2, exam: 'A', result: '単位修得条件達成' });
+  const unknownRow = presentation.rows.find(row => row.title === unknownCorrespondence.name);
+  assert.deepEqual({ required: unknownRow.requiredReports, passed: unknownRow.passedReports, result: unknownRow.correspondenceResult, progress: unknownRow.progressSummary }, { required: null, passed: null, result: '判定不可', progress: 'リポート要件 未確認・試験 C' });
+  assert.deepEqual(presentation.rows.filter(row => row.formLabel === 'メディア').map(row => [row.totalLessons, row.completedVideos, row.completedTests, row.assessmentSummary]), [[14, 1, 1, '中間試験 2026/06/10 実施済み'], [15, 1, 0, null], [null, 1, 0, '口頭試問 日程未設定 未実施']]);
+  assert.equal(presentation.rows.find(row => row.sourceType === 'public').classificationLabel, '専門教育');
+  assert.equal(presentation.rows.some(row => row.assessmentSummary?.includes('2026/12/20')), false);
+});
+
+test('planner export CSV writes UTF-8 BOM, headers, RFC4180 escaping, and leaves unknown fields empty', () => {
+  const presentation = {
+    affiliation: '法学部 / 法律学科',
+    rows: [{ sourceType: 'public', plannedYear: null, studyYear: null, plannedTerm: null, title: '科目,\"引用\"\n改行', credits: null, formLabel: '公開科目', statusLabel: '取りやめ', progressSummary: '—', finalGrade: null, classificationLabel: null, requiredReports: null, passedReports: null, examGrade: null, correspondenceResult: null, totalLessons: null, completedVideos: null, completedTests: null, assessmentSummary: null }],
+  };
+  const csv = plannerExportCsv(presentation);
+  assert.ok(csv.startsWith('\uFEFF所属,計画年度,履修学年,履修時期,科目名,'));
+  assert.match(csv, /"科目,""引用""\n改行"/);
+  assert.match(csv, /法学部 \/ 法律学科,,,,"科目,/);
+  assert.ok(csv.includes('\r\n'));
+  assert.equal(plannerExportFileName(new Date(2026, 8, 29)), 'hosei-planner-2026-09-29');
 });
