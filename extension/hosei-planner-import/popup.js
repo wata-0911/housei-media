@@ -11,7 +11,7 @@ $('read').addEventListener('click', async () => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const outcome = await injectAndRead(tab.id);
-    if (!outcome.ok) { status('このページでは成績表を確認できません。Web学習サービスの成績表ページを開いてください。'); return; }
+    if (!outcome.ok) { status(outcome.reason === 'course_rows_not_found' ? '成績表は見つかりましたが、科目行を読み取れませんでした。ページを再読み込みしてもう一度お試しください。' : 'このページでは成績表を確認できません。Web学習サービスの成績表ページを開いてください。'); return; }
     imported = outcome.value; $('count').textContent = `${imported.courses.length}科目`;
     $('courses').replaceChildren(...imported.courses.map(course => { const item = document.createElement('li'); item.textContent = `${course.rawName} 構成${course.compositionCredits.raw || '—'}単位 / 修得${course.earnedCredits.raw || '—'}単位`; return item; }));
     $('result').hidden = false; status('');

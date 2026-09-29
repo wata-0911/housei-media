@@ -9,4 +9,4 @@ Chrome の「パッケージ化されていない拡張機能を読み込む」�
 
 `host_permissions` は指定しません。`<all_urls>`、cookies、history、webRequest、外部送信、telemetry、remote code、eval は使いません。法政 ID・パスワード、Cookie、セッショントークンは読み取りません。ページを書き換えず、JSON は端末内で生成します。
 
-対象は `#seisekiTabele110` の `tr.column_even` / `tr.column_odd` だけです。`td.line_y_label` を除いた logical cell が 24 個の row だけを処理し、category row は科目として出力しません。
+Super Tables により同じ `id="seisekiTabele110"` の table が複数生成されることがあります。拡張は全候補の `tr.column_even` / `tr.column_odd` を確認し、24 logical cell の科目行が最も多い実データ table を自動選択します。`td.line_y_label` を除いた logical cell が 24 個の row だけを処理し、category row は科目として出力しません。

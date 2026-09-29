@@ -25,16 +25,53 @@
     schoolings: [schooling(cells.slice(14, 19)), schooling(cells.slice(19, 24))]
   });
   const cellsForRow = row => Array.from(row.querySelectorAll('td')).filter(cell => !cell.classList.contains('line_y_label')).map(cell => clean(cell.textContent));
+  const isCategoryRow = cells => cells.length === 24 && clean(cells[1]).startsWith('***');
+  const isCourseRow = cells => cells.length === 24 && !isCategoryRow(cells) && clean(cells[1]) !== '';
   const extractRows = rows => {
     let categoryRaw = null; const courses = [];
-    for (const row of rows) { const cells = Array.isArray(row) ? row.map(clean) : cellsForRow(row); if (cells.length !== 24) continue; if (clean(cells[1]).startsWith('***')) { categoryRaw = clean(cells[1]); continue; } if (clean(cells[1]) !== '') courses.push(course(cells, categoryRaw)); }
+    for (const row of rows) { const cells = Array.isArray(row) ? row.map(clean) : cellsForRow(row); if (cells.length !== 24) continue; if (isCategoryRow(cells)) { categoryRaw = clean(cells[1]); continue; } if (clean(cells[1]) !== '') courses.push(course(cells, categoryRaw)); }
     return courses;
   };
+  const inspectTable = (table, index) => {
+    const logicalRows = Array.from(table.querySelectorAll('tr.column_even, tr.column_odd'), cellsForRow);
+    const validRows = logicalRows.filter(cells => cells.length === 24);
+    const courseRows = validRows.filter(isCourseRow);
+    return {
+      index,
+      rows: logicalRows,
+      courseRows,
+      rowCount: logicalRows.length,
+      valid24RowCount: validRows.length,
+      categoryRowCount: validRows.filter(isCategoryRow).length,
+      courseRowCount: courseRows.length,
+      nonEmptyCellCount: courseRows.reduce((count, cells) => count + cells.filter(cell => cell !== '').length, 0)
+    };
+  };
+  const diagnosticsFor = (candidates, selectedCandidateIndex = null, tieCandidateIndexes = []) => ({
+    tableCandidates: candidates.map(({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount, nonEmptyCellCount }) => ({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount, nonEmptyCellCount })),
+    selectedCandidateIndex,
+    tieCandidateIndexes
+  });
+  const selectCandidate = candidates => {
+    const largestCourseRowCount = Math.max(...candidates.map(candidate => candidate.courseRowCount));
+    const tied = candidates.filter(candidate => candidate.courseRowCount === largestCourseRowCount);
+    if (tied.length === 1) return { selected: tied[0], tieCandidateIndexes: [] };
+    const distinctContents = new Set(tied.map(candidate => JSON.stringify(candidate.courseRows))).size;
+    if (distinctContents === 1) return { selected: tied[0], tieCandidateIndexes: tied.map(candidate => candidate.index) };
+    const selected = tied.reduce((best, candidate) => {
+      if (candidate.nonEmptyCellCount !== best.nonEmptyCellCount) return candidate.nonEmptyCellCount > best.nonEmptyCellCount ? candidate : best;
+      if (candidate.valid24RowCount !== best.valid24RowCount) return candidate.valid24RowCount > best.valid24RowCount ? candidate : best;
+      return best;
+    });
+    return { selected, tieCandidateIndexes: tied.map(candidate => candidate.index) };
+  };
   const extractCurrentDocument = () => {
-    const table = document.querySelector('#seisekiTabele110');
-    if (!table) return { ok: false, reason: 'table_not_found' };
-    const rows = table.querySelectorAll('tr.column_even, tr.column_odd');
-    return { ok: true, value: { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: new Date().toISOString(), courses: extractRows(rows) } };
+    const candidates = Array.from(document.querySelectorAll('table[id="seisekiTabele110"]'), inspectTable);
+    if (candidates.length === 0) return { ok: false, reason: 'table_not_found', diagnostics: diagnosticsFor(candidates) };
+    const { selected, tieCandidateIndexes } = selectCandidate(candidates);
+    const diagnostics = diagnosticsFor(candidates, selected.index, tieCandidateIndexes);
+    if (selected.courseRowCount === 0) return { ok: false, reason: 'course_rows_not_found', diagnostics };
+    return { ok: true, value: { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: new Date().toISOString(), courses: extractRows(selected.rows) }, diagnostics };
   };
   globalThis.HoseiPlannerGradeExtractor = { date, report, extractRows, extractCurrentDocument };
 })();
