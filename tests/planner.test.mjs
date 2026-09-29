@@ -20,6 +20,7 @@ import { correspondenceRequirementFor, structuredRequirementCount } from '../src
 import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planTable.ts';
 import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
 import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
+import { applyImport, importPreview, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -1793,4 +1794,18 @@ test('grade import contract accepts only complete v1 extension JSON and has no f
   assert.equal('finalGrade' in value.courses[0], false);
   assert.equal(isHoseiGradeImportV1({ ...value, schemaVersion: 2 }), false);
   assert.equal(isHoseiGradeImportV1({ ...value, courses: [{ ...value.courses[0], reports: [] }] }), false);
+  assert.equal(isHoseiGradeImportV1({ ...value, capturedAt: 'not-a-date' }), false);
+  assert.equal(isHoseiGradeImportV1({ ...value, courses: [{ ...value.courses[0], rawName: ' ' }] }), false);
+  assert.equal(isHoseiGradeImportV1({ ...value, courses: [{ ...value.courses[0], earnedCredits: { raw: '-1', value: -1 } }] }), false);
+  assert.equal(isHoseiGradeImportV1({ ...value, courses: [{ ...value.courses[0], creditExam: { ...value.courses[0].creditExam, date: '2026-02-30' } }] }), false);
+});
+
+test('grade import separates correspondence and schooling, preserves source year, and deduplicates selected records', () => {
+  const course = { rawName: '共通名', categoryRaw: null, compositionCredits: { raw: '4', value: 4 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '2', value: 2 }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [{ rawYear: '25', rawTerm: '冬', rawDate: '26/01/26', rawCredits: '2', rawGrade: 'A', year: '25', term: '冬', date: '2026-01-26', credits: 2, grade: 'A' }, { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null }] };
+  const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] };
+  const offerings = [{ ...catalog.offerings[0], id: 'correspondence-id', name: '共通名', method: 'correspondence' }, { ...catalog.offerings[0], id: 'schooling-id', name: '共通名', method: 'schooling' }];
+  const preview = importPreview(data, offerings);
+  assert.equal(preview.length, 2); assert.equal(preview[0].academicYear, null); assert.equal(preview[1].academicYear, 2025); assert.equal(preview[1].yearSource, 'source'); assert.equal(schoolingAcademicYear('25'), 2025);
+  const next = applyImport(initialState(), preview); assert.equal(next.importedStudyRecords.length, 2); assert.equal(next.items.length, 0); assert.equal(next.courseEvaluations && Object.keys(next.courseEvaluations).length, 0);
+  assert.equal(importPreview(data, offerings, next.importedStudyRecords).every(row => row.duplicate), true);
 });

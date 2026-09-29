@@ -1090,6 +1090,9 @@
             "additionalProperties": false
           }
         }
+        ,"importedStudyRecords": { "type": "array", "items": { "type": "object", "properties": {
+          "id": { "type": "string", "minLength": 1 }, "fingerprint": { "type": "string", "minLength": 1 }, "source": { "const": "hosei_import" }, "rawName": { "type": "string", "minLength": 1 }, "offeringId": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "match": { "enum": ["exact_unique", "ambiguous", "unmatched"] }, "method": { "enum": ["correspondence", "schooling"] }, "academicYear": { "anyOf": [{ "type": "integer" }, { "type": "null" }] }, "yearSource": { "enum": ["source", "inferred", "manual", "unknown"] }, "rawYear": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "term": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "rawTerm": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "date": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "credits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "grade": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "reports": { "type": "array" }, "examGrade": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+        }, "required": ["id", "fingerprint", "source", "rawName", "offeringId", "match", "method", "academicYear", "yearSource", "rawYear", "term", "rawTerm", "date", "credits", "grade"], "additionalProperties": false } }
       },
       "required": [
         "schemaVersion",
@@ -1100,7 +1103,8 @@
         "todos",
         "mediaSchoolingProgress",
         "courseEvaluations",
-        "correspondenceProgress"
+        "correspondenceProgress",
+        "importedStudyRecords"
       ],
       "additionalProperties": false
     },
