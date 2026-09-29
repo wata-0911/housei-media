@@ -25,3 +25,4 @@ dist-ssr
 *.sw?
 .vercel
 documents/
+extension/hosei-planner-import-dev/
