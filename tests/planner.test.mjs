@@ -24,6 +24,7 @@ import { academicYearFromDate, applyImport, groupImportedAchievements, hasCorres
 import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
 import { deriveImportedAchievements } from '../src/planner/importedAchievementCalculations.ts';
 import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
+import { createUnifiedCourseRows } from '../src/planner/unifiedCourseView.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -2054,4 +2055,23 @@ test('v14 base-name repair keeps Roman numerals, safely classifies null-identity
   const migrated = loadState(memoryStore(JSON.stringify(v13)), catalog);
   assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 14);
   assert.deepEqual(migrated.state.items, v13.items, 'migration does not mutate plan items');
+});
+
+test('unified course view coalesces only safely identified official achievements without mutating source facts', () => {
+  const offering = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(offering);
+  const planned = item(offering.id, 'planned');
+  const exact = { id: 'official-exact', fingerprint: 'official-exact', source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: null, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [offering.id] };
+  const nameOnly = { ...exact, id: 'official-name-only', fingerprint: 'official-name-only', courseId: null, match: 'ambiguous', selectionSource: 'none', selectedOfferingId: null };
+  const originalExact = structuredClone(exact);
+  const originalPlanned = structuredClone(planned);
+  const rows = createUnifiedCourseRows([planned], [exact, nameOnly], offeringsById);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].source, 'planner_imported');
+  assert.equal(rows[0].importedAchievements[0], exact);
+  assert.equal(rows[0].plannerItem.status, 'planned');
+  assert.equal(rows[1].source, 'imported');
+  assert.equal(rows[1].displayStatus, 'earned_imported');
+  assert.deepEqual(exact, originalExact, 'the display view never rewrites the imported achievement');
+  assert.deepEqual(planned, originalPlanned, 'the display view never rewrites the planner item');
 });
