@@ -13,7 +13,7 @@ import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySe
 import { repeatableRule } from './repeatableRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
-import type { ImportedStudyRecord } from './gradeImportApply';
+import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { deriveImportedAchievements, type ImportedAchievementWarning } from './importedAchievementCalculations';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
@@ -738,13 +738,13 @@ function publicCourseCard(publicCourses: PublicCourse[], catalog: PlannerCatalog
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = []): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = []): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return { graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [], importedWarnings: [], importedContributionCount: 0 };
   }
   const catalogOfferings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
-  const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items);
+  const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements);
   const calculationItems = [...items, ...imported.items];
   const offerings = new Map([...catalog.offerings, ...imported.offerings].map(offering => [offering.id, offering]));
   const resolve = createMappingResolver(catalog);

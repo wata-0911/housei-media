@@ -19,7 +19,7 @@ import PlannerExportActions from '../components/planner/PlannerExportActions';
 import { plannerExportPresentation } from '../planner/plannerExport';
 import GradeImportPanel from '../components/planner/GradeImportPanel';
 import ImportedAchievements from '../components/planner/ImportedAchievements';
-import { applyImport, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
+import { applyImport, importedEarnedCreditsTotal, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
 import { deriveImportedAchievements } from '../planner/importedAchievementCalculations';
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
 
@@ -47,10 +47,8 @@ export default function PlannerPage() {
   const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
-  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection, state.importedStudyRecords);
-  const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items);
-  const summaryOfferings = new Map([...offeringsById, ...importedDerived.offerings.map(offering => [offering.id, offering] as const)]);
-  const summaryItems = [...state.items, ...importedDerived.items];
+  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection, state.importedStudyRecords, state.importedCourseAchievements);
+  const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements);
   const exportPresentation = plannerExportPresentation(state, catalog);
 
   useEffect(() => {
@@ -206,7 +204,7 @@ export default function PlannerPage() {
       <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} thesisSelection={state.thesisSelection} disabled={loaded.error !== null}
         onChange={selectedScopeId => commit(stateForScopeChange(state, selectedScopeId), '所属を保存しました。卒業論文の選択は未定に戻しました。')}
         onThesisSelectionChange={thesisSelection => commit({ ...state, thesisSelection }, '卒業論文の選択を保存しました。')} />
-      <CreditSummary summary={summarizeCredits(summaryItems, summaryOfferings, state.publicCourses)} importedAchievementCount={importedDerived.items.length} />
+      <CreditSummary summary={summarizeCredits(state.items, offeringsById, state.publicCourses)} importedEarnedCredits={importedEarnedCreditsTotal(state.importedCourseAchievements)} />
       <div className="min-h-5 text-sm text-[#002255]">
         <p role="status" className="inline">{notice}</p>
         {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
@@ -217,7 +215,7 @@ export default function PlannerPage() {
         <button type="button" role="tab" aria-selected={activeTab === 'media'} onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
       </div>
       {activeTab === 'annual'
-        ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} /><ImportedAchievements records={state.importedStudyRecords} offerings={catalog.offerings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onDelete={deleteImportedAchievement} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses, importedDerived.items, importedDerived.offerings)} importedAchievementCount={importedDerived.items.length} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}</div>
+        ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} /><ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onDelete={deleteImportedAchievement} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses, importedDerived.items, importedDerived.offerings)} importedAchievementCount={importedDerived.items.length} importedUnclassified={importedDerived.unclassified} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}</div>
         : activeTab === 'media'
           ? <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} disabled={loaded.error !== null} onChange={changeMediaProgress} /> : null}
     </div>

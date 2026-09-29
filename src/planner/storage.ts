@@ -3,7 +3,7 @@ import { validateState } from './validation';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 10, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [] });
+export const initialState = (): PlannerState => ({ schemaVersion: 11, selectedScopeId: null, thesisSelection: 'undecided', items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [] });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null };
 
@@ -36,17 +36,28 @@ function migrateState(value: unknown): unknown {
   const v3 = v2.schemaVersion === 2 ? { ...v2, schemaVersion: 3, publicCourses: [] } : v2;
   const v4 = v3.schemaVersion === 3 ? { ...v3, schemaVersion: 4, thesisSelection: 'undecided' } : v3;
   const v5 = v4.schemaVersion === 4 ? { ...v4, schemaVersion: 5, mediaSchoolingProgress: {} } : v4;
-  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7 && v5.schemaVersion !== 8 && v5.schemaVersion !== 9 && v5.schemaVersion !== 10) return value;
+  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7 && v5.schemaVersion !== 8 && v5.schemaVersion !== 9 && v5.schemaVersion !== 10 && v5.schemaVersion !== 11) return value;
   const v6 = v5.schemaVersion === 5 ? { ...v5, schemaVersion: 6, courseEvaluations: {} } : v5;
   const v7 = v6.schemaVersion === 6 ? { ...v6, schemaVersion: 7, correspondenceProgress: {} } : v6;
   // v9 component records intentionally have no reconstructed course aggregate.
   // They remain visible, but cannot be used as graduation achievements.
-  if (v7.schemaVersion === 10) return v7;
-  if (v7.schemaVersion === 9) return { ...v7, schemaVersion: 10, importedStudyRecords: Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords : [] };
+  if (v7.schemaVersion === 11) return v7;
+  if (v7.schemaVersion === 10) {
+    const records = Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords as Record<string, unknown>[] : [];
+    const rows = new Map<string, Record<string, unknown>>();
+    for (const record of records) {
+      const id = typeof record.sourceCourseId === 'string' ? record.sourceCourseId : null;
+      if (!id || rows.has(id) || typeof record.earnedCreditsTotal !== 'number') continue;
+      rows.set(id, { id, fingerprint: `migrated:${id}`, source: 'hosei_import', rawName: record.rawName, categoryRaw: null, capturedAt: typeof record.capturedAt === 'string' ? record.capturedAt : '', earnedCreditsTotal: record.earnedCreditsTotal, schoolingCreditsTotal: record.schoolingCreditsTotal ?? null, compositionCredits: record.compositionCredits ?? null, recognizedExemption: record.recognizedExemption ?? null, additionalEnrollment: record.additionalEnrollment ?? null, academicYear: record.academicYear ?? null, yearSource: record.yearSource ?? 'unknown', courseId: null, selectedOfferingId: record.offeringId ?? null, match: record.match ?? 'unmatched', candidateOfferingIds: [] });
+    }
+    return { ...v7, schemaVersion: 11, importedStudyRecords: records, importedCourseAchievements: [...rows.values()] };
+  }
+  if (v7.schemaVersion === 9) return { ...v7, schemaVersion: 11, importedStudyRecords: Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords : [], importedCourseAchievements: [] };
   if (v7.schemaVersion === 8) return {
     ...v7,
-    schemaVersion: 10,
+    schemaVersion: 11,
     importedStudyRecords: [],
+    importedCourseAchievements: [],
     mediaSchoolingProgress: typeof v7.mediaSchoolingProgress === 'object' && v7.mediaSchoolingProgress !== null && !Array.isArray(v7.mediaSchoolingProgress)
       ? Object.fromEntries(Object.entries(v7.mediaSchoolingProgress).map(([id, progress]) => [id, typeof progress === 'object' && progress !== null && !Array.isArray(progress) ? { ...progress as Record<string, unknown>, assessments: [] } : progress]))
       : v7.mediaSchoolingProgress,
@@ -56,7 +67,7 @@ function migrateState(value: unknown): unknown {
   // report/schooling grades represent different assessment stages.
   return {
     ...v7,
-    schemaVersion: 10,
+    schemaVersion: 11,
     items: (v7.items as unknown[]).map(item => typeof item === 'object' && item !== null && !Array.isArray(item)
       ? { ...item as Record<string, unknown>, studyYear: null } : item),
     publicCourses: Array.isArray(v7.publicCourses) ? v7.publicCourses.map(course => typeof course === 'object' && course !== null && !Array.isArray(course)
@@ -65,6 +76,7 @@ function migrateState(value: unknown): unknown {
       ? Object.fromEntries(Object.entries(v7.courseEvaluations).map(([id, evaluation]) => [id, typeof evaluation === 'object' && evaluation !== null && !Array.isArray(evaluation) ? { ...evaluation as Record<string, unknown>, finalGrade: null } : evaluation]))
       : v7.courseEvaluations,
     importedStudyRecords: [],
+    importedCourseAchievements: [],
     mediaSchoolingProgress: typeof v7.mediaSchoolingProgress === 'object' && v7.mediaSchoolingProgress !== null && !Array.isArray(v7.mediaSchoolingProgress)
       ? Object.fromEntries(Object.entries(v7.mediaSchoolingProgress).map(([id, progress]) => [id, typeof progress === 'object' && progress !== null && !Array.isArray(progress) ? { ...progress as Record<string, unknown>, assessments: [] } : progress]))
       : v7.mediaSchoolingProgress,

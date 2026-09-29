@@ -1,14 +1,15 @@
-import { groupImportedAchievements, type ImportedStudyRecord } from '../../planner/gradeImportApply';
+import { groupImportedAchievements, type ImportedCourseAchievement, type ImportedStudyRecord } from '../../planner/gradeImportApply';
 import type { Offering } from '../../planner/plannerCatalog';
 
 const methodLabel = (method: ImportedStudyRecord['method']) => method === 'correspondence' ? '通信' : 'スクーリング';
 const matchLabel = (match: ImportedStudyRecord['match']) => match === 'exact_unique' ? '既存科目一致' : match === 'ambiguous' ? '要確認' : '未一致';
 const yearLabel = (source: ImportedStudyRecord['yearSource']) => source === 'source' ? '成績表の年度' : source === 'inferred' ? '推定' : source === 'manual' ? '手動修正' : '未設定';
 
-export default function ImportedAchievements({ records, offerings, disabled, onChange, onDelete }: { records: ImportedStudyRecord[]; offerings: Offering[]; disabled: boolean; onChange: (id: string, patch: Partial<ImportedStudyRecord>) => void; onDelete: (id: string) => void }) {
-  if (!records.length) return null;
+export default function ImportedAchievements({ records, courseRows = [], offerings, disabled, onChange, onDelete }: { records: ImportedStudyRecord[]; courseRows?: ImportedCourseAchievement[]; offerings: Offering[]; disabled: boolean; onChange: (id: string, patch: Partial<ImportedStudyRecord>) => void; onDelete: (id: string) => void }) {
+  if (!records.length && !courseRows.length) return null;
   return <section id="imported-achievements" className="border border-[#002255] bg-white p-4 space-y-4" aria-label="取り込んだ履修実績">
     <div><h2 className="text-lg text-[#002255]">取り込んだ履修実績</h2><p className="text-sm">成績表から保存した項目です。年度・期・照合先はここで後から修正できます。</p></div>
+    <section className="space-y-2"><h3 className="border-b border-gray-200 pb-1 text-base">成績表の科目行</h3><p className="text-xs text-gray-600">公式の修得単位の正本です。詳細の通信・スクーリング記録がなくても保持されます。</p>{courseRows.map(row => <article key={row.id} className="border border-orange-200 bg-orange-50 p-3 text-sm"><p className="font-medium">{row.rawName}</p><p className="mt-1">修得 {row.earnedCreditsTotal ?? '不明'}単位 / S {row.schoolingCreditsTotal ?? '不明'}単位 / 構成 {row.compositionCredits ?? '不明'}単位</p><p className="mt-1 text-xs text-gray-600">照合: {matchLabel(row.match)}{row.selectedOfferingId ? ' / 照合先あり' : ' / 未設定'}</p></article>)}</section>
     {groupImportedAchievements(records).map(([year, group]) => <div key={year ?? 'unset'} className="space-y-2"><h3 className="border-b border-gray-200 pb-1 text-base">{year === null ? '年度未設定' : `${year}年度`}</h3>
       {group.map(record => { const linked = record.offeringId ? offerings.find(offering => offering.id === record.offeringId) : null; const candidates = offerings.filter(offering => offering.method === record.method && offering.name.trim() === record.rawName.trim()); return <article key={record.id} className="border p-3 text-sm space-y-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><p className="font-medium">{record.rawName} <span className="font-normal text-gray-600">— {methodLabel(record.method)}</span></p><button type="button" disabled={disabled} onClick={() => { if (window.confirm(`「${record.rawName}」の取り込んだ履修実績を削除しますか？`)) onDelete(record.id); }} className="text-xs underline disabled:opacity-50">削除</button></div>

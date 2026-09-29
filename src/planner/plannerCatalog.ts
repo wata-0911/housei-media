@@ -249,7 +249,7 @@ export type PublicCourse = {
 };
 
 export type PlannerState = {
-  schemaVersion: 10;
+  schemaVersion: 11;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
@@ -263,6 +263,8 @@ export type PlannerState = {
   correspondenceProgress: Record<string, CorrespondenceCourseProgress>;
   /** Raw component-level records from the grade table; they never assert graduation mapping. */
   importedStudyRecords: Array<import('./gradeImportApply').ImportedStudyRecord>;
+  /** One official grade-table row per course, including rows with no detail slots. */
+  importedCourseAchievements: Array<import('./gradeImportApply').ImportedCourseAchievement>;
 };
 
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';

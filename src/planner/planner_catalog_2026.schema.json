@@ -989,7 +989,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 10
+          "const": 11
         },
         "selectedScopeId": {
           "anyOf": [
@@ -1093,7 +1093,8 @@
         ,"importedStudyRecords": { "type": "array", "items": { "type": "object", "properties": {
           "id": { "type": "string", "minLength": 1 }, "fingerprint": { "type": "string", "minLength": 1 }, "source": { "const": "hosei_import" }, "rawName": { "type": "string", "minLength": 1 }, "offeringId": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "match": { "enum": ["exact_unique", "ambiguous", "unmatched"] }, "method": { "enum": ["correspondence", "schooling"] }, "academicYear": { "anyOf": [{ "type": "integer" }, { "type": "null" }] }, "yearSource": { "enum": ["source", "inferred", "manual", "unknown"] }, "rawYear": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "term": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "rawTerm": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "date": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "credits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "grade": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "reports": { "type": "array" }, "examGrade": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
           "sourceCourseId": { "type": "string", "minLength": 1 }, "earnedCreditsTotal": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "schoolingCreditsTotal": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "compositionCredits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "recognizedExemption": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "additionalEnrollment": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "capturedAt": { "type": "string" }
-        }, "required": ["id", "fingerprint", "source", "rawName", "offeringId", "match", "method", "academicYear", "yearSource", "rawYear", "term", "rawTerm", "date", "credits", "grade"], "additionalProperties": false } }
+        }, "required": ["id", "fingerprint", "source", "rawName", "offeringId", "match", "method", "academicYear", "yearSource", "rawYear", "term", "rawTerm", "date", "credits", "grade"], "additionalProperties": false } },
+        "importedCourseAchievements": { "type": "array", "items": { "type": "object", "properties": { "id": { "type": "string", "minLength": 1 }, "fingerprint": { "type": "string", "minLength": 1 }, "source": { "const": "hosei_import" }, "rawName": { "type": "string", "minLength": 1 }, "categoryRaw": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "capturedAt": { "type": "string" }, "earnedCreditsTotal": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "schoolingCreditsTotal": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "compositionCredits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "recognizedExemption": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "additionalEnrollment": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "academicYear": { "anyOf": [{ "type": "integer" }, { "type": "null" }] }, "yearSource": { "enum": ["source", "inferred", "manual", "unknown"] }, "courseId": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "selectedOfferingId": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "match": { "enum": ["exact_unique", "ambiguous", "unmatched"] }, "candidateOfferingIds": { "type": "array", "items": { "type": "string" } } }, "required": ["id", "fingerprint", "source", "rawName", "categoryRaw", "capturedAt", "earnedCreditsTotal", "schoolingCreditsTotal", "compositionCredits", "recognizedExemption", "additionalEnrollment", "academicYear", "yearSource", "courseId", "selectedOfferingId", "match", "candidateOfferingIds"], "additionalProperties": false } }
       },
       "required": [
         "schemaVersion",
@@ -1105,7 +1106,8 @@
         "mediaSchoolingProgress",
         "courseEvaluations",
         "correspondenceProgress",
-        "importedStudyRecords"
+        "importedStudyRecords",
+        "importedCourseAchievements"
       ],
       "additionalProperties": false
     },
