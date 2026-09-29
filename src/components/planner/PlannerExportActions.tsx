@@ -4,6 +4,11 @@ import { exportGradeLabel, exportStudyYearLabel, exportTermLabel, exportValue, p
 
 type Props = { presentation: PlannerExportPresentation };
 
+// Keep Japanese glyphs and Latin numerals in one local serif family when the
+// presentation is rasterized. These are OS-provided fonts, so no web-font
+// request or CORS-dependent font embedding is needed.
+const exportImageFontFamily = '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif';
+
 function downloadBlob(contents: string, fileName: string, type: string) {
   const url = URL.createObjectURL(new Blob([contents], { type }));
   const link = document.createElement('a');
@@ -24,7 +29,7 @@ function ExportRow({ row }: { row: PlannerExportRow }) {
 
 function ExportImage({ presentation, date }: { presentation: PlannerExportPresentation; date: Date }) {
   const groups: Array<[PlannerExportRow['studyYear'], PlannerExportRow[]]> = [[1, presentation.rows.filter(row => row.studyYear === 1)], [2, presentation.rows.filter(row => row.studyYear === 2)], [3, presentation.rows.filter(row => row.studyYear === 3)], [4, presentation.rows.filter(row => row.studyYear === 4)], [null, presentation.rows.filter(row => row.studyYear === null)]];
-  return <div className="w-[1000px] bg-[#fffaf3] p-10 font-serif text-[#18243b]">
+  return <div className="w-[1000px] bg-[#fffaf3] p-10 text-[#18243b]" style={{ fontFamily: exportImageFontFamily }}>
     <p className="text-xs font-semibold tracking-[0.18em] text-[#a34700]">HOSEI TSUSHIN</p>
     <h3 className="mt-2 text-3xl font-semibold text-[#002255]">履修計画</h3>
     <div className="mt-4 border-y border-[#dfd4c5] py-3 text-sm"><p>所属 {presentation.affiliation}</p><p className="mt-1">出力日 {date.getFullYear()}年{date.getMonth() + 1}月{date.getDate()}日</p></div>
