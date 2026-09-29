@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import vm from 'node:vm';
 import { createDevelopmentManifest, loadPlannerTargets, renderTargetConfig } from '../../../scripts/planner-targets.mjs';
 
 await import('../planner-target-config.js');
@@ -12,10 +13,40 @@ const token = '11111111-1111-4111-8111-111111111111';
 const targetConfig = await loadPlannerTargets();
 const prodOrigin = targetConfig.prod.origin;
 const devOrigin = targetConfig.dev.origin;
+const targetScript = readFileSync(new URL('../planner-target.js', import.meta.url), 'utf8');
+const handoffScript = readFileSync(new URL('../handoff-store.js', import.meta.url), 'utf8');
+const popupScript = readFileSync(new URL('../popup.js', import.meta.url), 'utf8');
 const storage = () => {
   const values = new Map();
   return { values, async set(entries) { Object.entries(entries).forEach(([key, value]) => values.set(key, value)); }, async get(key) { return { [key]: values.get(key) }; }, async remove(key) { values.delete(key); } };
 };
+
+function runtimeFromGeneratedConfig(keys) {
+  const context = { URL };
+  context.globalThis = context;
+  vm.runInNewContext(renderTargetConfig(targetConfig, keys), context);
+  vm.runInNewContext(targetScript, context);
+  vm.runInNewContext(handoffScript, context);
+  return context;
+}
+
+function popupTargetLabels(context) {
+  const nodes = new Map();
+  const actions = { append: (...buttons) => buttons.forEach(button => nodes.set(button.id, button)) };
+  for (const id of ['read', 'result', 'status', 'count', 'courses', 'copy', 'download']) {
+    nodes.set(id, { addEventListener() {}, replaceChildren() {} });
+  }
+  nodes.set('planner-actions', actions);
+  context.document = {
+    getElementById: id => nodes.get(id),
+    createElement: () => ({ addEventListener() {} }),
+  };
+  context.chrome = {};
+  vm.runInNewContext(popupScript, context);
+  return [...nodes.entries()]
+    .filter(([id, button]) => id.startsWith('planner-') && typeof button.textContent === 'string')
+    .map(([, button]) => button.textContent);
+}
 
 test('stores a one-time transfer and creates a production URL containing only its token', async () => {
   targets.configure(['prod']);
@@ -27,12 +58,20 @@ test('stores a one-time transfer and creates a production URL containing only it
   assert.equal(url.includes(JSON.stringify(payload)), false);
 });
 
-test('creates a dev target URL only in the dev configuration', () => {
-  globalThis.HoseiPlannerTargetDefinitions = Object.freeze(targetConfig);
-  targets.configure(['prod', 'dev']);
-  assert.equal(handoff.plannerUrl(token, 'dev'), `${devOrigin}/planner#hosei-import=11111111-1111-4111-8111-111111111111`);
-  targets.configure(['prod']);
-  assert.throws(() => handoff.plannerUrl(token, 'dev'), /Unauthorized Planner target/);
+test('generated production runtime config enables only production and rejects the dev URL', () => {
+  const context = runtimeFromGeneratedConfig(['prod']);
+  assert.deepEqual(Array.from(context.HoseiPlannerTarget.enabled(), target => target.key), ['prod']);
+  assert.throws(() => context.HoseiPlannerHandoffStore.plannerUrl(token, 'dev'), /Unauthorized Planner target/);
+});
+
+test('generated development runtime config enables both targets without manual configuration', () => {
+  const context = runtimeFromGeneratedConfig(['prod', 'dev']);
+  assert.deepEqual(Array.from(context.HoseiPlannerTarget.enabled(), target => target.key), ['prod', 'dev']);
+  assert.deepEqual(popupTargetLabels(context), ['Plannerで確認', 'Planner(dev)で確認']);
+  assert.equal(
+    context.HoseiPlannerHandoffStore.plannerUrl(token, 'dev'),
+    `${devOrigin}/planner#hosei-import=11111111-1111-4111-8111-111111111111`,
+  );
 });
 
 test('returns a live payload only to the exact planner route and deletes it before a second read', async () => {
@@ -61,6 +100,7 @@ test('authorizes the exact planner pathname, including fragments, but rejects ot
 });
 
 test('dev configuration authorizes both exact Planner routes but rejects other paths and origins', async () => {
+  globalThis.HoseiPlannerTargetDefinitions = Object.freeze(targetConfig);
   targets.configure(['prod', 'dev']);
   for (const [senderUrl, allowed] of [
     [`${prodOrigin}/planner`, true], [`${devOrigin}/planner`, true],
@@ -114,12 +154,13 @@ test('a changed dev origin is reflected together in the generated manifest and r
   assert.deepEqual(manifest.content_scripts[0].matches, [`${prodOrigin}/*`, `${fixtureOrigin}/*`]);
   assert.match(runtimeConfig, new RegExp(fixtureOrigin));
   assert.doesNotMatch(runtimeConfig, new RegExp(devOrigin));
+  assert.match(runtimeConfig, /HoseiPlannerEnabledTargetKeys = Object\.freeze\(\["prod","dev"\]\)/);
 });
 
 test('popup retains copy and download fallbacks beside the direct handoff action', () => {
   const popup = readFileSync(new URL('../popup.html', import.meta.url), 'utf8');
   const script = readFileSync(new URL('../popup.js', import.meta.url), 'utf8');
-  const target = readFileSync(new URL('../planner-target.js', import.meta.url), 'utf8');
+  const target = targetScript;
   assert.match(popup, /id="planner-actions"/); assert.match(popup, /id="copy"/); assert.match(popup, /id="download"/);
   assert.match(target, /HoseiPlannerTargetDefinitions/); assert.match(script, /planner-\$\{key\}/);
   assert.match(script, /navigator\.clipboard\.writeText/); assert.match(script, /hosei-grade-import-v1\.json/);

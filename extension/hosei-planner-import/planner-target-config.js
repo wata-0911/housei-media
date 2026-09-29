@@ -3,4 +3,5 @@
   globalThis.HoseiPlannerTargetDefinitions = Object.freeze({
     prod: Object.freeze({ origin: 'https://hosei-tsukyo-media.com', plannerPath: '/planner', buttonLabel: 'Plannerで確認' }),
   });
+  globalThis.HoseiPlannerEnabledTargetKeys = Object.freeze(['prod']);
 })();

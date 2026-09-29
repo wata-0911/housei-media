@@ -5,7 +5,10 @@
     if (!definitions || typeof definitions !== 'object') throw new Error('Planner target definitions are unavailable.');
     return definitions;
   };
-  let enabledTargetKeys = ['prod'];
+  const configuredTargetKeys = globalThis.HoseiPlannerEnabledTargetKeys;
+  let enabledTargetKeys = Array.isArray(configuredTargetKeys) && configuredTargetKeys.length > 0 && configuredTargetKeys.every(key => Object.hasOwn(targets(), key))
+    ? [...configuredTargetKeys]
+    : ['prod'];
   const configure = keys => {
     if (!Array.isArray(keys) || keys.length === 0 || keys.some(key => !Object.hasOwn(targets(), key))) throw new Error('Invalid Planner targets.');
     enabledTargetKeys = [...keys];

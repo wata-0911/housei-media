@@ -16,7 +16,7 @@ export async function loadPlannerTargets(configUrl = new URL('../extension/hosei
 export function renderTargetConfig(targets, keys) {
   const selected = Object.fromEntries(keys.map(key => [key, targets[key]]));
   if (Object.values(selected).some(target => !target)) throw new Error('Unknown Planner target.');
-  return `// Generated from planner-targets.config.json. Do not edit.\n(() => {\n  globalThis.HoseiPlannerTargetDefinitions = Object.freeze(${JSON.stringify(selected, null, 2)});\n})();\n`;
+  return `// Generated from planner-targets.config.json. Do not edit.\n(() => {\n  globalThis.HoseiPlannerTargetDefinitions = Object.freeze(${JSON.stringify(selected, null, 2)});\n  globalThis.HoseiPlannerEnabledTargetKeys = Object.freeze(${JSON.stringify(keys)});\n})();\n`;
 }
 
 export function createDevelopmentManifest(productionManifest, targets) {
