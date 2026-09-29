@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "法政 履修データ取り込み",
+  "version": "1.0.0",
+  "description": "法政Web学習サービスの成績表を、この端末内でJSONへ変換します。",
+  "permissions": ["activeTab", "scripting"],
+  "action": { "default_popup": "popup.html", "default_title": "法政 履修データ取り込み" }
+}

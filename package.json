@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "test:planner": "node --import tsx --test tests/planner.test.mjs"
+    "test:planner": "node --import tsx --test tests/planner.test.mjs",
+    "test:extension": "node --test extension/hosei-planner-import/tests/extractor.test.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0",
