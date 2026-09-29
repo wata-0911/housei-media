@@ -20,6 +20,7 @@ import { plannerExportPresentation } from '../planner/plannerExport';
 import GradeImportPanel from '../components/planner/GradeImportPanel';
 import ImportedAchievements from '../components/planner/ImportedAchievements';
 import { applyImport, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
+import { deriveImportedAchievements } from '../planner/importedAchievementCalculations';
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
 
 function readSavedState(): LoadResult {
@@ -46,7 +47,8 @@ export default function PlannerPage() {
   const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
-  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection);
+  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection, state.importedStudyRecords);
+  const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items);
   const exportPresentation = plannerExportPresentation(state, catalog);
 
   useEffect(() => {
@@ -215,7 +217,7 @@ export default function PlannerPage() {
       {activeTab === 'annual'
         ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} /><ImportedAchievements records={state.importedStudyRecords} offerings={catalog.offerings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onDelete={deleteImportedAchievement} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses)} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}</div>
         : activeTab === 'media'
-          ? <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} disabled={loaded.error !== null} onChange={changeMediaProgress} /> : null}
+          ? <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} disabled={loaded.error !== null} onChange={changeMediaProgress} /> : null}
     </div>
   </div>;
 }

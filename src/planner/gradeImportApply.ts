@@ -3,7 +3,9 @@ import type { Offering, PlannerState } from './plannerCatalog';
 
 export type ImportMethod = 'correspondence' | 'schooling';
 export type ImportMatch = 'exact_unique' | 'ambiguous' | 'unmatched';
-export type ImportedStudyRecord = { id: string; fingerprint: string; source: 'hosei_import'; rawName: string; offeringId: string | null; match: ImportMatch; method: ImportMethod; academicYear: number | null; yearSource: 'source' | 'inferred' | 'manual' | 'unknown'; rawYear: string | null; term: string | null; rawTerm: string | null; date: string | null; credits: number | null; grade: string | null; reports?: HoseiGradeImportCourse['reports']; examGrade?: string | null };
+/** A component is retained for display, while these optional fields preserve the
+ * single source-course row.  Their absence identifies a v9 legacy record. */
+export type ImportedStudyRecord = { id: string; fingerprint: string; source: 'hosei_import'; rawName: string; offeringId: string | null; match: ImportMatch; method: ImportMethod; academicYear: number | null; yearSource: 'source' | 'inferred' | 'manual' | 'unknown'; rawYear: string | null; term: string | null; rawTerm: string | null; date: string | null; credits: number | null; grade: string | null; reports?: HoseiGradeImportCourse['reports']; examGrade?: string | null; sourceCourseId?: string; earnedCreditsTotal?: number | null; schoolingCreditsTotal?: number | null; compositionCredits?: number | null; recognizedExemption?: number | null; additionalEnrollment?: number | null; capturedAt?: string };
 export type ImportPreviewUnit = ImportedStudyRecord & { selected: boolean; candidates: Offering[]; duplicate: boolean };
 
 export const normalizeImportName = (name: string) => name.trim().replace(/[\s\u3000]+/g, ' ');
@@ -35,10 +37,12 @@ function match(name: string, method: ImportMethod, offerings: Offering[]) { cons
 export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], existing: ImportedStudyRecord[] = []): ImportPreviewUnit[] {
   const rows: ImportPreviewUnit[] = [];
   for (const course of data.courses) {
+    const sourceCourseId = crypto.randomUUID();
+    const aggregate = { sourceCourseId, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, capturedAt: data.capturedAt };
     if (hasCorrespondenceEvidence(course)) {
       const correspondence = match(course.rawName, 'correspondence', offerings);
       const inferred = inferredCorrespondenceYear(course, data.capturedAt);
-      const base = { rawName: course.rawName, method: 'correspondence' as const, academicYear: inferred.academicYear, yearSource: inferred.academicYear === null ? 'unknown' as const : 'inferred' as const, rawYear: null, term: null, rawTerm: null, date: course.creditExam.date ?? inferred.date, credits: course.creditExam.credits, grade: course.creditExam.grade, reports: course.reports, examGrade: course.creditExam.grade };
+      const base = { rawName: course.rawName, method: 'correspondence' as const, academicYear: inferred.academicYear, yearSource: inferred.academicYear === null ? 'unknown' as const : 'inferred' as const, rawYear: null, term: null, rawTerm: null, date: course.creditExam.date ?? inferred.date, credits: course.creditExam.credits, grade: course.creditExam.grade, reports: course.reports, examGrade: course.creditExam.grade, ...aggregate };
       const record = { ...base, id: crypto.randomUUID(), source: 'hosei_import' as const, offeringId: correspondence.candidates[0]?.id ?? null, match: correspondence.match };
       const fingerprint = importFingerprint(record); const duplicate = existing.some(x => x.fingerprint === fingerprint); rows.push({ ...record, fingerprint, candidates: correspondence.candidates, duplicate, selected: !duplicate });
     }
@@ -47,7 +51,7 @@ export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], e
       const result = match(course.rawName, 'schooling', offerings);
       const sourceYear = schoolingAcademicYear(slot.year) ?? schoolingAcademicYear(slot.rawYear);
       const inferredYear = sourceYear ?? academicYearFromDate(slot.date ?? data.capturedAt.slice(0, 10));
-      const candidate = { rawName: course.rawName, method: 'schooling' as const, academicYear: inferredYear, yearSource: sourceYear !== null ? 'source' as const : inferredYear !== null ? 'inferred' as const : 'unknown' as const, rawYear: slot.rawYear || null, term: slot.term, rawTerm: slot.rawTerm || null, date: slot.date, credits: slot.credits, grade: slot.grade };
+      const candidate = { rawName: course.rawName, method: 'schooling' as const, academicYear: inferredYear, yearSource: sourceYear !== null ? 'source' as const : inferredYear !== null ? 'inferred' as const : 'unknown' as const, rawYear: slot.rawYear || null, term: slot.term, rawTerm: slot.rawTerm || null, date: slot.date, credits: slot.credits, grade: slot.grade, ...aggregate };
       const record = { ...candidate, id: crypto.randomUUID(), source: 'hosei_import' as const, offeringId: result.candidates[0]?.id ?? null, match: result.match };
       const fingerprint = `${importFingerprint(record)}:${index}`; const duplicate = existing.some(x => x.fingerprint === fingerprint); rows.push({ ...record, fingerprint, candidates: result.candidates, duplicate, selected: !duplicate });
     });
@@ -59,6 +63,7 @@ export function applyImport(state: PlannerState, units: ImportPreviewUnit[]): Pl
     id: unit.id, fingerprint: unit.fingerprint, source: unit.source, rawName: unit.rawName, offeringId: unit.offeringId, match: unit.match,
     method: unit.method, academicYear: unit.academicYear, yearSource: unit.yearSource, rawYear: unit.rawYear, term: unit.term, rawTerm: unit.rawTerm,
     date: unit.date, credits: unit.credits, grade: unit.grade, ...(unit.reports ? { reports: unit.reports } : {}), ...(unit.examGrade !== undefined ? { examGrade: unit.examGrade } : {}),
+    sourceCourseId: unit.sourceCourseId, earnedCreditsTotal: unit.earnedCreditsTotal, schoolingCreditsTotal: unit.schoolingCreditsTotal, compositionCredits: unit.compositionCredits, recognizedExemption: unit.recognizedExemption, additionalEnrollment: unit.additionalEnrollment, capturedAt: unit.capturedAt,
   }));
   return { ...state, importedStudyRecords: [...state.importedStudyRecords, ...additions] };
 }
