@@ -2086,7 +2086,7 @@ test('v14 base-name repair keeps Roman numerals, safely classifies null-identity
   assert.deepEqual(migrated.state.items, v13.items, 'migration does not mutate plan items');
 });
 
-test('unified course view coalesces only safely identified official achievements without mutating source facts', () => {
+test('unified course view coalesces safely repaired official achievements without mutating source facts', () => {
   const offering = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
   assert.ok(offering);
   const planned = item(offering.id, 'planned');
@@ -2095,12 +2095,10 @@ test('unified course view coalesces only safely identified official achievements
   const originalExact = structuredClone(exact);
   const originalPlanned = structuredClone(planned);
   const rows = createUnifiedCourseRows([planned], [exact, nameOnly], offeringsById);
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 1);
   assert.equal(rows[0].source, 'planner_imported');
-  assert.equal(rows[0].importedAchievements[0], exact);
+  assert.deepEqual(rows[0].importedAchievements, [exact, nameOnly]);
   assert.equal(rows[0].plannerItem.status, 'planned');
-  assert.equal(rows[1].source, 'imported');
-  assert.equal(rows[1].displayStatus, 'earned_imported');
   assert.deepEqual(exact, originalExact, 'the display view never rewrites the imported achievement');
   assert.deepEqual(planned, originalPlanned, 'the display view never rewrites the planner item');
 });
@@ -2117,6 +2115,44 @@ test('unified course view coalesces every safely identified imported lifecycle w
   assert.equal(rows.length, 1); assert.equal(rows[0].source, 'planner_imported'); assert.deepEqual(rows[0].importedAchievements, [inProgress, waiting, pending, earned]);
   assert.deepEqual([inProgress, waiting, pending, earned].map(achievement => importedAchievementStatusLabel(achievement, userMeta[achievement.id])), ['成績表取込: 履修中', '成績表取込: 結果待ち', '成績表取込: 判定保留', '修得済み（成績表）']);
   assert.deepEqual(planned, originalPlanner, 'the view never changes PlannerItem status'); assert.deepEqual([inProgress, waiting, pending, earned], originalImported, 'the view never changes imported source facts'); assert.deepEqual(userMeta, originalMeta, 'the view never changes imported user metadata');
+});
+
+test('unified course view coalesces a display-time repaired Media identity for every imported lifecycle', () => {
+  const base = catalog.offerings.find(value => isMediaSchooling(value) && value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(base && base.courseId);
+  const media = { ...base, id: 'development-economics-media', courseId: 'development-economics', name: '開発経済入門B(前期メディア)' };
+  const planner = { ...media, id: 'development-economics-planner', name: '開発経済入門B' };
+  const offerings = new Map([[media.id, media], [planner.id, planner]]);
+  const planned = item(planner.id, 'in_progress');
+  const imported = id => ({ id, fingerprint: id, source: 'hosei_import', rawName: '開発経済入門Ｂ', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: 0, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'ambiguous', candidateOfferingIds: [] });
+  const inProgress = imported('development-economics-progress'); const waiting = imported('development-economics-waiting'); const pending = imported('development-economics-pending');
+  const meta = { [inProgress.id]: { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 2 }, [waiting.id]: { lifecycleStatus: 'waiting', plannedYear: 2026, plannedTerm: '後期', studyYear: 2 }, [pending.id]: { lifecycleStatus: null, plannedYear: null, plannedTerm: null, studyYear: null } };
+  const sourceFacts = structuredClone([inProgress, waiting, pending]);
+  const rows = createUnifiedCourseRows([planned], [inProgress, waiting, pending], offerings, meta);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].importedAchievements, [inProgress, waiting, pending]);
+  assert.deepEqual([inProgress, waiting, pending].map(row => importedAchievementStatusLabel(row, meta[row.id])), ['成績表取込: 履修中', '成績表取込: 結果待ち', '成績表取込: 判定保留']);
+  assert.deepEqual([inProgress, waiting, pending], sourceFacts, 'display-time repair must not change import source facts');
+  assert.equal(managedImportedMedia([inProgress], [], { [inProgress.id]: meta[inProgress.id] }, new Map([[media.id, media]])).media[0].offering.id, media.id, 'Media uses the same repaired identity');
+});
+
+test('unified course view does not derive an ambiguous name identity and preserves manual priority', () => {
+  const base = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(base && base.courseId);
+  const first = { ...base, id: 'same-name-first', courseId: 'same-name-first-course', name: 'English S' };
+  const second = { ...base, id: 'same-name-second', courseId: 'same-name-second-course', name: 'English S' };
+  const manual = { ...base, id: 'manual-choice', courseId: 'manual-course', name: 'Manual course' };
+  const offerings = new Map([[first.id, first], [second.id, second], [manual.id, manual]]);
+  const imported = { id: 'unsafe-name', fingerprint: 'unsafe-name', source: 'hosei_import', rawName: 'English S', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'ambiguous', candidateOfferingIds: [] };
+  assert.equal(createUnifiedCourseRows([item(first.id)], [imported], offerings).length, 2, 'multiple name identities remain separate');
+  const manualRow = { ...imported, id: 'manual-priority', rawName: 'English S', courseId: manual.courseId, selectedOfferingId: manual.id, selectionSource: 'manual' };
+  const rows = createUnifiedCourseRows([item(manual.id)], [manualRow], offerings);
+  assert.equal(rows.length, 1, 'a matched manual selection wins over ambiguous names');
+  const candidateOnly = { ...imported, id: 'candidate-only', rawName: 'candidate-only', candidateOfferingIds: [manual.id] };
+  assert.equal(createUnifiedCourseRows([item(manual.id)], [candidateOnly], offerings).length, 1, 'one matched candidate course identity is safe without rewriting the source row');
+  const unmatchedCandidate = { ...candidateOnly, id: 'unmatched-candidate', candidateOfferingIds: ['missing-offering'] };
+  assert.equal(createUnifiedCourseRows([item(manual.id)], [unmatchedCandidate], offerings).length, 2, 'unmatched candidates cannot create an identity');
+  assert.equal(createUnifiedCourseRows([item(manual.id), { ...item(manual.id), offeringId: 'manual-copy' }], [manualRow], new Map([...offerings, ['manual-copy', { ...manual, id: 'manual-copy' }]])).length, 3, 'multiple planner rows remain uncoalesced');
 });
 
 test('unified course view preserves an official row when multiple planner offerings share its course identity', () => {

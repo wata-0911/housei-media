@@ -1,4 +1,5 @@
 import type { ImportedCourseAchievement } from './gradeImportApply';
+import { resolveSafeImportedCourseId } from './importedAchievementIdentity';
 import type { ImportedCourseUserMeta, Offering, PlannerItem } from './plannerCatalog';
 
 export type UnifiedCourseRow = {
@@ -16,22 +17,6 @@ export type UnifiedCourseRow = {
 function safePlannerCourseId(item: PlannerItem, offerings: Map<string, Offering>) {
   const offering = offerings.get(item.offeringId);
   return offering?.resolutionStatus === 'matched' && offering.courseId ? offering.courseId : null;
-}
-
-/**
- * An imported identity is usable for display coalescing only when the import
- * already has a safe course identity.  A manual selection is also safe when
- * its selected offering confirms that same identity.  Names are intentionally
- * never used here: name-only matches remain separate read-only rows.
- */
-function safeImportedCourseId(row: ImportedCourseAchievement, offerings: Map<string, Offering>) {
-  if (!row.courseId) return null;
-  if (row.selectionSource === 'manual') {
-    const selected = row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
-    return selected?.resolutionStatus === 'matched' && selected.courseId === row.courseId ? row.courseId : null;
-  }
-  if (row.match !== 'exact_unique') return null;
-  return [...offerings.values()].some(offering => offering.resolutionStatus === 'matched' && offering.courseId === row.courseId) ? row.courseId : null;
 }
 
 /**
@@ -79,7 +64,7 @@ export function createUnifiedCourseRows(items: PlannerItem[], importedAchievemen
 
   for (const achievement of importedAchievements) {
     const displayStatus = importedAchievementDisplayStatus(achievement, userMeta[achievement.id]);
-    const courseId = safeImportedCourseId(achievement, offerings);
+    const courseId = resolveSafeImportedCourseId(achievement, offerings);
     // Multiple planner offerings may legitimately share one course identity.
     // Coalesce only the unambiguous one-to-one case; otherwise preserve the
     // imported achievement as its own read-only row.
