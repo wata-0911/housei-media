@@ -142,6 +142,7 @@ mainへpushした後は、GitHub Actionsの検査結果とVercelのデプロイ�
 - `earned`・`in_progress`・`planned`をそれぞれ合計します。`waiting`・`failed`・`dropped`は合計対象外です。単位数が`null`の件数は状態を問わず別表示します。同一科目の別開講をまとめる処理や卒業要件への算入判定はありません。
 - 卒業判定・todo UIは未実装です。契約互換のため空の`todos`を保持し、既存のtodoや所属データがあれば変更せず保存します。
 - プランナーは遅延読み込みです。カタログ込みのプランナー用チャンクは約796 kB（gzip約147 kB）で、Viteのサイズ警告が出ます。既存ページの初回読み込みには含めません。
+- 成績取り込み拡張の **Plannerで確認** は、`https://hosei-tsukyo-media.com/planner#hosei-import=<one-time-token>` を開きます。JSON本体はURLにもサーバーにも送らず、Chrome session storageで最大5分だけ保持します。Planner originからの一回限りの受領後に削除し、既存のプレビュー・手動反映フローをそのまま使います。拡張の実機確認は [extension/hosei-planner-import/README.md](extension/hosei-planner-import/README.md) を参照してください。
 
 検証：`npm run typecheck`、`npm run lint`、`npm run test:planner`、`npm run build`。テストは実カタログの全件検索・未確定科目・6状態の保存・破損データ保全・単位数不明・保存失敗・復旧・既存状態保持を確認します。
 

@@ -1,8 +1,11 @@
 {
   "manifest_version": 3,
   "name": "法政 履修データ取り込み",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "法政Web学習サービスの成績表を、この端末内でJSONへ変換します。",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://hosei-tsukyo-media.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["https://hosei-tsukyo-media.com/*"], "js": ["planner-bridge.js"], "run_at": "document_start" }],
   "action": { "default_popup": "popup.html", "default_title": "法政 履修データ取り込み" }
 }

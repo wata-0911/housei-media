@@ -21,6 +21,7 @@ import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offer
 import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
 import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
 import { applyImport, importPreview, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
+import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -1808,4 +1809,18 @@ test('grade import separates correspondence and schooling, preserves source year
   assert.equal(preview.length, 2); assert.equal(preview[0].academicYear, null); assert.equal(preview[1].academicYear, 2025); assert.equal(preview[1].yearSource, 'source'); assert.equal(schoolingAcademicYear('25'), 2025);
   const next = applyImport(initialState(), preview); assert.equal(next.importedStudyRecords.length, 2); assert.equal(next.items.length, 0); assert.equal(next.courseEvaluations && Object.keys(next.courseEvaluations).length, 0);
   assert.equal(importPreview(data, offerings, next.importedStudyRecords).every(row => row.duplicate), true);
+});
+
+test('direct handoff accepts only contract JSON, makes a preview, and never applies it itself', () => {
+  const emptySchooling = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
+  const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [{ rawName: '確認用科目', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '', value: null }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [emptySchooling, emptySchooling] }] };
+  const offerings = [{ ...catalog.offerings[0], id: 'direct-offering', name: '確認用科目', method: 'correspondence' }];
+  const accepted = previewDirectGradeHandoff(data, offerings, []);
+  assert.ok(accepted); assert.equal(accepted.units.length, 1); assert.equal(applyImport(initialState(), []).importedStudyRecords.length, 0);
+  assert.equal(previewDirectGradeHandoff({ ...data, schemaVersion: 2 }, offerings, []), null);
+  const handoffToken = '11111111-1111-4111-8111-111111111111';
+  assert.equal(gradeHandoffToken(`#hosei-import=${handoffToken}`), handoffToken);
+  assert.equal(gradeHandoffToken('#hosei-import=wrong'), null);
+  assert.equal(isGradeHandoffResponse({ type: 'hosei-grade-handoff-response', ok: true, token: handoffToken, importData: data }, handoffToken), true);
+  assert.equal(isGradeHandoffResponse({ type: 'hosei-grade-handoff-response', ok: true, token: 'wrong' }, handoffToken), false);
 });
