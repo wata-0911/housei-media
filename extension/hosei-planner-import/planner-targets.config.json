@@ -5,7 +5,7 @@
     "buttonLabel": "Plannerで確認"
   },
   "dev": {
-    "origin": "https://housei-media-egvrrjm8y-htms-projects-5d66bc0c.vercel.app",
+    "origin": "https://dev.hosei-tsukyo-media.com",
     "plannerPath": "/planner",
     "buttonLabel": "Planner(dev)で確認"
   }
