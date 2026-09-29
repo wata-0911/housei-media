@@ -20,11 +20,27 @@ test('stores a one-time transfer and creates a URL containing only its token', a
   assert.equal(url.includes(JSON.stringify(payload)), false);
 });
 
-test('returns a live payload only to the planner origin and deletes it before a second read', async () => {
+test('returns a live payload only to the exact planner route and deletes it before a second read', async () => {
   const session = storage(); await handoff.store(session, { token, importData: { schemaVersion: 1 }, now: 1000 });
   const first = await handoff.read(session, { token, senderUrl: 'https://hosei-tsukyo-media.com/planner', now: 1001 });
   assert.deepEqual(first, { ok: true, importData: { schemaVersion: 1 } }); assert.equal(session.values.has(handoff.keyFor(token)), false);
   assert.deepEqual(await handoff.read(session, { token, senderUrl: 'https://hosei-tsukyo-media.com/planner', now: 1002 }), { ok: false, reason: 'not_found' });
+});
+
+test('authorizes the exact planner pathname, including fragments, but rejects other routes and origins', async () => {
+  const cases = [
+    ['https://hosei-tsukyo-media.com/planner', true],
+    ['https://hosei-tsukyo-media.com/other', false],
+    ['https://hosei-tsukyo-media.com/planner/test', false],
+    ['https://hosei-tsukyo-media.com/planner#hosei-import=example', true],
+    ['https://evil.example/planner', false],
+  ];
+  for (const [senderUrl, allowed] of cases) {
+    const session = storage(); await handoff.store(session, { token, importData: { schemaVersion: 1 }, now: 1000 });
+    const result = await handoff.read(session, { token, senderUrl, now: 1001 });
+    if (allowed) assert.deepEqual(result, { ok: true, importData: { schemaVersion: 1 } });
+    else assert.deepEqual(result, { ok: false, reason: 'unauthorized_origin' });
+  }
 });
 
 test('rejects expired, mismatched, and unauthorized handoff reads without leaking data', async () => {

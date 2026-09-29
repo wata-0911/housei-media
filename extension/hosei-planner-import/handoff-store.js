@@ -7,8 +7,8 @@
   async function store(storage, { token, importData, now = Date.now() }) { if (!tokenOk(token)) return { ok: false, reason: 'invalid_token' }; const entry = { token, createdAt: now, expiresAt: now + TTL_MS, importData }; await storage.set({ [keyFor(token)]: entry }); return { ok: true, entry }; }
   async function read(storage, { token, senderUrl, now = Date.now() }) {
     if (!tokenOk(token)) return { ok: false, reason: 'invalid_token' };
-    let origin = ''; try { origin = new URL(senderUrl).origin; } catch { return { ok: false, reason: 'unauthorized_origin' }; }
-    if (origin !== target.origin) return { ok: false, reason: 'unauthorized_origin' };
+    let url; try { url = new URL(senderUrl); } catch { return { ok: false, reason: 'unauthorized_origin' }; }
+    if (url.origin !== target.origin || url.pathname !== target.plannerPath) return { ok: false, reason: 'unauthorized_origin' };
     const key = keyFor(token); const entry = (await storage.get(key))[key];
     if (!entry || entry.token !== token) return { ok: false, reason: 'not_found' };
     if (!Number.isFinite(entry.expiresAt) || entry.expiresAt <= now) { await storage.remove(key); return { ok: false, reason: 'expired' }; }
