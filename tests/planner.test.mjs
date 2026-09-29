@@ -1942,3 +1942,25 @@ test('reimport adds a missing source row even when its detail component already 
   assert.equal(reapplied.importedCourseAchievements.length, 1);
   assert.equal(importedEarnedCreditsTotal(reapplied.importedCourseAchievements), 2);
 });
+
+test('source row identity ignores capture time and categoryRaw overrides a safe catalog category', () => {
+  const offering = catalog.offerings.find(value => value.courseId !== null && value.resolutionStatus === 'matched' && value.credits !== null);
+  const row = { id: 'row-category', fingerprint: 'stable', source: 'hosei_import', rawName: offering.name, categoryRaw: '外国語', capturedAt: '2026-09-29T00:00:00.000Z', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: offering.id, match: 'exact_unique', candidateOfferingIds: [offering.id] };
+  const derived = deriveImportedAchievements([], offeringsById, [], [row]);
+  assert.equal(derived.categoryOverrides.get(`imported:${row.id}`), '外国語');
+  const course = { rawName: '同一行', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] };
+  const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] }, []));
+  const laterPreview = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-01T00:00:00.000Z', courses: [course] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
+  assert.ok(laterPreview.every(unit => unit.sourceDuplicate && !unit.selected));
+});
+
+test('ambiguous imported schooling is held for manual media resolution', () => {
+  const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched');
+  const normal = catalog.offerings.find(value => value.courseId === media.courseId && value.method === 'schooling' && !isMediaSchooling(value));
+  const record = { id: 'media-component', fingerprint: 'media-component', source: 'hosei_import', rawName: normal.name, offeringId: normal.id, match: 'exact_unique', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'A', sourceCourseId: 'media-row', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '2026-09-29T00:00:00.000Z' };
+  const row = { id: 'media-row', fingerprint: 'media-row', source: 'hosei_import', rawName: normal.name, categoryRaw: null, capturedAt: '2026-09-29T00:00:00.000Z', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: media.courseId, selectedOfferingId: null, match: 'exact_unique', candidateOfferingIds: [normal.id, media.id] };
+  const pending = deriveImportedAchievements([record], offeringsById, [], [row]);
+  assert.equal(pending.media.length, 0); assert.equal(pending.mediaPending[0].sourceCourseId, row.id);
+  const resolved = deriveImportedAchievements([record], offeringsById, [], [{ ...row, selectedOfferingId: media.id }]);
+  assert.equal(resolved.media.length, 1); assert.equal(resolved.media[0].offering.id, media.id);
+});
