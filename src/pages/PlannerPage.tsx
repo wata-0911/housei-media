@@ -18,7 +18,8 @@ import MediaSchoolingProgress from '../components/planner/MediaSchoolingProgress
 import PlannerExportActions from '../components/planner/PlannerExportActions';
 import { plannerExportPresentation } from '../planner/plannerExport';
 import GradeImportPanel from '../components/planner/GradeImportPanel';
-import { applyImport, type ImportPreviewUnit } from '../planner/gradeImportApply';
+import ImportedAchievements from '../components/planner/ImportedAchievements';
+import { applyImport, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
 
 function readSavedState(): LoadResult {
@@ -167,9 +168,12 @@ export default function PlannerPage() {
   }
   function applyGradeImport(units: ImportPreviewUnit[]) {
     const next = applyImport(state, units);
-    if (commit(next, `${next.importedStudyRecords.length - state.importedStudyRecords.length}件の成績コンポーネントを保存しました。`)) { setUndoImport(state); setDirectImport(undefined); }
+    if (commit(next, `${next.importedStudyRecords.length - state.importedStudyRecords.length}件の履修実績を保存しました。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
+    return false;
   }
-  function undoGradeImport() { if (undoImport && commit(undoImport, '直前の成績取り込みを元に戻しました。')) setUndoImport(null); }
+  function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
+  function deleteImportedAchievement(id: string) { const record = state.importedStudyRecords.find(value => value.id === id); if (!record) return; if (commit({ ...state, importedStudyRecords: state.importedStudyRecords.filter(value => value.id !== id) }, `「${record.rawName}」の履修実績を削除しました。`)) setUndoImport(state); }
+  function undoGradeImport() { if (undoImport && commit(undoImport, '取り込んだ履修実績を元に戻しました。')) setUndoImport(null); }
   const onDirectResult = useCallback(({ ok, courseCount }: { ok: boolean; courseCount?: number }) => setNotice(ok ? `拡張機能から${courseCount}科目を受信しました。内容を確認してから反映してください。` : '拡張機能から受信した成績データを検証できませんでした。反映していません。'), []);
 
   return <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen" style={{ fontFamily: '"Noto Serif JP", serif' }}>
@@ -209,7 +213,7 @@ export default function PlannerPage() {
         <button type="button" role="tab" aria-selected={activeTab === 'media'} onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
       </div>
       {activeTab === 'annual'
-        ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses)} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}</div>
+        ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} /><ImportedAchievements records={state.importedStudyRecords} offerings={catalog.offerings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onDelete={deleteImportedAchievement} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} items={state.items} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} disabled={loaded.error !== null} onChange={changeItem} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses)} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <GraduationProgress progress={graduationProgress} />}</div>
         : activeTab === 'media'
           ? <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} disabled={loaded.error !== null} onChange={changeMediaProgress} /> : null}
     </div>
