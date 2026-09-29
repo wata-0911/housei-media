@@ -7,6 +7,19 @@ export const classificationStates = ['選択した所属のカリキュラム対
 export type CreditCategory = typeof creditCategories[number];
 export type CreditClassification = CreditCategory | typeof classificationStates[number];
 export const isCreditCategory = (value: CreditClassification): value is CreditCategory => creditCategories.some(category => category === value);
+/** Only explicit, recognisable grade-table labels override catalog mapping. */
+export function categoryFromImportRaw(raw: string | null): CreditCategory | null {
+  if (!raw) return null;
+  const value = raw.normalize('NFKC').replace(/[\s\u3000]/g, '');
+  if (value.includes('外国語')) return '外国語';
+  if (value.includes('保健') || value.includes('体育')) return '保健体育';
+  if (value.includes('専門')) return '専門教育';
+  if (value.includes('人文')) return '一般教育：人文';
+  if (value.includes('社会')) return '一般教育：社会';
+  if (value.includes('自然')) return '一般教育：自然';
+  if (value.includes('その他')) return '一般教育：その他';
+  return null;
+}
 export const selectablePrograms = (catalog: PlannerCatalog) => catalog.programs.filter(p => !p.isCommon);
 
 // Exact catalog values only: preserve legacy text without interpreting it.
@@ -56,14 +69,14 @@ export function createCreditClassifier(catalog: PlannerCatalog, scopeId: string 
   };
 }
 
-export function summarizeCategories(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = []) {
-  const offerings = new Map(catalog.offerings.map(o => [o.id, o]));
+export function summarizeCategories(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], extraItems: PlannerItem[] = [], extraOfferings: Offering[] = [], extraCategoryOverrides: Map<string, CreditCategory> = new Map()) {
+  const offerings = new Map([...catalog.offerings, ...extraOfferings].map(o => [o.id, o]));
   const classify = createCreditClassifier(catalog, scopeId);
   const grouped = new Map<CreditClassification, PlannerItem[]>([...creditCategories, ...classificationStates].map(c => [c, []]));
-  for (const item of items) {
+  for (const item of [...items, ...extraItems]) {
     const offering = offerings.get(item.offeringId);
     if (!offering) throw new Error(`Unknown offering: ${item.offeringId}`);
-    grouped.get(classify(offering))!.push(item);
+    grouped.get(extraCategoryOverrides.get(item.offeringId) ?? classify(offering))!.push(item);
   }
   return [...creditCategories, ...classificationStates].map(category => {
     const summary = summarizeCredits(grouped.get(category)!, offerings);
