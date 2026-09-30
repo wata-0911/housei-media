@@ -21,21 +21,53 @@ export function supportsThesisSelection(catalog: PlannerCatalog, scopeId: string
 }
 
 /** A thesis decision belongs to the selected program and is never carried across programs. */
-export function stateForScopeChange(state: PlannerState, selectedScopeId: string | null): PlannerState {
-  const progress = selectedScopeId === null ? { selection: 'undecided' as const, status: 'not_started' as const }
-    : state.thesisProgressByScope[selectedScopeId] ?? { selection: 'undecided' as const, status: 'not_started' as const };
-  return { ...state, selectedScopeId, thesisSelection: progress.selection };
+function defaultProgress(policy: ThesisPolicy): ThesisProgress {
+  return { selection: policy === 'required' ? 'selected' : 'undecided', status: 'not_started' };
 }
 
-export function thesisProgressForScope(state: Pick<PlannerState, 'thesisSelection' | 'thesisProgressByScope'>, scopeId: string | null): ThesisProgress {
+/**
+ * Required theses are selected by definition.  Keep this normalization at the
+ * state boundary as well as in the UI so legacy v18 records cannot make a
+ * required thesis look optional or reset its independently tracked status.
+ */
+function normalizedProgress(policy: ThesisPolicy, progress: ThesisProgress): ThesisProgress {
+  if (policy === 'required') return { selection: 'selected', status: progress.status };
+  if (progress.selection !== 'selected') return { ...progress, status: 'not_started' };
+  return progress;
+}
+
+export function thesisProgressForScope(state: Pick<PlannerState, 'thesisSelection' | 'thesisProgressByScope'>, catalog: PlannerCatalog, scopeId: string | null): ThesisProgress {
+  const policy = thesisPolicyForScope(catalog, scopeId);
   const saved = scopeId === null ? undefined : state.thesisProgressByScope[scopeId];
-  return saved ?? { selection: state.thesisSelection, status: 'not_started' };
+  return normalizedProgress(policy, saved ?? (scopeId === null ? { selection: state.thesisSelection, status: 'not_started' } : defaultProgress(policy)));
 }
 
-export function setThesisProgressForScope(state: PlannerState, scopeId: string | null, patch: Partial<ThesisProgress>): PlannerState {
+/** A thesis decision belongs to the selected program and is never carried across programs. */
+export function stateForScopeChange(state: PlannerState, catalog: PlannerCatalog, selectedScopeId: string | null): PlannerState {
+  if (selectedScopeId === null) return { ...state, selectedScopeId, thesisSelection: 'undecided' };
+  const progress = thesisProgressForScope(state, catalog, selectedScopeId);
+  return {
+    ...state,
+    selectedScopeId,
+    thesisSelection: progress.selection,
+    thesisProgressByScope: { ...state.thesisProgressByScope, [selectedScopeId]: progress },
+  };
+}
+
+export function setThesisProgressForScope(state: PlannerState, catalog: PlannerCatalog, scopeId: string | null, patch: Partial<ThesisProgress>): PlannerState {
   if (scopeId === null) return state;
-  const current = thesisProgressForScope(state, scopeId);
-  const next = { ...current, ...patch };
-  if (next.selection !== 'selected') next.status = 'not_started';
+  const current = thesisProgressForScope(state, catalog, scopeId);
+  const next = normalizedProgress(thesisPolicyForScope(catalog, scopeId), { ...current, ...patch });
   return { ...state, thesisSelection: next.selection, thesisProgressByScope: { ...state.thesisProgressByScope, [scopeId]: next } };
+}
+
+/** Normalize persisted v18 data before validation; status is preserved for required scopes. */
+export function normalizeThesisProgressState(state: PlannerState, catalog: PlannerCatalog): PlannerState {
+  const progressByScope = Object.fromEntries(Object.entries(state.thesisProgressByScope).map(([scopeId, progress]) => [scopeId, normalizedProgress(thesisPolicyForScope(catalog, scopeId), progress)]));
+  const selected = state.selectedScopeId;
+  if (selected !== null && thesisPolicyForScope(catalog, selected) === 'required' && !progressByScope[selected]) {
+    progressByScope[selected] = defaultProgress('required');
+  }
+  const selection = selected === null ? state.thesisSelection : (progressByScope[selected]?.selection ?? state.thesisSelection);
+  return { ...state, thesisSelection: selection, thesisProgressByScope: progressByScope };
 }

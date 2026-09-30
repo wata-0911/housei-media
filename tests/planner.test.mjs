@@ -14,7 +14,7 @@ import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePubli
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
-import { stateForScopeChange, supportsThesisSelection, thesisPolicyForScope } from '../src/planner/thesisSelection.ts';
+import { setThesisProgressForScope, stateForScopeChange, supportsThesisSelection, thesisPolicyForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
 import { addAssessment, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaSharePresentation, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/mediaSchooling.ts';
 import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, usesLegacyReportEvaluation } from '../src/planner/courseEvaluations.ts';
 import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/correspondenceProgress.ts';
@@ -795,7 +795,8 @@ test('outside mapping and manual review keep distinct labels and remain saveable
     for (const scope of [null, ...selectablePrograms(catalog).map(p => p.scopeId)]) {
       const classify = createCreditClassifier(catalog, scope);
       assert.ok(offerings.every(o => classify(o) === label));
-      const state = { ...initialState(), selectedScopeId: scope, items: offerings.map(o => item(o.id)) };
+      const rawState = { ...initialState(), selectedScopeId: scope, items: offerings.map(o => item(o.id)) };
+      const state = thesisPolicyForScope(catalog, scope) === 'required' ? stateForScopeChange(rawState, catalog, scope) : rawState;
       const store = memoryStore();
       saveState(store, state, null, catalog);
       assert.deepEqual(loadState(store, catalog).state, state);
@@ -1372,7 +1373,55 @@ test('thesis policy distinguishes optional, required, and unknown scopes; only o
   assert.equal(supportsThesisSelection(catalog, literature), false);
   assert.equal(supportsThesisSelection(catalog, commerce), true);
   const state = { ...initialState(), selectedScopeId: law, thesisSelection: 'selected', items: [item(first.id)] };
-  assert.deepEqual(stateForScopeChange(state, commerce), { ...state, selectedScopeId: commerce, thesisSelection: 'undecided' });
+  assert.deepEqual(stateForScopeChange(state, catalog, commerce), { ...state, selectedScopeId: commerce, thesisSelection: 'undecided', thesisProgressByScope: { [commerce]: { selection: 'undecided', status: 'not_started' } } });
+});
+
+test('required thesis scopes are selected internally and preserve their independent status', () => {
+  const scope = department => catalog.programs.find(program => program.department === department).scopeId;
+  const literature = scope('日本文学科');
+  const history = scope('史学科');
+  const geography = scope('地理学科');
+  let state = stateForScopeChange(initialState(), catalog, literature);
+  assert.deepEqual(thesisProgressForScope(state, catalog, literature), { selection: 'selected', status: 'not_started' });
+  state = setThesisProgressForScope(state, catalog, literature, { status: 'planned' });
+  assert.deepEqual(thesisProgressForScope(state, catalog, literature), { selection: 'selected', status: 'planned' });
+  const store = memoryStore();
+  saveState(store, state, null, catalog);
+  state = loadState(store, catalog).state;
+  assert.deepEqual(thesisProgressForScope(state, catalog, literature), { selection: 'selected', status: 'planned' });
+  state = setThesisProgressForScope(state, catalog, literature, { status: 'in_progress' });
+  assert.deepEqual(thesisProgressForScope(state, catalog, literature), { selection: 'selected', status: 'in_progress' });
+  state = setThesisProgressForScope(state, catalog, literature, { status: 'earned' });
+  assert.deepEqual(thesisProgressForScope(state, catalog, literature), { selection: 'selected', status: 'earned' });
+  assert.equal(calculateGraduationProgress([], catalog, literature, [], 'selected', [], [], undefined, thesisProgressForScope(state, catalog, literature)).cards.find(row => row.requirementId.startsWith('thesis-progress-')).status, 'satisfied');
+  state = stateForScopeChange(state, catalog, history);
+  state = setThesisProgressForScope(state, catalog, history, { status: 'planned' });
+  state = stateForScopeChange(state, catalog, geography);
+  state = setThesisProgressForScope(state, catalog, geography, { status: 'in_progress' });
+  state = stateForScopeChange(state, catalog, literature);
+  assert.deepEqual(thesisProgressForScope(state, catalog, literature), { selection: 'selected', status: 'earned' });
+  assert.deepEqual(thesisProgressForScope(state, catalog, history), { selection: 'selected', status: 'planned' });
+  assert.deepEqual(thesisProgressForScope(state, catalog, geography), { selection: 'selected', status: 'in_progress' });
+  assert.equal(calculateGraduationProgress([], catalog, literature).graduationCheckComplete, false);
+});
+
+test('required thesis legacy v18 state is normalized on reload without discarding status', () => {
+  const literature = catalog.programs.find(program => program.department === '日本文学科').scopeId;
+  const legacy = { ...initialState(), selectedScopeId: literature, thesisProgressByScope: { [literature]: { selection: 'undecided', status: 'planned' } } };
+  const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
+  assert.equal(loaded.error, null);
+  assert.deepEqual(loaded.state.thesisProgressByScope[literature], { selection: 'selected', status: 'planned' });
+  assert.deepEqual(thesisProgressForScope(loaded.state, catalog, literature), { selection: 'selected', status: 'planned' });
+});
+
+test('optional thesis scopes still reset status until selected', () => {
+  for (const department of ['法律学科', '経済学科', '商業学科']) {
+    const scope = catalog.programs.find(program => program.department === department).scopeId;
+    const undecided = setThesisProgressForScope(initialState(), catalog, scope, { status: 'planned' });
+    assert.deepEqual(thesisProgressForScope(undecided, catalog, scope), { selection: 'undecided', status: 'not_started' });
+    const notSelected = setThesisProgressForScope(undecided, catalog, scope, { selection: 'not_selected', status: 'earned' });
+    assert.deepEqual(thesisProgressForScope(notSelected, catalog, scope), { selection: 'not_selected', status: 'not_started' });
+  }
 });
 
 test('required thesis has a dedicated 8-credit card, keeps unsupported guidance unknown, and does not double count professional categories', () => {

@@ -2,6 +2,7 @@ import type { PlannerCatalog, PlannerState } from './plannerCatalog';
 import { validateState } from './validation';
 import { repairImportedAchievements } from './importedAchievementRepair';
 import { initialGraduationProfile } from './graduationProfile';
+import { normalizeThesisProgressState } from './thesisSelection';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
@@ -15,7 +16,7 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     raw = store.getItem(STORAGE_KEY);
     if (raw === null) return { state: initialState(), raw, error: null };
     const parsed: unknown = JSON.parse(raw);
-    const state = migrateState(parsed, catalog);
+    const state = normalizeThesisProgressState(migrateState(parsed, catalog) as PlannerState, catalog);
     if (!validateState(state, catalog)) throw new Error('Invalid state');
     return { state, raw, error: null };
   } catch {

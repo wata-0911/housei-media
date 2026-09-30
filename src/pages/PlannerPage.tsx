@@ -50,7 +50,7 @@ export default function PlannerPage() {
   const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
-  const thesisProgress = thesisProgressForScope(state, state.selectedScopeId);
+  const thesisProgress = thesisProgressForScope(state, catalog, state.selectedScopeId);
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, thesisProgress.selection, state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile, thesisProgress);
   const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, state.selectedScopeId);
   const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta);
@@ -211,9 +211,9 @@ export default function PlannerPage() {
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
       <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} thesis={thesisProgress} disabled={loaded.error !== null}
-        onChange={selectedScopeId => commit(stateForScopeChange(state, selectedScopeId), '所属を保存しました。卒業論文の進捗は学科ごとに保存します。')}
-        onThesisSelectionChange={selection => commit(setThesisProgressForScope(state, state.selectedScopeId, { selection }), '卒業論文の選択を保存しました。')}
-        onThesisStatusChange={status => commit(setThesisProgressForScope(state, state.selectedScopeId, { status }), '卒業論文の進捗を保存しました。')} />
+        onChange={selectedScopeId => commit(stateForScopeChange(state, catalog, selectedScopeId), '所属を保存しました。卒業論文の進捗は学科ごとに保存します。')}
+        onThesisSelectionChange={selection => commit(setThesisProgressForScope(state, catalog, state.selectedScopeId, { selection }), '卒業論文の選択を保存しました。')}
+        onThesisStatusChange={status => commit(setThesisProgressForScope(state, catalog, state.selectedScopeId, { status }), '卒業論文の進捗を保存しました。')} />
       <CreditSummary summary={summarizeCredits(state.items, offeringsById, state.publicCourses)} importedEarnedCredits={importedEarnedCreditsTotal(state.importedCourseAchievements)} />
       <div className="min-h-5 text-sm text-[#002255]">
         <p role="status" className="inline">{notice}</p>
