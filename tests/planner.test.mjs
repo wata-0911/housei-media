@@ -2333,6 +2333,8 @@ test('graduation profile saves only internally consistent prerequisites and reje
   assert.equal(loaded.error, null);
   assert.deepEqual(loaded.state.graduationProfile, state.graduationProfile);
   assert.equal(normalizeNonnegativeNumber('0'), 0);
+  assert.equal(normalizeNonnegativeNumber('1.'), 1, 'a decimal draft can be committed once complete');
+  assert.equal(normalizeNonnegativeNumber(''), null);
   assert.equal(normalizeNonnegativeNumber('-1'), null);
   assert.equal(normalizeNonnegativeNumber('NaN'), null);
   assert.equal(normalizeAdmissionYear('25'), null);
@@ -2346,6 +2348,18 @@ test('graduation profile saves only internally consistent prerequisites and reje
   assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: 12 } } }, catalog), false);
   assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: 1 } } }, catalog), false);
   assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: 0, schoolingEquivalentCredits: 0 } } }, catalog), true);
+});
+
+test('recognized-credit controls keep editable drafts and commit both values together', () => {
+  const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
+  assert.match(source, /useState\(profile\.recognizedCredits\.totalCredits\?\.toString\(\) \?\? ''\)/);
+  assert.match(source, /useState\(profile\.recognizedCredits\.schoolingEquivalentCredits\?\.toString\(\) \?\? ''\)/);
+  assert.match(source, /const commitRecognizedCredits = \(\) =>/);
+  assert.match(source, /recognizedCredits: \{ totalCredits, schoolingEquivalentCredits \}/);
+  assert.match(source, /value=\{totalCreditsDraft\}[\s\S]*onBlur=\{commitRecognizedCredits\}/);
+  assert.match(source, /value=\{schoolingEquivalentCreditsDraft\}[\s\S]*onBlur=\{commitRecognizedCredits\}/);
+  assert.match(source, /type="text" inputMode="decimal" value=\{totalCreditsDraft\}/);
+  assert.doesNotMatch(source, /updateRecognizedCredits/);
 });
 
 test('missing graduation profile prerequisites never completes graduation evaluation or breaks coverage', () => {

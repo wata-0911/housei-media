@@ -6,7 +6,8 @@ type GraduationProfileSettingsProps = { profile: GraduationProfile; disabled: bo
 
 export default function GraduationProfileSettings(props: GraduationProfileSettingsProps) {
   const { profile } = props;
-  const profileKey = [profile.admissionYear, profile.admissionType, profile.recognizedCredits.totalCredits, profile.recognizedCredits.schoolingEquivalentCredits, profile.curriculumApplicability].join('|');
+  // Only a saved value for one of these drafts resets it. Updating another setting must not interrupt typing.
+  const profileKey = [profile.admissionYear, profile.recognizedCredits.totalCredits, profile.recognizedCredits.schoolingEquivalentCredits].join('|');
   return <GraduationProfileSettingsForm key={profileKey} {...props} />;
 }
 
@@ -14,6 +15,9 @@ function GraduationProfileSettingsForm({ profile, disabled, onChange }: Graduati
   const [validationError, setValidationError] = useState<string | null>(null);
   const [admissionYearDraft, setAdmissionYearDraft] = useState(profile.admissionYear?.toString() ?? '');
   const [admissionYearError, setAdmissionYearError] = useState<string | null>(null);
+  const [totalCreditsDraft, setTotalCreditsDraft] = useState(profile.recognizedCredits.totalCredits?.toString() ?? '');
+  const [schoolingEquivalentCreditsDraft, setSchoolingEquivalentCreditsDraft] = useState(profile.recognizedCredits.schoolingEquivalentCredits?.toString() ?? '');
+  const [recognizedCreditsError, setRecognizedCreditsError] = useState<string | null>(null);
   const missing = missingGraduationProfilePrerequisites(profile);
 
   const update = (patch: Partial<GraduationProfile>) => {
@@ -32,13 +36,27 @@ function GraduationProfileSettingsForm({ profile, disabled, onChange }: Graduati
     setAdmissionYearError(null);
     update({ admissionYear });
   };
-  const updateRecognizedCredits = (key: keyof GraduationProfile['recognizedCredits'], value: string) => {
-    const credits = normalizeNonnegativeNumber(value);
-    if (value.trim() !== '' && credits === null) {
+  const commitRecognizedCredits = () => {
+    const totalCredits = normalizeNonnegativeNumber(totalCreditsDraft);
+    if (totalCreditsDraft.trim() !== '' && totalCredits === null) {
       setValidationError('認定単位は0以上の数値で入力してください。');
       return;
     }
-    update({ recognizedCredits: { ...profile.recognizedCredits, [key]: credits } });
+    const schoolingEquivalentCredits = normalizeNonnegativeNumber(schoolingEquivalentCreditsDraft);
+    if (schoolingEquivalentCreditsDraft.trim() !== '' && schoolingEquivalentCredits === null) {
+      setRecognizedCreditsError('スクーリング相当認定単位は0以上の数値で入力してください。');
+      return;
+    }
+    const next = { ...profile, recognizedCredits: { totalCredits, schoolingEquivalentCredits } };
+    const error = graduationProfileValidationError(next);
+    if (error) {
+      setRecognizedCreditsError(null);
+      setValidationError(error);
+      return;
+    }
+    setRecognizedCreditsError(null);
+    setValidationError(null);
+    onChange(next);
   };
 
   return <section aria-labelledby="graduation-profile-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
@@ -55,11 +73,11 @@ function GraduationProfileSettingsForm({ profile, disabled, onChange }: Graduati
         </select>
       </label>
       <label className="grid gap-1 text-sm">認定単位
-        <input aria-label="認定単位" type="number" inputMode="decimal" min="0" step="any" value={profile.recognizedCredits.totalCredits ?? ''} disabled={disabled} onChange={event => updateRecognizedCredits('totalCredits', event.target.value)} className="border border-gray-300 px-3 py-2" placeholder="0" />
+        <input aria-label="認定単位" type="text" inputMode="decimal" value={totalCreditsDraft} disabled={disabled} onChange={event => { setTotalCreditsDraft(event.target.value); setRecognizedCreditsError(null); setValidationError(null); }} onBlur={commitRecognizedCredits} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="0" />
         <span className="text-xs text-gray-600">入学前・編入時などの公式な認定単位。0単位も保存できます。</span>
       </label>
       <label className="grid gap-1 text-sm">認定単位のうちスクーリング相当（任意）
-        <input aria-label="認定単位のうちスクーリング相当" type="number" inputMode="decimal" min="0" step="any" value={profile.recognizedCredits.schoolingEquivalentCredits ?? ''} disabled={disabled} onChange={event => updateRecognizedCredits('schoolingEquivalentCredits', event.target.value)} className="border border-gray-300 px-3 py-2" placeholder="公式な内訳がある場合のみ" />
+        <input aria-label="認定単位のうちスクーリング相当" type="text" inputMode="decimal" value={schoolingEquivalentCreditsDraft} disabled={disabled} onChange={event => { setSchoolingEquivalentCreditsDraft(event.target.value); setRecognizedCreditsError(null); setValidationError(null); }} onBlur={commitRecognizedCredits} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="公式な内訳がある場合のみ" />
         <span className="text-xs text-gray-600">公式に区別されている場合のみ入力してください。内訳は推測しません。</span>
       </label>
       <label className="grid gap-1 text-sm sm:col-span-2">適用課程
@@ -69,7 +87,7 @@ function GraduationProfileSettingsForm({ profile, disabled, onChange }: Graduati
         <span className="text-xs text-gray-600">入学年度から自動で確定しません。</span>
       </label>
     </div>
-    {(admissionYearError ?? validationError) && <p role="alert" className="mt-4 text-sm text-red-700">{admissionYearError ?? validationError} 変更は保存していません。</p>}
+    {(admissionYearError ?? recognizedCreditsError ?? validationError) && <p role="alert" className="mt-4 text-sm text-red-700">{admissionYearError ?? recognizedCreditsError ?? validationError} 変更は保存していません。</p>}
     {missing.length > 0 && <p className="mt-4 text-sm text-amber-800">判定前に確認が必要：{missing.map(key => GRADUATION_PROFILE_PREREQUISITE_LABEL[key]).join('、')}</p>}
   </section>;
 }
