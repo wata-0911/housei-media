@@ -25,6 +25,7 @@ import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } 
 import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/importedAchievementCalculations.ts';
 import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
 import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
+import { initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber } from '../src/planner/graduationProfile.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -476,7 +477,7 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 16 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 17 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
@@ -978,7 +979,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   const store = memoryStore(JSON.stringify(v1));
   const loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.state.schemaVersion, 16);
   assert.equal(loaded.state.items[0].earnedOrder, null);
   assert.deepEqual(loaded.state.publicCourses, []);
   assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
@@ -986,7 +987,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   delete v2.publicCourses;
   const v2Loaded = loadState(memoryStore(JSON.stringify(v2)), catalog);
   assert.equal(v2Loaded.error, null);
-  assert.equal(v2Loaded.state.schemaVersion, 15);
+  assert.equal(v2Loaded.state.schemaVersion, 16);
   assert.deepEqual(v2Loaded.state.publicCourses, []);
 });
 
@@ -996,7 +997,7 @@ test('v3 state migrates through v6 without losing saved planner data, and valida
   delete v3.thesisSelection;
   const loaded = loadState(memoryStore(JSON.stringify(v3)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.state.schemaVersion, 16);
   assert.equal(loaded.state.thesisSelection, 'undecided');
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: current.items, publicCourses: current.publicCourses, todos: current.todos, selectedScopeId: current.selectedScopeId });
   assert.equal(validateState({ ...current, thesisSelection: 'selected' }, catalog), true);
@@ -1161,7 +1162,7 @@ test('v4 migration adds empty media progress without losing items, public course
   delete saved.mediaSchoolingProgress;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.state.schemaVersion, 16);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, {});
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
   assert.deepEqual(calculateGraduationProgress(loaded.state.items, catalog, loaded.state.selectedScopeId, loaded.state.publicCourses, loaded.state.thesisSelection), calculateGraduationProgress(saved.items, catalog, saved.selectedScopeId, saved.publicCourses, saved.thesisSelection));
@@ -1184,7 +1185,7 @@ test('v5 migration preserves planner and media data while adding empty evaluatio
   delete saved.courseEvaluations;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.state.schemaVersion, 16);
   assert.deepEqual(loaded.state.courseEvaluations, {});
   assert.deepEqual(loaded.state.mediaSchoolingProgress, { [media.id]: { ...mediaSchoolingProgress[media.id], assessments: [] } });
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
@@ -1756,7 +1757,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
   const legacy = { ...initialState(), schemaVersion: 6, correspondenceProgress: undefined };
   delete legacy.correspondenceProgress;
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.state.schemaVersion, 16);
   assert.deepEqual(loaded.state.correspondenceProgress, {});
   assert.deepEqual(loaded.state.courseEvaluations, legacy.courseEvaluations);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
@@ -1765,7 +1766,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
 test('v7 migration preserves legacy values while adding study year and null final grades', () => {
   const legacy = { ...initialState(), schemaVersion: 7, items: [{ offeringId: first.id, status: 'in_progress', plannedYear: 2026, plannedTerm: '春休み', earnedOrder: null }], publicCourses: [{ id: '44444444-4444-4444-8444-444444444444', title: '公開科目', status: 'planned', plannedYear: 2027, plannedTerm: '夏期', credits: 2 }], courseEvaluations: { [first.id]: { offeringId: first.id, reportGrade: 'A', schoolingGrade: 'B' } } };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 16);
   assert.deepEqual(loaded.state.items[0], { ...legacy.items[0], studyYear: null });
   assert.equal(loaded.state.publicCourses[0].studyYear, null); assert.equal(loaded.state.publicCourses[0].finalGrade, null);
   assert.deepEqual(loaded.state.courseEvaluations[first.id], { ...legacy.courseEvaluations[first.id], finalGrade: null });
@@ -1797,7 +1798,7 @@ test('media assessments are optional, preserve all supported types, and survive 
   assert.equal(setTotalLessons(base, 14)?.totalLessons, 14); assert.equal(setTotalLessons(base, 15)?.totalLessons, 15);
   const v8 = { ...initialState(), schemaVersion: 8, mediaSchoolingProgress: { [media.id]: { offeringId: media.id, totalLessons: 15, lessons: [] } } };
   const loaded = loadState(memoryStore(JSON.stringify(v8)), catalog);
-  assert.equal(loaded.state.schemaVersion, 15); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
+  assert.equal(loaded.state.schemaVersion, 16); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
   const state = { ...initialState(), items: [item(media.id)], mediaSchoolingProgress: { [media.id]: withAll } };
   const raw = JSON.stringify(state); assert.deepEqual(loadState(memoryStore(raw), catalog).state.mediaSchoolingProgress[media.id].assessments, withAll.assessments);
 });
@@ -2078,7 +2079,7 @@ test('v13 repair safely restores catalog identity, orphan components, and pendin
   const component = { id: 'orphan', fingerprint: 'orphan', source: 'hosei_import', rawName: matched.name, offeringId: null, match: 'unmatched', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'A', sourceCourseId: 'gone', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
   const legacy = { ...initialState(), schemaVersion: 12, importedCourseAchievements: [row], importedStudyRecords: [component] };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 16);
   assert.equal(loaded.state.importedCourseAchievements[0].courseId, matched.courseId);
   assert.equal(loaded.state.importedStudyRecords[0].sourceCourseId, row.id);
   const derived = deriveImportedAchievements(loaded.state.importedStudyRecords, offeringsById, [], loaded.state.importedCourseAchievements);
@@ -2130,7 +2131,7 @@ test('v14 base-name repair keeps Roman numerals, safely classifies null-identity
   assert.equal(mediaDerived.mediaPending.length, 1, 'base-name media candidates remain available for confirmation');
   const v13 = { ...initialState(), schemaVersion: 13, selectedScopeId: scope, importedCourseAchievements: [row], items: [item(first.id, 'earned')] };
   const migrated = loadState(memoryStore(JSON.stringify(v13)), catalog);
-  assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 15);
+  assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 16);
   assert.deepEqual(migrated.state.items, v13.items, 'migration does not mutate plan items');
 });
 
@@ -2298,14 +2299,75 @@ test('in-progress imported Media auto-matches only when its safe identity proves
   assert.equal(managedImportedMedia([candidateOnly], [], active(candidateOnly), new Map([[mediaFirst.id, mediaFirst]])).media[0].offering.id, mediaFirst.id, 'one safe Media candidate is derived without a row identity');
 });
 
-test('v14 state migrates to v15 without dropping imports, selections, or saved progress', () => {
+test('v14 state migrates to v16 without dropping imports, selections, or saved progress', () => {
   const media = catalog.offerings.find(isMediaSchooling);
   assert.ok(media);
   const legacy = { ...initialState(), schemaVersion: 14, mediaSchoolingProgress: { [media.id]: progressFor(media.id, {}) }, importedCourseAchievements: [{ id: 'legacy-row', fingerprint: 'legacy-row', source: 'hosei_import', rawName: '保存済み', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: null, recognizedExemption: null, additionalEnrollment: null, academicYear: null, yearSource: 'unknown', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.state.schemaVersion, 16);
   assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
   assert.deepEqual(loaded.state.importedCourseUserMeta, {});
+  assert.deepEqual(loaded.state.graduationProfile, initialGraduationProfile());
+});
+
+test('v15 graduation profile migration preserves planner, imported, and media data while adding unknown/null prerequisites', () => {
+  const media = catalog.offerings.find(isMediaSchooling);
+  const legacy = { ...initialState(), schemaVersion: 15, items: [item(first.id, 'earned')], mediaSchoolingProgress: { [media.id]: progressFor(media.id, {}) }, importedCourseAchievements: [{ id: 'profile-row', fingerprint: 'profile-row', source: 'hosei_import', rawName: '保存済み', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: null, recognizedExemption: null, additionalEnrollment: null, academicYear: null, yearSource: 'unknown', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] };
+  delete legacy.graduationProfile;
+  const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.state.schemaVersion, 16);
+  assert.deepEqual(loaded.state.items, legacy.items);
+  assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
+  assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements);
+  assert.deepEqual(loaded.state.graduationProfile, initialGraduationProfile());
+});
+
+test('graduation profile saves only internally consistent prerequisites and rejects invalid numeric input', () => {
+  const state = { ...initialState(), graduationProfile: { admissionYear: 2025, admissionType: 'transfer', recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: 4 }, curriculumApplicability: 'legacy_or_transition' } };
+  const store = memoryStore();
+  const raw = saveState(store, state, null, catalog);
+  const loaded = loadState(memoryStore(raw), catalog);
+  assert.equal(loaded.error, null);
+  assert.deepEqual(loaded.state.graduationProfile, state.graduationProfile);
+  assert.equal(normalizeNonnegativeNumber('0'), 0);
+  assert.equal(normalizeNonnegativeNumber('1.'), 1, 'a decimal draft can be committed once complete');
+  assert.equal(normalizeNonnegativeNumber(''), null);
+  assert.equal(normalizeNonnegativeNumber('-1'), null);
+  assert.equal(normalizeNonnegativeNumber('NaN'), null);
+  assert.equal(normalizeAdmissionYear('25'), null);
+  assert.equal(normalizeAdmissionYear('2'), null);
+  assert.equal(normalizeAdmissionYear('10000'), null);
+  assert.equal(normalizeAdmissionYear('-1'), null);
+  assert.equal(normalizeAdmissionYear('2025.5'), null);
+  assert.equal(normalizeAdmissionYear('2025'), 2025);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, admissionYear: 25 } }, catalog), false);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: -1, schoolingEquivalentCredits: null } } }, catalog), false);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: 12 } } }, catalog), false);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: 1 } } }, catalog), false);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: 0, schoolingEquivalentCredits: 0 } } }, catalog), true);
+});
+
+test('recognized-credit controls keep editable drafts and commit both values together', () => {
+  const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
+  assert.match(source, /useState\(profile\.recognizedCredits\.totalCredits\?\.toString\(\) \?\? ''\)/);
+  assert.match(source, /useState\(profile\.recognizedCredits\.schoolingEquivalentCredits\?\.toString\(\) \?\? ''\)/);
+  assert.match(source, /const commitRecognizedCredits = \(\) =>/);
+  assert.match(source, /recognizedCredits: \{ totalCredits, schoolingEquivalentCredits \}/);
+  assert.match(source, /value=\{totalCreditsDraft\}[\s\S]*onBlur=\{commitRecognizedCredits\}/);
+  assert.match(source, /value=\{schoolingEquivalentCreditsDraft\}[\s\S]*onBlur=\{commitRecognizedCredits\}/);
+  assert.match(source, /type="text" inputMode="decimal" value=\{totalCreditsDraft\}/);
+  assert.doesNotMatch(source, /updateRecognizedCredits/);
+});
+
+test('missing graduation profile prerequisites never completes graduation evaluation or breaks coverage', () => {
+  const profile = initialGraduationProfile();
+  assert.deepEqual(missingGraduationProfilePrerequisites(profile), ['admission_year', 'admission_type', 'curriculum_applicability']);
+  const transfer = { ...profile, admissionType: 'transfer' };
+  assert.ok(missingGraduationProfilePrerequisites(transfer).includes('recognized_credits'));
+  const progress = calculateGraduationProgress([], catalog, catalog.programs[0].scopeId);
+  assert.equal(catalog.metadata.graduationCheckComplete, false);
+  assert.ok(progress.coverageSummary.unknown >= 0);
 });

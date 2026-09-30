@@ -1,0 +1,93 @@
+import { useState } from 'react';
+import type { GraduationProfile } from '../../planner/plannerCatalog';
+import { GRADUATION_PROFILE_PREREQUISITE_LABEL, graduationProfileValidationError, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber } from '../../planner/graduationProfile';
+
+type GraduationProfileSettingsProps = { profile: GraduationProfile; disabled: boolean; onChange: (profile: GraduationProfile) => void };
+
+export default function GraduationProfileSettings(props: GraduationProfileSettingsProps) {
+  const { profile } = props;
+  // Only a saved value for one of these drafts resets it. Updating another setting must not interrupt typing.
+  const profileKey = [profile.admissionYear, profile.recognizedCredits.totalCredits, profile.recognizedCredits.schoolingEquivalentCredits].join('|');
+  return <GraduationProfileSettingsForm key={profileKey} {...props} />;
+}
+
+function GraduationProfileSettingsForm({ profile, disabled, onChange }: GraduationProfileSettingsProps) {
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [admissionYearDraft, setAdmissionYearDraft] = useState(profile.admissionYear?.toString() ?? '');
+  const [admissionYearError, setAdmissionYearError] = useState<string | null>(null);
+  const [totalCreditsDraft, setTotalCreditsDraft] = useState(profile.recognizedCredits.totalCredits?.toString() ?? '');
+  const [schoolingEquivalentCreditsDraft, setSchoolingEquivalentCreditsDraft] = useState(profile.recognizedCredits.schoolingEquivalentCredits?.toString() ?? '');
+  const [recognizedCreditsError, setRecognizedCreditsError] = useState<string | null>(null);
+  const missing = missingGraduationProfilePrerequisites(profile);
+
+  const update = (patch: Partial<GraduationProfile>) => {
+    const next = { ...profile, ...patch };
+    const error = graduationProfileValidationError(next);
+    if (error) { setValidationError(error); return; }
+    setValidationError(null);
+    onChange(next);
+  };
+  const commitAdmissionYear = () => {
+    const admissionYear = normalizeAdmissionYear(admissionYearDraft);
+    if (admissionYearDraft.trim() !== '' && admissionYear === null) {
+      setAdmissionYearError('入学年度は4桁の西暦（1000〜9999）で入力してください。');
+      return;
+    }
+    setAdmissionYearError(null);
+    update({ admissionYear });
+  };
+  const commitRecognizedCredits = () => {
+    const totalCredits = normalizeNonnegativeNumber(totalCreditsDraft);
+    if (totalCreditsDraft.trim() !== '' && totalCredits === null) {
+      setValidationError('認定単位は0以上の数値で入力してください。');
+      return;
+    }
+    const schoolingEquivalentCredits = normalizeNonnegativeNumber(schoolingEquivalentCreditsDraft);
+    if (schoolingEquivalentCreditsDraft.trim() !== '' && schoolingEquivalentCredits === null) {
+      setRecognizedCreditsError('スクーリング相当認定単位は0以上の数値で入力してください。');
+      return;
+    }
+    const next = { ...profile, recognizedCredits: { totalCredits, schoolingEquivalentCredits } };
+    const error = graduationProfileValidationError(next);
+    if (error) {
+      setRecognizedCreditsError(null);
+      setValidationError(error);
+      return;
+    }
+    setRecognizedCreditsError(null);
+    setValidationError(null);
+    onChange(next);
+  };
+
+  return <section aria-labelledby="graduation-profile-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
+    <h2 id="graduation-profile-heading" className="text-xl text-[#002255]">卒業判定設定</h2>
+    <p className="mt-3 border-l-4 border-sky-600 bg-sky-50 p-3 text-sm leading-relaxed">この情報は卒業要件の参考判定に使います。未入力の項目は推測せず、判定保留になります。</p>
+    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <label className="grid gap-1 text-sm">入学年度
+        <input aria-label="入学年度" type="number" inputMode="numeric" min="1000" max="9999" step="1" value={admissionYearDraft} disabled={disabled} onChange={event => { setAdmissionYearDraft(event.target.value); setAdmissionYearError(null); }} onBlur={commitAdmissionYear} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="例: 2025" />
+        <span className="text-xs text-gray-600">4桁の西暦で入力します。現在年からは推測しません。</span>
+      </label>
+      <label className="grid gap-1 text-sm">入学区分
+        <select aria-label="入学区分" value={profile.admissionType} disabled={disabled} onChange={event => update({ admissionType: event.target.value as GraduationProfile['admissionType'] })} className="border border-gray-300 px-3 py-2">
+          <option value="unknown">未選択</option><option value="first_year">1年次入学</option><option value="transfer">編入学</option>
+        </select>
+      </label>
+      <label className="grid gap-1 text-sm">認定単位
+        <input aria-label="認定単位" type="text" inputMode="decimal" value={totalCreditsDraft} disabled={disabled} onChange={event => { setTotalCreditsDraft(event.target.value); setRecognizedCreditsError(null); setValidationError(null); }} onBlur={commitRecognizedCredits} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="0" />
+        <span className="text-xs text-gray-600">入学前・編入時などの公式な認定単位。0単位も保存できます。</span>
+      </label>
+      <label className="grid gap-1 text-sm">認定単位のうちスクーリング相当（任意）
+        <input aria-label="認定単位のうちスクーリング相当" type="text" inputMode="decimal" value={schoolingEquivalentCreditsDraft} disabled={disabled} onChange={event => { setSchoolingEquivalentCreditsDraft(event.target.value); setRecognizedCreditsError(null); setValidationError(null); }} onBlur={commitRecognizedCredits} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="公式な内訳がある場合のみ" />
+        <span className="text-xs text-gray-600">公式に区別されている場合のみ入力してください。内訳は推測しません。</span>
+      </label>
+      <label className="grid gap-1 text-sm sm:col-span-2">適用課程
+        <select aria-label="適用課程" value={profile.curriculumApplicability} disabled={disabled} onChange={event => update({ curriculumApplicability: event.target.value as GraduationProfile['curriculumApplicability'] })} className="border border-gray-300 px-3 py-2">
+          <option value="unknown">未選択（確認が必要）</option><option value="current_2026">2026年度の現行課程</option><option value="legacy_or_transition">旧課程・経過措置・個別適用</option>
+        </select>
+        <span className="text-xs text-gray-600">入学年度から自動で確定しません。</span>
+      </label>
+    </div>
+    {(admissionYearError ?? recognizedCreditsError ?? validationError) && <p role="alert" className="mt-4 text-sm text-red-700">{admissionYearError ?? recognizedCreditsError ?? validationError} 変更は保存していません。</p>}
+    {missing.length > 0 && <p className="mt-4 text-sm text-amber-800">判定前に確認が必要：{missing.map(key => GRADUATION_PROFILE_PREREQUISITE_LABEL[key]).join('、')}</p>}
+  </section>;
+}
