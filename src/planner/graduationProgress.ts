@@ -10,7 +10,7 @@ import type {
   GraduationProfile,
 } from './plannerCatalog';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
-import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
+import { HISTORY_SCOPE_ID, historySeminarField, isHistoricalSources, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
 import { allocateGeographyTransfers, geographyTransferKind, type GeographyTransferKind } from './geographyTransferRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
@@ -336,8 +336,14 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
   const orderKnown = validHistorySeminarOrders(items, offerings) && (assignedAll || seminars.every(item => item.earnedOrder !== null));
   const reason = orderKnown ? null : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
   const creditsFor = (orders: number[]) => ordered.filter(item => orders.includes(item.earnedOrder!)).reduce((sum, item) => sum + (offerings.get(item.offeringId)?.credits ?? 0), 0);
-  const required = creditsFor([1, 2]);
-  const elective = creditsFor([3, 4]);
+  const overviewSchoolingCompletions = ['日本史概説', '東洋史概説', '西洋史概説'].filter(name =>
+    items.some(item => item.status === 'earned' && offerings.get(item.offeringId)?.method === 'schooling'
+      && (offerings.get(item.offeringId)?.name === name || offerings.get(item.offeringId)?.name.startsWith(`${name}（`))
+      && (offerings.get(item.offeringId)?.credits ?? 0) >= 2)).length;
+  const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
+    && ordered.some(item => item.earnedOrder === 1) && ordered.some(item => item.earnedOrder === 2);
+  const required = creditsFor(hasAllFiveSchoolingRequiredCourses ? [1] : [1, 2]);
+  const elective = creditsFor(hasAllFiveSchoolingRequiredCourses ? [2, 3, 4] : [3, 4]);
   const details = ordered.map(item => {
     const offering = offerings.get(item.offeringId)!;
     return { label: `史学演習${item.earnedOrder}（${historySeminarField(offering) ?? '分野未確認'}）`, earned: offering.credits ?? 0, inProgress: 0, planned: 0, target: 2 };
@@ -346,7 +352,7 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
     requirementId, label, ruleType: 'history_seminar_sequence',
     status: orderKnown ? (earned >= target ? 'satisfied' : 'unsatisfied') : 'unknown',
     earned: orderKnown ? earned : null, inProgress: 0, planned: 0, target, unit: 'credits', reason,
-    details, note: '史学演習1・2はスクーリング選択必修、3・4は選択。5回目以降は卒業所要単位に算入しません。分野別概説4単位の修得前提は参考情報であり、受講可否は判定しません。',
+    details, note: '史学演習1はスクーリング選択必修、2も原則同枠です。ただし5科目すべてを修得した場合は、公式どおり史学演習2を選択へ振り替えます。3・4は選択、5回目以降は卒業所要単位に算入しません。分野別概説4単位の修得前提は参考情報であり、受講可否は判定しません。',
   });
   return [
     card('history-seminar-required-elective', '史学演習1・2（スクーリング選択必修）', required, 4),
@@ -482,7 +488,17 @@ function professionalCards(
 
   for (const item of items) {
     const offering = offerings.get(item.offeringId);
-    if (!offering || offering.resolutionStatus !== 'matched' || offering.credits === null) continue;
+    if (!offering || offering.credits === null) continue;
+    // These two 2026 history rows intentionally remain manual_review in the
+    // catalog because their numbered curriculum identity depends on the
+    // learner. Their official family and fixed credit value are nevertheless
+    // known, so route them through the dedicated allocation below.
+    if (program.department === '史学科' && isHistorySeminar(offering)) continue;
+    if (program.department === '史学科' && isHistoricalSources(offering)) {
+      specialRows.push({ kind: 'history-sources', item, offering });
+      continue;
+    }
+    if (offering.resolutionStatus !== 'matched') continue;
     // A required literature thesis is tracked by its own source-configured card.
     // Do not let a future thesis offering also inflate a professional-category bucket.
     if (thesisPolicyForScope(catalog, scopeId) === 'required' && offering.name === '卒業論文') continue;
@@ -595,6 +611,10 @@ function professionalCards(
       distribute(schooling, [['スクーリング選択必修', 2], ['必修', Infinity]]);
       distribute(other, [['必修', Infinity]]);
     }
+    // 歴史資料学1〜6 are all elective. The official maximum is six
+    // completions / 12 credits; unlike 史学演習 their number never changes the
+    // destination bucket, so a missing personal order does not block this cap.
+    distribute(specialRows.filter(row => row.kind === 'history-sources'), [['選択', 12]]);
   }
   if (program.department === '地理学科') {
     // The table's named destination courses are allocation buckets, not extra
@@ -688,9 +708,17 @@ function professionalCards(
     const ordered = seminars.filter(item => item.earnedOrder !== null);
     const orderKnown = validHistorySeminarOrders(items, offerings) && (ordered.length === 4 || seminars.every(item => item.earnedOrder !== null));
     const orderReason = orderKnown ? baseReason : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
+    const overviewSchoolingCompletions = ['日本史概説', '東洋史概説', '西洋史概説'].filter(name =>
+      specialRows.some(row => row.kind === 'history-overview' && row.item.status === 'earned'
+        && row.offering.method === 'schooling' && isNamed(row.offering, name) && row.offering.credits! >= 2)).length;
+    const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
+      && ordered.some(item => item.earnedOrder === 1)
+      && ordered.some(item => item.earnedOrder === 2);
     for (const item of ordered) {
       const offering = offerings.get(item.offeringId)!;
-      const target = item.earnedOrder! <= 2 ? 'スクーリング選択必修' : '選択';
+      const target = item.earnedOrder === 1 || (item.earnedOrder === 2 && !hasAllFiveSchoolingRequiredCourses)
+        ? 'スクーリング選択必修' : item.earnedOrder! <= 4 ? '選択' : null;
+      if (target === null) continue;
       addTo(target, item, offering);
       const field = historySeminarField(offering);
       if (target === '選択' && field) addTo(`選択:${field}史の分野`, item, offering);
@@ -703,10 +731,10 @@ function professionalCards(
     return [
       { ...make('professional-history-required', '専門教育：必修', required, 16, required.earned >= 16), partialCourses: partialCourses('必修') },
       { ...make('professional-history-schooling-required-elective', '専門教育：スクーリング選択必修', schoolingRequired, 8, schoolingRequired.earned >= 8,
-        undefined, '史学演習1・2はこの枠へ算入します。', orderReason), partialCourses: partialCourses('スクーリング選択必修') },
+        undefined, hasAllFiveSchoolingRequiredCourses ? '5科目すべてを修得済みのため、公式どおり史学演習2は選択へ算入しています。' : '史学演習1と（5科目修得前の）2はこの枠へ算入します。', orderReason), partialCourses: partialCourses('スクーリング選択必修') },
       { ...make('professional-history-elective', '専門教育：選択', elective, 50, elective.earned >= 50 && fieldMet,
         fields.map(field => detail(`${field.label}から1科目以上`, field.totals, 1, 'courses')),
-        '史学演習3・4はこの枠へ算入します。50単位に加え、日本・東洋・西洋史から各1科目が必要です。', orderReason), partialCourses: partialCourses('選択') },
+        `${hasAllFiveSchoolingRequiredCourses ? '史学演習2（5科目修得時）・' : ''}史学演習3・4と歴史資料学（6回12単位まで）はこの枠へ算入します。50単位に加え、日本・東洋・西洋史から各1科目が必要です。`, orderReason), partialCourses: partialCourses('選択') },
     ];
   }
 
@@ -901,7 +929,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const eligibleMappings = (offering: Offering) => resolve(offering).filter(mapping => mapping.scopeId === scopeId || commonScopes.has(mapping.scopeId));
   const hasUnresolvedEarned = calculationItems.some(item => item.status === 'earned'
     && offerings.get(item.offeringId)?.resolutionStatus === 'manual_review'
-    && !(scopeId === HISTORY_SCOPE_ID && isHistorySeminar(offerings.get(item.offeringId))));
+    && !(scopeId === HISTORY_SCOPE_ID && (isHistorySeminar(offerings.get(item.offeringId)) || isHistoricalSources(offerings.get(item.offeringId)))));
   const requirements = requirementsForScope(catalog, scopeId).flatMap(requirement => {
     if (requirement.status === 'unsupported') return [unknown(requirement, requirement.reason || '未対応の要件です')];
     const condition = thesisCondition(requirement, thesisSelection);
