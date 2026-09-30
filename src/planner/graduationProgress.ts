@@ -337,7 +337,8 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
   const reason = orderKnown ? null : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
   const creditsFor = (orders: number[]) => ordered.filter(item => orders.includes(item.earnedOrder!)).reduce((sum, item) => sum + (offerings.get(item.offeringId)?.credits ?? 0), 0);
   const overviewSchoolingCompletions = HISTORY_OVERVIEW_NAMES.filter(name =>
-    items.some(item => item.status === 'earned' && offerings.get(item.offeringId)?.method === 'schooling'
+    items.some(item => item.status === 'earned'
+      && isHistoryOverviewSchooling(offerings.get(item.offeringId))
       && historyOverviewName(offerings.get(item.offeringId)) === name
       && (offerings.get(item.offeringId)?.credits ?? 0) >= 2)).length;
   const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
@@ -363,14 +364,31 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
 type Totals = { earned: number; inProgress: number; planned: number; courses: Set<string> };
 const emptyTotals = (): Totals => ({ earned: 0, inProgress: 0, planned: 0, courses: new Set() });
 
-// The catalog contains both `概説（…）` and the explicitly curated `概説[S]` /
-// `概説［S］` offerings.  These are the same three official overview families;
-// recognize their catalog spelling without inventing new course aliases.
+// The source snapshot has no courseId for these offerings.  Their curriculum
+// mapping is therefore the canonical identity; names are only a compatibility
+// fallback for an as-yet-unmapped catalog row.
 const HISTORY_OVERVIEW_NAMES = ['日本史概説', '東洋史概説', '西洋史概説'] as const;
+const HISTORY_OVERVIEW_MAPPING_NAMES = new Map<string, typeof HISTORY_OVERVIEW_NAMES[number]>([
+  ['f87aca70-d720-4435-8f2c-013b1c1fd5e4', '日本史概説'],
+  ['c644b305-f312-4b08-8f8f-aaf02cf9069e', '日本史概説'],
+  ['4623706f-84c7-46f2-b736-b98731eba3a0', '東洋史概説'],
+  ['4db251ac-3887-4f18-a225-1c332572d2db', '東洋史概説'],
+  ['8dc9f71e-30c1-4a7f-8fb7-7a117af6a3a7', '西洋史概説'],
+  ['a1c1e855-6e61-4232-8b8a-d7d9dd2a809a', '西洋史概説'],
+]);
 function historyOverviewName(offering: Offering | undefined): typeof HISTORY_OVERVIEW_NAMES[number] | null {
   if (!offering) return null;
+  const mapped = offering.mappingIds.map(mappingId => HISTORY_OVERVIEW_MAPPING_NAMES.get(mappingId)).find(Boolean);
+  if (mapped) return mapped;
   return HISTORY_OVERVIEW_NAMES.find(name => offering.name === name
     || offering.name.startsWith(`${name}（`) || offering.name.startsWith(`${name}［`) || offering.name.startsWith(`${name}[`)) ?? null;
+}
+
+function isHistoryOverviewSchooling(offering: Offering | undefined) {
+  // The raw snapshot labels two media offerings as method=schooling.  The
+  // printed 2026 table is authoritative: a メディア offering is not one of the
+  // five *スクーリング*選択必修 courses.
+  return offering?.method === 'schooling' && !/メディア/.test(offering.name);
 }
 
 type ElectiveOverflowRule = { threshold: number; requiredCourses: number | null };
@@ -505,16 +523,19 @@ function professionalCards(
       specialRows.push({ kind: 'history-sources', item, offering });
       continue;
     }
+    // The source snapshot retains some verified overview offerings as
+    // manual_review until the runtime ledger supplies their mapping edge.
+    // This dedicated official allocation is safe without that generic gate.
+    if (program.department === '史学科' && historyOverviewName(offering) !== null) {
+      specialRows.push({ kind: 'history-overview', item, offering });
+      continue;
+    }
     if (offering.resolutionStatus !== 'matched') continue;
     // A required literature thesis is tracked by its own source-configured card.
     // Do not let a future thesis offering also inflate a professional-category bucket.
     if (thesisPolicyForScope(catalog, scopeId) === 'required' && offering.name === '卒業論文') continue;
     // History seminars are allocated by the learner's confirmed completion order below.
     if (program.department === '史学科' && isHistorySeminar(offering)) continue;
-    if (program.department === '史学科' && historyOverviewName(offering) !== null) {
-      specialRows.push({ kind: 'history-overview', item, offering });
-      continue;
-    }
     if (program.department === '地理学科') {
       const kind = geographyTransferKind(offering, canonicalNameForCourse);
       if (kind) {
@@ -616,8 +637,8 @@ function professionalCards(
     // schooling-elective course; any further credits are its required namesake.
     for (const name of HISTORY_OVERVIEW_NAMES) {
       const rows = specialRows.filter(row => row.kind === 'history-overview' && historyOverviewName(row.offering) === name);
-      const schooling = rows.filter(row => row.offering.method === 'schooling');
-      const other = rows.filter(row => row.offering.method !== 'schooling');
+      const schooling = rows.filter(row => isHistoryOverviewSchooling(row.offering));
+      const other = rows.filter(row => !isHistoryOverviewSchooling(row.offering));
       distribute(schooling, [['スクーリング選択必修', 2], ['必修', Infinity]]);
       distribute(other, [['必修', Infinity]]);
     }
@@ -720,7 +741,7 @@ function professionalCards(
     const orderReason = orderKnown ? baseReason : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
     const overviewSchoolingCompletions = HISTORY_OVERVIEW_NAMES.filter(name =>
       specialRows.some(row => row.kind === 'history-overview' && row.item.status === 'earned'
-        && row.offering.method === 'schooling' && historyOverviewName(row.offering) === name && row.offering.credits! >= 2)).length;
+        && isHistoryOverviewSchooling(row.offering) && historyOverviewName(row.offering) === name && row.offering.credits! >= 2)).length;
     const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
       && ordered.some(item => item.earnedOrder === 1)
       && ordered.some(item => item.earnedOrder === 2);

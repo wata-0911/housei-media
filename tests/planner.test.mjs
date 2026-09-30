@@ -1000,6 +1000,48 @@ test('history sequence recognizes the catalog [S] overview offerings, moves semi
   assert.deepEqual([sequenceElective.label, sequenceElective.earned, sequenceElective.target], ['史学演習2〜4（選択）', 6, 6]);
 });
 
+test('history fifth-course exception uses canonical mappings and excludes media offerings', () => {
+  const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  const seminars = catalog.offerings.filter(o => /^史学演習（(日本|西洋|東洋)）/.test(o.name)).slice(0, 4);
+  const overview = [
+    '830688aa-ff84-43e4-9a86-348871f382d1', // 日本史概説[S]（冬期スクーリング）【オンライン】
+    'c7ce6809-c7a8-4541-b01b-1023dc2fc25f', // 東洋史概説[S]（冬期スクーリング）
+    '13b84a06-03b7-4226-8451-1ea65e460951', // 西洋史概説[S]（冬期スクーリング）
+  ].map(id => catalog.offerings.find(o => o.id === id));
+  assert.ok(overview.every(Boolean));
+  const items = [
+    ...overview.map(offering => item(offering.id, 'earned')),
+    ...seminars.map((offering, index) => ({ ...item(offering.id, 'earned'), earnedOrder: index + 1 })),
+  ];
+  const card = (progress, id) => progress.cards.find(row => row.requirementId === id);
+  const mappingOnlyCatalog = {
+    ...catalog,
+    offerings: catalog.offerings.map(offering => overview.some(candidate => candidate.id === offering.id)
+      ? { ...offering, name: `catalog-identity-${offering.id}` }
+      : offering),
+  };
+  const progress = calculateGraduationProgress(items, mappingOnlyCatalog, scope);
+  const school = card(progress, 'professional-history-schooling-required-elective');
+  const elective = card(progress, 'professional-history-elective');
+  assert.equal(school.earned, 8);
+  assert.equal(elective.earned, 6, '史学演習2 is counted only in 選択');
+  assert.match(school.note, /5科目すべてを修得済み/);
+  assert.deepEqual([card(progress, 'history-seminar-required-elective').label, card(progress, 'history-seminar-required-elective').earned], ['史学演習1（スクーリング選択必修）', 2]);
+  assert.deepEqual([card(progress, 'history-seminar-elective').label, card(progress, 'history-seminar-elective').earned], ['史学演習2〜4（選択）', 6]);
+
+  const missingEastern = calculateGraduationProgress(items.filter(entry => entry.offeringId !== overview[1].id), mappingOnlyCatalog, scope);
+  assert.equal(card(missingEastern, 'professional-history-elective').earned, 4);
+  assert.match(card(missingEastern, 'professional-history-schooling-required-elective').note, /5科目修得前/);
+
+  const mediaJapanese = catalog.offerings.find(o => o.id === '91524802-f639-4be6-9d3e-3a55ca166b6b');
+  assert.ok(mediaJapanese);
+  const mediaInstead = calculateGraduationProgress([
+    ...items.filter(entry => entry.offeringId !== overview[0].id),
+    item(mediaJapanese.id, 'earned'),
+  ], catalog, scope);
+  assert.equal(card(mediaInstead, 'professional-history-elective').earned, 4, 'メディアはスクーリング選択必修の5科目に含めない');
+});
+
 test('historical-source cap is shared across earned, in-progress, and planned credits', () => {
   const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
   const source = catalog.offerings.find(o => /^歴史資料学（/.test(o.name));
