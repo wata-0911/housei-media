@@ -403,6 +403,22 @@ function requiredElectiveCreditTarget(catalog: PlannerCatalog, scopeId: string):
   return requirement?.value ?? null;
 }
 
+/** The economics and commerce tables specify a professional-education total,
+ * separately from their required-elective minimum. */
+function professionalTotalCreditTarget(catalog: PlannerCatalog, scopeId: string): number | null {
+  const requirement = catalog.requirements.find((candidate): candidate is StructuredRequirement =>
+    candidate.status === 'structured'
+      && candidate.scopeId === scopeId
+      && candidate.ruleType === 'min_credits'
+      && candidate.target.curriculum_category === '専門教育'
+      && candidate.target.requirement_type === undefined
+      && candidate.target.curriculum_field === undefined
+      && typeof candidate.value === 'number'
+      && candidate.value >= 0,
+  );
+  return requirement?.value ?? null;
+}
+
 function addOfferingTotals(totals: Totals, item: PlannerItem, offering: Offering) {
   if (item.status === 'earned') {
     totals.earned += offering.credits!;
@@ -734,15 +750,25 @@ function professionalCards(
     ];
   }
 
-  const threshold = overflowRule?.threshold ?? 0;
-  const requiredElectiveTargetValue = requiredElectiveTarget ?? threshold;
+  const requiredElectiveTargetValue = requiredElectiveTarget;
   const requiredElective = normal('選択必修');
-  const elective = withOverflow(normal('選択'), requiredElective, threshold);
+  const elective = normal('選択');
+  const professionalTotalTarget = professionalTotalCreditTarget(catalog, scopeId);
+  const professionalTotal = { ...requiredElective, earned: requiredElective.earned + elective.earned,
+    inProgress: requiredElective.inProgress + elective.inProgress, planned: requiredElective.planned + elective.planned };
+  const prefix = program.department === '経済学科' ? 'economics' : 'commerce';
+  const totalReason = professionalTotalTarget === null
+    ? '専門教育合計の公式な必要単位を安全に特定できません。'
+    : baseReason;
   return [
-    { ...make(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-required-elective`, '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, requiredElective.earned >= requiredElectiveTargetValue), partialCourses: partialCourses('選択必修') },
-    { ...makeKnownUnknown(`professional-${program.department === '経済学科' ? 'economics' : 'commerce'}-elective`, '専門教育：選択（卒業算入見込み）', elective, undefined,
-        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。専門教育82単位には卒業論文を含むため、ここでは達成判定しません。`,
-      overflowRule === null ? (overflowRuleReason ?? '選択必修超過分の公式ルールを確認できません。') : '卒業論文を含む選択必要量の内訳をPlannerStateで安全に判定できません。'), partialCourses: partialCourses('選択') },
+    ...(requiredElectiveTargetValue === null ? [makeKnownUnknown(`professional-${prefix}-required-elective`, '専門教育：選択必修', requiredElective, undefined,
+      '選択必修の公式な最低単位を安全に特定できません。', '選択必修の公式な最低単位を安全に特定できません。')] : [
+      { ...make(`professional-${prefix}-required-elective`, '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, requiredElective.earned >= requiredElectiveTargetValue), partialCourses: partialCourses('選択必修') },
+    ]),
+    { ...make(`professional-${prefix}-total`, '専門教育合計', professionalTotal, professionalTotalTarget,
+      professionalTotalTarget !== null && professionalTotal.earned >= professionalTotalTarget, undefined,
+      `選択必修 ${requiredElective.earned}単位 + 選択 ${catalogElectiveEarned()}単位${publicCourseBreakdown()}。選択必修の超過分も含め、各修得済み科目は専門教育合計に1回だけ算入します。卒業論文は選択科目として修得済みの場合に限り、この合計へ1回だけ算入します。`, totalReason),
+      partialCourses: [...(partialCourses('選択必修') ?? []), ...(partialCourses('選択') ?? [])].sort((a, b) => a.label.localeCompare(b.label, 'ja')) },
   ];
 }
 
@@ -783,6 +809,8 @@ function countedOverallCredits(cards: ProgressCard[], department: string | null)
   const common = ['group-general', 'group-foreign', 'group-physical'];
   const commonCredits = common.reduce((sum, id) => sum + (cards.find(card => card.requirementId === id)?.earned ?? 0), 0);
   if (department === '法律学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-law-total')?.earned ?? 0);
+  if (department === '経済学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-economics-total')?.earned ?? 0);
+  if (department === '商業学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-commerce-total')?.earned ?? 0);
   const professionalCredits = cards.filter(card => card.requirementId.startsWith('professional-')
     && !card.requirementId.endsWith('-schooling') && card.requirementId !== 'professional-law-total')
     .reduce((sum, card) => sum + (card.earned ?? 0), 0);

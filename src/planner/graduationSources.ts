@@ -15,9 +15,8 @@ const thesis: GraduationSourceRef = { title: '卒業論文について', url: 'h
 
 /**
  * Credit values printed in the 2026 curriculum tables.  This is metadata, not
- * a graduation decision: economics and commerce remain unknown because their
- * tables do not state a safe elective target when the optional thesis is not
- * taken.
+ * a graduation decision. Economics and commerce use the thesis credit only
+ * when its completed offering is counted in their professional total.
  */
 export const THESIS_CREDIT_METADATA_2026 = {
   '法律学科': { credits: 4, sourcePages: [46] },
@@ -41,8 +40,8 @@ export const GRADUATION_CARD_SOURCES: Record<string, GraduationSourceRef[]> = {
   'professional-history-required': [curriculum(53)], 'professional-history-schooling-required-elective': [curriculum(53)], 'professional-history-elective': [curriculum(53)],
   'professional-geography-required': [curriculum(55)], 'professional-geography-schooling-required': [curriculum(55)], 'professional-geography-required-elective': [curriculum(55)], 'professional-geography-elective': [curriculum(55)],
   'professional-law-required-elective': [curriculum(47)], 'professional-law-elective': [curriculum(47)], 'professional-law-total': [curriculum(47)], 'professional-law-schooling': [curriculum(47)],
-  'professional-economics-required-elective': [curriculum(57)], 'professional-economics-elective': [curriculum(57)],
-  'professional-commerce-required-elective': [curriculum(59)], 'professional-commerce-elective': [curriculum(59)],
+  'professional-economics-required-elective': [curriculum(57)], 'professional-economics-total': [curriculum(57)],
+  'professional-commerce-required-elective': [curriculum(59)], 'professional-commerce-total': [curriculum(59)],
   'professional-required': [curriculum(48)], 'professional-schooling-required': [curriculum(48)], 'professional-required-elective': [curriculum(48)], 'professional-elective': [curriculum(48)],
   'public-course': [requirements], thesis: [thesis, requirements],
 };

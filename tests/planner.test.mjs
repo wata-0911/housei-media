@@ -1276,7 +1276,7 @@ test('required thesis has an 8-credit card, keeps unsupported guidance unknown, 
   assert.equal(progress.graduationCheckComplete, false);
 });
 
-test('2026 thesis credit metadata is department-specific and does not fix economics or commerce electives', () => {
+test('2026 thesis credit metadata is department-specific and economics/commerce use their professional total', () => {
   assert.equal(thesisCreditsForDepartment('経済学科'), 6);
   assert.equal(thesisCreditsForDepartment('商業学科'), 6);
   assert.equal(thesisCreditsForDepartment('法律学科'), 4);
@@ -1290,10 +1290,13 @@ test('2026 thesis credit metadata is department-specific and does not fix econom
   const economics = catalog.programs.find(program => program.department === '経済学科').scopeId;
   const commerce = catalog.programs.find(program => program.department === '商業学科').scopeId;
   for (const [scope, department] of [[economics, 'economics'], [commerce, 'commerce']]) {
-    const elective = calculateGraduationProgress([], catalog, scope).cards.find(card => card.requirementId === `professional-${department}-elective`);
-    assert.equal(elective.status, 'unknown');
-    assert.equal(elective.target, null);
-    assert.match(elective.reason, /卒業論文を含む選択必要量/);
+    const total = calculateGraduationProgress([], catalog, scope).cards.find(card => card.requirementId === `professional-${department}-total`);
+    assert.equal(total.status, 'unsatisfied');
+    assert.equal(total.target, 82);
+    assert.equal(total.reason, null);
+    assert.equal(total.coverageStatus, 'partial');
+    assert.equal(total.sourceRefs[0].page, department === 'economics' ? 'p.57' : 'p.59');
+    assert.equal(calculateGraduationProgress([], catalog, scope).cards.some(card => card.requirementId === `professional-${department}-elective`), false);
   }
 
   const literatureThesisSources = sourcesForGraduationCard('japanese_literature_thesis_required_course', 49, '卒業論文');
@@ -1400,7 +1403,8 @@ function professionalFixture(department, mappingRows, offeringRows) {
         && (requirement.ruleType === 'overflow_credit_transfer'
           || (requirement.ruleType === 'min_credits'
             && requirement.target.curriculum_category === '専門教育'
-            && requirement.target.requirement_type === '選択必修'))).map(requirement => ({
+            && (requirement.target.requirement_type === '選択必修'
+              || requirement.target.requirement_type === undefined)))).map(requirement => ({
         ...requirement,
         conditions: structuredClone(requirement.conditions),
       })),
@@ -1454,7 +1458,7 @@ test('history and geography grouped professional rules require their fields and 
   assert.equal(geoCard.status, 'unsatisfied');
 });
 
-test('law, economics and commerce use their official required-elective thresholds and overflow', () => {
+test('law, economics and commerce use their official required-elective thresholds', () => {
   for (const [department, threshold, prefix] of [['法律学科', 32, 'law'], ['経済学科', 24, 'economics'], ['商業学科', 20, 'commerce']]) {
     const fixture = professionalFixture(department, [...Array.from({ length: threshold / 4 + 1 }, (_, i) => [`required-${i}`, '選択必修']), ['elective', '選択']], [
       ...Array.from({ length: threshold / 4 + 1 }, (_, i) => [`required-${i}`, 4, [`required-${i}`]]),
@@ -1465,10 +1469,14 @@ test('law, economics and commerce use their official required-elective threshold
     const earned = fixture.catalog.offerings.filter(o => o.id.startsWith('required-')).map(o => item(o.id, 'earned'));
     const progress = calculateGraduationProgress(earned, fixture.catalog, fixture.scope);
     const required = progress.cards.find(row => row.requirementId === `professional-${prefix}-required-elective`);
-    const elective = progress.cards.find(row => row.requirementId === `professional-${prefix}-elective`);
     assert.equal(required.status, 'satisfied');
     assert.equal(required.earned, threshold);
-    assert.equal(elective.earned, 4);
+    if (prefix !== 'law') {
+      const total = progress.cards.find(row => row.requirementId === `professional-${prefix}-total`);
+      assert.equal(total.earned, threshold + 4);
+      assert.equal(total.target, 82);
+      assert.equal(progress.cards.some(row => row.requirementId === `professional-${prefix}-elective`), false);
+    }
     assert.equal(progress.graduationCheckComplete, false);
   }
   const law = professionalFixture('法律学科', Array.from({ length: 8 }, (_, i) => [`law-${i}`, '選択必修']), Array.from({ length: 8 }, (_, i) => [`law-${i}`, 4, [`law-${i}`]]));
@@ -1477,19 +1485,51 @@ test('law, economics and commerce use their official required-elective threshold
   assert.equal(required.status, 'satisfied');
 });
 
-test('professional overflow is driven by the structured official rule and never double counts its threshold', () => {
+test('commerce professional total counts required-elective overflow once without an elective target', () => {
   const fixture = professionalFixture('商業学科', [
     ...Array.from({ length: 7 }, (_, index) => [`required-${index}`, '選択必修']), ['elective', '選択'],
   ], Array.from({ length: 7 }, (_, index) => [`required-${index}`, 4, [`required-${index}`]]));
-  const rule = fixture.catalog.requirements.find(requirement => requirement.ruleType === 'overflow_credit_transfer');
-  rule.conditions.threshold.credits = 24;
   const items = fixture.catalog.offerings.map(offering => item(offering.id, 'earned'));
   const progress = calculateGraduationProgress(items, fixture.catalog, fixture.scope);
   const required = progress.cards.find(row => row.requirementId === 'professional-commerce-required-elective');
-  const elective = progress.cards.find(row => row.requirementId === 'professional-commerce-elective');
+  const total = progress.cards.find(row => row.requirementId === 'professional-commerce-total');
   assert.equal(required.earned, 20); // the 20-credit requirement remains capped at its own target
-  assert.equal(elective.earned, 4); // 28 earned - catalog transfer threshold 24
+  assert.equal(total.earned, 28); // 28 earned credits, including the 8-credit required-elective excess once
   assert.equal(progress.graduationCheckComplete, false);
+});
+
+test('economics and commerce complete their independent required-elective and 82-credit professional checks', () => {
+  for (const [department, threshold, prefix] of [['経済学科', 24, 'economics'], ['商業学科', 20, 'commerce']]) {
+    const fixture = professionalFixture(department, [['required', '選択必修'], ['elective', '選択']], [
+      ['required-short', threshold - 1, ['required']], ['required-full', threshold, ['required']],
+      ['professional-81', 81 - threshold, ['elective']], ['professional-82', 82 - threshold, ['elective']],
+    ]);
+    const card = (items, suffix) => calculateGraduationProgress(items, fixture.catalog, fixture.scope).cards
+      .find(row => row.requirementId === `professional-${prefix}-${suffix}`);
+    assert.equal(card([item('required-short', 'earned')], 'required-elective').status, 'unsatisfied');
+    assert.equal(card([item('required-full', 'earned')], 'required-elective').status, 'satisfied');
+    assert.equal(card([item('required-full', 'earned'), item('professional-81', 'earned')], 'total').status, 'unsatisfied');
+    assert.equal(card([item('required-full', 'earned'), item('professional-82', 'earned')], 'total').status, 'satisfied');
+  }
+});
+
+test('economics professional total counts thesis, imports, and each completed identity once', () => {
+  const fixture = professionalFixture('経済学科', [['required', '選択必修'], ['elective', '選択'], ['thesis', '選択']], [
+    ['required-course', 24, ['required']], ['elective-course', 52, ['elective']], ['thesis-course', 6, ['thesis']],
+  ]);
+  for (const offering of fixture.catalog.offerings) offering.courseId = offering.id;
+  fixture.catalog.offerings.find(offering => offering.id === 'thesis-course').name = '卒業論文';
+  const total = (items, imported = []) => calculateGraduationProgress(items, fixture.catalog, fixture.scope, [], 'undecided', [], imported).cards
+    .find(row => row.requirementId === 'professional-economics-total');
+  assert.equal(total([item('required-course', 'earned'), item('elective-course', 'earned'), item('thesis-course', 'earned')]).earned, 82);
+  assert.equal(total([item('required-course', 'earned'), { ...item('elective-course', 'earned'), offeringId: 'elective-course' }, item('thesis-course', 'earned')]).earned, 82);
+
+  const imported = { id: 'economics-import', fingerprint: 'economics-import', source: 'hosei_import', rawName: 'elective-course', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 52, schoolingCreditsTotal: 0, compositionCredits: 52, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: 'elective-course', selectedOfferingId: 'elective-course', selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: ['elective-course'] };
+  const importedOnly = total([item('required-course', 'earned'), item('thesis-course', 'earned')], [imported]);
+  const duplicatePlanner = total([item('required-course', 'earned'), item('elective-course', 'earned'), item('thesis-course', 'earned')], [imported]);
+  assert.equal(importedOnly.earned, 82);
+  assert.equal(duplicatePlanner.earned, 82);
+  assert.equal(importedOnly.status, 'satisfied');
 });
 
 test('professional progress completes curriculum mappings before counting credits or courses', () => {
