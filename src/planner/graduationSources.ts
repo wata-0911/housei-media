@@ -10,10 +10,12 @@ export const UNKNOWN_REASON_CATEGORY_LABEL: Record<UnknownReasonCategory, string
 
 const curriculum = (page: number): GraduationSourceRef => ({ title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: `p.${page}` });
 const requirements: GraduationSourceRef = { title: '卒業に必要な要件', url: 'https://www.tsukyo.hosei.ac.jp/system/requirements/' };
+const schooling: GraduationSourceRef = { title: 'スクーリング登録までの流れ（必要スクーリング単位）', url: 'https://www.tsukyo.hosei.ac.jp/system/schooling-registration-flow/' };
 const thesis: GraduationSourceRef = { title: '卒業論文について', url: 'https://www.tsukyo.hosei.ac.jp/system/graduation-thesis/' };
 
 /** Calculation code refers to stable ids; official-source text lives only here. */
 export const GRADUATION_CARD_SOURCES: Record<string, GraduationSourceRef[]> = {
+  'overall-reference-progress': [requirements], 'schooling-reference-progress': [requirements, schooling],
   'group-general': [curriculum(46)], 'group-foreign': [curriculum(46)], 'group-physical': [curriculum(46)],
   'history-seminar-required-elective': [curriculum(53)], 'history-seminar-elective': [curriculum(53)],
   'professional-history-required': [curriculum(53)], 'professional-history-schooling-required-elective': [curriculum(53)], 'professional-history-elective': [curriculum(53)],
