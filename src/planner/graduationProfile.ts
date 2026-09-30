@@ -38,8 +38,32 @@ export function missingGraduationProfilePrerequisites(profile: GraduationProfile
   if (profile.admissionYear === null) missing.push('admission_year');
   if (profile.admissionType === 'unknown') missing.push('admission_type');
   if (profile.curriculumApplicability === 'unknown') missing.push('curriculum_applicability');
-  if (['transfer_second_year', 'transfer_third_year', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType) && profile.recognizedCredits.totalCredits === null && profile.recognizedCredits.professionalCourses.length === 0) missing.push('recognized_credits');
+  if (['transfer_second_year', 'transfer_third_year', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType) && !hasCreditBearingRecognition(profile.recognizedCredits)) missing.push('recognized_credits');
   return missing;
+}
+
+/** Exemptions are deliberately not credit-bearing.  This is also used for the
+ * route prefill: a confirmed category breakdown is sufficient even when the
+ * old aggregate total was never supplied. */
+export function recognizedCreditBreakdownTotal(credits: GraduationProfile['recognizedCredits']): number {
+  // Calculation also accepts old in-memory callers; persisted v19 records are
+  // validated with all fields present.
+  const legacy = credits as Partial<GraduationProfile['recognizedCredits']>;
+  const general = Object.values(legacy.general ?? {}).reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0);
+  const foreign = legacy.foreignLanguage?.mode === 'recognized' ? legacy.foreignLanguage.credits ?? 0 : 0;
+  const physical = legacy.physicalEducation?.mode === 'recognized' ? legacy.physicalEducation.credits ?? 0 : 0;
+  return general + foreign + physical + (legacy.professionalCourses ?? []).reduce((sum, row) => sum + row.credits, 0);
+}
+
+export function hasCreditBearingRecognition(credits: GraduationProfile['recognizedCredits']): boolean {
+  return credits.totalCredits !== null || recognizedCreditBreakdownTotal(credits) > 0 || credits.schoolingEquivalentCredits !== null;
+}
+
+/** The legacy aggregate is not another bucket.  Only its excess is an
+ * unallocated, overall-reference-only credit. */
+export function unallocatedRecognizedCredits(credits: GraduationProfile['recognizedCredits']): number | null {
+  if (credits.totalCredits === null) return null;
+  return credits.totalCredits - recognizedCreditBreakdownTotal(credits);
 }
 
 /** Empty, non-finite, and negative values never enter persisted planner state; zero is valid. */
@@ -66,9 +90,6 @@ export function graduationProfileValidationError(profile: GraduationProfile): st
     || (schoolingEquivalentCredits !== null && (!Number.isFinite(schoolingEquivalentCredits) || schoolingEquivalentCredits < 0))) {
     return '認定単位は0以上の数値で入力してください。';
   }
-  if (schoolingEquivalentCredits !== null && totalCredits === null) {
-    return 'スクーリング相当の認定単位を入力するには、認定単位の合計も入力してください。';
-  }
   if (totalCredits !== null && schoolingEquivalentCredits !== null && schoolingEquivalentCredits > totalCredits) {
     return 'スクーリング相当の認定単位は、認定単位の合計以下にしてください。';
   }
@@ -78,11 +99,11 @@ export function graduationProfileValidationError(profile: GraduationProfile): st
   if (fields.some(row => row.credits !== null && (row.credits < 0 || row.credits > 36))
     || (profile.recognizedCredits.foreignLanguage.credits !== null && (profile.recognizedCredits.foreignLanguage.credits < 0 || profile.recognizedCredits.foreignLanguage.credits > 4))
     || (profile.recognizedCredits.physicalEducation.credits !== null && (profile.recognizedCredits.physicalEducation.credits < 0 || profile.recognizedCredits.physicalEducation.credits > 2))) return '区分別の認定単位が公式上限を超えています。';
-  const detailed = fields.reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0) + (profile.recognizedCredits.foreignLanguage.mode === 'recognized' ? profile.recognizedCredits.foreignLanguage.credits ?? 0 : 0) + (profile.recognizedCredits.physicalEducation.mode === 'recognized' ? profile.recognizedCredits.physicalEducation.credits ?? 0 : 0) + profile.recognizedCredits.professionalCourses.reduce((sum, row) => sum + row.credits, 0);
+  const detailed = recognizedCreditBreakdownTotal(profile.recognizedCredits);
   if (totalCredits !== null && detailed > totalCredits) return '内訳の認定単位が公式認定単位合計を超えています。';
   const cap = profile.admissionType === 'transfer_second_year' ? 7 : profile.admissionType === 'transfer_third_year' || profile.admissionType === 'bachelor_admission' ? 15 : null;
   if (cap !== null && schoolingEquivalentCredits !== null && schoolingEquivalentCredits > cap) return `この入学区分のスクーリング認定は${cap}単位以下です。個別認定の場合は「その他・個別」を選択してください。`;
-  const identities = profile.recognizedCredits.professionalCourses.map(row => row.courseId ?? row.offeringId).filter((id): id is string => id !== null);
+  const identities = profile.recognizedCredits.professionalCourses.map(row => row.courseId ? `course:${row.courseId}` : row.offeringId ? `offering:${row.offeringId}` : null).filter((id): id is string => id !== null);
   if (new Set(identities).size !== identities.length) return '同じ専門認定科目を重複して登録できません。';
   return null;
 }

@@ -10,6 +10,7 @@ import type {
   ThesisProgress,
   GraduationProfile,
 } from './plannerCatalog';
+import { hasCreditBearingRecognition, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from './graduationProfile';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistoricalSources, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
@@ -900,7 +901,7 @@ function referencePrerequisiteReason(profile: GraduationProfile, program: { depa
   if (profile.curriculumApplicability === 'unknown') return '適用課程が未確認のため、2026年度の必要単位を適用できません。';
   if (profile.curriculumApplicability === 'legacy_or_transition') return '旧課程・経過措置では2026年度の必要単位を適用しません。';
   if (profile.admissionType === 'unknown') return '入学区分が未入力のため、個別の認定単位を扱えません。';
-  if (['transfer_second_year', 'transfer_third_year', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType) && profile.recognizedCredits.totalCredits === null && profile.recognizedCredits.professionalCourses.length === 0) return '編入学の認定単位合計または公式の個別認定結果が未入力です。0としては扱いません。';
+  if (['transfer_second_year', 'transfer_third_year', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType) && !hasCreditBearingRecognition(profile.recognizedCredits)) return '編入学の認定単位合計または公式の個別認定結果が未入力です。0としては扱いません。';
   if (program.department === '法律学科' && thesisSelection === 'undecided') return '法学部の卒業論文の選択が未定のため、124/128単位を確定できません。';
   return null;
 }
@@ -909,8 +910,8 @@ function referencePrerequisiteReason(profile: GraduationProfile, program: { depa
  * exemptions satisfy their requirement but deliberately contribute no earned credits. */
 function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): ProgressCard[] {
   const general = profile.recognizedCredits.general ?? { humanities: { mode: 'unknown' as const, credits: null }, social: { mode: 'unknown' as const, credits: null }, natural: { mode: 'unknown' as const, credits: null } };
-  const replace = (id: string, fn: (card: ProgressCard) => ProgressCard) => cards.map(card => card.requirementId === id ? fn(card) : card);
-  let next = replace('group-general', card => {
+  const replace = (source: ProgressCard[], id: string, fn: (card: ProgressCard) => ProgressCard) => source.map(card => card.requirementId === id ? fn(card) : card);
+  let next = replace(cards, 'group-general', card => {
     const fields = ['humanities', 'social', 'natural'] as const;
     const exempt = fields.every(key => general[key].mode === 'exempt');
     const credited = fields.reduce((sum, key) => sum + (general[key].mode === 'recognized' ? general[key].credits ?? 0 : 0), 0);
@@ -922,13 +923,13 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
       status: exempt || (details?.every(detail => detail.earned >= detail.target) && (card.earned ?? 0) + credited >= 36) ? 'satisfied' : card.status,
       note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : credited ? ' 公式認定単位を反映しています。' : ''}` };
   });
-  next = replace.call(null, 'group-foreign', card => {
+  next = replace(next, 'group-foreign', card => {
     const row = profile.recognizedCredits.foreignLanguage ?? { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null };
     if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
     if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && (row.schoolingEquivalentCredits ?? 0) >= 2) return { ...card, earned: 4, status: 'satisfied', note: `${card.note ?? ''} 公式認定の内訳を反映しています。` };
     return card;
   });
-  next = replace.call(null, 'group-physical', card => {
+  next = replace(next, 'group-physical', card => {
     const row = profile.recognizedCredits.physicalEducation ?? { mode: 'unknown' as const, credits: null };
     if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
     if (row.mode === 'recognized' && row.credits === 2) return { ...card, earned: 2, status: 'satisfied', note: `${card.note ?? ''} 公式認定を反映しています。` };
@@ -990,8 +991,12 @@ function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[
   const target = prerequisiteReason ? null : program.department === '法律学科' && thesisSelection === 'not_selected'
     ? 124 + (thesisCreditsForDepartment(program.department) ?? 0) : 124;
   const creditBearingRoute = profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && profile.admissionType !== 'bachelor_admission';
-  const recognizedTotal = creditBearingRoute ? profile.recognizedCredits.totalCredits : 0;
-  const overallEarned = countedOverallCredits(cards, program.department) + (recognizedTotal ?? 0);
+  const detailedRecognized = recognizedCreditBreakdownTotal(profile.recognizedCredits);
+  const unallocated = creditBearingRoute ? unallocatedRecognizedCredits(profile.recognizedCredits) : 0;
+  // Detailed recognition already appears in the category/professional cards.
+  // The legacy total may add only the explicitly unallocated remainder.
+  const recognizedTotal = creditBearingRoute ? (profile.recognizedCredits.totalCredits ?? detailedRecognized) : 0;
+  const overallEarned = countedOverallCredits(cards, program.department) + (unallocated ?? 0);
   const schooling = countedSchoolingCredits(calculationItems, offerings, eligibleMappings, program.department);
   const schoolingRecognized = profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' ? profile.recognizedCredits.schoolingEquivalentCredits : 0;
   const schoolingReason = prerequisiteReason ?? (profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && schoolingRecognized === null
@@ -1045,11 +1050,13 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const currentThesis = thesisProgress ?? { selection: thesisSelection, status: 'not_started' as const };
   const currentSelection = thesisPolicyForScope(catalog, scopeId) === 'required' ? 'selected' : currentThesis.selection;
   const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements, catalog, scopeId);
-  const existingCourseIds = new Set([...items, ...imported.items].map(item => catalogOfferings.get(item.offeringId)?.courseId).filter((id): id is string => id !== null));
+  const identity = (offering: Offering | undefined) => offering?.courseId ? `course:${offering.courseId}` : offering ? `offering:${offering.id}` : null;
+  const existingCourseIds = new Set([...items, ...imported.items].map(item => identity(catalogOfferings.get(item.offeringId))).filter((id): id is string => id !== null));
   const recognizedItems = (profile.recognizedCredits.professionalCourses ?? []).flatMap(course => {
     const offering = course.offeringId ? catalogOfferings.get(course.offeringId) : undefined;
-    if (!offering || !offering.courseId || existingCourseIds.has(offering.courseId) || offering.name === '卒業論文') return [];
-    existingCourseIds.add(offering.courseId);
+    const key = identity(offering);
+    if (!offering || !key || existingCourseIds.has(key) || offering.name === '卒業論文') return [];
+    existingCourseIds.add(key);
     return [{ offeringId: offering.id, status: 'earned' as const, plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null }];
   });
   const calculationItems = [...items, ...imported.items, ...recognizedItems];
