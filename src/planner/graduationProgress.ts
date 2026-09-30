@@ -49,7 +49,7 @@ export type GraduationProgress = {
   importedWarnings: ImportedAchievementWarning[];
   importedContributionCount: number;
   referenceProgress: ReferenceProgress[];
-  /** Present only for the History program; rendered only with ?debugHistory=1. */
+  /** Present only for the History program, for internal diagnostic use. */
   historySchoolingDiagnostic: HistorySchoolingDiagnostic | null;
 };
 
