@@ -967,25 +967,51 @@ test('history seminars use recorded completion order, never offering order, and 
   assert.match(card(unknown, required).reason, /修得順が未確定/);
 });
 
-test('history sequence follows the 2026 fifth-schooling-course exception and counts historical sources once up to six completions', () => {
+test('history sequence recognizes the catalog [S] overview offerings, moves seminar 2 once, and counts historical sources once up to six completions', () => {
   const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
   const seminars = catalog.offerings.filter(o => /^史学演習（(日本|西洋|東洋)）/.test(o.name));
   const sources = catalog.offerings.filter(o => /^歴史資料学（/.test(o.name));
-  const overviewTemplate = catalog.offerings.find(o => o.name === '日本史概説' && o.method === 'correspondence');
-  assert.ok(overviewTemplate);
-  const overview = ['日本史概説', '東洋史概説', '西洋史概説'].map((name, index) => ({ ...overviewTemplate, id: `history-overview-${index}`, name, method: 'schooling', credits: 2, resolutionStatus: 'matched', mappingIds: [] }));
-  const historyCatalog = { ...catalog, offerings: [...catalog.offerings, ...overview] };
+  const beforeFive = calculateGraduationProgress(seminars.slice(0, 4).map((offering, index) => ({ ...item(offering.id, 'earned'), earnedOrder: index + 1 })), catalog, scope)
+    .cards.find(row => row.requirementId === 'professional-history-schooling-required-elective');
+  assert.match(beforeFive.note, /5科目修得前/);
+  const overview = [
+    catalog.offerings.find(o => o.id === '830688aa-ff84-43e4-9a86-348871f382d1'),
+    catalog.offerings.find(o => o.id === 'c7ce6809-c7a8-4541-b01b-1023dc2fc25f'),
+    catalog.offerings.find(o => o.id === '13b84a06-03b7-4226-8451-1ea65e460951'),
+  ];
+  assert.ok(overview.every(Boolean));
   const progress = calculateGraduationProgress([
     ...overview.map(offering => item(offering.id, 'earned')),
     { ...item(seminars[0].id, 'earned'), earnedOrder: 1 },
     { ...item(seminars[1].id, 'earned'), earnedOrder: 2 },
+    { ...item(seminars[2].id, 'earned'), earnedOrder: 3 },
+    { ...item(seminars[3].id, 'earned'), earnedOrder: 4 },
     ...Array.from({ length: 7 }, (_, index) => ({ ...item(sources[index % sources.length].id, 'earned'), offeringId: `${sources[index % sources.length].id}-copy-${index}`, earnedOrder: index + 1 })),
-  ], { ...historyCatalog, offerings: [...historyCatalog.offerings, ...Array.from({ length: 7 }, (_, index) => ({ ...sources[index % sources.length], id: `${sources[index % sources.length].id}-copy-${index}` }))] }, scope);
+  ], { ...catalog, offerings: [...catalog.offerings, ...Array.from({ length: 7 }, (_, index) => ({ ...sources[index % sources.length], id: `${sources[index % sources.length].id}-copy-${index}` }))] }, scope);
   const school = progress.cards.find(row => row.requirementId === 'professional-history-schooling-required-elective');
   const elective = progress.cards.find(row => row.requirementId === 'professional-history-elective');
+  const sequenceSchool = progress.cards.find(row => row.requirementId === 'history-seminar-required-elective');
+  const sequenceElective = progress.cards.find(row => row.requirementId === 'history-seminar-elective');
   assert.equal(school.earned, 8, '史学演習2 is moved out after all five schooling courses are complete');
-  assert.equal(elective.earned, 14, '史学演習2 plus at most six historical-source completions count once');
+  assert.equal(elective.earned, 18, '史学演習2〜4 plus at most six historical-source completions count once');
+  assert.match(school.note, /5科目すべてを修得済み/);
   assert.match(elective.note, /歴史資料学/);
+  assert.deepEqual([sequenceSchool.label, sequenceSchool.earned, sequenceSchool.target], ['史学演習1（スクーリング選択必修）', 2, 2]);
+  assert.deepEqual([sequenceElective.label, sequenceElective.earned, sequenceElective.target], ['史学演習2〜4（選択）', 6, 6]);
+});
+
+test('historical-source cap is shared across earned, in-progress, and planned credits', () => {
+  const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  const source = catalog.offerings.find(o => /^歴史資料学（/.test(o.name));
+  assert.ok(source);
+  const copies = Array.from({ length: 7 }, (_, index) => ({ ...source, id: `history-source-cap-${index}` }));
+  const progress = (statuses) => calculateGraduationProgress(copies.map((offering, index) => item(offering.id, statuses[index])), { ...catalog, offerings: [...catalog.offerings, ...copies] }, scope)
+    .cards.find(row => row.requirementId === 'professional-history-elective');
+
+  const earnedThenPlanned = progress(['earned', 'earned', 'earned', 'earned', 'earned', 'earned', 'planned']);
+  assert.deepEqual([earnedThenPlanned.earned, earnedThenPlanned.inProgress, earnedThenPlanned.planned], [12, 0, 0]);
+  const earnedThenInProgressThenPlanned = progress(['earned', 'earned', 'earned', 'earned', 'earned', 'in_progress', 'planned']);
+  assert.deepEqual([earnedThenInProgressThenPlanned.earned, earnedThenInProgressThenPlanned.inProgress, earnedThenInProgressThenPlanned.planned], [10, 2, 0]);
 });
 
 test('history seminar completion order is unique, consecutive, earned-only, and prior state versions migrate without inference', () => {

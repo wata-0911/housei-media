@@ -336,9 +336,9 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
   const orderKnown = validHistorySeminarOrders(items, offerings) && (assignedAll || seminars.every(item => item.earnedOrder !== null));
   const reason = orderKnown ? null : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
   const creditsFor = (orders: number[]) => ordered.filter(item => orders.includes(item.earnedOrder!)).reduce((sum, item) => sum + (offerings.get(item.offeringId)?.credits ?? 0), 0);
-  const overviewSchoolingCompletions = ['日本史概説', '東洋史概説', '西洋史概説'].filter(name =>
+  const overviewSchoolingCompletions = HISTORY_OVERVIEW_NAMES.filter(name =>
     items.some(item => item.status === 'earned' && offerings.get(item.offeringId)?.method === 'schooling'
-      && (offerings.get(item.offeringId)?.name === name || offerings.get(item.offeringId)?.name.startsWith(`${name}（`))
+      && historyOverviewName(offerings.get(item.offeringId)) === name
       && (offerings.get(item.offeringId)?.credits ?? 0) >= 2)).length;
   const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
     && ordered.some(item => item.earnedOrder === 1) && ordered.some(item => item.earnedOrder === 2);
@@ -355,13 +355,23 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
     details, note: '史学演習1はスクーリング選択必修、2も原則同枠です。ただし5科目すべてを修得した場合は、公式どおり史学演習2を選択へ振り替えます。3・4は選択、5回目以降は卒業所要単位に算入しません。分野別概説4単位の修得前提は参考情報であり、受講可否は判定しません。',
   });
   return [
-    card('history-seminar-required-elective', '史学演習1・2（スクーリング選択必修）', required, 4),
-    card('history-seminar-elective', '史学演習3・4（選択）', elective, 4),
+    card('history-seminar-required-elective', hasAllFiveSchoolingRequiredCourses ? '史学演習1（スクーリング選択必修）' : '史学演習1・2（スクーリング選択必修）', required, hasAllFiveSchoolingRequiredCourses ? 2 : 4),
+    card('history-seminar-elective', hasAllFiveSchoolingRequiredCourses ? '史学演習2〜4（選択）' : '史学演習3・4（選択）', elective, hasAllFiveSchoolingRequiredCourses ? 6 : 4),
   ];
 }
 
 type Totals = { earned: number; inProgress: number; planned: number; courses: Set<string> };
 const emptyTotals = (): Totals => ({ earned: 0, inProgress: 0, planned: 0, courses: new Set() });
+
+// The catalog contains both `概説（…）` and the explicitly curated `概説[S]` /
+// `概説［S］` offerings.  These are the same three official overview families;
+// recognize their catalog spelling without inventing new course aliases.
+const HISTORY_OVERVIEW_NAMES = ['日本史概説', '東洋史概説', '西洋史概説'] as const;
+function historyOverviewName(offering: Offering | undefined): typeof HISTORY_OVERVIEW_NAMES[number] | null {
+  if (!offering) return null;
+  return HISTORY_OVERVIEW_NAMES.find(name => offering.name === name
+    || offering.name.startsWith(`${name}（`) || offering.name.startsWith(`${name}［`) || offering.name.startsWith(`${name}[`)) ?? null;
+}
 
 type ElectiveOverflowRule = { threshold: number; requiredCourses: number | null };
 
@@ -483,9 +493,6 @@ function professionalCards(
   const specialRows: Array<{ kind: string; item: PlannerItem; offering: Offering }> = [];
   const geographyTransferDetails: string[] = [];
   const canonicalNameForCourse = (courseId: string | null) => catalog.courses.find(course => course.id === courseId)?.canonicalName ?? null;
-  const isNamed = (offering: Offering, name: string) => offering.name === name
-    || offering.name.startsWith(`${name}（`) || offering.name.startsWith(`${name}［`) || offering.name.startsWith(`${name}[`);
-
   for (const item of items) {
     const offering = offerings.get(item.offeringId);
     if (!offering || offering.credits === null) continue;
@@ -504,7 +511,7 @@ function professionalCards(
     if (thesisPolicyForScope(catalog, scopeId) === 'required' && offering.name === '卒業論文') continue;
     // History seminars are allocated by the learner's confirmed completion order below.
     if (program.department === '史学科' && isHistorySeminar(offering)) continue;
-    if (program.department === '史学科' && ['日本史概説', '東洋史概説', '西洋史概説'].some(name => isNamed(offering, name))) {
+    if (program.department === '史学科' && historyOverviewName(offering) !== null) {
       specialRows.push({ kind: 'history-overview', item, offering });
       continue;
     }
@@ -585,8 +592,11 @@ function professionalCards(
   // These transfers are stated in the 2026 curriculum tables. They are based on
   // completed-credit quantities, so unlike 史学演習 they do not need a learner-entered order.
   const distribute = (rows: typeof specialRows, allocations: Array<[string, number]>) => {
+    // A cap belongs to the course family, not to each lifecycle status.  Give
+    // already-earned credits priority, then in-progress and planned credits,
+    // so an earlier completion cannot be counted again as a future plan.
+    const used = allocations.map(() => 0);
     for (const status of ['earned', 'in_progress', 'planned'] as const) {
-      const used = allocations.map(() => 0);
       for (const row of rows.filter(candidate => candidate.item.status === status)) {
         let remaining = row.offering.credits!;
         for (const [index, [name, cap]] of allocations.entries()) {
@@ -604,8 +614,8 @@ function professionalCards(
   if (program.department === '史学科') {
     // p.53 c: for each overview, the first two schooling credits are the
     // schooling-elective course; any further credits are its required namesake.
-    for (const name of ['日本史概説', '東洋史概説', '西洋史概説']) {
-      const rows = specialRows.filter(row => row.kind === 'history-overview' && isNamed(row.offering, name));
+    for (const name of HISTORY_OVERVIEW_NAMES) {
+      const rows = specialRows.filter(row => row.kind === 'history-overview' && historyOverviewName(row.offering) === name);
       const schooling = rows.filter(row => row.offering.method === 'schooling');
       const other = rows.filter(row => row.offering.method !== 'schooling');
       distribute(schooling, [['スクーリング選択必修', 2], ['必修', Infinity]]);
@@ -708,9 +718,9 @@ function professionalCards(
     const ordered = seminars.filter(item => item.earnedOrder !== null);
     const orderKnown = validHistorySeminarOrders(items, offerings) && (ordered.length === 4 || seminars.every(item => item.earnedOrder !== null));
     const orderReason = orderKnown ? baseReason : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
-    const overviewSchoolingCompletions = ['日本史概説', '東洋史概説', '西洋史概説'].filter(name =>
+    const overviewSchoolingCompletions = HISTORY_OVERVIEW_NAMES.filter(name =>
       specialRows.some(row => row.kind === 'history-overview' && row.item.status === 'earned'
-        && row.offering.method === 'schooling' && isNamed(row.offering, name) && row.offering.credits! >= 2)).length;
+        && row.offering.method === 'schooling' && historyOverviewName(row.offering) === name && row.offering.credits! >= 2)).length;
     const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
       && ordered.some(item => item.earnedOrder === 1)
       && ordered.some(item => item.earnedOrder === 2);
