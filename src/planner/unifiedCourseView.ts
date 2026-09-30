@@ -1,5 +1,6 @@
 import type { ImportedCourseAchievement } from './gradeImportApply';
-import type { Offering, PlannerItem } from './plannerCatalog';
+import { resolveSafeImportedCourseId } from './importedAchievementIdentity';
+import type { ImportedCourseUserMeta, Offering, PlannerItem } from './plannerCatalog';
 
 export type UnifiedCourseRow = {
   key: string;
@@ -9,7 +10,8 @@ export type UnifiedCourseRow = {
   offering: Offering | null;
   studyYear: PlannerItem['studyYear'];
   source: 'planner' | 'imported' | 'planner_imported';
-  displayStatus: 'planner' | 'earned_imported';
+  /** Official facts win. Metadata only supplies context for unresolved rows. */
+  displayStatus: 'planner' | 'earned_imported' | 'failed_imported' | 'waiting_imported' | 'in_progress_imported' | 'pending_imported';
 };
 
 function safePlannerCourseId(item: PlannerItem, offerings: Map<string, Offering>) {
@@ -18,26 +20,32 @@ function safePlannerCourseId(item: PlannerItem, offerings: Map<string, Offering>
 }
 
 /**
- * An imported identity is usable for display coalescing only when the import
- * already has a safe course identity.  A manual selection is also safe when
- * its selected offering confirms that same identity.  Names are intentionally
- * never used here: name-only matches remain separate read-only rows.
- */
-function safeImportedCourseId(row: ImportedCourseAchievement, offerings: Map<string, Offering>) {
-  if (!row.courseId) return null;
-  if (row.selectionSource === 'manual') {
-    const selected = row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
-    return selected?.resolutionStatus === 'matched' && selected.courseId === row.courseId ? row.courseId : null;
-  }
-  if (row.match !== 'exact_unique') return null;
-  return [...offerings.values()].some(offering => offering.resolutionStatus === 'matched' && offering.courseId === row.courseId) ? row.courseId : null;
-}
-
-/**
  * Creates a presentation-only combined view.  It does not write planner
  * state, change final grades, or reuse imported credits for calculations.
  */
-export function createUnifiedCourseRows(items: PlannerItem[], importedAchievements: ImportedCourseAchievement[], offerings: Map<string, Offering>): UnifiedCourseRow[] {
+export function importedAchievementDisplayStatus(achievement: ImportedCourseAchievement, meta: ImportedCourseUserMeta | undefined): UnifiedCourseRow['displayStatus'] {
+  if (achievement.earnedCreditsTotal !== null && achievement.earnedCreditsTotal > 0) return 'earned_imported';
+  // A component grade is not a final grade, so it must never manufacture an
+  // official failure here. Unresolved official rows remain pending unless the
+  // learner adds lifecycle context.
+  if (meta?.lifecycleStatus === 'waiting') return 'waiting_imported';
+  if (meta?.lifecycleStatus === 'in_progress') return 'in_progress_imported';
+  return 'pending_imported';
+}
+
+/** Compact source-fact context displayed alongside a retained planner row. */
+export function importedAchievementStatusLabel(achievement: ImportedCourseAchievement, meta: ImportedCourseUserMeta | undefined) {
+  switch (importedAchievementDisplayStatus(achievement, meta)) {
+    case 'earned_imported': return '修得済み（成績表）';
+    case 'failed_imported': return '不合格（成績表）';
+    case 'waiting_imported': return '成績表取込: 結果待ち';
+    case 'in_progress_imported': return '成績表取込: 履修中';
+    case 'pending_imported': return '成績表取込: 判定保留';
+    case 'planner': return '';
+  }
+}
+
+export function createUnifiedCourseRows(items: PlannerItem[], importedAchievements: ImportedCourseAchievement[], offerings: Map<string, Offering>, userMeta: Record<string, ImportedCourseUserMeta> = {}): UnifiedCourseRow[] {
   const rows: UnifiedCourseRow[] = items.map(item => ({
     key: `planner:${item.offeringId}`,
     plannerItem: item,
@@ -55,11 +63,11 @@ export function createUnifiedCourseRows(items: PlannerItem[], importedAchievemen
   }
 
   for (const achievement of importedAchievements) {
-    if (achievement.earnedCreditsTotal === null || achievement.earnedCreditsTotal <= 0) continue;
-    const courseId = safeImportedCourseId(achievement, offerings);
+    const displayStatus = importedAchievementDisplayStatus(achievement, userMeta[achievement.id]);
+    const courseId = resolveSafeImportedCourseId(achievement, offerings);
     // Multiple planner offerings may legitimately share one course identity.
     // Coalesce only the unambiguous one-to-one case; otherwise preserve the
-    // official achievement as its own read-only row.
+    // imported achievement as its own read-only row.
     const plannerRows = courseId ? plannerRowsByCourseId.get(courseId) : undefined;
     const plannerRow = plannerRows?.length === 1 ? plannerRows[0] : undefined;
     if (plannerRow) {
@@ -72,9 +80,9 @@ export function createUnifiedCourseRows(items: PlannerItem[], importedAchievemen
       plannerItem: null,
       importedAchievements: [achievement],
       offering: null,
-      studyYear: null,
+      studyYear: userMeta[achievement.id]?.studyYear ?? null,
       source: 'imported',
-      displayStatus: 'earned_imported',
+      displayStatus,
     });
   }
   return rows;

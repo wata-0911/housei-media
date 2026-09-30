@@ -1,18 +1,22 @@
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { isMediaSchooling } from './mediaSchooling';
 import { categoryFromImportRaw, type CreditCategory } from './annualPlan';
-import type { Offering, PlannerItem } from './plannerCatalog';
+import { resolveSafeImportedCourseId } from './importedAchievementIdentity';
+import type { ImportedCourseUserMeta, Offering, PlannerItem } from './plannerCatalog';
 import type { PlannerCatalog } from './plannerCatalog';
 import { matchedNameOfferings } from './importedAchievementRepair';
 
 export type ImportedAchievementWarning = { rawName: string; reason: string };
 export type ImportedMediaAchievement = { sourceCourseId: string; rawName: string; academicYear: number | null; term: string | null; earnedCreditsTotal: number; schoolingCreditsTotal: number | null; records: ImportedStudyRecord[]; offering: Offering };
 export type ImportedMediaPending = { sourceCourseId: string; rawName: string; candidates: Offering[] };
+/** An unresolved grade-table row that has a safe Media offering and learner lifecycle context. */
+export type ImportedManagedMedia = { sourceCourseId: string; rawName: string; meta: ImportedCourseUserMeta; offering: Offering };
 export type DerivedImportedAchievements = { items: PlannerItem[]; offerings: Offering[]; categoryItems: PlannerItem[]; categoryOfferings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[]; mediaPending: ImportedMediaPending[]; unclassified: ImportedCourseAchievement[]; classifiedCredits: number; categoryOverrides: Map<string, CreditCategory> };
 
 function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering | undefined, courseId: string, offerings: Map<string, Offering>): Offering | undefined {
-  const explicitlyLinked = manuallyLinked && isMediaSchooling(manuallyLinked) ? manuallyLinked : undefined;
-  if (explicitlyLinked) return explicitlyLinked;
+  // An explicit choice always wins.  In particular, a learner's explicit
+  // non-Media choice must not be silently replaced with a derived Media one.
+  if (manuallyLinked) return isMediaSchooling(manuallyLinked) ? manuallyLinked : undefined;
 
   const mediaCandidates = [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
   const terms = group.filter(record => record.method === 'schooling').flatMap(record => [record.term, record.rawTerm]).filter((term): term is string => typeof term === 'string').map(term => term.normalize('NFKC').replace(/\s/g, ''));
@@ -27,6 +31,70 @@ function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering
   const normalCandidates = [...offerings.values()].filter(offering => offering.courseId === courseId && offering.method === 'schooling' && !isMediaSchooling(offering));
   if (mediaCandidates.length === 1 && normalCandidates.length === 0) return mediaCandidates[0];
   return undefined;
+}
+
+function mediaCandidatesForCourse(courseId: string | null, offerings: Map<string, Offering>): Offering[] {
+  return courseId === null ? [] : [...offerings.values()].filter(offering => offering.courseId === courseId && isMediaSchooling(offering));
+}
+
+function candidateMedia(row: ImportedCourseAchievement, offerings: Map<string, Offering>): Offering[] {
+  return [...new Map(row.candidateOfferingIds.flatMap(id => offerings.get(id)).filter((offering): offering is Offering => Boolean(offering && offering.resolutionStatus === 'matched' && isMediaSchooling(offering))).map(offering => [offering.id, offering])).values()];
+}
+
+function derivedMediaOffering(row: ImportedCourseAchievement, group: ImportedStudyRecord[], offerings: Map<string, Offering>): Offering | undefined {
+  const selectionSource = row.selectionSource ?? (row.selectedOfferingId ? 'manual' : 'none');
+  const manual = selectionSource === 'manual' && row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
+  // A manual choice is authoritative, including an explicit normal-schooling
+  // selection that intentionally keeps this row out of Media progress.
+  if (manual) return isMediaSchooling(manual) ? manual : undefined;
+
+  // The shared resolver may use an exact source identity, the constrained v14
+  // base-name repair, or matched import candidates. mediaOfferingFor adds the
+  // Media-specific safeguard for normal-schooling competition.
+  const courseId = resolveSafeImportedCourseId(row, offerings);
+  const resolved = courseId ? mediaOfferingFor(group, undefined, courseId, offerings) : undefined;
+  if (resolved) return resolved;
+
+  const candidates = candidateMedia(row, offerings);
+  const candidateIds = new Set(row.candidateOfferingIds);
+  const candidateCourseIds = new Set(candidates.map(candidate => candidate.courseId).filter((id): id is string => id !== null));
+  const normalCandidate = [...candidateIds].map(id => offerings.get(id)).some(offering => offering?.resolutionStatus === 'matched' && offering.method === 'schooling' && !isMediaSchooling(offering))
+    || [...offerings.values()].some(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null && candidateCourseIds.has(offering.courseId) && offering.method === 'schooling' && !isMediaSchooling(offering));
+  return candidates.length === 1 && !normalCandidate ? candidates[0] : undefined;
+}
+
+/**
+ * Finds a Media offering only from an existing safe course identity or a
+ * manual selection. Names alone never activate progress tracking.
+ */
+export function managedImportedMedia(rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], userMeta: Record<string, ImportedCourseUserMeta>, offerings: Map<string, Offering>): { media: ImportedManagedMedia[]; pending: ImportedMediaPending[] } {
+  const grouped = new Map<string, ImportedStudyRecord[]>();
+  for (const record of records) if (record.sourceCourseId) grouped.set(record.sourceCourseId, [...(grouped.get(record.sourceCourseId) ?? []), record]);
+  const media: ImportedManagedMedia[] = [];
+  const pending: ImportedMediaPending[] = [];
+  const usedOfferings = new Set<string>();
+  for (const row of rows) {
+    const meta = userMeta[row.id];
+    // Only an explicitly in-progress, not-yet-earned row may create a Media
+    // progress surface.  Waiting and pending rows remain source facts only.
+    if (meta?.lifecycleStatus !== 'in_progress' || (row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0)) continue;
+    const group = grouped.get(row.id) ?? [];
+    const selectionSource = row.selectionSource ?? (row.selectedOfferingId ? 'manual' : 'none');
+    const offering = derivedMediaOffering(row, group, offerings);
+    if (offering && !usedOfferings.has(offering.id)) {
+      media.push({ sourceCourseId: row.id, rawName: row.rawName, meta, offering });
+      usedOfferings.add(offering.id);
+      continue;
+    }
+    const courseId = resolveSafeImportedCourseId(row, offerings);
+    const candidates = [...new Map([...mediaCandidatesForCourse(courseId, offerings), ...candidateMedia(row, offerings)].map(candidate => [candidate.id, candidate])).values()];
+    // A safe course identity alone is not proof that a schooling component
+    // was Media.  Keep every unresolved automatic case visible for an
+    // intentional learner confirmation, including a single Media candidate
+    // that conflicts with a normal-schooling candidate.
+    if (candidates.length > 0 && selectionSource !== 'manual') pending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates });
+  }
+  return { media, pending };
 }
 
 /**
