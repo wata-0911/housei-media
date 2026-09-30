@@ -1,18 +1,41 @@
+import { useState } from 'react';
 import type { GraduationProfile } from '../../planner/plannerCatalog';
-import { GRADUATION_PROFILE_PREREQUISITE_LABEL, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber } from '../../planner/graduationProfile';
+import { GRADUATION_PROFILE_PREREQUISITE_LABEL, graduationProfileValidationError, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber } from '../../planner/graduationProfile';
 
 export default function GraduationProfileSettings({ profile, disabled, onChange }: { profile: GraduationProfile; disabled: boolean; onChange: (profile: GraduationProfile) => void }) {
+  const [validationError, setValidationError] = useState<string | null>(null);
   const missing = missingGraduationProfilePrerequisites(profile);
-  const update = (patch: Partial<GraduationProfile>) => onChange({ ...profile, ...patch });
-  const updateRecognizedCredits = (key: keyof GraduationProfile['recognizedCredits'], value: string) => update({ recognizedCredits: { ...profile.recognizedCredits, [key]: normalizeNonnegativeNumber(value) } });
+  const update = (patch: Partial<GraduationProfile>) => {
+    const next = { ...profile, ...patch };
+    const error = graduationProfileValidationError(next);
+    if (error) { setValidationError(error); return; }
+    setValidationError(null);
+    onChange(next);
+  };
+  const updateAdmissionYear = (value: string) => {
+    const admissionYear = normalizeAdmissionYear(value);
+    if (value.trim() !== '' && admissionYear === null) {
+      setValidationError('入学年度は4桁の西暦（1000〜9999）で入力してください。');
+      return;
+    }
+    update({ admissionYear });
+  };
+  const updateRecognizedCredits = (key: keyof GraduationProfile['recognizedCredits'], value: string) => {
+    const credits = normalizeNonnegativeNumber(value);
+    if (value.trim() !== '' && credits === null) {
+      setValidationError('認定単位は0以上の数値で入力してください。');
+      return;
+    }
+    update({ recognizedCredits: { ...profile.recognizedCredits, [key]: credits } });
+  };
 
   return <section aria-labelledby="graduation-profile-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="graduation-profile-heading" className="text-xl text-[#002255]">卒業判定設定</h2>
     <p className="mt-3 border-l-4 border-sky-600 bg-sky-50 p-3 text-sm leading-relaxed">この情報は卒業要件の参考判定に使います。未入力の項目は推測せず、判定保留になります。</p>
     <div className="mt-4 grid gap-4 sm:grid-cols-2">
       <label className="grid gap-1 text-sm">入学年度
-        <input aria-label="入学年度" type="number" inputMode="numeric" min="1" step="1" value={profile.admissionYear ?? ''} disabled={disabled} onChange={event => update({ admissionYear: normalizeAdmissionYear(event.target.value) })} className="border border-gray-300 px-3 py-2" placeholder="例: 2025" />
-        <span className="text-xs text-gray-600">現在年からは推測しません。</span>
+        <input aria-label="入学年度" type="number" inputMode="numeric" min="1000" max="9999" step="1" value={profile.admissionYear ?? ''} disabled={disabled} onChange={event => updateAdmissionYear(event.target.value)} className="border border-gray-300 px-3 py-2" placeholder="例: 2025" />
+        <span className="text-xs text-gray-600">4桁の西暦で入力します。現在年からは推測しません。</span>
       </label>
       <label className="grid gap-1 text-sm">入学区分
         <select aria-label="入学区分" value={profile.admissionType} disabled={disabled} onChange={event => update({ admissionType: event.target.value as GraduationProfile['admissionType'] })} className="border border-gray-300 px-3 py-2">
@@ -34,6 +57,7 @@ export default function GraduationProfileSettings({ profile, disabled, onChange 
         <span className="text-xs text-gray-600">入学年度から自動で確定しません。</span>
       </label>
     </div>
+    {validationError && <p role="alert" className="mt-4 text-sm text-red-700">{validationError} 変更は保存していません。</p>}
     {missing.length > 0 && <p className="mt-4 text-sm text-amber-800">判定前に確認が必要：{missing.map(key => GRADUATION_PROFILE_PREREQUISITE_LABEL[key]).join('、')}</p>}
   </section>;
 }

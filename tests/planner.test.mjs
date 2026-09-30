@@ -2325,8 +2325,8 @@ test('v15 graduation profile migration preserves planner, imported, and media da
   assert.deepEqual(loaded.state.graduationProfile, initialGraduationProfile());
 });
 
-test('graduation profile saves all prerequisites, preserves zero recognized credits, and rejects invalid numeric input', () => {
-  const state = { ...initialState(), graduationProfile: { admissionYear: 2025, admissionType: 'transfer', recognizedCredits: { totalCredits: 0, schoolingEquivalentCredits: null }, curriculumApplicability: 'legacy_or_transition' } };
+test('graduation profile saves only internally consistent prerequisites and rejects invalid numeric input', () => {
+  const state = { ...initialState(), graduationProfile: { admissionYear: 2025, admissionType: 'transfer', recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: 4 }, curriculumApplicability: 'legacy_or_transition' } };
   const store = memoryStore();
   const raw = saveState(store, state, null, catalog);
   const loaded = loadState(memoryStore(raw), catalog);
@@ -2335,9 +2335,17 @@ test('graduation profile saves all prerequisites, preserves zero recognized cred
   assert.equal(normalizeNonnegativeNumber('0'), 0);
   assert.equal(normalizeNonnegativeNumber('-1'), null);
   assert.equal(normalizeNonnegativeNumber('NaN'), null);
+  assert.equal(normalizeAdmissionYear('25'), null);
+  assert.equal(normalizeAdmissionYear('2'), null);
+  assert.equal(normalizeAdmissionYear('10000'), null);
+  assert.equal(normalizeAdmissionYear('-1'), null);
   assert.equal(normalizeAdmissionYear('2025.5'), null);
   assert.equal(normalizeAdmissionYear('2025'), 2025);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, admissionYear: 25 } }, catalog), false);
   assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: -1, schoolingEquivalentCredits: null } } }, catalog), false);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: 12 } } }, catalog), false);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: 1 } } }, catalog), false);
+  assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { totalCredits: 0, schoolingEquivalentCredits: 0 } } }, catalog), true);
 });
 
 test('missing graduation profile prerequisites never completes graduation evaluation or breaks coverage', () => {
