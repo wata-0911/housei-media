@@ -12,6 +12,7 @@ import type {
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
+import { allocateGeographyTransfers, geographyTransferKind, type GeographyTransferKind } from './geographyTransferRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
 import { classifyUnknownReason, coverageForCard, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
@@ -474,6 +475,8 @@ function professionalCards(
   const entries = new Map<string, CurriculumEntry>();
   const addTo = (name: string, item: PlannerItem, offering: Offering) => addOfferingTotals(bucket(name), item, offering);
   const specialRows: Array<{ kind: string; item: PlannerItem; offering: Offering }> = [];
+  const geographyTransferDetails: string[] = [];
+  const canonicalNameForCourse = (courseId: string | null) => catalog.courses.find(course => course.id === courseId)?.canonicalName ?? null;
   const isNamed = (offering: Offering, name: string) => offering.name === name
     || offering.name.startsWith(`${name}（`) || offering.name.startsWith(`${name}［`) || offering.name.startsWith(`${name}[`);
 
@@ -490,12 +493,19 @@ function professionalCards(
       continue;
     }
     if (program.department === '地理学科') {
-      const kind = isNamed(offering, '現地研究') ? 'field-study'
-        : isNamed(offering, '地誌学特講') ? 'chorography'
-          : isNamed(offering, '人文地理学演習') ? 'human-seminar'
-            : isNamed(offering, '自然地理学演習') ? 'natural-seminar'
-              : isNamed(offering, '人文地理学特講') || isNamed(offering, '自然地理学特講') ? 'geography-lecture' : null;
+      const kind = geographyTransferKind(offering, canonicalNameForCourse);
       if (kind) {
+        const specialMappings = eligibleMappings(offering).filter(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育');
+        // Transfer destinations must never bypass the same curriculum-completion
+        // evidence required for ordinary professional rows.
+        if (specialMappings.length === 0) {
+          if (item.status === 'earned') ambiguous.add(offering.id);
+          continue;
+        }
+        if (specialMappings.some(mapping => mapping.curriculumCredits === null)) {
+          if (item.status === 'earned') specialMappings.forEach(mapping => incompleteMetadata.add(mapping.mappingId));
+          continue;
+        }
         specialRows.push({ kind, item, offering });
         continue;
       }
@@ -587,13 +597,22 @@ function professionalCards(
     }
   }
   if (program.department === '地理学科') {
-    // 学習のしおり p.55 d/i. The named destination courses in the table are
-    // graduation buckets, not separate offerings to add alongside these credits.
-    distribute(specialRows.filter(row => row.kind === 'field-study'), [['スクーリング必修', 2], ['選択', 2]]);
-    distribute(specialRows.filter(row => row.kind === 'chorography'), [['選択必修:地誌・その他の分野', 2], ['選択', Infinity]]);
-    distribute(specialRows.filter(row => row.kind === 'human-seminar'), [['スクーリング必修', 2], ['選択必修:人文地理の分野', 2], ['選択', Infinity]]);
-    distribute(specialRows.filter(row => row.kind === 'natural-seminar'), [['スクーリング必修', 2], ['選択必修:自然地理の分野', 2], ['選択', Infinity]]);
-    distribute(specialRows.filter(row => row.kind === 'geography-lecture'), [['選択', 4]]);
+    // The table's named destination courses are allocation buckets, not extra
+    // offerings.  This helper emits exactly one allocation for each credit.
+    for (const kind of ['fieldStudy', 'chorography', 'humanSeminar', 'naturalSeminar', 'geographyLecture'] as GeographyTransferKind[]) {
+      const rows = specialRows.filter(row => row.kind === kind);
+      const { allocations, discarded } = allocateGeographyTransfers(kind, rows.map(row => ({ id: row.offering.id, credits: row.offering.credits!, status: row.item.status as 'earned' | 'in_progress' | 'planned' })).filter(row => ['earned', 'in_progress', 'planned'].includes(row.status)));
+      for (const allocation of allocations) {
+        const row = rows.find(candidate => candidate.offering.id === allocation.id)!;
+        addCredits(allocation.bucket, row.item, row.offering, allocation.credits);
+        if (allocation.bucket.startsWith('選択必修:')) addCredits('選択必修', row.item, row.offering, allocation.credits);
+      }
+      if (allocations.some(allocation => allocation.status === 'earned')) {
+        const label = { fieldStudy: '現地研究', chorography: '地誌学特講', humanSeminar: '人文地理学演習', naturalSeminar: '自然地理学演習', geographyLecture: '人文・自然地理学特講' }[kind];
+        const summary = allocations.filter(allocation => allocation.status === 'earned').map(allocation => `${allocation.bucket} ${allocation.credits}単位`).join(' + ');
+        geographyTransferDetails.push(`${label}: ${summary}${discarded ? `（超過${discarded}単位は卒業算入外）` : ''}`);
+      }
+    }
   }
 
   for (const entry of entries.values()) {
@@ -698,18 +717,14 @@ function professionalCards(
     const elective = withOverflow(normal('選択'), requiredElective, threshold);
     const human = normal('選択必修:人文地理の分野'), natural = normal('選択必修:自然地理の分野'), regional = normal('選択必修:地誌・その他の分野');
     const fieldsMet = human.earned >= 8 && human.courses.size >= 2 && natural.earned >= 8 && natural.courses.size >= 2 && regional.earned >= 16;
-    const specialEarned = (kind: string) => specialRows.filter(row => row.kind === kind && row.item.status === 'earned')
-      .reduce((sum, row) => sum + row.offering.credits!, 0);
-    const fieldStudyEarned = specialEarned('field-study');
-    const geographyLectureEarned = specialEarned('geography-lecture');
     return [
       { ...make('professional-geography-required', '専門教育：必修', required, 12, required.earned >= 12), partialCourses: partialCourses('必修') },
       { ...make('professional-geography-schooling-required', '専門教育：スクーリング必修', schooling, 6, schooling.earned >= 6), partialCourses: partialCourses('スクーリング必修') },
       { ...make('professional-geography-required-elective', '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, requiredElective.earned >= requiredElectiveTargetValue && fieldsMet,
         [detail('人文地理：2科目・8単位以上', human, 8), detail('自然地理：2科目・8単位以上', natural, 8), detail('地誌・その他：16単位以上', regional, 16)],
-        '人文・自然はそれぞれ科目数も満たす必要があります。2013年度以前の救済措置は自動判定しません。'), partialCourses: partialCourses('選択必修') },
+        `人文・自然はそれぞれ科目数も満たす必要があります。${geographyTransferDetails.filter(detail => /演習|地誌/.test(detail)).join('。')}。2013年度以前の救済措置は自動判定しません。`), partialCourses: partialCourses('選択必修') },
       { ...make('professional-geography-elective', '専門教育：選択', elective, 12, elective.earned >= 12, undefined,
-        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。現地研究は必修2単位＋選択2単位まで${fieldStudyEarned > 4 ? `（超過${fieldStudyEarned - 4}単位は修得済みだが卒業算入外）` : ''}。人文・自然地理学特講は合算4単位まで${geographyLectureEarned > 4 ? `（超過${geographyLectureEarned - 4}単位は修得済みだが卒業算入外）` : ''}。`, overflowRuleReason), partialCourses: partialCourses('選択') },
+        `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。${geographyTransferDetails.join('。')}。`, overflowRuleReason), partialCourses: partialCourses('選択') },
     ];
   }
 
