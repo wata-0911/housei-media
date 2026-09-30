@@ -28,6 +28,7 @@ import { deriveImportedAchievements, managedImportedMedia } from '../src/planner
 import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
 import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
 import { initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber } from '../src/planner/graduationProfile.ts';
+import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -1040,6 +1041,32 @@ test('history fifth-course exception uses canonical mappings and excludes media 
     item(mediaJapanese.id, 'earned'),
   ], catalog, scope);
   assert.equal(card(mediaInstead, 'professional-history-elective').earned, 4, 'メディアはスクーリング選択必修の5科目に含めない');
+});
+
+test('Course Search add, saved state, and row edits recognize every selectable non-Media history overview schooling offering', () => {
+  const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  const seminarItems = catalog.offerings.filter(o => /^史学演習（(日本|西洋|東洋)）/.test(o.name)).slice(0, 4)
+    .map((offering, index) => ({ ...plannerItemFromCourseSearch(offering.id), status: 'earned', earnedOrder: index + 1 }));
+  const selectable = name => searchOfferings(catalog.offerings, name).filter(offering => offering.method === 'schooling' && !offering.name.includes('メディア'));
+  const japanese = selectable('日本史概説'), eastern = selectable('東洋史概説'), western = selectable('西洋史概説');
+  assert.deepEqual(japanese.map(o => o.id), ['52db8968-0681-4186-9a30-c4bd134e1ec3', '55a36b64-104e-47e8-8abe-7f0d1f4d30e0', '5e0c94a2-c29b-40e3-86f9-f827742761b1', '5f7bba88-96bd-4042-81ab-1f6ee7399035', '830688aa-ff84-43e4-9a86-348871f382d1', '9ba88f21-186c-474c-a26c-56554c3cf2ee']);
+  assert.equal(eastern.length, 6);
+  assert.equal(western.length, 6);
+  for (const jp of japanese) for (const east of eastern) for (const west of western) {
+    // This is the same state transition as the Planner: search result -> add ->
+    // save/load -> set status earned -> set the seminar completion orders.
+    let items = [...seminarItems, ...[jp, east, west].map(offering => plannerItemFromCourseSearch(offering.id))];
+    const addedState = { ...initialState(), selectedScopeId: scope, items };
+    const store = memoryStore();
+    const saved = saveState(store, addedState, null, catalog);
+    items = loadState(memoryStore(saved), catalog).state.items;
+    for (const overview of [jp, east, west]) items = updatePlannerItem(items, overview.id, { status: 'earned' });
+    const progress = calculateGraduationProgress(items, catalog, scope);
+    assert.equal(progress.historySchoolingDiagnostic.overviewSchoolingCompletions, 3, `${jp.id}, ${east.id}, ${west.id}`);
+    assert.equal(progress.historySchoolingDiagnostic.hasAllFiveSchoolingRequiredCourses, true);
+    assert.deepEqual([progress.cards.find(row => row.requirementId === 'history-seminar-required-elective').label, progress.cards.find(row => row.requirementId === 'history-seminar-elective').label], ['史学演習1（スクーリング選択必修）', '史学演習2〜4（選択）']);
+    assert.equal(progress.cards.find(row => row.requirementId === 'professional-history-schooling-required-elective').earned, 8);
+  }
 });
 
 test('historical-source cap is shared across earned, in-progress, and planned credits', () => {

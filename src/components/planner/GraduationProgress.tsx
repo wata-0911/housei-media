@@ -12,6 +12,7 @@ const coverageLabel: Record<'supported' | 'partial' | 'unknown', string> = { sup
 export default function GraduationProgress({ progress }: { progress: Progress }) {
   const evaluated = progress.cards;
   const unknown = progress.requirements.filter(row => row.status === 'unknown');
+  const showHistoryDebug = new URLSearchParams(window.location.search).get('debugHistory') === '1' && progress.historySchoolingDiagnostic !== null;
   return <section aria-labelledby="graduation-progress-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="graduation-progress-heading" className="text-xl text-[#002255]">卒業要件の部分進捗</h2>
     <p className="mt-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed">一部要件のみ自動判定しています。卒業可否を保証しません。</p>
@@ -49,6 +50,15 @@ export default function GraduationProgress({ progress }: { progress: Progress })
         {row.note && <p className="mt-2 break-words text-xs leading-relaxed text-gray-600">{row.note}</p>}
       </article>)}
     </div>
+    {showHistoryDebug && <details open className="mt-6 border border-violet-300 bg-violet-50 p-4 text-xs" data-testid="history-debug">
+      <summary className="cursor-pointer font-medium text-violet-950">史学科・開発用診断（?debugHistory=1 のときだけ表示）</summary>
+      <p className="mt-3">史学演習の修得順：{progress.historySchoolingDiagnostic!.orderedSeminarOrders.join(', ') || 'なし'}</p>
+      <p className="mt-1">概説スクーリング修得数：{progress.historySchoolingDiagnostic!.overviewSchoolingCompletions}</p>
+      <p className="mt-1">5科目条件：{progress.historySchoolingDiagnostic!.hasAllFiveSchoolingRequiredCourses ? 'true' : 'false'}</p>
+      <ul className="mt-3 space-y-2 border-t border-violet-200 pt-2">{progress.historySchoolingDiagnostic!.overviewDetections.map(row => <li key={row.offeringId}>
+        family={row.family ?? 'なし'} / offeringId={row.offeringId} / status={row.status} / method={row.method} / credits={row.credits ?? 'null'} / schooling={String(row.schooling)} / mappingIds={row.mappingIds.join(',') || 'なし'}
+      </li>)}</ul>
+    </details>}
     <details className="mt-6 border border-gray-200 bg-slate-50 p-4">
       <summary className="cursor-pointer font-medium text-[#002255]">確認が必要な条件：{unknown.length}件</summary>
       <ul className="mt-3 space-y-2 text-sm">

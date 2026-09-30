@@ -49,6 +49,15 @@ export type GraduationProgress = {
   importedWarnings: ImportedAchievementWarning[];
   importedContributionCount: number;
   referenceProgress: ReferenceProgress[];
+  /** Present only for the History program; rendered only with ?debugHistory=1. */
+  historySchoolingDiagnostic: HistorySchoolingDiagnostic | null;
+};
+
+export type HistorySchoolingDiagnostic = {
+  orderedSeminarOrders: number[];
+  overviewDetections: Array<{ family: string | null; offeringId: string; status: PlannerItem['status']; method: Offering['method']; credits: number | null; schooling: boolean; mappingIds: string[] }>;
+  overviewSchoolingCompletions: number;
+  hasAllFiveSchoolingRequiredCourses: boolean;
 };
 
 /** A deliberately non-final, source-backed total. It never asserts graduation eligibility. */
@@ -336,13 +345,7 @@ function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offeri
   const orderKnown = validHistorySeminarOrders(items, offerings) && (assignedAll || seminars.every(item => item.earnedOrder !== null));
   const reason = orderKnown ? null : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
   const creditsFor = (orders: number[]) => ordered.filter(item => orders.includes(item.earnedOrder!)).reduce((sum, item) => sum + (offerings.get(item.offeringId)?.credits ?? 0), 0);
-  const overviewSchoolingCompletions = HISTORY_OVERVIEW_NAMES.filter(name =>
-    items.some(item => item.status === 'earned'
-      && isHistoryOverviewSchooling(offerings.get(item.offeringId))
-      && historyOverviewName(offerings.get(item.offeringId)) === name
-      && (offerings.get(item.offeringId)?.credits ?? 0) >= 2)).length;
-  const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
-    && ordered.some(item => item.earnedOrder === 1) && ordered.some(item => item.earnedOrder === 2);
+  const { hasAllFiveSchoolingRequiredCourses } = historySchoolingDiagnostic(items, offerings);
   const required = creditsFor(hasAllFiveSchoolingRequiredCourses ? [1] : [1, 2]);
   const elective = creditsFor(hasAllFiveSchoolingRequiredCourses ? [2, 3, 4] : [3, 4]);
   const details = ordered.map(item => {
@@ -389,6 +392,33 @@ function isHistoryOverviewSchooling(offering: Offering | undefined) {
   // printed 2026 table is authoritative: a メディア offering is not one of the
   // five *スクーリング*選択必修 courses.
   return offering?.method === 'schooling' && !/メディア/.test(offering.name);
+}
+
+/**
+ * Shared fifth-course evidence for both History card groups.  Keeping this
+ * independent of the display/coalescing layer makes the saved PlannerItem
+ * identity, status, and completion order directly auditable.
+ */
+export function historySchoolingDiagnostic(items: PlannerItem[], offerings: Map<string, Offering>): HistorySchoolingDiagnostic {
+  const overviewDetections = items.flatMap(item => {
+    const offering = offerings.get(item.offeringId);
+    const family = historyOverviewName(offering);
+    return family === null || !offering ? [] : [{
+      family, offeringId: item.offeringId, status: item.status, method: offering.method,
+      credits: offering.credits, schooling: isHistoryOverviewSchooling(offering), mappingIds: offering.mappingIds,
+    }];
+  });
+  const orderedSeminarOrders = items.filter(item => item.status === 'earned' && isHistorySeminar(offerings.get(item.offeringId)) && item.earnedOrder !== null)
+    .map(item => item.earnedOrder!).sort((a, b) => a - b);
+  const overviewSchoolingCompletions = HISTORY_OVERVIEW_NAMES.filter(name => overviewDetections.some(row =>
+    row.family === name && row.status === 'earned' && row.schooling && (row.credits ?? 0) >= 2)).length;
+  return {
+    orderedSeminarOrders,
+    overviewDetections,
+    overviewSchoolingCompletions,
+    hasAllFiveSchoolingRequiredCourses: overviewSchoolingCompletions === 3
+      && orderedSeminarOrders.includes(1) && orderedSeminarOrders.includes(2),
+  };
 }
 
 type ElectiveOverflowRule = { threshold: number; requiredCourses: number | null };
@@ -739,12 +769,7 @@ function professionalCards(
     const ordered = seminars.filter(item => item.earnedOrder !== null);
     const orderKnown = validHistorySeminarOrders(items, offerings) && (ordered.length === 4 || seminars.every(item => item.earnedOrder !== null));
     const orderReason = orderKnown ? baseReason : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
-    const overviewSchoolingCompletions = HISTORY_OVERVIEW_NAMES.filter(name =>
-      specialRows.some(row => row.kind === 'history-overview' && row.item.status === 'earned'
-        && isHistoryOverviewSchooling(row.offering) && historyOverviewName(row.offering) === name && row.offering.credits! >= 2)).length;
-    const hasAllFiveSchoolingRequiredCourses = overviewSchoolingCompletions === 3
-      && ordered.some(item => item.earnedOrder === 1)
-      && ordered.some(item => item.earnedOrder === 2);
+    const { hasAllFiveSchoolingRequiredCourses } = historySchoolingDiagnostic(items, offerings);
     for (const item of ordered) {
       const offering = offerings.get(item.offeringId)!;
       const target = item.earnedOrder === 1 || (item.earnedOrder === 2 && !hasAllFiveSchoolingRequiredCourses)
@@ -948,7 +973,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return {
       graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [],
-      coverageSummary: { supported: 0, partial: 0, unknown: 0 }, importedWarnings: [], importedContributionCount: 0, referenceProgress: [],
+      coverageSummary: { supported: 0, partial: 0, unknown: 0 }, importedWarnings: [], importedContributionCount: 0, referenceProgress: [], historySchoolingDiagnostic: null,
     };
   }
   const catalogOfferings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
@@ -1014,5 +1039,6 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     importedWarnings: imported.warnings,
     importedContributionCount: imported.items.length,
     referenceProgress: reference,
+    historySchoolingDiagnostic: scopeId === HISTORY_SCOPE_ID ? historySchoolingDiagnostic(calculationItems, offerings) : null,
   };
 }
