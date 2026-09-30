@@ -9,6 +9,7 @@ import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverSta
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { THESIS_CREDIT_METADATA_2026, sourcesForGraduationCard, thesisCreditsForDepartment } from '../src/planner/graduationSources.ts';
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
+import { allocateGeographyTransfers } from '../src/planner/geographyTransferRules.ts';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/removeUndo.ts';
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
@@ -1715,6 +1716,23 @@ test('2026 common, history, geography, and law special credit transfers follow t
   const lawCards = calculateGraduationProgress(law.catalog.offerings.map(offering => item(offering.id, 'earned')), law.catalog, law.scope).cards;
   assert.equal(lawCards.find(row => row.requirementId === 'professional-law-required-elective').earned, 32);
   assert.equal(lawCards.find(row => row.requirementId === 'professional-law-elective').earned, 10); // 8 capped 法律学特講 + 2 allowed partial.
+});
+
+test('geography 2026 staged transfers allocate each completed identity once and cap only the official rules', () => {
+  const allocate = (kind, credits) => allocateGeographyTransfers(kind, credits.map((value, index) => ({ id: `${kind}-${index}`, credits: value, status: 'earned' })));
+  assert.deepEqual(allocate('fieldStudy', [1, 1]).allocations.map(row => [row.bucket, row.credits]), [['スクーリング必修', 1], ['スクーリング必修', 1]]);
+  assert.deepEqual(allocate('fieldStudy', [1, 1, 1, 1, 1]).allocations.map(row => [row.bucket, row.credits]), [['スクーリング必修', 1], ['スクーリング必修', 1], ['選択', 1], ['選択', 1]]);
+  assert.equal(allocate('fieldStudy', [1, 1, 1, 1, 1]).discarded, 1);
+  assert.deepEqual(allocate('humanSeminar', [2, 2, 2]).allocations.map(row => [row.bucket, row.credits]), [['スクーリング必修', 2], ['選択必修:人文地理の分野', 2], ['選択', 2]]);
+  assert.deepEqual(allocate('naturalSeminar', [2, 2, 2]).allocations.map(row => [row.bucket, row.credits]), [['スクーリング必修', 2], ['選択必修:自然地理の分野', 2], ['選択', 2]]);
+  assert.deepEqual(allocate('chorography', [2, 2]).allocations.map(row => [row.bucket, row.credits]), [['選択必修:地誌・その他の分野', 2], ['選択', 2]]);
+  const lectures = allocate('geographyLecture', [2, 2, 2]);
+  assert.equal(lectures.allocations.reduce((sum, row) => sum + row.credits, 0), 4);
+  assert.equal(lectures.discarded, 2);
+  for (const kind of ['fieldStudy', 'chorography', 'humanSeminar', 'naturalSeminar', 'geographyLecture']) {
+    const rows = allocate(kind, kind === 'fieldStudy' ? [1, 1, 1, 1] : [2, 2, 2]).allocations;
+    assert.equal(new Set(rows.map(row => row.id)).size, rows.length, `${kind} never assigns an identity to two buckets`);
+  }
 });
 
 test('special transfer cards use planned/in-progress only as reference and ignore terminal statuses', () => {
