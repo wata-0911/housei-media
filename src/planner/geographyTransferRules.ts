@@ -43,8 +43,11 @@ export function allocateGeographyTransfers(kind: GeographyTransferKind, rows: Ge
   const stages = rule.stages as ReadonlyArray<readonly [string, number]>;
   const allocations: GeographyAllocation[] = [];
   let discarded = 0;
+  // Stages are shared across the full status priority order.  A completed
+  // offering therefore reserves its official place before an in-progress or
+  // planned offering can be considered for that same stage.
+  const used = stages.map(() => 0);
   for (const status of ['earned', 'in_progress', 'planned'] as const) {
-    const used = stages.map(() => 0);
     for (const row of rows.filter(candidate => candidate.status === status)) {
       let assigned = false;
       for (let index = 0; index < stages.length && !assigned; index += 1) {

@@ -1735,6 +1735,32 @@ test('geography 2026 staged transfers allocate each completed identity once and 
   }
 });
 
+test('geography 2026 staged transfers share capacity across earned, in-progress, and planned rows', () => {
+  const allocate = (kind, rows) => allocateGeographyTransfers(kind, rows.map(([credits, status], index) => ({
+    id: `${kind}-${index}`, credits, status,
+  })));
+  const buckets = result => result.allocations.map(row => [row.status, row.bucket, row.credits]);
+
+  assert.deepEqual(buckets(allocate('fieldStudy', [[1, 'earned'], [1, 'earned'], [1, 'in_progress']])), [
+    ['earned', 'スクーリング必修', 1], ['earned', 'スクーリング必修', 1], ['in_progress', '選択', 1],
+  ]);
+  assert.deepEqual(buckets(allocate('fieldStudy', [[1, 'earned'], [1, 'earned'], [1, 'earned'], [1, 'earned'], [1, 'planned']])), [
+    ['earned', 'スクーリング必修', 1], ['earned', 'スクーリング必修', 1], ['earned', '選択', 1], ['earned', '選択', 1],
+  ]);
+  assert.deepEqual(buckets(allocate('humanSeminar', [[2, 'earned'], [2, 'in_progress']])), [
+    ['earned', 'スクーリング必修', 2], ['in_progress', '選択必修:人文地理の分野', 2],
+  ]);
+  assert.deepEqual(buckets(allocate('naturalSeminar', [[2, 'earned'], [2, 'planned']])), [
+    ['earned', 'スクーリング必修', 2], ['planned', '選択必修:自然地理の分野', 2],
+  ]);
+  assert.deepEqual(buckets(allocate('chorography', [[2, 'earned'], [2, 'planned']])), [
+    ['earned', '選択必修:地誌・その他の分野', 2], ['planned', '選択', 2],
+  ]);
+  assert.deepEqual(buckets(allocate('geographyLecture', [[2, 'earned'], [2, 'earned'], [2, 'planned']])), [
+    ['earned', '選択', 2], ['earned', '選択', 2],
+  ]);
+});
+
 test('geography transfer does not treat incomplete curriculum-credit metadata as completed', () => {
   const geography = professionalFixture('地理学科', [['field', 'スクーリング必修', null, null]], [['field', 1, ['field'], 'schooling']]);
   geography.catalog.offerings[0].name = '現地研究（夏期スクーリング）';
