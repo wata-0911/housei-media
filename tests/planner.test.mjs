@@ -1735,6 +1735,15 @@ test('geography 2026 staged transfers allocate each completed identity once and 
   }
 });
 
+test('geography transfer does not treat incomplete curriculum-credit metadata as completed', () => {
+  const geography = professionalFixture('地理学科', [['field', 'スクーリング必修', null, null]], [['field', 1, ['field'], 'schooling']]);
+  geography.catalog.offerings[0].name = '現地研究（夏期スクーリング）';
+  const card = calculateGraduationProgress([item('field', 'earned')], geography.catalog, geography.scope).cards
+    .find(row => row.requirementId === 'professional-geography-schooling-required');
+  assert.equal(card.status, 'unknown');
+  assert.equal(card.earned, null);
+});
+
 test('special transfer cards use planned/in-progress only as reference and ignore terminal statuses', () => {
   const geography = professionalFixture('地理学科', [['any', '選択']], [['field', 1, ['any'], 'schooling']]);
   geography.catalog.offerings[0].name = '現地研究（夏期スクーリング）';

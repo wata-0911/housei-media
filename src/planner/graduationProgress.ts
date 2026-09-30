@@ -495,6 +495,17 @@ function professionalCards(
     if (program.department === '地理学科') {
       const kind = geographyTransferKind(offering, canonicalNameForCourse);
       if (kind) {
+        const specialMappings = eligibleMappings(offering).filter(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育');
+        // Transfer destinations must never bypass the same curriculum-completion
+        // evidence required for ordinary professional rows.
+        if (specialMappings.length === 0) {
+          if (item.status === 'earned') ambiguous.add(offering.id);
+          continue;
+        }
+        if (specialMappings.some(mapping => mapping.curriculumCredits === null)) {
+          if (item.status === 'earned') specialMappings.forEach(mapping => incompleteMetadata.add(mapping.mappingId));
+          continue;
+        }
         specialRows.push({ kind, item, offering });
         continue;
       }
