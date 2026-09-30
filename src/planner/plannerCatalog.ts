@@ -257,13 +257,30 @@ export type ImportedCourseUserMeta = {
 };
 
 /** Learner-entered context required before graduation-wide rules can be evaluated. */
-export type AdmissionType = 'first_year' | 'transfer' | 'unknown';
+/** The admission route is deliberately more specific than the old transfer flag.
+ * `other_transfer` is the safe migration destination when the entering year is unknown. */
+export type AdmissionType = 'first_year' | 'transfer_second_year' | 'transfer_third_year' | 'bachelor_admission' | 'hosei_internal_transfer' | 'other_transfer' | 'unknown';
 export type CurriculumApplicability = 'current_2026' | 'legacy_or_transition' | 'unknown';
+export type RecognitionMode = 'none' | 'recognized' | 'exempt' | 'unknown';
+export type RecognizedGeneralField = { mode: RecognitionMode; credits: number | null };
+export type RecognizedProfessionalCourse = {
+  id: string;
+  /** A 2026 catalogue identity is required before this can affect degree rules. */
+  offeringId: string | null;
+  courseId: string | null;
+  mappingId: string | null;
+  name: string;
+  credits: number;
+};
 export type RecognizedCredits = {
   /** Credits officially recognized before admission or at transfer; never inferred. */
   totalCredits: number | null;
   /** Kept separate only when the learner has an official schooling-equivalent breakdown. */
   schoolingEquivalentCredits: number | null;
+  general: { humanities: RecognizedGeneralField; social: RecognizedGeneralField; natural: RecognizedGeneralField };
+  foreignLanguage: { mode: RecognitionMode; credits: number | null; language: 'english' | 'german' | 'french' | 'unknown'; schoolingEquivalentCredits: number | null };
+  physicalEducation: { mode: RecognitionMode; credits: number | null };
+  professionalCourses: RecognizedProfessionalCourse[];
 };
 export type GraduationProfile = {
   admissionYear: number | null;
@@ -274,7 +291,7 @@ export type GraduationProfile = {
 };
 
 export type PlannerState = {
-  schemaVersion: 18;
+  schemaVersion: 19;
   selectedScopeId: string | null;
   /** v17 compatibility value; the scoped record below is authoritative. */
   thesisSelection: ThesisSelection;

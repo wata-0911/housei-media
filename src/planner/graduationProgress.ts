@@ -900,9 +900,41 @@ function referencePrerequisiteReason(profile: GraduationProfile, program: { depa
   if (profile.curriculumApplicability === 'unknown') return '適用課程が未確認のため、2026年度の必要単位を適用できません。';
   if (profile.curriculumApplicability === 'legacy_or_transition') return '旧課程・経過措置では2026年度の必要単位を適用しません。';
   if (profile.admissionType === 'unknown') return '入学区分が未入力のため、個別の認定単位を扱えません。';
-  if (profile.admissionType === 'transfer' && profile.recognizedCredits.totalCredits === null) return '編入学の認定単位合計が未入力です。公式の履修・成績通知書で確認してください。';
+  if (['transfer_second_year', 'transfer_third_year', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType) && profile.recognizedCredits.totalCredits === null && profile.recognizedCredits.professionalCourses.length === 0) return '編入学の認定単位合計または公式の個別認定結果が未入力です。0としては扱いません。';
   if (program.department === '法律学科' && thesisSelection === 'undecided') return '法学部の卒業論文の選択が未定のため、124/128単位を確定できません。';
   return null;
+}
+
+/** Recognition is an independent source.  It is overlaid once on common cards;
+ * exemptions satisfy their requirement but deliberately contribute no earned credits. */
+function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): ProgressCard[] {
+  const general = profile.recognizedCredits.general ?? { humanities: { mode: 'unknown' as const, credits: null }, social: { mode: 'unknown' as const, credits: null }, natural: { mode: 'unknown' as const, credits: null } };
+  const replace = (id: string, fn: (card: ProgressCard) => ProgressCard) => cards.map(card => card.requirementId === id ? fn(card) : card);
+  let next = replace('group-general', card => {
+    const fields = ['humanities', 'social', 'natural'] as const;
+    const exempt = fields.every(key => general[key].mode === 'exempt');
+    const credited = fields.reduce((sum, key) => sum + (general[key].mode === 'recognized' ? general[key].credits ?? 0 : 0), 0);
+    const details = card.details?.map((detail, index) => {
+      const row = general[fields[index]];
+      return { ...detail, earned: row.mode === 'exempt' ? detail.target : detail.earned + (row.mode === 'recognized' ? row.credits ?? 0 : 0) };
+    });
+    return { ...card, earned: exempt ? 0 : Math.min(card.target ?? 36, (card.earned ?? 0) + credited), details,
+      status: exempt || (details?.every(detail => detail.earned >= detail.target) && (card.earned ?? 0) + credited >= 36) ? 'satisfied' : card.status,
+      note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : credited ? ' 公式認定単位を反映しています。' : ''}` };
+  });
+  next = replace.call(null, 'group-foreign', card => {
+    const row = profile.recognizedCredits.foreignLanguage ?? { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null };
+    if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
+    if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && (row.schoolingEquivalentCredits ?? 0) >= 2) return { ...card, earned: 4, status: 'satisfied', note: `${card.note ?? ''} 公式認定の内訳を反映しています。` };
+    return card;
+  });
+  next = replace.call(null, 'group-physical', card => {
+    const row = profile.recognizedCredits.physicalEducation ?? { mode: 'unknown' as const, credits: null };
+    if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
+    if (row.mode === 'recognized' && row.credits === 2) return { ...card, earned: 2, status: 'satisfied', note: `${card.note ?? ''} 公式認定を反映しています。` };
+    return card;
+  });
+  return next;
 }
 
 /**
@@ -957,11 +989,12 @@ function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[
   const prerequisiteReason = referencePrerequisiteReason(profile, program, thesisSelection);
   const target = prerequisiteReason ? null : program.department === '法律学科' && thesisSelection === 'not_selected'
     ? 124 + (thesisCreditsForDepartment(program.department) ?? 0) : 124;
-  const recognizedTotal = profile.admissionType === 'transfer' ? profile.recognizedCredits.totalCredits : 0;
+  const creditBearingRoute = profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && profile.admissionType !== 'bachelor_admission';
+  const recognizedTotal = creditBearingRoute ? profile.recognizedCredits.totalCredits : 0;
   const overallEarned = countedOverallCredits(cards, program.department) + (recognizedTotal ?? 0);
   const schooling = countedSchoolingCredits(calculationItems, offerings, eligibleMappings, program.department);
-  const schoolingRecognized = profile.admissionType === 'transfer' ? profile.recognizedCredits.schoolingEquivalentCredits : 0;
-  const schoolingReason = prerequisiteReason ?? (profile.admissionType === 'transfer' && schoolingRecognized === null
+  const schoolingRecognized = profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' ? profile.recognizedCredits.schoolingEquivalentCredits : 0;
+  const schoolingReason = prerequisiteReason ?? (profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && schoolingRecognized === null
     ? '編入学の認定スクーリング相当単位が未入力です。0としては扱いません。'
     : schooling.uncertain ? '一部の修得済み科目はスクーリング算入先を一意に確認できないため、含めていません。' : null);
   const make = (id: ReferenceProgress['id'], label: string, earned: number | null, referenceTarget: number | null, recognizedCredits: number | null, reason: string | null): ReferenceProgress => ({
@@ -1000,7 +1033,7 @@ function thesisProgressCard(catalog: PlannerCatalog, scopeId: string, progress: 
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return {
@@ -1012,7 +1045,14 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const currentThesis = thesisProgress ?? { selection: thesisSelection, status: 'not_started' as const };
   const currentSelection = thesisPolicyForScope(catalog, scopeId) === 'required' ? 'selected' : currentThesis.selection;
   const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements, catalog, scopeId);
-  const calculationItems = [...items, ...imported.items];
+  const existingCourseIds = new Set([...items, ...imported.items].map(item => catalogOfferings.get(item.offeringId)?.courseId).filter((id): id is string => id !== null));
+  const recognizedItems = (profile.recognizedCredits.professionalCourses ?? []).flatMap(course => {
+    const offering = course.offeringId ? catalogOfferings.get(course.offeringId) : undefined;
+    if (!offering || !offering.courseId || existingCourseIds.has(offering.courseId) || offering.name === '卒業論文') return [];
+    existingCourseIds.add(offering.courseId);
+    return [{ offeringId: offering.id, status: 'earned' as const, plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null }];
+  });
+  const calculationItems = [...items, ...imported.items, ...recognizedItems];
   const offerings = new Map([...catalog.offerings, ...imported.offerings].map(offering => [offering.id, offering]));
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));
@@ -1031,7 +1071,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
   const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status);
-  const cards = [
+  const cards = applyRecognition([
     ...groupedCards(calculationItems, offerings, eligibleMappings, hasUnresolvedEarned),
     ...professional,
     ...thesisCards,
@@ -1040,7 +1080,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     ...requirements.filter(row => row.status !== 'unknown' && row.ruleType !== 'max_credits'
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')
       && !professional.length),
-  ];
+  ], profile);
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId)!;
   const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
   const thesisPage = thesisCreditsForDepartment(program.department) === 8 ? ({ '日本文学科': 49, '史学科': 52, '地理学科': 54 } as Record<string, number>)[program.department ?? ''] : ({ '法律学科': 46, '経済学科': 57, '商業学科': 59 } as Record<string, number>)[program.department ?? ''];

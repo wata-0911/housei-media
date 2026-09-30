@@ -12,6 +12,7 @@ const curriculum = (page: number): GraduationSourceRef => ({ title: '2026年度 
 const requirements: GraduationSourceRef = { title: '卒業に必要な要件', url: 'https://www.tsukyo.hosei.ac.jp/system/requirements/' };
 const schooling: GraduationSourceRef = { title: 'スクーリング登録までの流れ（必要スクーリング単位）', url: 'https://www.tsukyo.hosei.ac.jp/system/schooling-registration-flow/' };
 const thesis: GraduationSourceRef = { title: '卒業論文について', url: 'https://www.tsukyo.hosei.ac.jp/system/graduation-thesis/' };
+const transferRecognition: GraduationSourceRef = { title: '編入学者の単位認定（2026確認）', year: 2026, url: 'https://www.tsukyo.hosei.ac.jp/admission/accreditations/' };
 
 /**
  * Credit values printed in the 2026 curriculum tables.  This is metadata, not
@@ -34,7 +35,7 @@ export function thesisCreditsForDepartment(department: string | null): number | 
 
 /** Calculation code refers to stable ids; official-source text lives only here. */
 export const GRADUATION_CARD_SOURCES: Record<string, GraduationSourceRef[]> = {
-  'overall-reference-progress': [requirements], 'schooling-reference-progress': [requirements, schooling],
+  'overall-reference-progress': [requirements, transferRecognition], 'schooling-reference-progress': [requirements, schooling, transferRecognition],
   'group-general': [curriculum(46)], 'group-foreign': [curriculum(46)], 'group-physical': [curriculum(46)],
   'history-seminar-required-elective': [curriculum(53)], 'history-seminar-elective': [curriculum(53)],
   'professional-history-required': [curriculum(53)], 'professional-history-schooling-required-elective': [curriculum(53)], 'professional-history-elective': [curriculum(53)],
