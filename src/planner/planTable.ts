@@ -20,7 +20,7 @@ export function correspondenceProgressSummary(course: CorrespondenceCourseProgre
   const exam = course.examGrade === null ? '未受験' : gradeLabel(course.examGrade);
   if (course.requiredReports === null) return `リポート要件 未確認・試験 ${exam}`;
   const requiredReports = course.requiredReports;
-  const passed = course.reports.filter(report => report.reportNumber <= requiredReports && report.status === 'passed' && report.grade !== null).length;
+  const passed = course.reports.filter(report => report.reportNumber <= requiredReports && report.status === 'passed').length;
   return `リポート ${passed}/${requiredReports}・試験 ${exam}`;
 }
 

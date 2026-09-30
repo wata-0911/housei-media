@@ -248,8 +248,16 @@ export type PublicCourse = {
   credits: 2;
 };
 
+/** Learner-managed context layered over, but never written into, a grade-table row. */
+export type ImportedCourseUserMeta = {
+  lifecycleStatus: 'in_progress' | 'waiting' | null;
+  plannedYear: number | null;
+  plannedTerm: string | null;
+  studyYear: 1 | 2 | 3 | 4 | null;
+};
+
 export type PlannerState = {
-  schemaVersion: 9;
+  schemaVersion: 15;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
@@ -263,6 +271,10 @@ export type PlannerState = {
   correspondenceProgress: Record<string, CorrespondenceCourseProgress>;
   /** Raw component-level records from the grade table; they never assert graduation mapping. */
   importedStudyRecords: Array<import('./gradeImportApply').ImportedStudyRecord>;
+  /** One official grade-table row per course, including rows with no detail slots. */
+  importedCourseAchievements: Array<import('./gradeImportApply').ImportedCourseAchievement>;
+  /** User-managed lifecycle context keyed by immutable imported achievement id. */
+  importedCourseUserMeta: Record<string, ImportedCourseUserMeta>;
 };
 
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';

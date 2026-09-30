@@ -16,6 +16,8 @@ export default function GraduationProgress({ progress }: { progress: Progress })
     <h2 id="graduation-progress-heading" className="text-xl text-[#002255]">卒業要件の部分進捗</h2>
     <p className="mt-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed">一部要件のみ自動判定しています。卒業可否を保証しません。</p>
     <p className="my-3 text-sm text-gray-600">修得済みだけを達成判定に使います。履修中・計画中は参考値です。全体判定には合成しません。</p>
+    {progress.importedContributionCount > 0 && <p className="mb-3 border-l-4 border-emerald-600 bg-emerald-50 p-3 text-sm">成績取込から安全に照合できた修得実績 {progress.importedContributionCount}件を含みます。成績表の科目行ごとの修得単位を一度だけ算入しています。</p>}
+    {progress.importedWarnings.length > 0 && <details className="mb-3 border border-amber-200 bg-amber-50 p-3 text-sm"><summary className="cursor-pointer font-medium">成績取込から自動算入しなかった実績：{progress.importedWarnings.length}件</summary><ul className="mt-2 space-y-1 text-xs">{progress.importedWarnings.map((warning, index) => <li key={`${warning.rawName}-${index}`}>{warning.rawName}：{warning.reason}</li>)}</ul></details>}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {evaluated.map(row => <article key={row.requirementId} className="min-w-0 border border-gray-200 p-4">
         <h3 className="break-words font-medium text-[#002255]">{row.label}</h3>

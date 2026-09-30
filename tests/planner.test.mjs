@@ -20,8 +20,11 @@ import { correspondenceRequirementFor, structuredRequirementCount } from '../src
 import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planTable.ts';
 import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
 import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
-import { academicYearFromDate, applyImport, groupImportedAchievements, hasCorrespondenceEvidence, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
+import { academicYearFromDate, applyImport, groupImportedAchievements, hasCorrespondenceEvidence, importedEarnedCreditsTotal, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
 import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
+import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/importedAchievementCalculations.ts';
+import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
+import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -343,6 +346,14 @@ test('graduation coverage keeps calculations intact and exposes official sources
   assert.equal(progress.coverageSummary.supported + progress.coverageSummary.partial + progress.coverageSummary.unknown, progress.cards.length);
 });
 
+test('unselected graduation scope returns every coverage and imported-progress default', () => {
+  const progress = calculateGraduationProgress([], catalog, null);
+  assert.equal(progress.graduationCheckComplete, false);
+  assert.deepEqual(progress.coverageSummary, { supported: 0, partial: 0, unknown: 0 });
+  assert.deepEqual(progress.importedWarnings, []);
+  assert.equal(progress.importedContributionCount, 0);
+});
+
 test('graduation coverage classifies incomplete evidence without promoting unknown rules', () => {
   const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
   const history = catalog.programs.find(program => program.department === '史学科').scopeId;
@@ -465,7 +476,7 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 10 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 16 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
@@ -967,7 +978,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   const store = memoryStore(JSON.stringify(v1));
   const loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 9);
+  assert.equal(loaded.state.schemaVersion, 15);
   assert.equal(loaded.state.items[0].earnedOrder, null);
   assert.deepEqual(loaded.state.publicCourses, []);
   assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
@@ -975,7 +986,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   delete v2.publicCourses;
   const v2Loaded = loadState(memoryStore(JSON.stringify(v2)), catalog);
   assert.equal(v2Loaded.error, null);
-  assert.equal(v2Loaded.state.schemaVersion, 9);
+  assert.equal(v2Loaded.state.schemaVersion, 15);
   assert.deepEqual(v2Loaded.state.publicCourses, []);
 });
 
@@ -985,7 +996,7 @@ test('v3 state migrates through v6 without losing saved planner data, and valida
   delete v3.thesisSelection;
   const loaded = loadState(memoryStore(JSON.stringify(v3)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 9);
+  assert.equal(loaded.state.schemaVersion, 15);
   assert.equal(loaded.state.thesisSelection, 'undecided');
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: current.items, publicCourses: current.publicCourses, todos: current.todos, selectedScopeId: current.selectedScopeId });
   assert.equal(validateState({ ...current, thesisSelection: 'selected' }, catalog), true);
@@ -994,7 +1005,7 @@ test('v3 state migrates through v6 without losing saved planner data, and valida
 });
 
 test('media schooling uses structured method and delivery category, not course names', () => {
-  const media = catalog.offerings.find(isMediaSchooling);
+  const media = catalog.offerings.find(offering => isMediaSchooling(offering) && offering.courseId);
   const nonMedia = catalog.offerings.find(offering => !isMediaSchooling(offering));
   assert.ok(media);
   assert.equal(media.method, 'schooling');
@@ -1049,6 +1060,23 @@ test('media share view model groups current media plan items, preserves order, a
   assert.match(post, /\n\nあと少し$/);
   assert.doesNotMatch(post, /orphan|#法政通信|2026\/12\/20/);
   assert.equal(mediaShareIntentUrl(post), `https://x.com/intent/post?text=${encodeURIComponent(post)}`);
+});
+
+test('media share includes imported current Media, deduplicates its offering, and preserves progress', () => {
+  const media = catalog.offerings.filter(isMediaSchooling);
+  const firstTerm = media.find(offering => offering.deliveryCategory === '前期メディア');
+  const secondTerm = media.find(offering => offering.deliveryCategory === '後期メディア');
+  const progress = {
+    [firstTerm.id]: { offeringId: firstTerm.id, totalLessons: 2, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }] },
+    [secondTerm.id]: { offeringId: secondTerm.id, totalLessons: 3, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: true }] },
+  };
+  const importedOnly = mediaShareViewModel([], offeringsById, progress, [{ offering: firstTerm, name: '成績表由来の前期メディア' }]);
+  assert.deepEqual(importedOnly.map(group => group.courses.map(course => course.name)), [['成績表由来の前期メディア']]);
+  assert.deepEqual(importedOnly[0].courses[0], { name: '成績表由来の前期メディア', videoCompletedCount: 1, testCompletedCount: 0, totalLessons: 2, videoDone: false, testDone: false, assessments: [] });
+
+  const combined = mediaShareViewModel([item(firstTerm.id)], offeringsById, progress, [{ offering: firstTerm, name: '重複する取込名' }, { offering: secondTerm, name: '成績表由来の後期メディア' }]);
+  assert.deepEqual(combined.map(group => group.courses.map(course => course.name)), [[firstTerm.name], ['成績表由来の後期メディア']]);
+  assert.match(mediaSharePost(combined), /成績表由来の後期メディア  動画 1\/3・テスト 1\/3/);
 });
 
 test('media share keeps the established progress template and derives both text and PNG data from the selected presentation', () => {
@@ -1133,7 +1161,7 @@ test('v4 migration adds empty media progress without losing items, public course
   delete saved.mediaSchoolingProgress;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 9);
+  assert.equal(loaded.state.schemaVersion, 15);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, {});
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
   assert.deepEqual(calculateGraduationProgress(loaded.state.items, catalog, loaded.state.selectedScopeId, loaded.state.publicCourses, loaded.state.thesisSelection), calculateGraduationProgress(saved.items, catalog, saved.selectedScopeId, saved.publicCourses, saved.thesisSelection));
@@ -1156,7 +1184,7 @@ test('v5 migration preserves planner and media data while adding empty evaluatio
   delete saved.courseEvaluations;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 9);
+  assert.equal(loaded.state.schemaVersion, 15);
   assert.deepEqual(loaded.state.courseEvaluations, {});
   assert.deepEqual(loaded.state.mediaSchoolingProgress, { [media.id]: { ...mediaSchoolingProgress[media.id], assessments: [] } });
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
@@ -1698,6 +1726,18 @@ test('correspondence progress separates report resubmission, eligibility, and ea
   assert.equal(correspondenceCreditResult({ ...passedReports, examGrade: 'C-' }).creditEarned, true);
 });
 
+test('a passed report counts immediately even when its optional grade is not recorded', () => {
+  const offering = catalog.offerings.find(current => current.name === '債権総論' && current.method === 'correspondence');
+  const saved = progressForCorrespondence(offering, {});
+  const onePassed = setReportStatus(saved, 1, 'passed');
+  const allPassed = setReportStatus(onePassed, 2, 'passed');
+  assert.equal(onePassed.reports[0].grade, null, 'selecting passed does not invent a report grade');
+  assert.equal(correspondenceProgressSummary(onePassed), 'リポート 1/2・試験 未受験');
+  assert.equal(correspondenceCreditResult(allPassed).reportsPassed, true);
+  assert.equal(correspondenceCreditResult({ ...allPassed, examGrade: 'C-' }).creditEarned, true);
+  assert.equal(validateState({ ...initialState(), items: [item(offering.id)], correspondenceProgress: { [offering.id]: allPassed } }, catalog), true);
+});
+
 test('structured correspondence requirements are keyed by offering ID only', () => {
   const mapped = catalog.offerings.find(current => current.id === '04050f27-c605-44c1-ae02-785c42114cd3');
   assert.equal(structuredRequirementCount, 10);
@@ -1716,7 +1756,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
   const legacy = { ...initialState(), schemaVersion: 6, correspondenceProgress: undefined };
   delete legacy.correspondenceProgress;
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.state.schemaVersion, 9);
+  assert.equal(loaded.state.schemaVersion, 15);
   assert.deepEqual(loaded.state.correspondenceProgress, {});
   assert.deepEqual(loaded.state.courseEvaluations, legacy.courseEvaluations);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
@@ -1725,7 +1765,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
 test('v7 migration preserves legacy values while adding study year and null final grades', () => {
   const legacy = { ...initialState(), schemaVersion: 7, items: [{ offeringId: first.id, status: 'in_progress', plannedYear: 2026, plannedTerm: '春休み', earnedOrder: null }], publicCourses: [{ id: '44444444-4444-4444-8444-444444444444', title: '公開科目', status: 'planned', plannedYear: 2027, plannedTerm: '夏期', credits: 2 }], courseEvaluations: { [first.id]: { offeringId: first.id, reportGrade: 'A', schoolingGrade: 'B' } } };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 9);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 15);
   assert.deepEqual(loaded.state.items[0], { ...legacy.items[0], studyYear: null });
   assert.equal(loaded.state.publicCourses[0].studyYear, null); assert.equal(loaded.state.publicCourses[0].finalGrade, null);
   assert.deepEqual(loaded.state.courseEvaluations[first.id], { ...legacy.courseEvaluations[first.id], finalGrade: null });
@@ -1757,7 +1797,7 @@ test('media assessments are optional, preserve all supported types, and survive 
   assert.equal(setTotalLessons(base, 14)?.totalLessons, 14); assert.equal(setTotalLessons(base, 15)?.totalLessons, 15);
   const v8 = { ...initialState(), schemaVersion: 8, mediaSchoolingProgress: { [media.id]: { offeringId: media.id, totalLessons: 15, lessons: [] } } };
   const loaded = loadState(memoryStore(JSON.stringify(v8)), catalog);
-  assert.equal(loaded.state.schemaVersion, 9); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
+  assert.equal(loaded.state.schemaVersion, 15); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
   const state = { ...initialState(), items: [item(media.id)], mediaSchoolingProgress: { [media.id]: withAll } };
   const raw = JSON.stringify(state); assert.deepEqual(loadState(memoryStore(raw), catalog).state.mediaSchoolingProgress[media.id].assessments, withAll.assessments);
 });
@@ -1869,7 +1909,7 @@ test('grade import infers academic years and selects every non-duplicate compone
   assert.deepEqual(preview.filter(unit => unit.method === 'correspondence').map(unit => [unit.rawName, unit.academicYear, unit.yearSource, unit.selected]), [['一致', 2026, 'inferred', true], ['曖昧', 2025, 'inferred', true], ['未一致', 2025, 'inferred', true]]);
   assert.equal(academicYearFromDate('2026-03-31'), 2025); assert.equal(academicYearFromDate('2026-04-01'), 2026);
   assert.deepEqual(inferredCorrespondenceYear(makeCourse('x', null, ['2026-01-01', '2026-04-01']), data.capturedAt), { academicYear: 2026, date: '2026-04-01' });
-  const applied = applyImport(initialState(), preview); const duplicatePreview = importPreview(data, offerings, applied.importedStudyRecords);
+  const applied = applyImport(initialState(), preview); const duplicatePreview = importPreview(data, offerings, applied.importedStudyRecords, applied.importedCourseAchievements);
   assert.ok(duplicatePreview.every(unit => unit.duplicate && !unit.selected));
   assert.equal(applied.items.length, 0); assert.equal(Object.keys(applied.courseEvaluations).length, 0);
 });
@@ -1889,11 +1929,383 @@ test('direct handoff accepts only contract JSON, makes a preview, and never appl
   const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [{ rawName: '確認用科目', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '', value: null }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [emptySchooling, emptySchooling] }] };
   const offerings = [{ ...catalog.offerings[0], id: 'direct-offering', name: '確認用科目', method: 'correspondence' }];
   const accepted = previewDirectGradeHandoff(data, offerings, []);
-  assert.ok(accepted); assert.equal(accepted.units.length, 0); assert.equal(applyImport(initialState(), []).importedStudyRecords.length, 0);
+  assert.ok(accepted); assert.equal(accepted.units.length, 1); assert.equal(applyImport(initialState(), []).importedStudyRecords.length, 0);
   assert.equal(previewDirectGradeHandoff({ ...data, schemaVersion: 2 }, offerings, []), null);
   const handoffToken = '11111111-1111-4111-8111-111111111111';
   assert.equal(gradeHandoffToken(`#hosei-import=${handoffToken}`), handoffToken);
   assert.equal(gradeHandoffToken('#hosei-import=wrong'), null);
   assert.equal(isGradeHandoffResponse({ type: 'hosei-grade-handoff-response', ok: true, token: handoffToken, importData: data }, handoffToken), true);
   assert.equal(isGradeHandoffResponse({ type: 'hosei-grade-handoff-response', ok: true, token: 'wrong' }, handoffToken), false);
+});
+
+test('imported course aggregates count once, reject unsafe links, and expose media history without progress', () => {
+  const media = catalog.offerings.find(offering => isMediaSchooling(offering) && offering.courseId !== null && offering.resolutionStatus === 'matched');
+  const other = catalog.offerings.find(offering => offering.courseId !== null && offering.resolutionStatus === 'matched' && offering.id !== media.id);
+  const make = (id, offeringId, patch = {}) => ({ id, fingerprint: id, source: 'hosei_import', rawName: offeringId ? offeringsById.get(offeringId).name : '未照合', offeringId, match: offeringId ? 'exact_unique' : 'unmatched', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: '2025-08-01', credits: 2, grade: 'S', sourceCourseId: `row-${id}`, earnedCreditsTotal: 4, schoolingCreditsTotal: 2, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, capturedAt: '2026-09-29T00:00:00.000Z', ...patch });
+  // Two components share one source row: 4 is the row aggregate, never 2 + 2 + 4.
+  const pair = [make('s', media.id, { sourceCourseId: 'row-a' }), make('c', other.id, { sourceCourseId: 'row-a', method: 'correspondence', credits: 2, grade: 'A' })];
+  const derived = deriveImportedAchievements(pair, offeringsById, []);
+  assert.equal(derived.items.length, 0, 'different course identities are ambiguous and must not count');
+  const exact = deriveImportedAchievements([make('exact', media.id)], offeringsById, []);
+  assert.equal(exact.items.length, 1); assert.equal(exact.offerings[0].credits, 4); assert.equal(exact.media.length, 1);
+  assert.equal(exact.media[0].records.length, 1, 'history has no lesson/video/test state');
+  assert.equal(deriveImportedAchievements([make('zero', media.id, { earnedCreditsTotal: 0 })], offeringsById, []).items.length, 0);
+  assert.equal(deriveImportedAchievements([make('unmatched', null)], offeringsById, []).items.length, 0);
+  assert.equal(deriveImportedAchievements([make('legacy', media.id, { sourceCourseId: undefined, earnedCreditsTotal: undefined })], offeringsById, []).items.length, 0);
+  assert.equal(deriveImportedAchievements([make('dedupe', media.id)], offeringsById, [item(media.id, 'earned')]).items.length, 0);
+  assert.equal(deriveImportedAchievements([make('non-media', other.id)], offeringsById, []).media.length, 0);
+});
+
+test('safe imported achievements feed credit and category summaries without changing the plan', () => {
+  const scope = selectablePrograms(catalog)[0].scopeId;
+  const classify = createCreditClassifier(catalog, scope);
+  const offering = catalog.offerings.find(value => value.courseId !== null && value.resolutionStatus === 'matched' && ['一般教育：人文', '一般教育：社会', '一般教育：自然', '一般教育：その他', '外国語', '保健体育', '専門教育'].includes(classify(value)));
+  assert.ok(offering);
+  const record = { id: 'safe-summary', fingerprint: 'safe-summary', source: 'hosei_import', rawName: offering.name, offeringId: offering.id, match: 'exact_unique', method: offering.method, academicYear: 2025, yearSource: 'source', rawYear: '25', term: null, rawTerm: null, date: null, credits: null, grade: 'S', sourceCourseId: 'safe-summary-row', earnedCreditsTotal: 4, schoolingCreditsTotal: null, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, capturedAt: '2026-09-29T00:00:00.000Z' };
+  const stateItems = [item(first.id, 'planned')];
+  const before = structuredClone(stateItems);
+  const derived = deriveImportedAchievements([record], offeringsById, stateItems);
+  const mergedOfferings = new Map([...offeringsById, ...derived.offerings.map(value => [value.id, value])]);
+  const summary = summarizeCredits([...stateItems, ...derived.items], mergedOfferings);
+  assert.equal(summary.earned, 4);
+  assert.equal(summary.in_progress, 0);
+  assert.equal(summary.planned, first.credits ?? 0);
+  assert.deepEqual(stateItems, before, 'calculation-only items never mutate state.items');
+  const row = summarizeCategories(stateItems, catalog, scope, [], derived.items, derived.offerings).find(value => value.category === classify(offering));
+  assert.equal(row.earned, 4);
+  assert.equal(row.in_progress, 0);
+  assert.equal(row.planned, 0);
+  assert.equal(deriveImportedAchievements([{ ...record, id: 'unsafe', sourceCourseId: 'unsafe-row', offeringId: null, match: 'unmatched' }], offeringsById, []).items.length, 0);
+  assert.equal(deriveImportedAchievements([record], offeringsById, [item(offering.id, 'earned')]).items.length, 0, 'planner-earned identity remains deduplicated');
+  const graduation = calculateGraduationProgress(stateItems, catalog, scope, [], 'undecided', [record]);
+  assert.equal(graduation.importedContributionCount, 1);
+  assert.ok(graduation.cards.some(card => card.earned >= 4 && card.coverageStatus && card.sourceRefs?.length), 'the imported contribution remains visible in a covered, sourced graduation card');
+  assert.equal(graduation.graduationCheckComplete, false);
+});
+
+test('imported media history requires an explicit link or unambiguous media term evidence', () => {
+  const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched');
+  const normal = catalog.offerings.find(value => value.courseId === media.courseId && !isMediaSchooling(value) && value.resolutionStatus === 'matched');
+  assert.ok(media); assert.ok(normal);
+  const make = (id, patch = {}) => ({ id, fingerprint: id, source: 'hosei_import', rawName: normal.name, offeringId: normal.id, match: 'exact_unique', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'S', sourceCourseId: id, earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '2026-09-29T00:00:00.000Z', ...patch });
+  assert.equal(deriveImportedAchievements([make('ordinary')], offeringsById, []).media.length, 0, 'ordinary schooling is not inferred as media');
+  const termMatched = deriveImportedAchievements([make('term-matched', { rawTerm: media.deliveryCategory })], offeringsById, []);
+  assert.equal(termMatched.media.length, 1); assert.equal(termMatched.media[0].offering.id, media.id);
+  const explicit = deriveImportedAchievements([make('explicit', { offeringId: media.id, term: '夏', rawTerm: '夏' })], offeringsById, []);
+  assert.equal(explicit.media.length, 1); assert.equal(explicit.media[0].offering.id, media.id);
+  const duplicateMedia = { ...media, id: 'duplicate-media-candidate' };
+  const ambiguousOfferings = new Map([...offeringsById, [duplicateMedia.id, duplicateMedia]]);
+  assert.equal(deriveImportedAchievements([make('ambiguous', { rawTerm: media.deliveryCategory })], ambiguousOfferings, []).media.length, 0, 'ambiguous media candidates are not auto-selected');
+});
+
+test('source grade-table rows retain official earned credits without component details or a safe catalog match', () => {
+  const course = name => ({ rawName: name, categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] });
+  const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: Array.from({ length: 20 }, (_, index) => course(`未照合${index}`)) };
+  const preview = importPreview(data, []);
+  const applied = applyImport(initialState(), preview);
+  assert.equal(applied.importedStudyRecords.length, 0, 'no invented component is stored');
+  assert.equal(applied.importedCourseAchievements.length, 20);
+  assert.equal(importedEarnedCreditsTotal(applied.importedCourseAchievements), 40);
+  const derived = deriveImportedAchievements(applied.importedStudyRecords, offeringsById, [], applied.importedCourseAchievements);
+  assert.equal(derived.items.length, 0);
+  assert.equal(derived.unclassified.length, 20);
+});
+
+test('reimport adds a missing source row even when its detail component already exists', () => {
+  const course = { rawName: '再取込', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2026/07/01', rawCredits: '', rawGrade: '', date: '2026-07-01', credits: null, grade: null, pendingMarker: false }, schoolings: [] };
+  const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] };
+  const preview = importPreview(data, []);
+  const legacyComponentOnly = { ...initialState(), importedStudyRecords: [preview[0]] };
+  const reapplied = applyImport(legacyComponentOnly, importPreview(data, [], legacyComponentOnly.importedStudyRecords));
+  assert.equal(reapplied.importedStudyRecords.length, 1);
+  assert.equal(reapplied.importedCourseAchievements.length, 1);
+  assert.equal(importedEarnedCreditsTotal(reapplied.importedCourseAchievements), 2);
+});
+
+test('source row identity ignores capture time and categoryRaw overrides a safe catalog category', () => {
+  const offering = catalog.offerings.find(value => value.courseId !== null && value.resolutionStatus === 'matched' && value.credits !== null);
+  const row = { id: 'row-category', fingerprint: 'stable', source: 'hosei_import', rawName: offering.name, categoryRaw: '外国語', capturedAt: '2026-09-29T00:00:00.000Z', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: offering.id, match: 'exact_unique', candidateOfferingIds: [offering.id] };
+  const derived = deriveImportedAchievements([], offeringsById, [], [row]);
+  assert.equal(derived.categoryOverrides.get(`imported-category:${row.id}`), '外国語');
+  const course = { rawName: '同一行', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] };
+  const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] }, []));
+  const laterPreview = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-01T00:00:00.000Z', courses: [course] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
+  assert.ok(laterPreview.every(unit => unit.sourceDuplicate && !unit.selected));
+});
+
+test('ambiguous imported schooling is held for manual media resolution', () => {
+  const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched');
+  const normal = catalog.offerings.find(value => value.courseId === media.courseId && value.method === 'schooling' && !isMediaSchooling(value));
+  const record = { id: 'media-component', fingerprint: 'media-component', source: 'hosei_import', rawName: normal.name, offeringId: normal.id, match: 'exact_unique', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'A', sourceCourseId: 'media-row', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '2026-09-29T00:00:00.000Z' };
+  const row = { id: 'media-row', fingerprint: 'media-row', source: 'hosei_import', rawName: normal.name, categoryRaw: null, capturedAt: '2026-09-29T00:00:00.000Z', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: media.courseId, selectedOfferingId: null, match: 'exact_unique', candidateOfferingIds: [normal.id, media.id] };
+  const pending = deriveImportedAchievements([record], offeringsById, [], [row]);
+  assert.equal(pending.media.length, 0); assert.equal(pending.mediaPending[0].sourceCourseId, row.id);
+  const resolved = deriveImportedAchievements([record], offeringsById, [], [{ ...row, selectedOfferingId: media.id }]);
+  assert.equal(resolved.media.length, 1); assert.equal(resolved.media[0].offering.id, media.id);
+});
+
+test('raw categories count unmatched source rows once while graduation remains unmapped', () => {
+  const rows = [['自然', 12], ['社会', 8], ['外国語', 4], ['専門', 16]].map(([categoryRaw, earnedCreditsTotal], index) => ({ id: `raw-${index}`, fingerprint: `raw-${index}`, source: 'hosei_import', rawName: `未照合${categoryRaw}`, categoryRaw, capturedAt: '', earnedCreditsTotal, schoolingCreditsTotal: null, compositionCredits: earnedCreditsTotal, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }));
+  const derived = deriveImportedAchievements([], offeringsById, [], rows);
+  assert.equal(derived.items.length, 0, 'raw categories never enter graduation mapping');
+  const categories = summarizeCategories([], catalog, catalog.programs.find(program => !program.isCommon).scopeId, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides);
+  assert.equal(categories.find(row => row.category === '一般教育：自然').earned, 12);
+  assert.equal(categories.find(row => row.category === '一般教育：社会').earned, 8);
+  assert.equal(categories.find(row => row.category === '外国語').earned, 4);
+  assert.equal(categories.find(row => row.category === '専門教育').earned, 16);
+});
+
+test('source rows upsert changed earned credits and auto normal schooling stays pending for media review', () => {
+  const course = earned => ({ rawName: '更新科目', categoryRaw: null, compositionCredits: { raw: String(earned), value: earned }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: String(earned), value: earned }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] });
+  const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-01-01T00:00:00.000Z', courses: [course(2)] }, []));
+  const update = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-02-01T00:00:00.000Z', courses: [course(4)] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
+  const updated = applyImport(firstImport, update);
+  assert.equal(updated.importedCourseAchievements.length, 1); assert.equal(importedEarnedCreditsTotal(updated.importedCourseAchievements), 4);
+  const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched'); const normal = catalog.offerings.find(value => value.courseId === media.courseId && value.method === 'schooling' && !isMediaSchooling(value));
+  const component = { id: 'auto-normal', fingerprint: 'auto-normal', source: 'hosei_import', rawName: normal.name, offeringId: normal.id, match: 'exact_unique', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: null, sourceCourseId: 'auto-row', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
+  const row = { id: 'auto-row', fingerprint: 'auto-row', source: 'hosei_import', rawName: normal.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: normal.courseId, selectedOfferingId: normal.id, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [normal.id, media.id] };
+  assert.equal(deriveImportedAchievements([component], offeringsById, [], [row]).mediaPending.length, 1);
+  const manuallyResolved = deriveImportedAchievements([component], offeringsById, [], [{ ...row, selectedOfferingId: media.id, selectionSource: 'manual', candidateOfferingIds: [] }]);
+  assert.equal(manuallyResolved.media[0].offering.id, media.id, 'manual search selection may use any catalog offering');
+});
+
+test('v13 repair safely restores catalog identity, orphan components, and pending media without a reimport', () => {
+  const scope = selectablePrograms(catalog)[0].scopeId;
+  const classify = createCreditClassifier(catalog, scope);
+  const matched = catalog.offerings.find(value => value.courseId !== null && value.resolutionStatus === 'matched' && value.credits !== null && ['一般教育：人文', '一般教育：社会', '一般教育：自然', '一般教育：その他', '外国語', '保健体育', '専門教育'].includes(classify(value)));
+  assert.ok(matched);
+  const row = { id: 'repair-row', fingerprint: 'legacy-row', source: 'hosei_import', rawName: matched.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] };
+  const component = { id: 'orphan', fingerprint: 'orphan', source: 'hosei_import', rawName: matched.name, offeringId: null, match: 'unmatched', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'A', sourceCourseId: 'gone', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
+  const legacy = { ...initialState(), schemaVersion: 12, importedCourseAchievements: [row], importedStudyRecords: [component] };
+  const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 15);
+  assert.equal(loaded.state.importedCourseAchievements[0].courseId, matched.courseId);
+  assert.equal(loaded.state.importedStudyRecords[0].sourceCourseId, row.id);
+  const derived = deriveImportedAchievements(loaded.state.importedStudyRecords, offeringsById, [], loaded.state.importedCourseAchievements);
+  assert.equal(derived.items.length, 1);
+  const categories = summarizeCategories([], catalog, scope, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides);
+  assert.equal(categories.find(value => value.category === classify(matched)).earned, 2, 'repaired catalog identity feeds the selected-scope category summary');
+  // A row with schooling credits but no recoverable component is surfaced for
+  // media review whenever its safely-repaired identity has a media option.
+  const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched');
+  const mediaRow = { ...row, id: 'missing-schooling', rawName: media.name, courseId: null, selectedOfferingId: null, candidateOfferingIds: [] };
+  const repaired = repairImportedAchievements({ ...initialState(), importedCourseAchievements: [mediaRow] }, catalog).state;
+  const pending = deriveImportedAchievements([], offeringsById, [], repaired.importedCourseAchievements);
+  assert.ok(pending.mediaPending.some(value => value.sourceCourseId === mediaRow.id));
+});
+
+test('v13 repair leaves manual and ambiguous data untouched, and import identity separates same-name attempts', () => {
+  const matched = catalog.offerings.find(value => value.courseId !== null && value.resolutionStatus === 'matched');
+  assert.ok(matched);
+  const manual = { id: 'manual', fingerprint: 'manual', source: 'hosei_import', rawName: matched.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: null, yearSource: 'unknown', courseId: 'manual-course', selectedOfferingId: 'manual-offering', selectionSource: 'manual', match: 'ambiguous', candidateOfferingIds: [] };
+  const ambiguousCatalog = { ...catalog, offerings: [...catalog.offerings, { ...matched, id: 'duplicate-name', courseId: 'different-course' }] };
+  const ambiguous = { ...manual, id: 'ambiguous', rawName: matched.name, courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched' };
+  const repaired = repairImportedAchievements({ ...initialState(), importedCourseAchievements: [manual, ambiguous] }, ambiguousCatalog).state;
+  assert.deepEqual(repaired.importedCourseAchievements, [manual, ambiguous]);
+  const orphan = { id: 'ambiguous-orphan', fingerprint: 'ambiguous-orphan', source: 'hosei_import', rawName: matched.name, offeringId: null, match: 'unmatched', method: 'schooling', academicYear: null, yearSource: 'unknown', rawYear: null, term: null, rawTerm: null, date: null, credits: null, grade: null, sourceCourseId: 'gone', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
+  const duplicateRows = [{ ...ambiguous, id: 'same-a', rawName: matched.name }, { ...ambiguous, id: 'same-b', rawName: matched.name }];
+  assert.equal(repairImportedAchievements({ ...initialState(), importedCourseAchievements: duplicateRows, importedStudyRecords: [orphan] }, catalog).state.importedStudyRecords[0].sourceCourseId, 'gone', 'ambiguous orphan links are never guessed');
+  const course = (term) => ({ rawName: '英語Ｓ', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '2', value: 2 }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [{ rawYear: '25', rawTerm: term, rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term, date: null, credits: 2, grade: 'A' }, { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null }] });
+  const first = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course('夏'), course('冬')] }, []));
+  assert.equal(first.importedCourseAchievements.length, 2);
+  const update = applyImport(first, importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-01T00:00:00.000Z', courses: [course('夏'), course('冬')] }, [], first.importedStudyRecords, first.importedCourseAchievements));
+  assert.equal(update.importedCourseAchievements.length, 2, 'capture time does not duplicate distinct same-name rows');
+});
+
+test('v14 base-name repair keeps Roman numerals, safely classifies null-identity candidates, and surfaces media review', () => {
+  assert.equal(normalizeImportBaseName('データサイエンス入門Ａ'), normalizeImportBaseName('データサイエンス入門A(前期メディア)'));
+  assert.equal(normalizeImportBaseName('数学３'), normalizeImportBaseName('数学３（冬期スクーリング）【オンライン】'));
+  assert.notEqual(normalizeImportBaseName('簿記Ⅰ'), normalizeImportBaseName('簿記I'));
+  assert.ok(matchedNameOfferings('生物学２', catalog).some(isMediaSchooling));
+  const bookkeeping = matchedNameOfferings('簿記Ⅰ', catalog);
+  const mapping = catalog.mappings.find(value => bookkeeping.some(offering => offering.mappingIds.includes(value.mappingId)) && value.category === '専門教育' && catalog.programs.some(program => !program.isCommon && program.scopeId === value.scopeId));
+  assert.ok(mapping);
+  const scope = mapping.scopeId;
+  const row = { id: 'category-only', fingerprint: 'category-only', source: 'hosei_import', rawName: '簿記Ⅰ', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] };
+  const derived = deriveImportedAchievements([], offeringsById, [], [row], catalog, scope);
+  assert.equal(derived.items.length, 0, 'category-only repair never invents a graduation identity');
+  assert.equal(derived.categoryOverrides.get('imported-category:category-only'), '専門教育');
+  const mediaRow = { ...row, id: 'base-media', rawName: '生物学２' };
+  const mediaDerived = deriveImportedAchievements([], offeringsById, [], [mediaRow], catalog, scope);
+  assert.equal(mediaDerived.mediaPending.length, 1, 'base-name media candidates remain available for confirmation');
+  const v13 = { ...initialState(), schemaVersion: 13, selectedScopeId: scope, importedCourseAchievements: [row], items: [item(first.id, 'earned')] };
+  const migrated = loadState(memoryStore(JSON.stringify(v13)), catalog);
+  assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 15);
+  assert.deepEqual(migrated.state.items, v13.items, 'migration does not mutate plan items');
+});
+
+test('unified course view coalesces safely repaired official achievements without mutating source facts', () => {
+  const offering = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(offering);
+  const planned = item(offering.id, 'planned');
+  const exact = { id: 'official-exact', fingerprint: 'official-exact', source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: null, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [offering.id] };
+  const nameOnly = { ...exact, id: 'official-name-only', fingerprint: 'official-name-only', courseId: null, match: 'ambiguous', selectionSource: 'none', selectedOfferingId: null };
+  const originalExact = structuredClone(exact);
+  const originalPlanned = structuredClone(planned);
+  const rows = createUnifiedCourseRows([planned], [exact, nameOnly], offeringsById);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source, 'planner_imported');
+  assert.deepEqual(rows[0].importedAchievements, [exact, nameOnly]);
+  assert.equal(rows[0].plannerItem.status, 'planned');
+  assert.deepEqual(exact, originalExact, 'the display view never rewrites the imported achievement');
+  assert.deepEqual(planned, originalPlanned, 'the display view never rewrites the planner item');
+});
+
+test('unified course view coalesces every safely identified imported lifecycle without changing source state', () => {
+  const offering = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(offering);
+  const planned = { ...item(offering.id, 'in_progress'), studyYear: 2 };
+  const imported = (id, earnedCreditsTotal = 0) => ({ id, fingerprint: id, source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: null, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [offering.id] });
+  const inProgress = imported('safe-in-progress'); const waiting = imported('safe-waiting'); const pending = imported('safe-pending'); const earned = imported('safe-earned', 2);
+  const userMeta = { [inProgress.id]: { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 2 }, [waiting.id]: { lifecycleStatus: 'waiting', plannedYear: 2026, plannedTerm: '後期', studyYear: 2 }, [pending.id]: { lifecycleStatus: null, plannedYear: null, plannedTerm: null, studyYear: null }, [earned.id]: { lifecycleStatus: 'waiting', plannedYear: 2026, plannedTerm: '後期', studyYear: 2 } };
+  const originalPlanner = structuredClone(planned); const originalImported = structuredClone([inProgress, waiting, pending, earned]); const originalMeta = structuredClone(userMeta);
+  const rows = createUnifiedCourseRows([planned], [inProgress, waiting, pending, earned], offeringsById, userMeta);
+  assert.equal(rows.length, 1); assert.equal(rows[0].source, 'planner_imported'); assert.deepEqual(rows[0].importedAchievements, [inProgress, waiting, pending, earned]);
+  assert.deepEqual([inProgress, waiting, pending, earned].map(achievement => importedAchievementStatusLabel(achievement, userMeta[achievement.id])), ['成績表取込: 履修中', '成績表取込: 結果待ち', '成績表取込: 判定保留', '修得済み（成績表）']);
+  assert.deepEqual(planned, originalPlanner, 'the view never changes PlannerItem status'); assert.deepEqual([inProgress, waiting, pending, earned], originalImported, 'the view never changes imported source facts'); assert.deepEqual(userMeta, originalMeta, 'the view never changes imported user metadata');
+});
+
+test('unified course view coalesces a display-time repaired Media identity for every imported lifecycle', () => {
+  const base = catalog.offerings.find(value => isMediaSchooling(value) && value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(base && base.courseId);
+  const media = { ...base, id: 'development-economics-media', courseId: 'development-economics', name: '開発経済入門B(前期メディア)' };
+  const planner = { ...media, id: 'development-economics-planner', name: '開発経済入門B' };
+  const offerings = new Map([[media.id, media], [planner.id, planner]]);
+  const planned = item(planner.id, 'in_progress');
+  const imported = id => ({ id, fingerprint: id, source: 'hosei_import', rawName: '開発経済入門Ｂ', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: 0, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'ambiguous', candidateOfferingIds: [] });
+  const inProgress = imported('development-economics-progress'); const waiting = imported('development-economics-waiting'); const pending = imported('development-economics-pending');
+  const meta = { [inProgress.id]: { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 2 }, [waiting.id]: { lifecycleStatus: 'waiting', plannedYear: 2026, plannedTerm: '後期', studyYear: 2 }, [pending.id]: { lifecycleStatus: null, plannedYear: null, plannedTerm: null, studyYear: null } };
+  const sourceFacts = structuredClone([inProgress, waiting, pending]);
+  const rows = createUnifiedCourseRows([planned], [inProgress, waiting, pending], offerings, meta);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].importedAchievements, [inProgress, waiting, pending]);
+  assert.deepEqual([inProgress, waiting, pending].map(row => importedAchievementStatusLabel(row, meta[row.id])), ['成績表取込: 履修中', '成績表取込: 結果待ち', '成績表取込: 判定保留']);
+  assert.deepEqual([inProgress, waiting, pending], sourceFacts, 'display-time repair must not change import source facts');
+  assert.equal(managedImportedMedia([inProgress], [], { [inProgress.id]: meta[inProgress.id] }, new Map([[media.id, media]])).media[0].offering.id, media.id, 'Media uses the same repaired identity');
+});
+
+test('unified course view does not derive an ambiguous name identity and preserves manual priority', () => {
+  const base = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(base && base.courseId);
+  const first = { ...base, id: 'same-name-first', courseId: 'same-name-first-course', name: 'English S' };
+  const second = { ...base, id: 'same-name-second', courseId: 'same-name-second-course', name: 'English S' };
+  const manual = { ...base, id: 'manual-choice', courseId: 'manual-course', name: 'Manual course' };
+  const offerings = new Map([[first.id, first], [second.id, second], [manual.id, manual]]);
+  const imported = { id: 'unsafe-name', fingerprint: 'unsafe-name', source: 'hosei_import', rawName: 'English S', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'ambiguous', candidateOfferingIds: [] };
+  assert.equal(createUnifiedCourseRows([item(first.id)], [imported], offerings).length, 2, 'multiple name identities remain separate');
+  const manualRow = { ...imported, id: 'manual-priority', rawName: 'English S', courseId: manual.courseId, selectedOfferingId: manual.id, selectionSource: 'manual' };
+  const rows = createUnifiedCourseRows([item(manual.id)], [manualRow], offerings);
+  assert.equal(rows.length, 1, 'a matched manual selection wins over ambiguous names');
+  const candidateOnly = { ...imported, id: 'candidate-only', rawName: 'candidate-only', candidateOfferingIds: [manual.id] };
+  assert.equal(createUnifiedCourseRows([item(manual.id)], [candidateOnly], offerings).length, 1, 'one matched candidate course identity is safe without rewriting the source row');
+  const unmatchedCandidate = { ...candidateOnly, id: 'unmatched-candidate', candidateOfferingIds: ['missing-offering'] };
+  assert.equal(createUnifiedCourseRows([item(manual.id)], [unmatchedCandidate], offerings).length, 2, 'unmatched candidates cannot create an identity');
+  assert.equal(createUnifiedCourseRows([item(manual.id), { ...item(manual.id), offeringId: 'manual-copy' }], [manualRow], new Map([...offerings, ['manual-copy', { ...manual, id: 'manual-copy' }]])).length, 3, 'multiple planner rows remain uncoalesced');
+});
+
+test('unified course view preserves an official row when multiple planner offerings share its course identity', () => {
+  const offering = catalog.offerings.find(value => value.resolutionStatus === 'matched' && value.courseId !== null);
+  assert.ok(offering);
+  const alternate = { ...offering, id: 'same-course-different-offering' };
+  const offerings = new Map([...offeringsById, [alternate.id, alternate]]);
+  const exact = { id: 'official-duplicate-safe', fingerprint: 'official-duplicate-safe', source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: null, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [offering.id] };
+  const rows = createUnifiedCourseRows([item(offering.id), item(alternate.id)], [exact], offerings);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.slice(0, 2).map(row => row.source), ['planner', 'planner']);
+  assert.equal(rows[2].source, 'imported');
+  assert.equal(rows[2].importedAchievements[0], exact);
+});
+
+test('imported user metadata persists separately and only changes unresolved unified display', () => {
+  const unresolved = { id: 'unresolved-meta', fingerprint: 'unresolved-meta', source: 'hosei_import', rawName: '未確定科目', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] };
+  const meta = { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 2 };
+  const state = { ...initialState(), importedCourseAchievements: [unresolved], importedCourseUserMeta: { [unresolved.id]: meta } };
+  const store = memoryStore();
+  const raw = saveState(store, state, null, catalog);
+  const loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  assert.deepEqual(loaded.state.importedCourseUserMeta, state.importedCourseUserMeta);
+  assert.equal(createUnifiedCourseRows([], [unresolved], offeringsById, loaded.state.importedCourseUserMeta)[0].displayStatus, 'in_progress_imported');
+  assert.equal(raw, store.getItem(STORAGE_KEY));
+  const waiting = { ...meta, lifecycleStatus: 'waiting' };
+  assert.equal(createUnifiedCourseRows([], [unresolved], offeringsById, { [unresolved.id]: waiting })[0].displayStatus, 'waiting_imported');
+});
+
+test('official earned imported achievement overrides retained user metadata without changing planner or aggregate credits', () => {
+  const earned = { id: 'earned-meta', fingerprint: 'earned-meta', source: 'hosei_import', rawName: '公式修得', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] };
+  const before = summarizeCredits([], offeringsById);
+  const rows = createUnifiedCourseRows([], [earned], offeringsById, { [earned.id]: { lifecycleStatus: 'waiting', plannedYear: 2026, plannedTerm: '後期', studyYear: 2 } });
+  assert.equal(rows[0].displayStatus, 'earned_imported');
+  assert.deepEqual(summarizeCredits([], offeringsById), before, 'metadata and imported display rows do not enter planner aggregates');
+});
+
+test('only safely resolved in-progress imported Media connects to offering-keyed progress', () => {
+  const media = catalog.offerings.find(offering => isMediaSchooling(offering) && offering.courseId && offering.resolutionStatus === 'matched');
+  assert.ok(media && media.courseId);
+  const safe = { id: 'safe-imported-media', fingerprint: 'safe-imported-media', source: 'hosei_import', rawName: media.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: 0, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: media.courseId, selectedOfferingId: media.id, selectionSource: 'manual', match: 'exact_unique', candidateOfferingIds: [media.id] };
+  const meta = { [safe.id]: { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 1 } };
+  const connected = managedImportedMedia([safe], [], meta, offeringsById);
+  assert.equal(connected.media.length, 1);
+  assert.equal(connected.media[0].offering.id, media.id);
+  const progress = toggleLesson(progressFor(media.id, {}), 1, 'videoCompleted');
+  assert.equal(progress.offeringId, media.id, 'the existing offering-keyed media progress is reused');
+  const ambiguous = { ...safe, id: 'ambiguous-imported-media', selectedOfferingId: null, selectionSource: 'none', match: 'ambiguous' };
+  assert.equal(managedImportedMedia([ambiguous], [], { [ambiguous.id]: meta[safe.id] }, offeringsById).media.length, 0, 'a candidate remains pending when its course identity has normal-schooling competition');
+});
+
+test('in-progress imported Media auto-matches only when its safe identity proves one Media offering', () => {
+  const base = catalog.offerings.find(offering => offering.courseId && offering.resolutionStatus === 'matched' && offering.method === 'schooling');
+  assert.ok(base && base.courseId);
+  const source = (id, patch = {}) => ({ id, fingerprint: id, source: 'hosei_import', rawName: '自動照合科目', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: 0, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: 'safe-auto-course', selectedOfferingId: null, selectionSource: 'none', match: 'exact_unique', candidateOfferingIds: [], ...patch });
+  const record = (sourceCourseId, term = null) => ({ id: `${sourceCourseId}-component`, fingerprint: `${sourceCourseId}-component`, source: 'hosei_import', rawName: '自動照合科目', offeringId: null, match: 'ambiguous', method: 'schooling', academicYear: 2026, yearSource: 'source', rawYear: '26', term, rawTerm: term, date: null, credits: null, grade: null, sourceCourseId, earnedCreditsTotal: 0, schoolingCreditsTotal: 0, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' });
+  const mediaFirst = { ...base, id: 'safe-auto-media-first', courseId: 'safe-auto-course', name: '自動照合科目(前期メディア)', deliveryCategory: '前期メディア' };
+  const mediaSecond = { ...base, id: 'safe-auto-media-second', courseId: 'safe-auto-course', name: '自動照合科目(後期メディア)', deliveryCategory: '後期メディア' };
+  const normal = { ...base, id: 'safe-auto-normal', courseId: 'safe-auto-course', name: '自動照合科目(夏期スクーリング)', deliveryCategory: '夏期スクーリング' };
+  const active = row => ({ [row.id]: { lifecycleStatus: 'in_progress', plannedYear: 2026, plannedTerm: '前期', studyYear: 1 } });
+
+  const termMatched = source('term-matched');
+  assert.equal(managedImportedMedia([termMatched], [record(termMatched.id, ' 前期メディア ')], active(termMatched), new Map([[mediaFirst.id, mediaFirst], [mediaSecond.id, mediaSecond], [normal.id, normal]])).media[0].offering.id, mediaFirst.id, 'NFKC-normalized term evidence resolves one Media offering without a manual selection');
+
+  const onlyMedia = source('only-media');
+  assert.equal(managedImportedMedia([onlyMedia], [], active(onlyMedia), new Map([[mediaFirst.id, mediaFirst]])).media[0].offering.id, mediaFirst.id, 'one Media candidate without normal-schooling competition is safe');
+
+  const multipleMedia = source('multiple-media');
+  const multiResult = managedImportedMedia([multipleMedia], [], active(multipleMedia), new Map([[mediaFirst.id, mediaFirst], [mediaSecond.id, mediaSecond]]));
+  assert.equal(multiResult.media.length, 0);
+  assert.equal(multiResult.pending[0].sourceCourseId, multipleMedia.id, 'multiple Media candidates require confirmation');
+
+  const normalConflict = source('normal-conflict');
+  const conflictResult = managedImportedMedia([normalConflict], [], active(normalConflict), new Map([[mediaFirst.id, mediaFirst], [normal.id, normal]]));
+  assert.equal(conflictResult.media.length, 0);
+  assert.equal(conflictResult.pending[0].sourceCourseId, normalConflict.id, 'a normal-schooling conflict requires confirmation');
+
+  const waiting = source('waiting');
+  assert.equal(managedImportedMedia([waiting], [], { [waiting.id]: { ...active(waiting)[waiting.id], lifecycleStatus: 'waiting' } }, new Map([[mediaFirst.id, mediaFirst]])).media.length, 0, 'waiting rows do not create progress');
+  const earned = source('earned', { earnedCreditsTotal: 2 });
+  assert.equal(managedImportedMedia([earned], [], active(earned), new Map([[mediaFirst.id, mediaFirst]])).media.length, 0, 'officially earned rows do not create progress');
+
+  const manual = source('manual', { selectedOfferingId: mediaSecond.id, selectionSource: 'manual' });
+  assert.equal(managedImportedMedia([manual], [], active(manual), new Map([[mediaFirst.id, mediaFirst], [mediaSecond.id, mediaSecond]])).media[0].offering.id, mediaSecond.id, 'manual Media selection remains the highest priority');
+
+  const repaired = source('repaired-name', { rawName: '自動照合科目', courseId: null, match: 'ambiguous', candidateOfferingIds: [] });
+  assert.equal(managedImportedMedia([repaired], [], active(repaired), new Map([[mediaFirst.id, mediaFirst]])).media[0].offering.id, mediaFirst.id, 'a safe NFKC/delivery-suffix base-name identity is derived without writing source facts');
+
+  const nfkcMedia = { ...mediaFirst, id: 'nfkc-media', courseId: 'nfkc-course', name: 'データサイエンス入門A(前期メディア)' };
+  const nfkcRepaired = source('nfkc-repaired-name', { rawName: 'データサイエンス入門Ａ', courseId: null, match: 'ambiguous', candidateOfferingIds: [] });
+  assert.equal(managedImportedMedia([nfkcRepaired], [], active(nfkcRepaired), new Map([[nfkcMedia.id, nfkcMedia]])).media[0].offering.id, nfkcMedia.id, 'NFKC repair matches full-width A to a safely unique Media identity');
+
+  const candidateOnly = source('candidate-only', { rawName: '未照合候補', courseId: null, match: 'ambiguous', candidateOfferingIds: [mediaFirst.id] });
+  assert.equal(managedImportedMedia([candidateOnly], [], active(candidateOnly), new Map([[mediaFirst.id, mediaFirst]])).media[0].offering.id, mediaFirst.id, 'one safe Media candidate is derived without a row identity');
+});
+
+test('v14 state migrates to v15 without dropping imports, selections, or saved progress', () => {
+  const media = catalog.offerings.find(isMediaSchooling);
+  assert.ok(media);
+  const legacy = { ...initialState(), schemaVersion: 14, mediaSchoolingProgress: { [media.id]: progressFor(media.id, {}) }, importedCourseAchievements: [{ id: 'legacy-row', fingerprint: 'legacy-row', source: 'hosei_import', rawName: '保存済み', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: null, recognizedExemption: null, additionalEnrollment: null, academicYear: null, yearSource: 'unknown', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] };
+  const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.state.schemaVersion, 15);
+  assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements);
+  assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
+  assert.deepEqual(loaded.state.importedCourseUserMeta, {});
 });

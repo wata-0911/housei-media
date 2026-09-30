@@ -69,15 +69,25 @@ export type MediaShareGroup = { deliveryCategory: '前期メディア' | '後期
 export type MediaShareAssessmentLine = { label: string; date: string; completed: boolean };
 export type MediaSharePresentationCourse = Omit<MediaShareCourse, 'assessments'> & { assessmentLines: MediaShareAssessmentLine[] };
 export type MediaSharePresentationGroup = Omit<MediaShareGroup, 'courses'> & { courses: MediaSharePresentationCourse[] };
+/** A current Media course whose lifecycle is managed outside PlannerItem. */
+export type ImportedMediaShareItem = { offering: Offering; name: string };
 
-export function mediaShareViewModel(items: PlannerItem[], offerings: Map<string, Offering>, progress: Record<string, MediaCourseProgress>): MediaShareGroup[] {
+export function mediaShareViewModel(items: PlannerItem[], offerings: Map<string, Offering>, progress: Record<string, MediaCourseProgress>, importedItems: ImportedMediaShareItem[] = []): MediaShareGroup[] {
   const groups = new Map<MediaShareGroup['deliveryCategory'], MediaShareGroup>();
-  for (const item of mediaPlanItems(items, offerings)) {
-    const offering = offerings.get(item.offeringId)!;
+  const courses = [
+    ...mediaPlanItems(items, offerings).map(item => ({ offering: offerings.get(item.offeringId)!, name: offerings.get(item.offeringId)!.name })),
+    ...importedItems,
+  ];
+  const seenOfferings = new Set<string>();
+  for (const { offering, name } of courses) {
+    // Planner entries take precedence if the same offering is also represented
+    // by an imported current row.
+    if (seenOfferings.has(offering.id)) continue;
+    seenOfferings.add(offering.id);
     const deliveryCategory = offering.deliveryCategory as MediaShareGroup['deliveryCategory'];
-    const course = progressFor(item.offeringId, progress);
+    const course = progressFor(offering.id, progress);
     const { video: videoCompletedCount, test: testCompletedCount } = mediaProgressSummary(course);
-    const row: MediaShareCourse = { name: offering.name, videoCompletedCount, testCompletedCount, totalLessons: course.totalLessons, videoDone: course.totalLessons !== null && videoCompletedCount === course.totalLessons, testDone: course.totalLessons !== null && testCompletedCount === course.totalLessons, assessments: course.assessments ?? [] };
+    const row: MediaShareCourse = { name, videoCompletedCount, testCompletedCount, totalLessons: course.totalLessons, videoDone: course.totalLessons !== null && videoCompletedCount === course.totalLessons, testDone: course.totalLessons !== null && testCompletedCount === course.totalLessons, assessments: course.assessments ?? [] };
     const group = groups.get(deliveryCategory) ?? { deliveryCategory, courses: [], totalVideoCompleted: 0, totalTestCompleted: 0, totalLessons: 0, unconfiguredCourses: 0 };
     group.courses.push(row);
     group.totalVideoCompleted += videoCompletedCount;

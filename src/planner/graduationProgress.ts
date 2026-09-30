@@ -14,6 +14,8 @@ import { repeatableRule } from './repeatableRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
 import { classifyUnknownReason, coverageForCard, sourcesForGraduationCard, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
+import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
+import { deriveImportedAchievements, type ImportedAchievementWarning } from './importedAchievementCalculations';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -42,6 +44,8 @@ export type GraduationProgress = {
   /** One summary row per reason keeps procedure/mapping warnings from becoming a wall of cards. */
   unknownReasons: Array<{ reason: string; count: number; labels: string[] }>;
   coverageSummary: Record<CoverageStatus, number>;
+  importedWarnings: ImportedAchievementWarning[];
+  importedContributionCount: number;
 };
 
 export type ProgressCard = RequirementProgress & {
@@ -745,16 +749,22 @@ function publicCourseCard(publicCourses: PublicCourse[], catalog: PlannerCatalog
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided'): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = []): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
-    return { graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [], coverageSummary: { supported: 0, partial: 0, unknown: 0 } };
+    return {
+      graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [],
+      coverageSummary: { supported: 0, partial: 0, unknown: 0 }, importedWarnings: [], importedContributionCount: 0,
+    };
   }
-  const offerings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
+  const catalogOfferings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
+  const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements, catalog, scopeId);
+  const calculationItems = [...items, ...imported.items];
+  const offerings = new Map([...catalog.offerings, ...imported.offerings].map(offering => [offering.id, offering]));
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));
   const eligibleMappings = (offering: Offering) => resolve(offering).filter(mapping => mapping.scopeId === scopeId || commonScopes.has(mapping.scopeId));
-  const hasUnresolvedEarned = items.some(item => item.status === 'earned'
+  const hasUnresolvedEarned = calculationItems.some(item => item.status === 'earned'
     && offerings.get(item.offeringId)?.resolutionStatus === 'manual_review'
     && !(scopeId === HISTORY_SCOPE_ID && isHistorySeminar(offerings.get(item.offeringId))));
   const requirements = requirementsForScope(catalog, scopeId).flatMap(requirement => {
@@ -762,7 +772,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     const condition = thesisCondition(requirement, thesisSelection);
     if (condition === 'inactive') return [];
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
-    return [evaluateStructured(withoutThesisCondition(requirement), items, offerings, eligibleMappings, hasUnresolvedEarned)];
+    return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, hasUnresolvedEarned)];
   });
   const requiredThesisCards = thesisPolicyForScope(catalog, scopeId) !== 'required' ? [] : requirements
     .filter(row => {
@@ -773,13 +783,13 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       ? '2026年度の開講snapshotに卒業論文の対応科目・mappingがないため、単位数は表示しつつ修得進捗は判定保留です。'
       : '卒業論文の単位のみを追跡します。専門教育の区分別カードには重ねて算入しません。' }));
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
-  const professional = professionalCards(items, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, thesisSelection);
+  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, thesisSelection);
   const cards = [
-    ...groupedCards(items, offerings, eligibleMappings, hasUnresolvedEarned),
+    ...groupedCards(calculationItems, offerings, eligibleMappings, hasUnresolvedEarned),
     ...professional,
     ...requiredThesisCards,
     ...publicCourse.cards,
-    ...(scopeId === HISTORY_SCOPE_ID ? historySeminarCards(items, offerings) : []),
+    ...(scopeId === HISTORY_SCOPE_ID ? historySeminarCards(calculationItems, offerings) : []),
     ...requirements.filter(row => row.status !== 'unknown' && row.ruleType !== 'max_credits'
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')
       && !professional.length),
@@ -805,5 +815,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       summary[card.coverageStatus ?? 'unknown'] += 1;
       return summary;
     }, { supported: 0, partial: 0, unknown: 0 }),
+    importedWarnings: imported.warnings,
+    importedContributionCount: imported.items.length,
   };
 }
