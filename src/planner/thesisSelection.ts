@@ -1,4 +1,4 @@
-import type { PlannerCatalog, PlannerState, StructuredRequirement } from './plannerCatalog';
+import type { PlannerCatalog, PlannerState, ThesisProgress } from './plannerCatalog';
 
 export type ThesisPolicy = 'required' | 'optional' | 'unknown';
 
@@ -9,17 +9,10 @@ export type ThesisPolicy = 'required' | 'optional' | 'unknown';
  */
 export function thesisPolicyForScope(catalog: PlannerCatalog, scopeId: string | null): ThesisPolicy {
   if (scopeId === null) return 'unknown';
-  const rules = catalog.requirements.filter((rule): rule is StructuredRequirement => rule.status === 'structured' && rule.scopeId === scopeId);
-  const hasNumericBranch = (selected: boolean) => rules.some(rule => rule.conditions?.when?.thesis_selected === selected
-    && rule.value !== null
-    && rule.unit === 'credits');
-  const hasBothBranches = hasNumericBranch(true) && hasNumericBranch(false);
-  if (hasBothBranches) return 'optional';
-  const hasRequiredThesis = rules.some(rule => rule.ruleType === 'required_course'
-    && rule.target.course_name === '卒業論文'
-    && rule.value !== null
-    && rule.conditions?.when?.thesis_selected === undefined);
-  return hasRequiredThesis ? 'required' : 'unknown';
+  const department = catalog.programs.find(program => program.scopeId === scopeId)?.department;
+  if (['日本文学科', '史学科', '地理学科'].includes(department ?? '')) return 'required';
+  if (['法律学科', '経済学科', '商業学科'].includes(department ?? '')) return 'optional';
+  return 'unknown';
 }
 
 /** A choice is exposed only where the catalog contains both official branches. */
@@ -29,5 +22,20 @@ export function supportsThesisSelection(catalog: PlannerCatalog, scopeId: string
 
 /** A thesis decision belongs to the selected program and is never carried across programs. */
 export function stateForScopeChange(state: PlannerState, selectedScopeId: string | null): PlannerState {
-  return { ...state, selectedScopeId, thesisSelection: 'undecided' };
+  const progress = selectedScopeId === null ? { selection: 'undecided' as const, status: 'not_started' as const }
+    : state.thesisProgressByScope[selectedScopeId] ?? { selection: 'undecided' as const, status: 'not_started' as const };
+  return { ...state, selectedScopeId, thesisSelection: progress.selection };
+}
+
+export function thesisProgressForScope(state: Pick<PlannerState, 'thesisSelection' | 'thesisProgressByScope'>, scopeId: string | null): ThesisProgress {
+  const saved = scopeId === null ? undefined : state.thesisProgressByScope[scopeId];
+  return saved ?? { selection: state.thesisSelection, status: 'not_started' };
+}
+
+export function setThesisProgressForScope(state: PlannerState, scopeId: string | null, patch: Partial<ThesisProgress>): PlannerState {
+  if (scopeId === null) return state;
+  const current = thesisProgressForScope(state, scopeId);
+  const next = { ...current, ...patch };
+  if (next.selection !== 'selected') next.status = 'not_started';
+  return { ...state, thesisSelection: next.selection, thesisProgressByScope: { ...state.thesisProgressByScope, [scopeId]: next } };
 }

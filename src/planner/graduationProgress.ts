@@ -7,6 +7,7 @@ import type {
   Requirement,
   StructuredRequirement,
   ThesisSelection,
+  ThesisProgress,
   GraduationProfile,
 } from './plannerCatalog';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
@@ -526,7 +527,7 @@ function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
  */
 function professionalCards(
   items: PlannerItem[], catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>,
-  eligibleMappings: (offering: Offering) => Mapping[], hasUnresolvedEarned: boolean, publicCourseCredits: number, thesisSelection: ThesisSelection,
+  eligibleMappings: (offering: Offering) => Mapping[], hasUnresolvedEarned: boolean, publicCourseCredits: number, thesisSelection: ThesisSelection, thesisStatus: ThesisProgress['status'],
 ): ProgressCard[] {
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId);
   if (!program || !['日本文学科', '史学科', '地理学科', '法律学科', '経済学科', '商業学科'].includes(program.department ?? '')) return [];
@@ -563,7 +564,10 @@ function professionalCards(
     if (offering.resolutionStatus !== 'matched') continue;
     // A required literature thesis is tracked by its own source-configured card.
     // Do not let a future thesis offering also inflate a professional-category bucket.
-    if (thesisPolicyForScope(catalog, scopeId) === 'required' && offering.name === '卒業論文') continue;
+    // Thesis progress is a learner-managed record, rather than an annual offering.
+    // Ignore a future catalog/import match with this name to make the one-source
+    // policy explicit and avoid double counting it with the manual record.
+    if (offering.name === '卒業論文') continue;
     // History seminars are allocated by the learner's confirmed completion order below.
     if (program.department === '史学科' && isHistorySeminar(offering)) continue;
     if (program.department === '地理学科') {
@@ -825,14 +829,16 @@ function professionalCards(
       .filter(entry => ['選択必修', '選択'].includes(entry.mapping.requirementType ?? '')
         && entry.mapping.curriculumCredits === 4 && entry.earned === 2 && entry.earnedSchooling === 2)
       .reduce((sum, entry) => sum + entry.earned, 0) : 0;
+    const thesisCredits = thesisSelection === 'selected' ? thesisCreditsForDepartment(program.department) ?? 0 : 0;
+    const thesisTotals = { earned: thesisStatus === 'earned' ? thesisCredits : 0, inProgress: thesisStatus === 'in_progress' ? thesisCredits : 0, planned: thesisStatus === 'planned' ? thesisCredits : 0 };
     const overflowElective = withOverflow(normal('選択'), requiredElective, threshold);
-    const elective = { ...overflowElective, earned: overflowElective.earned + permittedPartial };
+    const elective = { ...overflowElective, earned: overflowElective.earned + permittedPartial + thesisTotals.earned, inProgress: overflowElective.inProgress + thesisTotals.inProgress, planned: overflowElective.planned + thesisTotals.planned };
     const thesisValue = (ruleId: string) => catalog.requirements.find((rule): rule is StructuredRequirement =>
       rule.status === 'structured' && rule.scopeId === scopeId && rule.ruleId === ruleId)?.value ?? null;
     const selected = thesisSelection === 'selected';
     const electiveTarget = thesisSelection === 'undecided' ? null : thesisValue(selected ? 'law_elective_with_thesis_min_credits' : 'law_elective_without_thesis_min_credits');
     const totalTarget = thesisSelection === 'undecided' ? null : thesisValue(selected ? 'law_total_with_thesis_min_credits' : 'law_total_without_thesis_min_credits');
-    const total = { ...requiredElective, earned: requiredElective.earned + normal('選択').earned + permittedPartial };
+    const total = { ...requiredElective, earned: requiredElective.earned + normal('選択').earned + permittedPartial + thesisTotals.earned, inProgress: requiredElective.inProgress + normal('選択').inProgress + thesisTotals.inProgress, planned: requiredElective.planned + normal('選択').planned + thesisTotals.planned };
     const undecidedReason = '卒論有無が未定のため、必要単位を判定できません。';
     return [
       { ...make('professional-law-required-elective', '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, qualifies,
@@ -853,8 +859,9 @@ function professionalCards(
   const requiredElective = normal('選択必修');
   const elective = normal('選択');
   const professionalTotalTarget = professionalTotalCreditTarget(catalog, scopeId);
-  const professionalTotal = { ...requiredElective, earned: requiredElective.earned + elective.earned,
-    inProgress: requiredElective.inProgress + elective.inProgress, planned: requiredElective.planned + elective.planned };
+  const thesisCredits = thesisSelection === 'selected' ? thesisCreditsForDepartment(program.department) ?? 0 : 0;
+  const professionalTotal = { ...requiredElective, earned: requiredElective.earned + elective.earned + (thesisStatus === 'earned' ? thesisCredits : 0),
+    inProgress: requiredElective.inProgress + elective.inProgress + (thesisStatus === 'in_progress' ? thesisCredits : 0), planned: requiredElective.planned + elective.planned + (thesisStatus === 'planned' ? thesisCredits : 0) };
   const prefix = program.department === '経済学科' ? 'economics' : 'commerce';
   const totalReason = professionalTotalTarget === null
     ? '専門教育合計の公式な必要単位を安全に特定できません。'
@@ -967,8 +974,33 @@ function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[
   ];
 }
 
+function thesisProgressCard(catalog: PlannerCatalog, scopeId: string, progress: ThesisProgress): ProgressCard[] {
+  const program = catalog.programs.find(candidate => candidate.scopeId === scopeId);
+  const policy = thesisPolicyForScope(catalog, scopeId);
+  const credits = thesisCreditsForDepartment(program?.department ?? null);
+  if (!program || !credits || policy === 'unknown') return [];
+  if (policy === 'optional' && progress.selection === 'not_selected') return [{
+    requirementId: `thesis-progress-${scopeId}`, label: '卒業論文（選択）', ruleType: 'thesis_progress', status: 'satisfied',
+    earned: 0, inProgress: 0, planned: 0, target: credits, unit: 'credits', reason: null,
+    note: '卒業論文を選択しない設定です。このカードの単位は卒業要件に要求せず、他の専門教育科目で必要単位を満たします。',
+  }];
+  const selected = policy === 'required' || progress.selection === 'selected';
+  if (!selected) return [{
+    requirementId: `thesis-progress-${scopeId}`, label: '卒業論文（選択）', ruleType: 'thesis_progress', status: 'unknown',
+    earned: 0, inProgress: 0, planned: 0, target: credits, unit: 'credits', reason: '卒業論文を履修するか未定です。',
+    note: '専門教育・全体所要単位の通常判定は継続します。',
+  }];
+  const earned = progress.status === 'earned' ? credits : 0;
+  return [{
+    requirementId: `thesis-progress-${scopeId}`, label: policy === 'required' ? '卒業論文（必修）' : '卒業論文（選択）', ruleType: 'thesis_progress',
+    status: earned === credits ? 'satisfied' : 'unsatisfied', earned, inProgress: progress.status === 'in_progress' ? credits : 0,
+    planned: progress.status === 'planned' ? credits : 0, target: credits, unit: 'credits', reason: null,
+    note: '年度別の開講科目・mappingには依存しません。指導・提出手続の確認は、この単位進捗とは別です。',
+  }];
+}
+
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null }, curriculumApplicability: 'unknown' }): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return {
@@ -977,6 +1009,8 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     };
   }
   const catalogOfferings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
+  const currentThesis = thesisProgress ?? { selection: thesisSelection, status: 'not_started' as const };
+  const currentSelection = thesisPolicyForScope(catalog, scopeId) === 'required' ? 'selected' : currentThesis.selection;
   const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements, catalog, scopeId);
   const calculationItems = [...items, ...imported.items];
   const offerings = new Map([...catalog.offerings, ...imported.offerings].map(offering => [offering.id, offering]));
@@ -987,36 +1021,31 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     && offerings.get(item.offeringId)?.resolutionStatus === 'manual_review'
     && !(scopeId === HISTORY_SCOPE_ID && (isHistorySeminar(offerings.get(item.offeringId)) || isHistoricalSources(offerings.get(item.offeringId)))));
   const requirements = requirementsForScope(catalog, scopeId).flatMap(requirement => {
+    if (requirement.status === 'structured' && requirement.ruleType === 'required_course' && requirement.target.course_name === '卒業論文') return [];
     if (requirement.status === 'unsupported') return [unknown(requirement, requirement.reason || '未対応の要件です')];
-    const condition = thesisCondition(requirement, thesisSelection);
+    const condition = thesisCondition(requirement, currentSelection);
     if (condition === 'inactive') return [];
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
     return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, hasUnresolvedEarned)];
   });
-  const requiredThesisCards = thesisPolicyForScope(catalog, scopeId) !== 'required' ? [] : requirements
-    .filter(row => {
-      const source = catalog.requirements.find(requirement => requirement.id === row.requirementId);
-      return source?.status === 'structured' && source.ruleType === 'required_course' && source.target.course_name === '卒業論文';
-    })
-    .map(row => ({ ...row, note: row.status === 'unknown'
-      ? '2026年度の開講snapshotに卒業論文の対応科目・mappingがないため、単位数は表示しつつ修得進捗は判定保留です。'
-      : '卒業論文の単位のみを追跡します。専門教育の区分別カードには重ねて算入しません。' }));
+  const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
-  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, thesisSelection);
+  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status);
   const cards = [
     ...groupedCards(calculationItems, offerings, eligibleMappings, hasUnresolvedEarned),
     ...professional,
-    ...requiredThesisCards,
+    ...thesisCards,
     ...publicCourse.cards,
     ...(scopeId === HISTORY_SCOPE_ID ? historySeminarCards(calculationItems, offerings) : []),
     ...requirements.filter(row => row.status !== 'unknown' && row.ruleType !== 'max_credits'
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')
       && !professional.length),
   ];
-  const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
-  const coveredCards = cards.map(card => withCoverage(card, catalog.requirements.find(rule => rule.id === card.requirementId)?.sourcePage));
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId)!;
-  const reference = referenceProgress(coveredCards, calculationItems, offerings, eligibleMappings, program, profile, thesisSelection);
+  const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
+  const thesisPage = thesisCreditsForDepartment(program.department) === 8 ? ({ '日本文学科': 49, '史学科': 52, '地理学科': 54 } as Record<string, number>)[program.department ?? ''] : ({ '法律学科': 46, '経済学科': 57, '商業学科': 59 } as Record<string, number>)[program.department ?? ''];
+  const coveredCards = cards.map(card => withCoverage(card, card.ruleType === 'thesis_progress' ? thesisPage : catalog.requirements.find(rule => rule.id === card.requirementId)?.sourcePage));
+  const reference = referenceProgress(coveredCards, calculationItems, offerings, eligibleMappings, program, profile, currentSelection);
   const reasons = new Map<string, { count: number; labels: string[] }>();
   for (const row of coveredRequirements.filter(row => row.status === 'unknown')) {
     const reason = row.reason ?? '自動判定できません';

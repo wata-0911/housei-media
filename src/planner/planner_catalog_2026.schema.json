@@ -989,7 +989,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 17
+          "const": 18
         },
         "selectedScopeId": {
           "anyOf": [
@@ -1005,6 +1005,18 @@
         },
         "thesisSelection": {
           "enum": ["undecided", "selected", "not_selected"]
+        },
+        "thesisProgressByScope": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "selection": { "enum": ["undecided", "selected", "not_selected"] },
+              "status": { "enum": ["not_started", "planned", "in_progress", "earned"] }
+            },
+            "required": ["selection", "status"],
+            "additionalProperties": false
+          }
         },
         "items": {
           "type": "array",
@@ -1102,6 +1114,7 @@
         "schemaVersion",
         "selectedScopeId",
         "thesisSelection",
+        "thesisProgressByScope",
         "items",
         "publicCourses",
         "todos",
