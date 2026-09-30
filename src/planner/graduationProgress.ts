@@ -13,6 +13,7 @@ import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySe
 import { repeatableRule } from './repeatableRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
+import { classifyUnknownReason, coverageForCard, sourcesForGraduationCard, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { deriveImportedAchievements, type ImportedAchievementWarning } from './importedAchievementCalculations';
 
@@ -29,6 +30,9 @@ export type RequirementProgress = {
   target: number | null;
   unit: 'credits' | 'courses' | null;
   reason: string | null;
+  coverageStatus?: CoverageStatus;
+  unknownReasonCategory?: UnknownReasonCategory | null;
+  sourceRefs?: GraduationSourceRef[];
 };
 
 export type GraduationProgress = {
@@ -39,6 +43,7 @@ export type GraduationProgress = {
   unknownCount: number;
   /** One summary row per reason keeps procedure/mapping warnings from becoming a wall of cards. */
   unknownReasons: Array<{ reason: string; count: number; labels: string[] }>;
+  coverageSummary: Record<CoverageStatus, number>;
   importedWarnings: ImportedAchievementWarning[];
   importedContributionCount: number;
 };
@@ -50,6 +55,12 @@ export type ProgressCard = RequirementProgress & {
   repeatableCourses?: Array<{ label: string; earned: number; counted: number; limit: number; courses: number; limitCourses: number }>;
   publicCourse?: { earnedCourses: number; countedCourses: number; earnedCredits: number; countedCredits: number; excludedCredits: number; limitCourses: number; limitCredits: number };
 };
+
+function withCoverage<T extends RequirementProgress>(row: T, sourcePage?: number | null): T {
+  return { ...row, coverageStatus: coverageForCard(row.status, row.requirementId, row.ruleType),
+    unknownReasonCategory: row.status === 'unknown' ? (row.ruleType === 'unsupported' ? 'rule_unimplemented' : classifyUnknownReason(row.reason)) : null,
+    sourceRefs: sourcesForGraduationCard(row.requirementId, sourcePage, row.label) };
+}
 
 const GROUP_RULES = new Set([
   'common_general_exact_credits', 'common_general_max_credits',
@@ -741,7 +752,10 @@ function publicCourseCard(publicCourses: PublicCourse[], catalog: PlannerCatalog
 export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = []): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
-    return { graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [], importedWarnings: [], importedContributionCount: 0 };
+    return {
+      graduationCheckComplete: false, requirements: [], cards: [], evaluableCount: 0, unknownCount: 0, unknownReasons: [],
+      coverageSummary: { supported: 0, partial: 0, unknown: 0 }, importedWarnings: [], importedContributionCount: 0,
+    };
   }
   const catalogOfferings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements, catalog, scopeId);
@@ -780,8 +794,10 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')
       && !professional.length),
   ];
+  const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
+  const coveredCards = cards.map(card => withCoverage(card, catalog.requirements.find(rule => rule.id === card.requirementId)?.sourcePage));
   const reasons = new Map<string, { count: number; labels: string[] }>();
-  for (const row of requirements.filter(row => row.status === 'unknown')) {
+  for (const row of coveredRequirements.filter(row => row.status === 'unknown')) {
     const reason = row.reason ?? '自動判定できません';
     const summary = reasons.get(reason) ?? { count: 0, labels: [] };
     summary.count += 1;
@@ -790,11 +806,15 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   }
   return {
     graduationCheckComplete: false,
-    requirements,
-    cards,
-    evaluableCount: requirements.filter(row => row.status !== 'unknown').length,
-    unknownCount: requirements.filter(row => row.status === 'unknown').length,
+    requirements: coveredRequirements,
+    cards: coveredCards,
+    evaluableCount: coveredRequirements.filter(row => row.status !== 'unknown').length,
+    unknownCount: coveredRequirements.filter(row => row.status === 'unknown').length,
     unknownReasons: [...reasons].map(([reason, summary]) => ({ reason, ...summary })).sort((a, b) => b.count - a.count),
+    coverageSummary: coveredCards.reduce<Record<CoverageStatus, number>>((summary, card) => {
+      summary[card.coverageStatus ?? 'unknown'] += 1;
+      return summary;
+    }, { supported: 0, partial: 0, unknown: 0 }),
     importedWarnings: imported.warnings,
     importedContributionCount: imported.items.length,
   };

@@ -333,6 +333,51 @@ test('graduation progress copy never asserts graduation eligibility', () => {
   assert.match(source, /卒業可否を保証しません/);
 });
 
+test('graduation coverage keeps calculations intact and exposes official sources', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const progress = calculateGraduationProgress([], catalog, scope);
+  const general = progress.cards.find(row => row.requirementId === 'group-general');
+  const law = progress.cards.find(row => row.requirementId === 'professional-law-required-elective');
+  assert.equal(general.coverageStatus, 'supported');
+  assert.deepEqual(general.sourceRefs, [{ title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: 'p.46' }]);
+  assert.equal(law.coverageStatus, 'partial');
+  assert.ok(law.sourceRefs.some(source => source.page === 'p.47'));
+  assert.equal(progress.graduationCheckComplete, false);
+  assert.equal(progress.coverageSummary.supported + progress.coverageSummary.partial + progress.coverageSummary.unknown, progress.cards.length);
+});
+
+test('unselected graduation scope returns every coverage and imported-progress default', () => {
+  const progress = calculateGraduationProgress([], catalog, null);
+  assert.equal(progress.graduationCheckComplete, false);
+  assert.deepEqual(progress.coverageSummary, { supported: 0, partial: 0, unknown: 0 });
+  assert.deepEqual(progress.importedWarnings, []);
+  assert.equal(progress.importedContributionCount, 0);
+});
+
+test('graduation coverage classifies incomplete evidence without promoting unknown rules', () => {
+  const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const history = catalog.programs.find(program => program.department === '史学科').scopeId;
+  const thesisUnknown = calculateGraduationProgress([], catalog, law).requirements.find(row => row.reason?.includes('卒論有無が未定'));
+  assert.equal(thesisUnknown.coverageStatus, 'unknown');
+  assert.equal(thesisUnknown.unknownReasonCategory, 'personal_information');
+
+  const seminar = catalog.offerings.find(offering => offering.name.startsWith('史学演習'));
+  const historyUnknown = calculateGraduationProgress([{ ...item(seminar.id, 'earned'), earnedOrder: null }], catalog, history)
+    .cards.find(row => row.requirementId === 'history-seminar-required-elective');
+  assert.equal(historyUnknown.coverageStatus, 'unknown');
+  assert.equal(historyUnknown.unknownReasonCategory, 'completion_order');
+
+  const manual = catalog.offerings.find(offering => offering.resolutionStatus === 'manual_review');
+  const manualUnknown = calculateGraduationProgress([item(manual.id, 'earned')], catalog, law).requirements.find(row => row.reason?.includes('対応関係'));
+  assert.equal(manualUnknown.coverageStatus, 'unknown');
+  assert.equal(manualUnknown.unknownReasonCategory, 'course_matching');
+
+  const unsupported = calculateGraduationProgress([], catalog, law).requirements.find(row => row.ruleType === 'unsupported');
+  assert.equal(unsupported.status, 'unknown');
+  assert.equal(unsupported.coverageStatus, 'unknown');
+  assert.equal(unsupported.unknownReasonCategory, 'rule_unimplemented');
+});
+
 test('grouped requirements use earned credits, one language, and one mapped offering', () => {
   const scope = catalog.programs.find(program => !program.isCommon).scopeId;
   const common = catalog.programs.find(program => program.isCommon).scopeId;
@@ -1932,7 +1977,10 @@ test('safe imported achievements feed credit and category summaries without chan
   assert.equal(row.planned, 0);
   assert.equal(deriveImportedAchievements([{ ...record, id: 'unsafe', sourceCourseId: 'unsafe-row', offeringId: null, match: 'unmatched' }], offeringsById, []).items.length, 0);
   assert.equal(deriveImportedAchievements([record], offeringsById, [item(offering.id, 'earned')]).items.length, 0, 'planner-earned identity remains deduplicated');
-  assert.equal(calculateGraduationProgress(stateItems, catalog, scope, [], 'undecided', [record]).importedContributionCount, 1);
+  const graduation = calculateGraduationProgress(stateItems, catalog, scope, [], 'undecided', [record]);
+  assert.equal(graduation.importedContributionCount, 1);
+  assert.ok(graduation.cards.some(card => card.earned >= 4 && card.coverageStatus && card.sourceRefs?.length), 'the imported contribution remains visible in a covered, sourced graduation card');
+  assert.equal(graduation.graduationCheckComplete, false);
 });
 
 test('imported media history requires an explicit link or unambiguous media term evidence', () => {
