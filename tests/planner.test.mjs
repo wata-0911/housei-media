@@ -2371,3 +2371,37 @@ test('missing graduation profile prerequisites never completes graduation evalua
   assert.equal(catalog.metadata.graduationCheckComplete, false);
   assert.ok(progress.coverageSummary.unknown >= 0);
 });
+
+test('reference totals apply only explicit current-2026 profiles and keep the law thesis branch distinct', () => {
+  const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const economics = catalog.programs.find(program => program.department === '経済学科').scopeId;
+  const current = { admissionYear: 2026, admissionType: 'first_year', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null }, curriculumApplicability: 'current_2026' };
+  const refs = (scope, profile, thesis = 'undecided') => calculateGraduationProgress([], catalog, scope, [], thesis, [], [], profile).referenceProgress;
+  assert.equal(refs(economics, current)[0].target, 124);
+  assert.equal(refs(law, current, 'selected')[0].target, 124);
+  assert.equal(refs(law, current, 'not_selected')[0].target, 128);
+  assert.equal(refs(law, current)[0].target, null);
+  assert.equal(refs(economics, { ...current, curriculumApplicability: 'unknown' })[0].target, null);
+  assert.equal(refs(economics, { ...current, curriculumApplicability: 'legacy_or_transition' })[0].target, null);
+  assert.equal(refs(economics, { ...current, admissionType: 'transfer' })[0].target, null);
+  assert.equal(refs(economics, current)[1].target, 30);
+  assert.equal(refs(economics, current)[1].recognizedCredits, 0);
+});
+
+test('reference totals accept official transfer recognition including zero, never infer a missing schooling equivalent, and do not duplicate an imported identity', () => {
+  const scope = catalog.programs.find(program => program.department === '経済学科').scopeId;
+  const profile = { admissionYear: 2026, admissionType: 'transfer', recognizedCredits: { totalCredits: 0, schoolingEquivalentCredits: 0 }, curriculumApplicability: 'current_2026' };
+  const base = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], profile).referenceProgress;
+  assert.equal(base[0].earned, 0);
+  assert.equal(base[1].earned, 0);
+  const imported = { id: 'reference-import', fingerprint: 'reference-import', source: 'hosei_import', rawName: first.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: first.credits, schoolingCreditsTotal: first.credits === null ? null : Math.max(0, first.credits - 1), compositionCredits: first.credits, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: first.courseId, selectedOfferingId: first.id, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [first.id] };
+  const importedOnly = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [imported], profile).referenceProgress;
+  const duplicated = calculateGraduationProgress([item(first.id, 'earned')], catalog, scope, [], 'undecided', [], [imported], profile).referenceProgress;
+  const plannerOnly = calculateGraduationProgress([item(first.id, 'earned')], catalog, scope, [], 'undecided', [], [], profile).referenceProgress;
+  assert.ok(importedOnly[0].earned >= 0);
+  assert.equal(duplicated[0].earned, plannerOnly[0].earned);
+  assert.equal(importedOnly[1].earned, 0, 'a mixed imported aggregate must not become wholly schooling credit');
+  const missingSchooling = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], { ...profile, recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: null } }).referenceProgress[1];
+  assert.equal(missingSchooling.earned, null);
+  assert.match(missingSchooling.reason, /認定スクーリング相当/);
+});

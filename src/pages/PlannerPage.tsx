@@ -49,7 +49,7 @@ export default function PlannerPage() {
   const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
-  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection, state.importedStudyRecords, state.importedCourseAchievements);
+  const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, state.thesisSelection, state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile);
   const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, state.selectedScopeId);
   const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta);
   const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
