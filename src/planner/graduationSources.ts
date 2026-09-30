@@ -13,6 +13,26 @@ const requirements: GraduationSourceRef = { title: '卒業に必要な要件', u
 const schooling: GraduationSourceRef = { title: 'スクーリング登録までの流れ（必要スクーリング単位）', url: 'https://www.tsukyo.hosei.ac.jp/system/schooling-registration-flow/' };
 const thesis: GraduationSourceRef = { title: '卒業論文について', url: 'https://www.tsukyo.hosei.ac.jp/system/graduation-thesis/' };
 
+/**
+ * Credit values printed in the 2026 curriculum tables.  This is metadata, not
+ * a graduation decision: economics and commerce remain unknown because their
+ * tables do not state a safe elective target when the optional thesis is not
+ * taken.
+ */
+export const THESIS_CREDIT_METADATA_2026 = {
+  '法律学科': { credits: 4, sourcePages: [46] },
+  '日本文学科': { credits: 8, sourcePages: [49, 50, 51] },
+  '史学科': { credits: 8, sourcePages: [52] },
+  '地理学科': { credits: 8, sourcePages: [54] },
+  '経済学科': { credits: 6, sourcePages: [57] },
+  '商業学科': { credits: 6, sourcePages: [59] },
+} as const;
+
+export function thesisCreditsForDepartment(department: string | null): number | null {
+  if (department === null || !(department in THESIS_CREDIT_METADATA_2026)) return null;
+  return THESIS_CREDIT_METADATA_2026[department as keyof typeof THESIS_CREDIT_METADATA_2026].credits;
+}
+
 /** Calculation code refers to stable ids; official-source text lives only here. */
 export const GRADUATION_CARD_SOURCES: Record<string, GraduationSourceRef[]> = {
   'overall-reference-progress': [requirements], 'schooling-reference-progress': [requirements, schooling],
@@ -30,7 +50,11 @@ export const GRADUATION_CARD_SOURCES: Record<string, GraduationSourceRef[]> = {
 export function sourcesForGraduationCard(requirementId: string, sourcePage?: number | null, label?: string): GraduationSourceRef[] {
   if (GRADUATION_CARD_SOURCES[requirementId]) return GRADUATION_CARD_SOURCES[requirementId];
   if (requirementId.startsWith('public-course-')) return GRADUATION_CARD_SOURCES['public-course'];
-  if (requirementId.includes('thesis') || requirementId.includes('卒業論文') || label?.includes('卒業論文')) return GRADUATION_CARD_SOURCES.thesis;
+  if (requirementId.includes('thesis') || requirementId.includes('卒業論文') || label?.includes('卒業論文')) {
+    return sourcePage === null || sourcePage === undefined
+      ? GRADUATION_CARD_SOURCES.thesis
+      : [curriculum(sourcePage), ...GRADUATION_CARD_SOURCES.thesis];
+  }
   return sourcePage === null || sourcePage === undefined ? [requirements] : [curriculum(sourcePage)];
 }
 

@@ -7,6 +7,7 @@ import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
 import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
+import { THESIS_CREDIT_METADATA_2026, sourcesForGraduationCard, thesisCreditsForDepartment } from '../src/planner/graduationSources.ts';
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/removeUndo.ts';
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
@@ -1273,6 +1274,30 @@ test('required thesis has an 8-credit card, keeps unsupported guidance unknown, 
   assert.equal(progress.cards.find(row => row.label === '卒業論文').earned, 8);
   assert.equal(progress.cards.find(row => row.requirementId === 'professional-required').earned, 0);
   assert.equal(progress.graduationCheckComplete, false);
+});
+
+test('2026 thesis credit metadata is department-specific and does not fix economics or commerce electives', () => {
+  assert.equal(thesisCreditsForDepartment('経済学科'), 6);
+  assert.equal(thesisCreditsForDepartment('商業学科'), 6);
+  assert.equal(thesisCreditsForDepartment('法律学科'), 4);
+  assert.equal(thesisCreditsForDepartment('日本文学科'), 8);
+  assert.equal(thesisCreditsForDepartment('史学科'), 8);
+  assert.equal(thesisCreditsForDepartment('地理学科'), 8);
+  assert.equal(thesisCreditsForDepartment(null), null);
+  assert.deepEqual(THESIS_CREDIT_METADATA_2026['経済学科'], { credits: 6, sourcePages: [57] });
+  assert.deepEqual(THESIS_CREDIT_METADATA_2026['商業学科'], { credits: 6, sourcePages: [59] });
+
+  const economics = catalog.programs.find(program => program.department === '経済学科').scopeId;
+  const commerce = catalog.programs.find(program => program.department === '商業学科').scopeId;
+  for (const [scope, department] of [[economics, 'economics'], [commerce, 'commerce']]) {
+    const elective = calculateGraduationProgress([], catalog, scope).cards.find(card => card.requirementId === `professional-${department}-elective`);
+    assert.equal(elective.status, 'unknown');
+    assert.equal(elective.target, null);
+    assert.match(elective.reason, /卒業論文を含む選択必要量/);
+  }
+
+  const literatureThesisSources = sourcesForGraduationCard('japanese_literature_thesis_required_course', 49, '卒業論文');
+  assert.equal(literatureThesisSources[0].page, 'p.49');
 });
 
 test('cleanup coverage and audit before/after counts reconcile independently', () => {

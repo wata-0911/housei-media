@@ -14,7 +14,7 @@ import { HISTORY_SCOPE_ID, historySeminarField, isHistorySeminar, validHistorySe
 import { repeatableRule } from './repeatableRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
-import { classifyUnknownReason, coverageForCard, sourcesForGraduationCard, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
+import { classifyUnknownReason, coverageForCard, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { deriveImportedAchievements, type ImportedAchievementWarning } from './importedAchievementCalculations';
 
@@ -464,8 +464,8 @@ function professionalCards(
   for (const item of items) {
     const offering = offerings.get(item.offeringId);
     if (!offering || offering.resolutionStatus !== 'matched' || offering.credits === null) continue;
-    // A required thesis is tracked by its own 8-credit requirement card. Do not
-    // let a future thesis offering also inflate a professional-category bucket.
+    // A required literature thesis is tracked by its own source-configured card.
+    // Do not let a future thesis offering also inflate a professional-category bucket.
     if (thesisPolicyForScope(catalog, scopeId) === 'required' && offering.name === '卒業論文') continue;
     // History seminars are allocated by the learner's confirmed completion order below.
     if (program.department === '史学科' && isHistorySeminar(offering)) continue;
@@ -821,7 +821,8 @@ function countedSchoolingCredits(items: PlannerItem[], offerings: Map<string, Of
 
 function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], program: { department: string | null }, profile: GraduationProfile, thesisSelection: ThesisSelection): ReferenceProgress[] {
   const prerequisiteReason = referencePrerequisiteReason(profile, program, thesisSelection);
-  const target = prerequisiteReason ? null : program.department === '法律学科' && thesisSelection === 'not_selected' ? 128 : 124;
+  const target = prerequisiteReason ? null : program.department === '法律学科' && thesisSelection === 'not_selected'
+    ? 124 + (thesisCreditsForDepartment(program.department) ?? 0) : 124;
   const recognizedTotal = profile.admissionType === 'transfer' ? profile.recognizedCredits.totalCredits : 0;
   const overallEarned = countedOverallCredits(cards, program.department) + (recognizedTotal ?? 0);
   const schooling = countedSchoolingCredits(calculationItems, offerings, eligibleMappings, program.department);
