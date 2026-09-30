@@ -1,7 +1,7 @@
 import Ajv2020 from 'ajv/dist/2020';
 import schema from './planner_catalog_2026.schema.json';
 import type { PlannerCatalog, PlannerState } from './plannerCatalog';
-import { isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
+import { isHistoryCompletionOrderCourse, validHistoricalSourceOrders, validHistorySeminarOrders } from './historySeminar';
 import { isMediaSchooling } from './mediaSchooling';
 import { isCorrespondenceOffering, validCorrespondenceProgress } from './correspondenceProgress';
 import { isValidGraduationProfile } from './graduationProfile';
@@ -42,8 +42,9 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
     && importedMeta.every(([id, meta]) => importedIds.has(id)
       && (meta.plannedYear === null || (Number.isInteger(meta.plannedYear) && meta.plannedYear >= 1000 && meta.plannedYear <= 9999)))
     && value.items.every(item => {
-      const seminar = isHistorySeminar(offeringMap.get(item.offeringId));
-      return seminar ? (item.status === 'earned' || item.earnedOrder === null) : item.earnedOrder === null;
+      const orderedCourse = isHistoryCompletionOrderCourse(offeringMap.get(item.offeringId));
+      return orderedCourse ? (item.status === 'earned' || item.earnedOrder === null) : item.earnedOrder === null;
     })
-    && validHistorySeminarOrders(value.items, offeringMap);
+    && validHistorySeminarOrders(value.items, offeringMap)
+    && validHistoricalSourceOrders(value.items, offeringMap);
 }

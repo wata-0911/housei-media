@@ -920,7 +920,7 @@
         "studyYear": { "anyOf": [{ "enum": [1, 2, 3, 4] }, { "type": "null" }] },
         "earnedOrder": {
           "anyOf": [
-            { "enum": [1, 2, 3, 4] },
+            { "type": "integer", "minimum": 1 },
             { "type": "null" }
           ]
         }
@@ -989,7 +989,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 16
+          "const": 17
         },
         "selectedScopeId": {
           "anyOf": [

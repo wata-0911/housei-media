@@ -23,6 +23,7 @@ import ImportedAchievements from '../components/planner/ImportedAchievements';
 import { applyImport, importedEarnedCreditsTotal, type ImportedCourseAchievement, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
 import { deriveImportedAchievements, managedImportedMedia } from '../planner/importedAchievementCalculations';
 import { createUnifiedCourseRows } from '../planner/unifiedCourseView';
+import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/plannerItemState';
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
 
 function readSavedState(): LoadResult {
@@ -96,13 +97,11 @@ export default function PlannerPage() {
 
   function addOffering(id: string) {
     if (state.items.some(item => item.offeringId === id)) return;
-    commit({ ...state, items: [...state.items, { offeringId: id, status: 'planned', plannedYear: 2026, plannedTerm: null, studyYear: null, earnedOrder: null }] }, `${offeringsById.get(id)!.name}を追加・保存しました。`);
+    commit({ ...state, items: [...state.items, plannerItemFromCourseSearch(id)] }, `${offeringsById.get(id)!.name}を追加・保存しました。`);
   }
 
   function changeItem(id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) {
-    commit({ ...state, items: state.items.map(item => item.offeringId === id
-      ? { ...item, ...patch, ...(patch.status && patch.status !== 'earned' ? { earnedOrder: null } : {}) }
-      : item) }, '履修計画を保存しました。');
+    commit({ ...state, items: updatePlannerItem(state.items, id, patch) }, '履修計画を保存しました。');
   }
 
   function changeMediaProgress(offeringId: string, progress: PlannerState['mediaSchoolingProgress'][string]) {

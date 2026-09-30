@@ -179,8 +179,8 @@ export type PlannerItem = {
   plannedTerm: string | null;
   /** The learner's year of study, deliberately separate from plannedYear. */
   studyYear: 1 | 2 | 3 | 4 | null;
-  /** Only used for 2026 史学演習 offerings. The learner records the confirmed completion order. */
-  earnedOrder: 1 | 2 | 3 | 4 | null;
+  /** Only used for 2026史学科の修得順科目. The learner records the confirmed completion order. */
+  earnedOrder: number | null;
 };
 
 export type PlannerTodo = {
@@ -274,7 +274,7 @@ export type GraduationProfile = {
 };
 
 export type PlannerState = {
-  schemaVersion: 16;
+  schemaVersion: 17;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
