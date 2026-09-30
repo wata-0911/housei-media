@@ -274,9 +274,12 @@ export type GraduationProfile = {
 };
 
 export type PlannerState = {
-  schemaVersion: 17;
+  schemaVersion: 18;
   selectedScopeId: string | null;
+  /** v17 compatibility value; the scoped record below is authoritative. */
   thesisSelection: ThesisSelection;
+  /** Thesis progress is intentionally independent of annual offerings and mappings. */
+  thesisProgressByScope: Record<string, ThesisProgress>;
   items: Array<PlannerItem>;
   publicCourses: Array<PublicCourse>;
   todos: Array<PlannerTodo>;
@@ -297,6 +300,8 @@ export type PlannerState = {
 };
 
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';
+export type ThesisProgressStatus = 'not_started' | 'planned' | 'in_progress' | 'earned';
+export type ThesisProgress = { selection: ThesisSelection; status: ThesisProgressStatus };
 
 export type RequirementEvaluation = {
   requirementId: string;

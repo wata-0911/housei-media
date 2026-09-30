@@ -1,9 +1,9 @@
-import type { PlannerCatalog, ThesisSelection } from '../../planner/plannerCatalog';
+import type { PlannerCatalog, ThesisProgress, ThesisSelection } from '../../planner/plannerCatalog';
 import { selectablePrograms } from '../../planner/annualPlan';
 import { supportsThesisSelection, thesisPolicyForScope } from '../../planner/thesisSelection';
 
-type Props = { catalog: PlannerCatalog; scopeId: string | null; thesisSelection: ThesisSelection; disabled: boolean; onChange: (scopeId: string | null) => void; onThesisSelectionChange: (selection: ThesisSelection) => void };
-export default function ProgramSettings({ catalog, scopeId, thesisSelection, disabled, onChange, onThesisSelectionChange }: Props) {
+type Props = { catalog: PlannerCatalog; scopeId: string | null; thesis: ThesisProgress; disabled: boolean; onChange: (scopeId: string | null) => void; onThesisSelectionChange: (selection: ThesisSelection) => void; onThesisStatusChange: (status: ThesisProgress['status']) => void };
+export default function ProgramSettings({ catalog, scopeId, thesis, disabled, onChange, onThesisSelectionChange, onThesisStatusChange }: Props) {
   const programs = selectablePrograms(catalog);
   const legacyCommon = catalog.programs.find(p => p.scopeId === scopeId && p.isCommon);
   const thesisPolicy = thesisPolicyForScope(catalog, scopeId);
@@ -21,12 +21,12 @@ export default function ProgramSettings({ catalog, scopeId, thesisSelection, dis
       <legend className="text-sm mb-2">卒業論文</legend>
       <div className="flex flex-wrap gap-2">
         {[['undecided', '未定'], ['selected', '履修する'], ['not_selected', '履修しない']].map(([value, label]) => <label key={value} className="border border-gray-300 px-3 py-2 text-sm has-[:checked]:border-[#002255] has-[:checked]:bg-blue-50">
-          <input type="radio" name="thesis-selection" value={value} checked={thesisSelection === value} disabled={disabled} onChange={() => onThesisSelectionChange(value as ThesisSelection)} className="mr-2" />{label}
+          <input type="radio" name="thesis-selection" value={value} checked={thesis.selection === value} disabled={disabled} onChange={() => onThesisSelectionChange(value as ThesisSelection)} className="mr-2" />{label}
         </label>)}
       </div>
       <p className="text-sm text-gray-600 mt-2">卒論の選択により、一部の専門教育の必要単位が変わります。</p>
     </fieldset>}
-    {thesisPolicy === 'required' && <p className="mt-5 max-w-xl border-l-4 border-[#002255] bg-blue-50 p-3 text-sm leading-relaxed text-[#002255]">卒業論文はこの学科の卒業要件に含まれます。進捗は卒業要件の部分進捗で確認できます。</p>}
+    {thesisPolicy !== 'unknown' && (thesisPolicy === 'required' || thesis.selection === 'selected') && <fieldset className="mt-4 max-w-xl"><legend className="text-sm mb-2">卒業論文の状態</legend><div className="flex flex-wrap gap-2">{([['not_started', '未着手'], ['planned', '計画中'], ['in_progress', '執筆中'], ['earned', '修得済み']] as const).map(([value, label]) => <label key={value} className="border border-gray-300 px-3 py-2 text-sm has-[:checked]:border-[#002255] has-[:checked]:bg-blue-50"><input type="radio" name="thesis-status" checked={thesis.status === value} disabled={disabled} onChange={() => onThesisStatusChange(value)} className="mr-2" />{label}</label>)}</div><p className="mt-2 text-xs text-gray-600">卒論指導・提出手続は単位進捗と分けて確認します。</p></fieldset>}
     {thesisPolicy === 'unknown' && scopeId !== null && !legacyCommon && <p className="mt-5 max-w-xl border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">卒業論文の扱いは現在自動判定対象外です。公式の単位分岐を安全に確認できるまで、履修する／しないは選択できません。</p>}
     {legacyCommon && <p className="text-sm text-amber-800 mt-2">以前の共通scope設定を保持しています。区分別集計を表示するには所属を選択してください。</p>}
   </section>;
