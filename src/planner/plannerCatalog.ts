@@ -256,8 +256,25 @@ export type ImportedCourseUserMeta = {
   studyYear: 1 | 2 | 3 | 4 | null;
 };
 
+/** Learner-entered context required before graduation-wide rules can be evaluated. */
+export type AdmissionType = 'first_year' | 'transfer' | 'unknown';
+export type CurriculumApplicability = 'current_2026' | 'legacy_or_transition' | 'unknown';
+export type RecognizedCredits = {
+  /** Credits officially recognized before admission or at transfer; never inferred. */
+  totalCredits: number | null;
+  /** Kept separate only when the learner has an official schooling-equivalent breakdown. */
+  schoolingEquivalentCredits: number | null;
+};
+export type GraduationProfile = {
+  admissionYear: number | null;
+  admissionType: AdmissionType;
+  recognizedCredits: RecognizedCredits;
+  /** Explicit choice only: admission year does not decide a curriculum. */
+  curriculumApplicability: CurriculumApplicability;
+};
+
 export type PlannerState = {
-  schemaVersion: 15;
+  schemaVersion: 16;
   selectedScopeId: string | null;
   thesisSelection: ThesisSelection;
   items: Array<PlannerItem>;
@@ -275,6 +292,8 @@ export type PlannerState = {
   importedCourseAchievements: Array<import('./gradeImportApply').ImportedCourseAchievement>;
   /** User-managed lifecycle context keyed by immutable imported achievement id. */
   importedCourseUserMeta: Record<string, ImportedCourseUserMeta>;
+  /** Personal context for graduation-rule prerequisites, separate from official source facts. */
+  graduationProfile: GraduationProfile;
 };
 
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';
