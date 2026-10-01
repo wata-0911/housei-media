@@ -1,7 +1,7 @@
 import type { GraduationProfile, PlannerCatalog, PlannerState } from './plannerCatalog';
 import { validateState } from './validation';
 import { repairImportedAchievements } from './importedAchievementRepair';
-import { graduationProfileValidationError, initialGraduationProfile, MAX_RECOGNIZED_CREDITS_2026, schoolingRecognitionCap } from './graduationProfile';
+import { graduationProfileValidationError, initialGraduationProfile, MAX_GENERAL_RECOGNIZED_CREDITS_2026, MAX_RECOGNIZED_CREDITS_2026, recognizedCreditBreakdownTotal, schoolingRecognitionCap } from './graduationProfile';
 import { normalizeThesisProgressState } from './thesisSelection';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
@@ -12,29 +12,68 @@ export type LoadResult = { state: PlannerState; raw: string | null; error: strin
 
 function recognitionPaths(raw: unknown, recovered: unknown, prefix = 'recognizedCredits'): string[] {
   if (Object.is(raw, recovered)) return [];
+  if (Array.isArray(raw) || Array.isArray(recovered)) return JSON.stringify(raw) === JSON.stringify(recovered) ? [] : [prefix];
   if (!raw || !recovered || typeof raw !== 'object' || typeof recovered !== 'object') return [prefix];
   const keys = new Set([...Object.keys(raw as object), ...Object.keys(recovered as object)]);
   return [...keys].flatMap(key => recognitionPaths((raw as Record<string, unknown>)[key], (recovered as Record<string, unknown>)[key], `${prefix}.${key}`));
 }
 
-function recoverRecognitionProfile(profile: PlannerState['graduationProfile']): PlannerState['graduationProfile'] | null {
-  const base = initialGraduationProfile();
-  const current = profile as Partial<PlannerState['graduationProfile']>;
-  const credits = current.recognizedCredits as Partial<PlannerState['graduationProfile']['recognizedCredits']> | undefined;
-  if (!credits) return null;
-  const general = credits.general ?? base.recognizedCredits.general;
-  const repaired = {
-    ...base, ...current,
-    recognizedCredits: {
-      ...base.recognizedCredits, ...credits,
-      totalCredits: typeof credits.totalCredits === 'number' && (credits.totalCredits < 0 || credits.totalCredits > MAX_RECOGNIZED_CREDITS_2026) ? null : credits.totalCredits ?? null,
-      schoolingEquivalentCredits: typeof credits.schoolingEquivalentCredits === 'number' && (credits.schoolingEquivalentCredits < 0 || credits.schoolingEquivalentCredits > schoolingRecognitionCap(current as PlannerState['graduationProfile'])) ? null : credits.schoolingEquivalentCredits ?? null,
-      general: Object.fromEntries(Object.entries({ ...base.recognizedCredits.general, ...general }).map(([key, row]) => [key, row && typeof row === 'object' && typeof (row as { credits?: unknown }).credits === 'number' && ((row as { credits: number }).credits < 0 || (row as { credits: number }).credits > 36) ? { mode: 'unknown', credits: null } : row])) as PlannerState['graduationProfile']['recognizedCredits']['general'],
-      foreignLanguage: credits.foreignLanguage && typeof credits.foreignLanguage === 'object' && (((credits.foreignLanguage as { credits?: unknown }).credits as number) > 4 || ((credits.foreignLanguage as { schoolingEquivalentCredits?: unknown }).schoolingEquivalentCredits as number) > 2) ? { ...base.recognizedCredits.foreignLanguage, language: (credits.foreignLanguage as { language?: typeof base.recognizedCredits.foreignLanguage.language }).language ?? 'unknown' } : credits.foreignLanguage ?? base.recognizedCredits.foreignLanguage,
-      physicalEducation: credits.physicalEducation && typeof credits.physicalEducation === 'object' && (((credits.physicalEducation as { credits?: unknown }).credits as number) > 2) ? base.recognizedCredits.physicalEducation : credits.physicalEducation ?? base.recognizedCredits.physicalEducation,
-      professionalCourses: Array.isArray(credits.professionalCourses) ? credits.professionalCourses.filter(row => Number.isFinite(row.credits) && row.credits >= 0 && row.credits <= MAX_RECOGNIZED_CREDITS_2026) : base.recognizedCredits.professionalCourses,
-    },
-  } as PlannerState['graduationProfile'];
+function recoverRecognitionProfile(profile: GraduationProfile): GraduationProfile | null {
+  const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (!object(profile) || !object(profile.recognizedCredits)) return null;
+  const credits = profile.recognizedCredits;
+  if (!object(credits.general) || !object(credits.foreignLanguage) || !object(credits.physicalEducation) || !Array.isArray(credits.professionalCourses)) return null;
+  const modes = ['unknown', 'none', 'recognized', 'exempt'];
+  const numeric = (value: unknown) => value === null || typeof value === 'number';
+  const safe = (value: number | null, max: number) => value !== null && (!Number.isFinite(value) || value < 0 || value > max) ? null : value;
+  if (!numeric(credits.totalCredits) || !numeric(credits.schoolingEquivalentCredits)) return null;
+  for (const field of ['humanities', 'social', 'natural'] as const) {
+    const row = credits.general[field];
+    if (!object(row) || !modes.includes(row.mode as string) || !numeric(row.credits)) return null;
+  }
+  const foreign = credits.foreignLanguage;
+  const physical = credits.physicalEducation;
+  if (!modes.includes(foreign.mode) || !numeric(foreign.credits) || !numeric(foreign.schoolingEquivalentCredits)
+    || !['english', 'german', 'french', 'unknown'].includes(foreign.language)
+    || !modes.includes(physical.mode) || !numeric(physical.credits)) return null;
+  if (credits.professionalCourses.some(row => !object(row) || typeof row.id !== 'string' || typeof row.name !== 'string'
+    || (row.offeringId !== null && typeof row.offeringId !== 'string')
+    || (row.courseId !== null && typeof row.courseId !== 'string')
+    || (row.mappingId !== null && typeof row.mappingId !== 'string') || typeof row.credits !== 'number')) return null;
+
+  const repaired: GraduationProfile = structuredClone(profile);
+  const target = repaired.recognizedCredits;
+  target.totalCredits = safe(credits.totalCredits, MAX_RECOGNIZED_CREDITS_2026);
+  target.schoolingEquivalentCredits = safe(credits.schoolingEquivalentCredits, schoolingRecognitionCap(profile));
+  for (const field of ['humanities', 'social', 'natural'] as const) {
+    const row = target.general[field];
+    row.credits = safe(row.credits, MAX_GENERAL_RECOGNIZED_CREDITS_2026);
+    if (row.mode !== 'recognized') row.credits = null;
+  }
+  target.foreignLanguage.credits = safe(foreign.credits, 4);
+  target.foreignLanguage.schoolingEquivalentCredits = safe(foreign.schoolingEquivalentCredits, 2);
+  if (foreign.mode !== 'recognized') {
+    target.foreignLanguage.credits = null;
+    target.foreignLanguage.language = 'unknown';
+    target.foreignLanguage.schoolingEquivalentCredits = null;
+  } else if (target.foreignLanguage.credits === null || (target.foreignLanguage.schoolingEquivalentCredits ?? 0) > target.foreignLanguage.credits) {
+    target.foreignLanguage.schoolingEquivalentCredits = null;
+  }
+  target.physicalEducation.credits = physical.mode === 'recognized' ? safe(physical.credits, 2) : null;
+  target.professionalCourses = credits.professionalCourses.filter(row => Number.isFinite(row.credits) && row.credits >= 0 && row.credits <= MAX_RECOGNIZED_CREDITS_2026);
+
+  const generalRows = [target.general.humanities, target.general.social, target.general.natural];
+  let generalTotal = generalRows.reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0);
+  for (const row of [...generalRows].reverse()) {
+    if (generalTotal <= MAX_GENERAL_RECOGNIZED_CREDITS_2026) break;
+    if (row.mode === 'recognized' && row.credits !== null) { generalTotal -= row.credits; row.credits = null; }
+  }
+  for (let index = target.professionalCourses.length - 1; index >= 0 && recognizedCreditBreakdownTotal(target) > MAX_RECOGNIZED_CREDITS_2026; index -= 1) {
+    target.professionalCourses.splice(index, 1);
+  }
+  const detail = recognizedCreditBreakdownTotal(target);
+  if (target.totalCredits !== null && target.totalCredits < detail) target.totalCredits = null;
+  if (target.totalCredits !== null && target.schoolingEquivalentCredits !== null && target.schoolingEquivalentCredits > target.totalCredits) target.schoolingEquivalentCredits = null;
   return graduationProfileValidationError(repaired) === null ? repaired : null;
 }
 
@@ -45,12 +84,12 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     if (raw === null) return { state: initialState(), raw, error: null };
     const parsed: unknown = JSON.parse(raw);
     const state = normalizeThesisProgressState(migrateState(parsed, catalog) as PlannerState, catalog);
+    const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
+    if (!profile) throw new Error('Invalid recognition structure');
     if (!validateState(state, catalog)) {
       // A later validation tightening must not lock otherwise-safe planner data.
       // Keep the raw bytes for optimistic-save protection, but hold only the
       // invalid recognition profile out of calculation until the user re-enters it.
-      const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
-      if (!profile) throw new Error('Invalid state');
       const recovered = { ...(state as PlannerState), graduationProfile: profile };
       if (!validateState(recovered, catalog)) throw new Error('Invalid state');
       return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。', recoveredRecognitionRaw: (state as PlannerState).graduationProfile, invalidRecognitionPaths: recognitionPaths((state as PlannerState).graduationProfile.recognizedCredits, profile.recognizedCredits) };
@@ -157,7 +196,7 @@ export function saveStateWithRecognitionShadow(store: Store, state: PlannerState
   if (store.getItem(STORAGE_KEY) !== expectedRaw) throw new Error('別の画面で保存データが変更されました。再読み込みしてください。');
   const profile = structuredClone(state.graduationProfile) as GraduationProfile;
   for (const path of paths) {
-    const keys = path.split('.').slice(1); let target = profile as unknown as Record<string, unknown>; const source = shadow as unknown as Record<string, unknown>;
+    const keys = path.split('.'); let target = profile as unknown as Record<string, unknown>; const source = shadow as unknown as Record<string, unknown>;
     for (let index = 0; index < keys.length - 1; index += 1) target = target[keys[index]] as Record<string, unknown>;
     const value = keys.reduce<unknown>((current, key) => current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, source);
     target[keys[keys.length - 1]] = value;
@@ -168,7 +207,21 @@ export function saveStateWithRecognitionShadow(store: Store, state: PlannerState
 }
 
 export function recognitionPathValue(profile: GraduationProfile, path: string): unknown {
-  return path.split('.').slice(1).reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, profile);
+  return path.split('.').reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, profile);
+}
+
+/** A save only resolves paths whose recovered value the user actually changed. */
+export function saveRecoveredState(store: Store, next: PlannerState, previous: LoadResult, catalog: PlannerCatalog): LoadResult {
+  const remaining = (previous.invalidRecognitionPaths ?? []).filter(path => {
+    const before = recognitionPathValue(previous.state.graduationProfile, path);
+    const after = recognitionPathValue(next.graduationProfile, path);
+    return Object.is(before, after) || JSON.stringify(before) === JSON.stringify(after);
+  });
+  const raw = previous.recoveredRecognitionRaw && remaining.length
+    ? saveStateWithRecognitionShadow(store, next, previous.raw, catalog, previous.recoveredRecognitionRaw, remaining)
+    : saveState(store, next, previous.raw, catalog);
+  return { state: next, raw, error: null, recognitionWarning: remaining.length ? previous.recognitionWarning : null,
+    recoveredRecognitionRaw: remaining.length ? previous.recoveredRecognitionRaw : null, invalidRecognitionPaths: remaining };
 }
 
 export function recoverState(store: Store, expectedRaw: string, catalog: PlannerCatalog): string {

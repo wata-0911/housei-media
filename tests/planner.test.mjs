@@ -5,7 +5,7 @@ import { catalog, offeringsById } from '../src/planner/catalog.ts';
 import { manualMappingOverrideLedger, officialMappingOverrideLedger } from '../src/planner/manualMappingOverrides.ts';
 import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
-import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, recoverState } from '../src/planner/storage.ts';
+import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, saveRecoveredState, recoverState } from '../src/planner/storage.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { THESIS_CREDIT_METADATA_2026, sourcesForGraduationCard, thesisCreditsForDepartment } from '../src/planner/graduationSources.ts';
 import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
@@ -2691,6 +2691,138 @@ test('second-year admission and safe recognition candidates survive persistence 
   const overall = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], invalid).referenceProgress[0];
   assert.deepEqual([overall.earned, overall.target], [null, null]);
   assert.match(overall.reason, /認定単位の入力/);
+});
+
+test('invalid recognition fields recover without locking valid planner data', () => {
+  const scope = catalog.programs.find(program => program.department === '経済学科').scopeId;
+  const base = { ...initialState(), selectedScopeId: scope, items: [item(first.id, 'planned')], graduationProfile: { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_second_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, totalCredits: 9924, foreignLanguage: { mode: 'recognized', credits: -1, language: 'english', schoolingEquivalentCredits: 0 }, physicalEducation: { mode: 'recognized', credits: -2 } } } };
+  const raw = JSON.stringify(base); const loaded = loadState(memoryStore(raw), catalog);
+  assert.equal(loaded.error, null); assert.ok(loaded.recognitionWarning); assert.ok(loaded.invalidRecognitionPaths.includes('recognizedCredits.totalCredits'));
+  assert.equal(loaded.state.items.length, 1); assert.equal(loaded.state.graduationProfile.admissionType, 'transfer_second_year');
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.totalCredits, null);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.foreignLanguage.credits, null);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.physicalEducation.credits, null);
+});
+
+test('recognition shadow survives unrelated and normal-profile saves until its own field is repaired', () => {
+  const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_second_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, totalCredits: 9924 } };
+  const store = memoryStore(JSON.stringify({ ...initialState(), graduationProfile: profile }));
+  let loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  assert.ok(loaded.recognitionWarning);
+  assert.deepEqual(loaded.invalidRecognitionPaths, ['recognizedCredits.totalCredits']);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.totalCredits, null);
+  loaded = saveRecoveredState(store, { ...loaded.state, items: [item(first.id)] }, loaded, catalog);
+  loaded = loadState(store, catalog);
+  assert.equal(loaded.state.items.length, 1);
+  assert.equal(JSON.parse(store.getItem(STORAGE_KEY)).graduationProfile.recognizedCredits.totalCredits, 9924);
+  assert.ok(loaded.recognitionWarning);
+  for (const change of [{ admissionYear: 2025 }, { admissionType: 'other_transfer' }, { curriculumApplicability: 'legacy_or_transition' }]) {
+    loaded = saveRecoveredState(store, { ...loaded.state, graduationProfile: { ...loaded.state.graduationProfile, ...change } }, loaded, catalog);
+    loaded = loadState(store, catalog);
+    assert.ok(loaded.recognitionWarning);
+    assert.deepEqual(loaded.invalidRecognitionPaths, ['recognizedCredits.totalCredits']);
+    assert.equal(JSON.parse(store.getItem(STORAGE_KEY)).graduationProfile.recognizedCredits.totalCredits, 9924);
+    for (const [key, value] of Object.entries(change)) assert.equal(loaded.state.graduationProfile[key], value);
+  }
+  loaded = saveRecoveredState(store, { ...loaded.state, graduationProfile: { ...loaded.state.graduationProfile, recognizedCredits: { ...loaded.state.graduationProfile.recognizedCredits, totalCredits: 0 } } }, loaded, catalog);
+  assert.equal(loaded.recognitionWarning, null);
+  assert.deepEqual(loaded.invalidRecognitionPaths, []);
+  loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.recognitionWarning, undefined);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.totalCredits, 0);
+});
+
+test('multiple invalid recognition fields recover and resolve one path at a time', () => {
+  const original = initialGraduationProfile();
+  const profile = { ...original, admissionYear: 2026, admissionType: 'transfer_second_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...original.recognizedCredits, totalCredits: 9924, schoolingEquivalentCredits: 999,
+    general: { ...original.recognizedCredits.general, humanities: { mode: 'recognized', credits: -1 } },
+    foreignLanguage: { mode: 'recognized', credits: -1, language: 'english', schoolingEquivalentCredits: 5 },
+    physicalEducation: { mode: 'recognized', credits: -2 } } };
+  const store = memoryStore(JSON.stringify({ ...initialState(), graduationProfile: profile }));
+  let loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  const expected = ['recognizedCredits.totalCredits', 'recognizedCredits.schoolingEquivalentCredits', 'recognizedCredits.general.humanities.credits', 'recognizedCredits.foreignLanguage.credits', 'recognizedCredits.foreignLanguage.schoolingEquivalentCredits', 'recognizedCredits.physicalEducation.credits'];
+  for (const path of expected) assert.ok(loaded.invalidRecognitionPaths.includes(path), path);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.foreignLanguage.language, 'english');
+  const fixes = [
+    credits => ({ ...credits, totalCredits: 0 }),
+    credits => ({ ...credits, schoolingEquivalentCredits: 0 }),
+    credits => ({ ...credits, general: { ...credits.general, humanities: { ...credits.general.humanities, credits: 0 } } }),
+    credits => ({ ...credits, foreignLanguage: { ...credits.foreignLanguage, credits: 0 } }),
+    credits => ({ ...credits, foreignLanguage: { ...credits.foreignLanguage, schoolingEquivalentCredits: 0 } }),
+    credits => ({ ...credits, physicalEducation: { ...credits.physicalEducation, credits: 0 } }),
+  ];
+  for (let index = 0; index < fixes.length; index += 1) {
+    loaded = saveRecoveredState(store, { ...loaded.state, graduationProfile: { ...loaded.state.graduationProfile, recognizedCredits: fixes[index](loaded.state.graduationProfile.recognizedCredits) } }, loaded, catalog);
+    assert.equal(loaded.invalidRecognitionPaths.includes(expected[index]), false);
+    assert.equal(Boolean(loaded.recognitionWarning), index < fixes.length - 1);
+    loaded = loadState(store, catalog);
+    assert.equal(Boolean(loaded.recognitionWarning), index < fixes.length - 1);
+  }
+  assert.equal(loaded.error, null);
+});
+
+test('mixed professional recognition retains valid rows and shadows only invalid rows', () => {
+  const good = { id: 'valid-professional', offeringId: first.id, courseId: first.courseId, mappingId: null, name: first.name, credits: 2 };
+  const bad = { ...good, id: 'invalid-professional', offeringId: catalog.offerings[1].id, courseId: catalog.offerings[1].courseId, name: catalog.offerings[1].name, credits: -1 };
+  const profile = { ...initialGraduationProfile(), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, professionalCourses: [good, bad] } };
+  const store = memoryStore(JSON.stringify({ ...initialState(), graduationProfile: profile }));
+  const loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  assert.ok(loaded.recognitionWarning);
+  assert.deepEqual(loaded.state.graduationProfile.recognizedCredits.professionalCourses, [good]);
+  assert.ok(loaded.invalidRecognitionPaths.includes('recognizedCredits.professionalCourses'));
+  const reloaded = loadState(store, catalog);
+  assert.equal(reloaded.state.graduationProfile.recognizedCredits.professionalCourses.length, 1);
+  assert.equal(JSON.parse(store.getItem(STORAGE_KEY)).graduationProfile.recognizedCredits.professionalCourses.length, 2);
+});
+
+test('recognition domain recovery never bypasses structural recovery locks', () => {
+  const base = initialState();
+  const cases = [
+    '{broken',
+    JSON.stringify({ ...base, schemaVersion: 999 }),
+    JSON.stringify({ ...base, items: [item('missing-offering')] }),
+    JSON.stringify({ ...base, items: [item(first.id), item(first.id)] }),
+    JSON.stringify({ ...base, graduationProfile: { ...base.graduationProfile, recognizedCredits: { ...base.graduationProfile.recognizedCredits, general: [] } } }),
+  ];
+  for (const [index, raw] of cases.entries()) {
+    const loaded = loadState(memoryStore(raw), catalog);
+    assert.ok(loaded.error, `structural case ${index}`);
+    assert.equal(loaded.raw, raw);
+  }
+});
+
+test('non-finite recognition numbers fail domain validation', () => {
+  const original = initialGraduationProfile();
+  for (const credits of [Infinity, -Infinity, NaN]) {
+    const profile = { ...original, recognizedCredits: { ...original.recognizedCredits,
+      foreignLanguage: { mode: 'recognized', credits, language: 'english', schoolingEquivalentCredits: null } } };
+    assert.ok(graduationProfileValidationError(profile));
+  }
+});
+
+test('out-of-range and inconsistent recognition combinations are isolated by field', () => {
+  const original = initialGraduationProfile();
+  const recognizedCredits = { ...original.recognizedCredits, totalCredits: 0,
+    general: { ...original.recognizedCredits.general, humanities: { mode: 'recognized', credits: 8 } },
+    foreignLanguage: { mode: 'recognized', credits: 5, language: 'english', schoolingEquivalentCredits: 3 },
+    physicalEducation: { mode: 'recognized', credits: 3 } };
+  const loaded = loadState(memoryStore(JSON.stringify({ ...initialState(), graduationProfile: { ...original, recognizedCredits } })), catalog);
+  assert.equal(loaded.error, null);
+  assert.ok(loaded.recognitionWarning);
+  for (const path of ['recognizedCredits.totalCredits', 'recognizedCredits.foreignLanguage.credits', 'recognizedCredits.foreignLanguage.schoolingEquivalentCredits', 'recognizedCredits.physicalEducation.credits']) {
+    assert.ok(loaded.invalidRecognitionPaths.includes(path), path);
+  }
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.general.humanities.credits, 8);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.foreignLanguage.language, 'english');
+  const combination = { ...recognizedCredits, totalCredits: 12, foreignLanguage: { mode: 'recognized', credits: 1, language: 'english', schoolingEquivalentCredits: 2 }, physicalEducation: { mode: 'none', credits: null } };
+  const combined = loadState(memoryStore(JSON.stringify({ ...initialState(), graduationProfile: { ...original, recognizedCredits: combination } })), catalog);
+  assert.equal(combined.error, null);
+  assert.ok(combined.invalidRecognitionPaths.includes('recognizedCredits.foreignLanguage.schoolingEquivalentCredits'));
+  assert.equal(combined.state.graduationProfile.recognizedCredits.foreignLanguage.credits, 1);
 });
 
 test('recognized-credit controls expose explicit prefill, allocation, and safe professional search', () => {

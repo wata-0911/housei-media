@@ -9,7 +9,7 @@ import GraduationProgress from '../components/planner/GraduationProgress';
 import GraduationProfileSettings from '../components/planner/GraduationProfileSettings';
 import { catalog, offeringsById } from '../planner/catalog';
 import { summarizeCredits } from '../planner/calculations';
-import { initialState, loadState, recoverState, recognitionPathValue, saveState, saveStateWithRecognitionShadow, STORAGE_KEY, type LoadResult } from '../planner/storage';
+import { initialState, loadState, recoverState, saveRecoveredState, STORAGE_KEY, type LoadResult } from '../planner/storage';
 import type { ImportedCourseUserMeta, PlannerItem, PlannerState, PublicCourse } from '../planner/plannerCatalog';
 import { calculateGraduationProgress } from '../planner/graduationProgress';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
@@ -85,11 +85,7 @@ export default function PlannerPage() {
   function commit(next: PlannerState, message: string): boolean {
     if (loaded.error) return false;
     try {
-      const remainingInvalidPaths = (loaded.invalidRecognitionPaths ?? []).filter(path => recognitionPathValue(next.graduationProfile, path) === recognitionPathValue(state.graduationProfile, path));
-      const raw = loaded.recoveredRecognitionRaw && remainingInvalidPaths.length
-        ? saveStateWithRecognitionShadow(window.localStorage, next, loaded.raw, catalog, loaded.recoveredRecognitionRaw, remainingInvalidPaths)
-        : saveState(window.localStorage, next, loaded.raw, catalog);
-      setLoaded({ state: next, raw, error: null, recognitionWarning: remainingInvalidPaths.length ? loaded.recognitionWarning : null, recoveredRecognitionRaw: remainingInvalidPaths.length ? loaded.recoveredRecognitionRaw : null, invalidRecognitionPaths: remainingInvalidPaths });
+      setLoaded(saveRecoveredState(window.localStorage, next, loaded, catalog));
       setSaveError(null);
       setNotice(message);
       return true;

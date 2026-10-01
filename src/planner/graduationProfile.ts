@@ -108,9 +108,11 @@ export function graduationProfileValidationError(profile: GraduationProfile): st
   const fields = Object.values(profile.recognizedCredits.general);
   const modes = [profile.recognizedCredits.foreignLanguage, profile.recognizedCredits.physicalEducation, ...fields];
   if (modes.some(row => row.mode === 'exempt' && row.credits !== null)) return '免除と認定単位は同時に指定できません。免除は修得単位ではありません。';
-  if (fields.some(row => row.credits !== null && (row.credits < 0 || row.credits > MAX_GENERAL_RECOGNIZED_CREDITS_2026))
-    || (profile.recognizedCredits.foreignLanguage.credits !== null && (profile.recognizedCredits.foreignLanguage.credits < 0 || profile.recognizedCredits.foreignLanguage.credits > 4))
-    || (profile.recognizedCredits.physicalEducation.credits !== null && (profile.recognizedCredits.physicalEducation.credits < 0 || profile.recognizedCredits.physicalEducation.credits > 2))) return '区分別の認定単位が公式上限を超えています。';
+  const outside = (value: number | null, cap: number) => value !== null && (!Number.isFinite(value) || value < 0 || value > cap);
+  if (fields.some(row => outside(row.credits, MAX_GENERAL_RECOGNIZED_CREDITS_2026))
+    || outside(profile.recognizedCredits.foreignLanguage.credits, 4)
+    || outside(profile.recognizedCredits.physicalEducation.credits, 2)
+    || profile.recognizedCredits.professionalCourses.some(row => !Number.isFinite(row.credits) || row.credits < 0 || row.credits > MAX_RECOGNIZED_CREDITS_2026)) return '区分別の認定単位が公式上限を超えています。';
   const foreign = profile.recognizedCredits.foreignLanguage;
   if (foreign.mode !== 'recognized' && (foreign.language !== 'unknown' || foreign.schoolingEquivalentCredits !== null)) return '外国語が認定以外の場合、言語とスクーリング相当は指定できません。';
   if (foreign.schoolingEquivalentCredits !== null
