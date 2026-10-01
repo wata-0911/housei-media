@@ -1129,6 +1129,21 @@ function thesisProgressCard(catalog: PlannerCatalog, scopeId: string, progress: 
   }];
 }
 
+/** p.68 is a faculty decision, never a two-credit automatic completion. */
+function literaturePartialExceptionCard(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], cards: ProgressCard[]): ProgressCard[] {
+  const department = catalog.programs.find(program => program.scopeId === scopeId)?.department;
+  if (!['日本文学科', '史学科', '地理学科'].includes(department ?? '')) return [];
+  const totalId = department === '日本文学科' ? 'professional-japanese-total' : department === '史学科' ? 'professional-history-total' : 'professional-geography-total';
+  const professional = cards.find(card => card.requirementId === totalId);
+  const partial = items.some(item => {
+    if (item.status !== 'earned') return false;
+    const offering = offerings.get(item.offeringId);
+    return offering?.method === 'schooling' && offering.credits === 2 && eligibleMappings(offering).some(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育' && mapping.requirementType === '選択' && mapping.curriculumCredits === 4);
+  });
+  if (professional?.earned !== 80 || !partial) return [];
+  return [{ requirementId: 'literature-professional-80-plus-partial-2', label: '文学部 80＋部分修得2単位の特例候補', ruleType: 'manual_review', status: 'unknown', earned: 80, inProgress: 0, planned: 0, target: 82, unit: 'credits', reason: '教授会判断が必要な特例候補です。Plannerは82単位達成とは判定しません。', note: '分野要件を含む正式な判定は大学へ確認してください。' }];
+}
+
 /** Individual rules and grouped cards never compose into a graduation decision. */
 export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
@@ -1180,6 +1195,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       && !GROUP_RULES.has(catalog.requirements.find(rule => rule.id === row.requirementId)?.ruleId ?? '')
       && !professional.length),
   ], profile);
+  cards.push(...literaturePartialExceptionCard(calculationItems, catalog, scopeId, offerings, eligibleMappings, cards));
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId)!;
   const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
   const thesisPage = thesisCreditsForDepartment(program.department) === 8 ? ({ '日本文学科': 49, '史学科': 52, '地理学科': 54 } as Record<string, number>)[program.department ?? ''] : ({ '法律学科': 46, '経済学科': 57, '商業学科': 59 } as Record<string, number>)[program.department ?? ''];

@@ -30,6 +30,7 @@ import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/
 import { graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill } from '../src/planner/graduationProfile.ts';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
 import { annualCreditLimitReferences } from '../src/planner/annualPlan.ts';
+import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/thesisGuidance.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -3046,4 +3047,68 @@ test('safe recognized professional identities feed every department once without
     const duplicate = calculateGraduationProgress([item(chosen.offering.id, 'earned')], catalog, program.scopeId, [], 'selected', [], [], profile).cards.filter(card => card.requirementId.startsWith('professional-'));
     assert.equal(duplicate.reduce((sum, card) => sum + (card.earned ?? 0), 0), cards.reduce((sum, card) => sum + (card.earned ?? 0), 0), `${department} planner duplicate is not double counted`);
   }
+});
+
+test('round2: current study year and geography report survive v20 reload without admission-year inference', () => {
+  const geography = catalog.programs.find(program => program.department === '地理学科').scopeId;
+  for (const currentStudyYear of [null, 1, 2, 3, 4]) {
+    for (const geographyReportSubmitted of [null, true, false]) {
+      const saved = { ...initialState(), selectedScopeId: geography, graduationProfile: { ...initialGraduationProfile(), admissionYear: 2000, currentStudyYear }, thesisGuidanceByScope: { [geography]: { steps: {}, geographyReportSubmitted } } };
+      const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
+      assert.equal(loaded.error, null);
+      assert.equal(loaded.state.graduationProfile.currentStudyYear, currentStudyYear);
+      assert.equal(guidanceForScope(loaded.state, geography).geographyReportSubmitted, geographyReportSubmitted);
+    }
+  }
+  const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
+  assert.match(source, /現在の在学年次/);
+  assert.match(source, /aria-label="現在の在学年次"/);
+});
+
+test('round2: thesis procedures use explicit year, report status, fixed expiry, and department submission steps', () => {
+  const scope = department => catalog.programs.find(program => program.department === department).scopeId;
+  const profile = currentStudyYear => ({ ...initialGraduationProfile(), currentStudyYear });
+  const passedStep = passedOn => ({ status: 'passed', passedOn });
+  const japanese = thesisGuidanceViews(catalog, scope('日本文学科'), profile(3), { steps: { first: passedStep('2024-10-01') }, geographyReportSubmitted: null }, 60, new Date('2027-09-30'));
+  assert.equal(japanese.find(row => row.id === 'first').conditions[0].status, 'satisfied');
+  assert.equal(japanese.find(row => row.id === 'second').conditions[0].status, 'satisfied');
+  assert.equal(japanese.some(row => row.id === 'third'), false);
+  const expired = thesisGuidanceViews(catalog, scope('日本文学科'), profile(3), { steps: { first: passedStep('2024-10-01') }, geographyReportSubmitted: null }, 60, new Date('2027-10-02'));
+  assert.equal(expired.find(row => row.id === 'second').conditions[0].status, 'unsatisfied');
+  const noDate = thesisGuidanceViews(catalog, scope('日本文学科'), profile(3), { steps: { first: passedStep(null) }, geographyReportSubmitted: null }, 60, new Date('2027-01-01'));
+  assert.equal(noDate.find(row => row.id === 'second').conditions[0].status, 'unknown');
+  const geographyUnknown = thesisGuidanceViews(catalog, scope('地理学科'), profile(3), { steps: {}, geographyReportSubmitted: null }, 60, new Date('2026-01-01'));
+  const geographyFalse = thesisGuidanceViews(catalog, scope('地理学科'), profile(3), { steps: {}, geographyReportSubmitted: false }, 60, new Date('2026-01-01'));
+  assert.equal(geographyUnknown.find(row => row.id === 'first').conditions.at(-1).status, 'unknown');
+  assert.equal(geographyFalse.find(row => row.id === 'first').conditions.at(-1).status, 'unsatisfied');
+  const law = thesisGuidanceViews(catalog, scope('法律学科'), profile(3), { steps: { general: passedStep('2026-01-01') }, geographyReportSubmitted: null }, 100, new Date('2026-01-01'));
+  assert.equal(law.find(row => row.id === 'submission').conditions[0].status, 'unsatisfied');
+  const economy = thesisGuidanceViews(catalog, scope('経済学科'), profile(4), { steps: { plan: passedStep('2024-10-01'), interim: passedStep('2026-01-01') }, geographyReportSubmitted: null }, 100, new Date('2026-09-30'));
+  assert.equal(economy.find(row => row.id === 'submission').conditions.every(condition => condition.status === 'satisfied'), true);
+});
+
+test('round2: eligibility counts confirmed imported partials once, recognition detail and bachelor exemptions, while unsafe rows remain unknown', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const offering = catalog.offerings.find(row => row.resolutionStatus === 'matched' && row.courseId && row.credits === 4 && row.mappingIds.some(id => catalog.mappings.find(mapping => mapping.mappingId === id && (mapping.scopeId === scope || catalog.programs.find(program => program.isCommon).scopeId === mapping.scopeId) && !/教職|教科専門|その他専門/.test(mapping.category))));
+  assert.ok(offering);
+  const row = credits => ({ id: `import-${credits}`, fingerprint: `import-${credits}`, source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: credits, schoolingCreditsTotal: credits, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: offering.id, selectionSource: 'manual', match: 'exact_unique', candidateOfferingIds: [offering.id] });
+  const base = { ...initialState(), selectedScopeId: scope, graduationProfile: { ...initialGraduationProfile(), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, totalCredits: null, general: { humanities: { mode: 'recognized', credits: 24 }, social: { mode: 'none', credits: null }, natural: { mode: 'none', credits: null } } } } };
+  assert.equal(guidanceEligibilityCreditResult({ ...base, importedCourseAchievements: [row(2), { ...row(2), id: 'import-two', fingerprint: 'import-two' }] }, catalog).credits, 28, '2+2 is capped at the 4-credit course identity');
+  const bachelor = { ...base, graduationProfile: { ...base.graduationProfile, admissionType: 'bachelor_admission', recognizedCredits: officialRecognitionPrefill('bachelor_admission') } };
+  assert.equal(guidanceEligibilityCreditResult(bachelor, catalog).credits, 42);
+  assert.equal(guidanceEligibilityCreditResult({ ...base, importedCourseAchievements: [{ ...row(2), rawName: '照合不能な修得実績', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] }, catalog).status, 'unknown');
+});
+
+test('round2: v19 migration keeps records and profile, while v21 is locked', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const legacy = { ...initialState(), schemaVersion: 19, selectedScopeId: scope, items: [item(first.id, 'earned')], thesisProgressByScope: { [scope]: { selection: 'selected', status: 'planned' } }, importedCourseAchievements: [{ id: 'kept', fingerprint: 'kept', source: 'hosei_import', rawName: first.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: first.courseId, selectedOfferingId: first.id, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [first.id] }], graduationProfile: { ...initialGraduationProfile(), currentStudyYear: 4 } };
+  const migrated = loadState(memoryStore(JSON.stringify(legacy)), catalog);
+  assert.equal(migrated.error, null);
+  assert.equal(migrated.state.schemaVersion, 20);
+  assert.deepEqual(migrated.state.items, legacy.items);
+  assert.deepEqual(migrated.state.thesisProgressByScope, legacy.thesisProgressByScope);
+  assert.equal(migrated.state.importedCourseAchievements[0].id, 'kept');
+  assert.equal(migrated.state.graduationProfile.currentStudyYear, 4);
+  assert.deepEqual(migrated.state.thesisGuidanceByScope, {});
+  assert.notEqual(loadState(memoryStore(JSON.stringify({ ...legacy, schemaVersion: 21 })), catalog).error, null);
 });
