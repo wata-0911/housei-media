@@ -103,9 +103,9 @@ const GROUP_RULES = new Set([
 
 // These source rules remain in the catalog, but are not independent learner
 // checks. The common total is already exactly covered by the three grouped
-// cards (general 36, foreign 4, physical 2). Open University recognition has
-// no input model yet, so surfacing its catalog row would warn every learner;
-// add it back as a manual-review path when that recognition input exists.
+// cards (general 36, foreign 4, physical 2). Open University recognition is
+// explicitly entered and capped at ten credits in the general-education
+// overlay, so its catalog row must not create a duplicate learner warning.
 const REFERENCE_ONLY_REQUIREMENT_RULES = new Set([
   'common_total_min_credits',
   'common_open_university_max_credits',
@@ -1006,17 +1006,20 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     const recognitionMayApply = ['transfer_second_year', 'transfer_third_year', 'bachelor_admission', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType);
     const exempt = fields.every(key => general[key].mode === 'exempt');
     const credited = fields.reduce((sum, key) => sum + (general[key].mode === 'recognized' ? general[key].credits ?? 0 : 0), 0);
+    // The 2026 guide permits this explicit official recognition only in the
+    // general-education total; it must never satisfy a named field minimum.
+    const openUniversity = exempt ? 0 : profile.recognizedCredits.openUniversityCredits ?? 0;
     const details = card.details?.map((detail, index) => {
       const row = general[fields[index]];
       const earned = row.mode === 'exempt' ? detail.target : (detail.earned ?? 0) + (row.mode === 'recognized' ? row.credits ?? 0 : 0);
       return recognitionMayApply && row.mode === 'unknown' && earned < detail.target ? { ...detail, earned: null, reason: '認定情報未確認' } : { ...detail, earned };
     });
-    const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && (card.earned ?? 0) + credited >= 36;
+    const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && (card.earned ?? 0) + credited + openUniversity >= 36;
     const unknown = recognitionMayApply && !exempt && details?.some(detail => detail.earned === null);
-    return { ...card, earned: exempt ? 0 : unknown ? null : Math.min(card.target ?? 36, (card.earned ?? 0) + credited), details,
+    return { ...card, earned: exempt ? 0 : unknown ? null : Math.min(card.target ?? 36, (card.earned ?? 0) + credited + openUniversity), details,
       status: exempt || completed ? 'satisfied' : unknown ? 'unknown' : card.status,
       reason: unknown ? '一般教育の認定情報が未確認です。0単位認定とは扱いません。' : card.reason,
-      note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : credited ? ' 公式認定単位を反映しています。' : ''}` };
+      note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : `${credited ? ' 公式認定単位を反映しています。' : ''}${openUniversity ? ` 放送大学認定 ${openUniversity}単位を一般教育（その他）に反映しています。` : ''}`}` };
   });
   next = replace(next, 'group-foreign', card => {
     const row = profile.recognizedCredits.foreignLanguage ?? { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null };
@@ -1190,7 +1193,7 @@ function literaturePartialExceptionCard(items: PlannerItem[], catalog: PlannerCa
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, openUniversityCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return {

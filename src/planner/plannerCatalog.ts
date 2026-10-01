@@ -277,6 +277,8 @@ export type RecognizedCredits = {
   totalCredits: number | null;
   /** Kept separate only when the learner has an official schooling-equivalent breakdown. */
   schoolingEquivalentCredits: number | null;
+  /** Officially recognized Open University credits for general education "other" only. */
+  openUniversityCredits: number | null;
   general: { humanities: RecognizedGeneralField; social: RecognizedGeneralField; natural: RecognizedGeneralField };
   foreignLanguage: { mode: RecognitionMode; credits: number | null; language: 'english' | 'german' | 'french' | 'unknown'; schoolingEquivalentCredits: number | null };
   physicalEducation: { mode: RecognitionMode; credits: number | null };
@@ -292,7 +294,7 @@ export type GraduationProfile = {
 };
 
 export type PlannerState = {
-  schemaVersion: 20;
+  schemaVersion: 21;
   selectedScopeId: string | null;
   /** v17 compatibility value; the scoped record below is authoritative. */
   thesisSelection: ThesisSelection;
