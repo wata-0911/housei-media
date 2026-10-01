@@ -17,7 +17,7 @@ import { repeatableRule } from './repeatableRules';
 import { allocateGeographyTransfers, geographyTransferKind, type GeographyTransferKind } from './geographyTransferRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
-import { classifyUnknownReason, coverageForCard, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
+import { classifyUnknownReason, coverageForCard, LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { deriveImportedAchievements, type ImportedAchievementWarning } from './importedAchievementCalculations';
 
@@ -281,6 +281,8 @@ function groupedCards(
   const fields = new Map(['人文', '社会', '自然'].map(field => [field, empty()]));
   const physical = empty();
   const basicLecture = empty();
+  type CommonEntry = { mapping: Mapping; totals: Totals };
+  const commonEntries = new Map<string, CommonEntry>();
   const physicalEarned = new Set<string>();
   const languages = new Map(['英語', '独語', '仏語'].map(language => [language, empty()]));
   for (const item of items) {
@@ -295,7 +297,8 @@ function groupedCards(
       } else if (item.status === 'in_progress') totals.inProgress += offering.credits!;
       else if (item.status === 'planned') totals.planned += offering.credits!;
     };
-    if (mappings.some(mapping => mapping.category === '一般教育')) {
+    const commonMappings = mappings.filter(mapping => mapping.category === '一般教育' && mapping.curriculumCredits !== null);
+    if (commonMappings.length) {
       // 学習のしおり p.45: 基礎特講 is countable only twice / four credits.
       // Keep its excess out of the common-education total while still reporting it.
       if (offering.name === '基礎特講' || offering.name.startsWith('基礎特講（') || offering.name.startsWith('基礎特講［')) {
@@ -303,9 +306,13 @@ function groupedCards(
         if (item.status === 'earned') general.earned += Math.max(0, Math.min(4, basicLecture.earned) - Math.min(4, basicLecture.earned - offering.credits));
         else if (item.status === 'in_progress') general.inProgress += offering.credits;
         else if (item.status === 'planned') general.planned += offering.credits;
-      } else add(general);
-      for (const [field, totals] of fields) {
-        if (mappings.some(mapping => mapping.category === '一般教育' && mapping.field === field)) add(totals);
+      } else {
+        // p.45: graduation credits attach to a completed curriculum course,
+        // not to an individual two-credit schooling attendance.
+        for (const mapping of commonMappings) {
+          const entry = commonEntries.get(mapping.mappingId) ?? { mapping, totals: empty() };
+          add(entry.totals); commonEntries.set(mapping.mappingId, entry);
+        }
       }
     }
     if (mappings.some(mapping => mapping.category === '保健体育')
@@ -317,6 +324,15 @@ function groupedCards(
       if (mappings.some(mapping => mapping.category === '外国語' && mapping.field === language)) add(totals);
     }
   }
+  for (const { mapping, totals } of commonEntries.values()) {
+    const completed = totals.earned >= mapping.curriculumCredits! ? mapping.curriculumCredits! : 0;
+    general.earned += completed;
+    const field = mapping.field && fields.get(mapping.field);
+    if (field) field.earned += completed;
+    // Plans remain informational only; they never complete a curriculum row.
+    general.inProgress += totals.inProgress; general.planned += totals.planned;
+    if (field) { field.inProgress += totals.inProgress; field.planned += totals.planned; }
+  }
   const detail = (label: string, totals: Totals, target: number, showSchooling = false) => ({
     label, earned: totals.earned, inProgress: totals.inProgress, planned: totals.planned, target,
     ...(showSchooling ? { schooling: totals.schooling } : {}),
@@ -326,9 +342,21 @@ function groupedCards(
     earned: Math.min(target, totals.earned), inProgress: totals.inProgress, planned: totals.planned, target, unit: 'credits',
     reason: hasUnresolvedEarned ? '修得済みに対応関係を確認中の科目があります' : null, details, note,
   });
-  const generalDetails = [...fields].map(([field, totals]) => detail(field, totals, 8));
+  // p.45: a family can supply at most six credits to the natural-field minimum.
+  // The 36-credit common-education total deliberately remains uncapped.
+  const familyEarned = new Map<string, number>();
+  const naturalFamily = (name: string) => /^(数学|生物学|化学|物理学)(?:[１２３123])?$/.test(name.normalize('NFKC')) ? name.normalize('NFKC').replace(/[１２３123]$/, '') : null;
+  for (const { mapping, totals } of commonEntries.values()) {
+    if (mapping.field !== '自然' || totals.earned < mapping.curriculumCredits!) continue;
+    const name = [...offerings.values()].find(offering => offering.mappingIds.includes(mapping.mappingId))?.name ?? '';
+    const family = naturalFamily(name);
+    if (family) familyEarned.set(family, (familyEarned.get(family) ?? 0) + mapping.curriculumCredits!);
+  }
+  const naturalCapped = [...familyEarned.values()].reduce((sum, credits) => sum + Math.min(6, credits), 0)
+    + [...commonEntries.values()].filter(({ mapping, totals }) => mapping.field === '自然' && totals.earned >= mapping.curriculumCredits! && !naturalFamily([...offerings.values()].find(o => o.mappingIds.includes(mapping.mappingId))?.name ?? '')).reduce((sum, entry) => sum + entry.mapping.curriculumCredits!, 0);
+  const generalDetails = [...fields].map(([field, totals]) => detail(field, field === '自然' ? { ...totals, earned: naturalCapped } : totals, 8));
   const generalCard = make('group-general', '一般教育', general, 36,
-    general.earned >= 36 && [...fields.values()].every(totals => totals.earned >= 8), generalDetails,
+    general.earned >= 36 && fields.get('人文')!.earned >= 8 && fields.get('社会')!.earned >= 8 && naturalCapped >= 8, generalDetails,
     `36単位のうち人文・社会・自然を各8単位以上。算入上限36単位。基礎特講は${Math.min(4, basicLecture.earned)} / 4単位（${basicLecture.earned > 4 ? `${basicLecture.earned - 4}単位は修得済みだが卒業算入外` : '2回まで算入'}）。`);
   const physicalCard = make('group-physical', '保健体育', physical, 2, physicalEarned.size > 0, undefined,
     '健康・スポーツ科学概論 または スポーツ総合演習を1科目。算入上限2単位');
@@ -885,9 +913,22 @@ function professionalCards(
         { ...make('professional-law-elective', '専門教育：選択', elective, electiveTarget, electiveTarget !== null && elective.earned >= electiveTarget,
           undefined, `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()} + ${requiredCourses}科目${threshold}単位達成後に認められる4単位科目のスクーリング部分修得 ${permittedPartial}単位。`, overflowRuleReason), partialCourses: partialCourses('選択') },
         make('professional-law-total', '専門教育：合計', total, totalTarget, totalTarget !== null && total.earned >= totalTarget, undefined, '選択必修・選択の卒業算入見込み合計です。', baseReason)]),
-      make('professional-law-schooling', '専門教育：スクーリング', emptyTotals(), 8, false, undefined,
-        '＊印以外のみを数える必要があります。現行offeringには＊印を識別するデータがないため自動判定しません。',
-        '＊印除外と4単位科目の部分修得例外を安全に識別できません。'),
+      (() => {
+        const schooling = emptyTotals();
+        for (const item of items) {
+          if (item.status !== 'earned') continue;
+          const offering = offerings.get(item.offeringId);
+          if (!offering || offering.method !== 'schooling' || offering.credits === null || offering.resolutionStatus !== 'matched') continue;
+          const maps = eligibleMappings(offering).filter(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育');
+          if (!maps.length) continue;
+          const canonical = offering.courseId ? catalog.courses.find(course => course.id === offering.courseId)?.canonicalName : offering.name;
+          // Public courses and every exact official ＊ row are excluded.  No fuzzy name matching.
+          if (!canonical || LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(canonical) || maps.some(mapping => mapping.requirementType === '公開科目')) continue;
+          schooling.earned += offering.credits;
+        }
+        return make('professional-law-schooling', '専門教育：スクーリング', schooling, 8, schooling.earned >= 8, undefined,
+          '選択必修・選択のうち、2026年度正本 p.47 の＊印科目・他学部他学科公開科目を除く実修得スクーリング単位。4単位科目のスクーリング部分修得もここでは実修得分を数えます。');
+      })(),
     ];
   }
 
@@ -1010,8 +1051,8 @@ function countedOverallCredits(cards: ProgressCard[], department: string | null)
 /**
  * Count only completed, mapped schooling components.  A mixed imported row is
  * represented as correspondence by deriveImportedAchievements, so its aggregate
- * is never accidentally counted as schooling.  We also require the mapped
- * curriculum-credit total to be complete and deduplicate by course identity.
+ * is never accidentally counted as schooling.  This is an actual-attendance
+ * reference: unlike graduation buckets, a two-credit partial schooling is kept.
  */
 function countedSchoolingCredits(items: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], department: string | null): { credits: number; uncertain: boolean } {
   const byCourse = new Map<string, { curriculumCredits: number; earned: number; schooling: number }>();
@@ -1032,7 +1073,7 @@ function countedSchoolingCredits(items: PlannerItem[], offerings: Map<string, Of
     if (offering.method === 'schooling') entry.schooling += offering.credits;
     byCourse.set(offering.courseId, entry);
   }
-  return { credits: [...byCourse.values()].reduce((sum, entry) => sum + (entry.earned >= entry.curriculumCredits ? Math.min(entry.schooling, entry.curriculumCredits) : 0), 0), uncertain };
+  return { credits: [...byCourse.values()].reduce((sum, entry) => sum + Math.min(entry.schooling, entry.earned, entry.curriculumCredits), 0), uncertain };
 }
 
 function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], program: { department: string | null }, profile: GraduationProfile, thesisSelection: ThesisSelection): ReferenceProgress[] {
@@ -1089,7 +1130,7 @@ function thesisProgressCard(catalog: PlannerCatalog, scopeId: string, progress: 
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return {

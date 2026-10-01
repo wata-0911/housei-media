@@ -28,6 +28,12 @@ export const THESIS_CREDIT_METADATA_2026 = {
   '商業学科': { credits: 6, sourcePages: [59] },
 } as const;
 
+/** p.47 の＊印。名前の部分一致ではなく、正本に載る科目名だけを除外する。 */
+export const LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 = new Set([
+  '社会経済学A', '社会経済学B', '経済政策論A', '経済政策論B', '総合特講', '情報学入門', '総合外国語特講', 'スポーツ特講',
+  'データサイエンス入門A', 'データサイエンス入門B', 'データサイエンス応用基礎A', 'データサイエンス応用基礎B', 'データサイエンス応用基礎C',
+]);
+
 export function thesisCreditsForDepartment(department: string | null): number | null {
   if (department === null || !(department in THESIS_CREDIT_METADATA_2026)) return null;
   return THESIS_CREDIT_METADATA_2026[department as keyof typeof THESIS_CREDIT_METADATA_2026].credits;
@@ -36,7 +42,7 @@ export function thesisCreditsForDepartment(department: string | null): number | 
 /** Calculation code refers to stable ids; official-source text lives only here. */
 export const GRADUATION_CARD_SOURCES: Record<string, GraduationSourceRef[]> = {
   'overall-reference-progress': [requirements, transferRecognition], 'schooling-reference-progress': [requirements, schooling, transferRecognition],
-  'group-general': [curriculum(46)], 'group-foreign': [curriculum(46)], 'group-physical': [curriculum(46)],
+  'group-general': [curriculum(44), curriculum(45)], 'group-foreign': [curriculum(44), curriculum(45)], 'group-physical': [curriculum(44), curriculum(45)],
   'history-seminar-required-elective': [curriculum(53)], 'history-seminar-elective': [curriculum(53)],
   'professional-history-required': [curriculum(53)], 'professional-history-schooling-required-elective': [curriculum(53)], 'professional-history-elective': [curriculum(53)],
   'professional-geography-required': [curriculum(55)], 'professional-geography-schooling-required': [curriculum(55)], 'professional-geography-required-elective': [curriculum(55)], 'professional-geography-elective': [curriculum(55)], 'professional-geography-total': [curriculum(55)],

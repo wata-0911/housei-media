@@ -344,7 +344,7 @@ test('graduation coverage keeps calculations intact and exposes official sources
   const general = progress.cards.find(row => row.requirementId === 'group-general');
   const law = progress.cards.find(row => row.requirementId === 'professional-law-required-elective');
   assert.equal(general.coverageStatus, 'supported');
-  assert.deepEqual(general.sourceRefs, [{ title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: 'p.46' }]);
+  assert.deepEqual(general.sourceRefs, [{ title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: 'p.44' }, { title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: 'p.45' }]);
   assert.equal(law.coverageStatus, 'partial');
   assert.ok(law.sourceRefs.some(source => source.page === 'p.47'));
   assert.equal(progress.graduationCheckComplete, false);
@@ -412,8 +412,10 @@ test('grouped requirements use earned credits, one language, and one mapped offe
   assert.ok(empty.cards.every(row => row.ruleType !== 'max_credits'));
   for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress'], ['earned', 'earned']]) {
     const general = card([item('literature', status)], 'general');
-    assert.equal(general[key], 4);
-    assert.equal(general.details[0][key], 4);
+    // The fixture mapping is a 2-credit curriculum row. A 4-credit offering
+    // may not inflate graduation credit beyond its official composition value.
+    assert.equal(general[key], status === 'earned' ? 2 : 4);
+    assert.equal(general.details[0][key], status === 'earned' ? 2 : 4);
     assert.equal(general.status, 'unsatisfied');
     const foreign = card([item('english2', status)], 'foreign');
     assert.equal(foreign[key], 2);
@@ -481,7 +483,7 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 20 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 21 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
@@ -1102,7 +1104,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   const store = memoryStore(JSON.stringify(v1));
   const loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.equal(loaded.state.items[0].earnedOrder, null);
   assert.deepEqual(loaded.state.publicCourses, []);
   assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
@@ -1110,7 +1112,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   delete v2.publicCourses;
   const v2Loaded = loadState(memoryStore(JSON.stringify(v2)), catalog);
   assert.equal(v2Loaded.error, null);
-  assert.equal(v2Loaded.state.schemaVersion, 19);
+  assert.equal(v2Loaded.state.schemaVersion, 20);
   assert.deepEqual(v2Loaded.state.publicCourses, []);
 });
 
@@ -1120,7 +1122,7 @@ test('v3 state migrates through v6 without losing saved planner data, and valida
   delete v3.thesisSelection;
   const loaded = loadState(memoryStore(JSON.stringify(v3)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.equal(loaded.state.thesisSelection, 'undecided');
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: current.items, publicCourses: current.publicCourses, todos: current.todos, selectedScopeId: current.selectedScopeId });
   assert.equal(validateState({ ...current, thesisSelection: 'selected' }, catalog), true);
@@ -1285,7 +1287,7 @@ test('v4 migration adds empty media progress without losing items, public course
   delete saved.mediaSchoolingProgress;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, {});
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
   assert.deepEqual(calculateGraduationProgress(loaded.state.items, catalog, loaded.state.selectedScopeId, loaded.state.publicCourses, loaded.state.thesisSelection), calculateGraduationProgress(saved.items, catalog, saved.selectedScopeId, saved.publicCourses, saved.thesisSelection));
@@ -1308,7 +1310,7 @@ test('v5 migration preserves planner and media data while adding empty evaluatio
   delete saved.courseEvaluations;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.courseEvaluations, {});
   assert.deepEqual(loaded.state.mediaSchoolingProgress, { [media.id]: { ...mediaSchoolingProgress[media.id], assessments: [] } });
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
@@ -2080,7 +2082,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
   const legacy = { ...initialState(), schemaVersion: 6, correspondenceProgress: undefined };
   delete legacy.correspondenceProgress;
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.correspondenceProgress, {});
   assert.deepEqual(loaded.state.courseEvaluations, legacy.courseEvaluations);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
@@ -2089,7 +2091,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
 test('v7 migration preserves legacy values while adding study year and null final grades', () => {
   const legacy = { ...initialState(), schemaVersion: 7, items: [{ offeringId: first.id, status: 'in_progress', plannedYear: 2026, plannedTerm: '春休み', earnedOrder: null }], publicCourses: [{ id: '44444444-4444-4444-8444-444444444444', title: '公開科目', status: 'planned', plannedYear: 2027, plannedTerm: '夏期', credits: 2 }], courseEvaluations: { [first.id]: { offeringId: first.id, reportGrade: 'A', schoolingGrade: 'B' } } };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.items[0], { ...legacy.items[0], studyYear: null });
   assert.equal(loaded.state.publicCourses[0].studyYear, null); assert.equal(loaded.state.publicCourses[0].finalGrade, null);
   assert.deepEqual(loaded.state.courseEvaluations[first.id], { ...legacy.courseEvaluations[first.id], finalGrade: null });
@@ -2121,7 +2123,7 @@ test('media assessments are optional, preserve all supported types, and survive 
   assert.equal(setTotalLessons(base, 14)?.totalLessons, 14); assert.equal(setTotalLessons(base, 15)?.totalLessons, 15);
   const v8 = { ...initialState(), schemaVersion: 8, mediaSchoolingProgress: { [media.id]: { offeringId: media.id, totalLessons: 15, lessons: [] } } };
   const loaded = loadState(memoryStore(JSON.stringify(v8)), catalog);
-  assert.equal(loaded.state.schemaVersion, 19); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
+  assert.equal(loaded.state.schemaVersion, 20); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
   const state = { ...initialState(), items: [item(media.id)], mediaSchoolingProgress: { [media.id]: withAll } };
   const raw = JSON.stringify(state); assert.deepEqual(loadState(memoryStore(raw), catalog).state.mediaSchoolingProgress[media.id].assessments, withAll.assessments);
 });
@@ -2402,7 +2404,7 @@ test('v13 repair safely restores catalog identity, orphan components, and pendin
   const component = { id: 'orphan', fingerprint: 'orphan', source: 'hosei_import', rawName: matched.name, offeringId: null, match: 'unmatched', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'A', sourceCourseId: 'gone', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
   const legacy = { ...initialState(), schemaVersion: 12, importedCourseAchievements: [row], importedStudyRecords: [component] };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 20);
   assert.equal(loaded.state.importedCourseAchievements[0].courseId, matched.courseId);
   assert.equal(loaded.state.importedStudyRecords[0].sourceCourseId, row.id);
   const derived = deriveImportedAchievements(loaded.state.importedStudyRecords, offeringsById, [], loaded.state.importedCourseAchievements);
@@ -2454,7 +2456,7 @@ test('v14 base-name repair keeps Roman numerals, safely classifies null-identity
   assert.equal(mediaDerived.mediaPending.length, 1, 'base-name media candidates remain available for confirmation');
   const v13 = { ...initialState(), schemaVersion: 13, selectedScopeId: scope, importedCourseAchievements: [row], items: [item(first.id, 'earned')] };
   const migrated = loadState(memoryStore(JSON.stringify(v13)), catalog);
-  assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 19);
+  assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 20);
   assert.deepEqual(migrated.state.items, v13.items, 'migration does not mutate plan items');
 });
 
@@ -2628,7 +2630,7 @@ test('v14 state migrates to v16 without dropping imports, selections, or saved p
   const legacy = { ...initialState(), schemaVersion: 14, mediaSchoolingProgress: { [media.id]: progressFor(media.id, {}) }, importedCourseAchievements: [{ id: 'legacy-row', fingerprint: 'legacy-row', source: 'hosei_import', rawName: '保存済み', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: null, recognizedExemption: null, additionalEnrollment: null, academicYear: null, yearSource: 'unknown', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
   assert.deepEqual(loaded.state.importedCourseUserMeta, {});
@@ -2641,7 +2643,7 @@ test('v15 graduation profile migration preserves planner, imported, and media da
   delete legacy.graduationProfile;
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.items, legacy.items);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
   assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements);
@@ -2989,7 +2991,7 @@ test('official-audit: transfer prefills leave route-dependent schooling unknown 
   assert.equal(officialRecognitionPrefill('bachelor_admission').schoolingEquivalentCredits, 15);
   assert.equal(officialRecognitionPrefill('transfer_second_year').general.humanities.credits, 8);
   assert.equal(officialRecognitionPrefill('transfer_third_year').general.humanities.credits, 12);
-  const saved = { ...initialState(), schemaVersion: 19, graduationProfile: { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_third_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, schoolingEquivalentCredits: 15 } } };
+  const saved = { ...initialState(), schemaVersion: 20, graduationProfile: { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_third_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, schoolingEquivalentCredits: 15 } } };
   assert.equal(loadState(memoryStore(JSON.stringify(saved)), catalog).state.graduationProfile.recognizedCredits.schoolingEquivalentCredits, 15);
 });
 
@@ -3010,7 +3012,7 @@ test('official-audit: Japanese literature and geography professional 82 totals f
       ['common-human', '一般教育', '人文', 12, 'correspondence'], ['common-social', '一般教育', '社会', 12, 'correspondence'], ['common-natural', '一般教育', '自然', 12, 'correspondence'],
       ['common-foreign', '外国語', '英語', 4, 'schooling'], ['common-physical', '保健体育', null, 2, 'schooling'],
     ];
-    fixture.catalog.mappings.push(...common.map(([mappingId, category, field]) => ({ ...mapping, mappingId, scopeId: commonScope, category, field, requirementType: null, curriculumCredits: 2 })));
+    fixture.catalog.mappings.push(...common.map(([mappingId, category, field, credits]) => ({ ...mapping, mappingId, scopeId: commonScope, category, field, requirementType: null, curriculumCredits: credits })));
     fixture.catalog.offerings.push(...common.map(([id, category, field, credits, method]) => ({ ...offering, id, name: id === 'common-physical' ? '健康・スポーツ科学概論' : id, credits, method, mappingIds: [id], resolutionStatus: 'matched' })));
     // Mapping IDs above intentionally equal offering IDs: this keeps the fixture's
     // common buckets isolated from its professional mappings.
