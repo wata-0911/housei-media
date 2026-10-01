@@ -81,22 +81,24 @@ catalog completenessは「この年度の全科目が分かった」というboo
 
 計画表に2026/2027/2028…の**計画対象開講年度**selectorと、保存済み年度・年指定入力を用意する。固定の2028上限を作らない。履修予定暦年と在学年次は別欄。初期表示は既存利用者の2026 viewを維持し、null年度の記録は「未設定」groupに残す。
 
-未来年度catalogが未収録ならCourseRegistryのcanonicalNameからintentを追加する。検索結果の2026参考情報は「2026年度の参考: …」として折りたたみ表示できるが、追加後の2027の方式・期・単位としてコピーしない。courseIdのない開講は未来course検索で捏造しない。「科目identity確認が必要」と既存2026 recordへ導線を出す。自由記述から公式Course/Offeringを作る機能はこの基盤に含めない。
+未来年度catalogが未収録ならCourseRegistryのcanonicalNameからintentを追加する。future PlanIntentを作成できるのは、CourseRegistry上にnonnull courseIdが存在する科目のみである。verified/provisionalのどちらでも意図の作成は可能だが、provisionalはauto-link不可。検索結果の2026参考情報は「2026年度の参考: …」として折りたたみ表示できるが、追加後の2027の方式・期・単位としてコピーしない。
+
+`courseId=null`の2026 Offeringには「年度横断identity未確認のため未来年度計画不可」と表示し、未来年度への追加を無効にする。name / mapping / subjectCode / classCode等からCourse identityを生成しない。2026の既存PlannerItemとして選択・保存することは従来どおり可能である。identity監査で安全なCourse identityが付与され、CourseRegistryに収録された後にfuture planningを可能にする。全2026 selectable offeringが未来計画可能になることはfoundationの要件にしない。`UnresolvedPlanIntent`や自由記述future courseは今回のnon-goal。
 
 | 表示 | 条件 | 行の内容・操作 |
 | --- | --- | --- |
 | 科目は計画済み / 2027開講未確認 | catalog未収録、該当候補なし、またはcoverage未確認 | 科目名・希望年度・暦年・希望時期・年次を編集。方式/単位/開講期は「未確認」。0単位や通信とは表示しない |
 | 開講候補あり | 候補あり・未選択 | 年度、方式、期、単位、source、課程対応、変更warningを一覧。複数候補は利用者が選択 |
 | 開講候補あり / 要確認 | identity/mapping/creditsが未確定または前年差分あり | 理由と参考sourceを表示。単位変更等は差分確認が必要。identity ambiguity/manual_reviewはlink確定させない |
-| 開講確定 | validated bindingがあり、annual itemと整合 | そのrevisionの開講情報を表示。登録済み・履修可能・卒業算入の保証を意味しない |
+| 開講確定 | このintentをplanIntentIdで参照するvalidated Enrollmentが存在する | Enrollment.offeringRefのrevisionの開講情報を表示。登録済み・履修可能・卒業算入の保証を意味しない |
 
 希望時期（user preference）と開講期（official period）は別表示。希望方式を将来追加するとしても希望であり、複数候補からのauto-pick条件にはしない。本設計のv22では希望方式を保存しない。候補link後も希望時期/暦年/年次を保持し、開講期で上書きしない。
 
 | record / status | offering identityの必須条件 |
 | --- | --- |
-| 未link PlanIntent: planned | courseId必須、offeringId=null。修得/進捗/評価は持たない |
-| 未link PlanIntent: dropped | intent取消として可能。offeringId=nullを許容。earnedOrderや成績を作らない |
-| linked PlanIntent | annual itemを参照し、表示statusはitemに従う。intent.statusは希望の存続を表すplannedのまま。2つの履修statusを同期保存しない |
+| 未link PlanIntent: planned | CourseRegistryに存在するcourseId必須。対応Enrollmentなし。Offeringへのbinding fieldや修得/進捗/評価は持たない |
+| 未link PlanIntent: dropped | intent取消として可能。対応Enrollmentなし。earnedOrderや成績を作らない |
+| linked PlanIntent（導出状態） | Enrollment.planIntentIdから対応annual itemを導出し、表示statusはitemに従う。intent.statusは希望の存続を表すplannedのまま。linked flagや逆方向参照を保存しない |
 | PlannerItem: planned | 既存互換を含めofferingId必須。未来の純粋な未確認希望はPlanIntentを使う |
 | in_progress / waiting | 年度開講offeringId必須。catalog未確認intentから直接遷移不可。linked item作成後に明示変更 |
 | earned / failed | 年度開講offeringId必須。earnedはlearner-enteredと公式importの根拠を区別する。component評価から自動遷移しない |
@@ -106,9 +108,9 @@ catalog completenessは「この年度の全科目が分かった」というboo
 
 既存v21のearnedに新しく証明書やfinalGradeを要求しない。既存値はlearner-enteredで保持する。公式importは別recordのまま優先表示・重複算入抑制を行い、auto-linkでearnedにしたりPlannerItemへ成績をコピーしたりしない。failedをcomponentのDから推定しない。
 
-未link intentをキャンセルするとdroppedになる。linked itemの取りやめはitem.status=droppedとして保存する。非plannedのitemに対するunlink・年度の付け替えは禁止し、別年度の新intentを作る。planned itemでも既存進捗/評価がある場合は自動付け替え不可。明示replanは旧記録を残す手順で別操作にする。
+未link intentをキャンセルするとdroppedになる。linked itemの取りやめはitem.status=droppedとして保存し、bindingは残す。linkの正本はEnrollment.planIntentIdとEnrollment.offeringRefであり、PlanIntent自体はlink/unlinkで更新しない。明示unlinkを許すのはplanned itemで既存進捗/評価がない場合だけとし、そのEnrollmentのplanIntentIdとlinkDecisionをnullにする。annual itemとofferingRefは単独の開講記録として保持する。このintentを参照するEnrollmentがなくなるため未linkと導出され、orphan用indexの更新も不要。非plannedのitemに対するunlink・年度の付け替えは禁止し、別年度の新intentを作る。年度を変えるreplanは旧記録を残す別操作とし、自動付け替えしない。
 
-計画行の「削除」は「取りやめ」と別操作である。linked行を削除するとintentと対応itemを同じsaveで両方削除し、offeringCatalogRefs・進捗・評価を保持する。Undoは同じintentId/offeringId/revisionと元の配列位置をpairで復元し、再追加済みの衝突があれば復元しない。未link intentの削除/UndoはintentIdで行い、既存のintentなし2026 itemの削除/Undoは従来のofferingId操作を保持する。
+計画行の「削除」は「取りやめ」やunlinkと別操作である。linked行を削除するとintentと対応Enrollmentを同じsaveで両方削除し、進捗・評価・todo等を保持する。削除後もそのOfferingを参照する記録が残る場合だけ、削除するEnrollment.offeringRefのrevisionをofferingCatalogRefsへ退避する。参照が残らなければ補助indexを作らない。Undoは同じintentIdとEnrollment（planIntentId/offeringRef/linkDecisionを含む）、元の配列位置を復元し、再追加済みのID/binding/revision衝突があれば復元しない。復元によりannual参照の正本がEnrollmentへ戻るので、そのOfferingの補助index entryは取り除く。未link intentの削除/UndoはintentIdのみを更新し、既存のintentなし2026 itemの削除/Undoにも同じorphan revision退避規約を適用する。
 
 ## 6. 集計・特殊科目の方針
 
@@ -142,13 +144,21 @@ catalog completenessは「この年度の全科目が分かった」というboo
 | identity補完 | matched+course、matched+null、manual_review、outside_mapping_scope、provisional Course | 安全なcatalog参照のみ補完。unsafeはnull+理由。courseId必須で既存を失わない |
 | 全2026回帰 | 全686 offerings、既存進捗/評価・orphan・Undo・import | source IDs維持、re-addで進捗復元、既存計算/表示adapterの結果維持 |
 | 未来intent CRUD | courseId+2027、2028。offeringなし、希望時期あり | 保存/reload/編集/取消/Undoできる。方式・単位・期は未確認。進捗recordなし |
+| 登録済みcourseId | CourseRegistryに存在するverified courseIdで未来intent追加 | future intent作成可能。PlanIntentにofferingId/catalogRef/linkDecisionを保存しない |
+| provisional courseId | CourseRegistryに存在するprovisional courseIdで未来intent追加・候補評価 | intent作成・保存可能だがauto-link不可 |
+| null / 未登録courseId | courseId=nullの2026 Offering、またはregistryに存在しないcourseIdで未来追加 | future intent作成不可。UIに「年度横断identity未確認のため未来年度計画不可」。2026 PlannerItemとしての利用・migrationは保持 |
+| 名称のみ一致 | null identity Offeringと既存Courseのname一致、同mapping/subjectCode | Courseを生成・同定しない。UnresolvedPlanIntentも作らない。監査後のregistry収録で初めて未来追加可能 |
 | 年度区別 | plannedYear=2027、targetAcademicYear=2026、studyYear=3 | 3概念が独立、課程選択不変 |
 | registry | 2026+synthetic2027、重複offering ID、bad year、bad bridge、bad digest | 新bundle追加で2026 bytes不変。重複/bad参照拒否。bad新bundleは既存2026を壊さず登録停止 |
-| unique auto-link | verified stable course、同対象年度1候補、全方式coverage確認、scope/課程bridge確認、baseline差分なし | 1 itemをplannedで原子的作成。再実行でno-op。source revisionをpin |
+| unique auto-link | verified stable course、同対象年度1候補、全方式coverage確認、scope/課程bridge確認、baseline差分なし | Enrollmentだけをplannedで作成し、planIntentId/offeringRef/linkDecisionを保存。PlanIntent不変、新linkだけでは補助index entryなし。再実行でno-op |
+| binding正本 / validation | 同じintentIdを参照する2 Enrollment、存在しないintentId、dropped intentへの参照、annual year不一致 | 不正なEnrollment参照を拒否。linked/unlinkedは対応Enrollmentの有無から導出。単独Enrollmentと未link intentはいずれも有効 |
+| unlink | planned・進捗/評価なしのlinked Enrollmentから明示unlink | Enrollment.planIntentId/linkDecisionだけをnullにし、offeringRefとPlanIntentは不変。未linkを導出。非plannedは拒否 |
+| delete / Undo / orphan pin | linked行削除、進捗/評価/todoあり・なし、reload、Undo/re-add | 残存参照がある時だけofferingRefを補助indexへ退避。UndoでEnrollmentへ正本を戻しindex entryを消す。intentだけの削除はindex更新なし |
+| orphan pinの衝突 | orphan進捗がpinするrevisionと新link/Undo/re-add候補のrevisionが違う | 自動付け替え拒否。orphan pinからintent linkを推定しない。同revisionで復元する場合だけindexからEnrollmentへ移す |
 | 複数候補 | 通信+schooling、前期+後期メディア、同コード別クラス、希望時期に1件一致 | 自動選択しない。候補選択UIを表示 |
 | 部分source公開 | 1候補だが他方式coverage未確認 | 1件でもauto-link不可。資料追加で再評価 |
 | 同定拒否 | provisional/ambiguous course、null courseId、manual_review、outside scope、名称/コードのみ一致 | linkしない。既存2026 selectableとは独立 |
-| 単位/mapping変更 | 4→2、null→既知、所属/field/requirementType/構成単位/eligibleYears変更、橋の未確認 | warning/review。希望を書換えない。承認前はofferingId=null |
+| 単位/mapping変更 | 4→2、null→既知、所属/field/requirementType/構成単位/eligibleYears変更、橋の未確認 | warning/review。PlanIntentを書換えず、承認前は対応Enrollmentを作らない |
 | revision変更 | linked後にcatalog revision/ledgerの差分 | 保存revisionは同じ。自動rebind/計算値更新なし。差分提示 |
 | link衝突 | 同offeringの既存item、同course別intent、repeatable同一候補 | auto-linkせずreview。進捗/評価を合体しない |
 | status遷移 | 未link planned→in_progress/waiting/earned/failed、取消、linked非plannedのunlink | 不正遷移拒否。未link取消可、annual identity必須、component成績でstatus不変 |
@@ -170,6 +180,7 @@ catalog completenessは「この年度の全科目が分かった」というboo
 - 新年度の卒業課程をplannedYear/admissionYearから自動選択すること。
 - auth/cloud sync、大学側の履修登録、卒業可否の最終判定。
 - 全null courseIdの自動解消、名称正規化による年度横断identity確定。
+- `UnresolvedPlanIntent`、自由記述future course、CourseRegistryにない科目の未来計画。全2026 selectable offeringを2027/2028計画へ追加できるという保証。
 - 同一annual Offeringに複数attemptを持つ進捗/評価storageへの全面移行。別クラス/別年度は既存の別offeringで扱う。
 - thesisをannual Offeringへ戻すこと、`graduationCheckComplete=false`を変更すること。
 
@@ -177,9 +188,13 @@ catalog completenessは「この年度の全科目が分かった」というboo
 
 ## Recommended architecture
 
-**B: additive PlanIntent + offering必須PlannerItem（Enrollment）**を採用する。保存stateに`planIntents`を追加し、既存`items`・offering-keyed進捗/評価を保持する。itemsにはcourseIdの安全な補完結果、intent参照、source revision参照を追加する。未来のCourse-level planは`offeringId=null`で保存し、開講選択が成功した時だけannual itemを作る。
+**B: additive PlanIntent + offering必須PlannerItem（Enrollment）**を採用する。保存stateに`planIntents`を追加し、既存`items`・offering-keyed進捗/評価を保持する。PlanIntentはcourse-levelの希望だけを保存する。annual Offeringへのbindingのsingle source of truthは **Enrollment.planIntentId + Enrollment.offeringRef** とし、link decision/review evidenceもEnrollment.linkDecisionの1箇所に置く。PlanIntentにofferingId/catalogRef/linkDecision、linked flagや逆方向参照を保存しない。linked/unlinkedは対応Enrollmentの存在から導出する。
 
-各intentに独立intentIdを付ける。linked intentとitemは1対1。UIの`PlanRow`判別unionで一行化し、status/単位/進捗はitemを優先する。intentを計算用itemへ合成しない。既存itemにintentを強制生成せず、v21からは空planIntentsで移行する。既存2026 plannedYear=2027 recordもそのまま保存し、参照年度が2026であることを明示する。未来年度へ変換する場合は別の明示操作で新intentを作る。
+offeringCatalogRefsはlinkの正本にはしない。EnrollmentがないOfferingを参照するorphan進捗/評価/todo等のrevisionを解決する補助indexに限定し、active Enrollmentのbindingを写して保存しない。通常の新linkはEnrollmentの追加だけで成立する。既存orphan pinを利用する場合のみ、そのpinをEnrollmentへ移す。
+
+future PlanIntentは、verified/provisionalを問わずCourseRegistryにcourseIdが存在する科目だけに作成できる。courseId=nullの2026 Offeringは「年度横断identity未確認のため未来年度計画不可」であり、2026 PlannerItemとしての従来利用は維持する。name/mapping/subjectCode等からCourseを捏造せず、identity監査後にregistryへ安全なidentityが収録されてから未来計画可能にする。全2026開講の未来計画対応やUnresolvedPlanIntentは要件に含めない。
+
+各intentに独立intentIdを付け、一つのintentを参照できるEnrollmentは最大1件とする。UIの`PlanRow`判別unionで導出した対応を一行化し、status/単位/進捗はitemを優先する。intentだけの状態とintentなしのannual itemはどちらも有効であり、「両方bindingを持って一致必須」という不変条件を設けない。intentを計算用itemへ合成しない。既存itemにintentを強制生成せず、v21からは空planIntentsで移行する。既存2026 plannedYear=2027 recordもそのまま保存し、参照年度が2026であることを明示する。未来年度へ変換する場合はregistry courseIdの条件を満たす時だけ別の明示操作で新intentを作る。
 
 CourseRegistryと年度bundleを年別indexで解決し、適用課程のCurriculumBundleは別resolverで解決する。auto-linkはsource-backed stable identity・年度・coverage・scope/課程bridge・単位差分の確認をすべて通過した場合のみ行う。現在全Courseがprovisionalであるため、catalog追加だけでは自動linkが始まらない。
 
@@ -253,9 +268,10 @@ type CatalogRegistry = {
   bridges: OfferingCurriculumBridge[];
 };
 
-type PlanIntentBase = {
+type PlanIntent = {
   id: IntentId;
-  courseId: CourseId; // provisionalにも計画できる。自動linkは別条件
+  courseId: CourseId; // CourseRegistry参照必須。null/未登録は作成不可
+  status: 'planned' | 'dropped'; // 希望の存続。linked/unlinkedは保存しない
   targetAcademicYear: AcademicYear;
   plannedYear: CalendarYear | null;
   preferredTerm: string | null; // 希望。official periodとは別
@@ -269,29 +285,25 @@ type PlanIntentBase = {
 };
 type LinkDecision = {
   source: 'auto' | 'manual';
+  scopeId: string; // link時に確認したscopeをpin
   curriculumRef: { id: CurriculumVersionId; revisionId: string };
   bridgeDigest: string;
   acceptedChangeCodes: string[]; // manual reviewで確認した差分
 };
-type PlanIntent = PlanIntentBase & (
-  | { status: 'planned' | 'dropped'; offeringId: null;
-      catalogRef: null; linkDecision: null }
-  | { status: 'planned'; offeringId: OfferingId;
-      catalogRef: CatalogRef; linkDecision: LinkDecision }
-);
 
 // 旧itemの全field/意味を維持。既存annual itemはintentなしでも有効。
 type Enrollment = V21PlannerItem & {
   courseId: CourseId | null;
   courseIdentityResolution: 'catalog_provisional' | 'verified' | 'unresolved';
-  planIntentId: IntentId | null;
-  offeringRef: OfferingRef; // raw offeringIdと一致必須
+  planIntentId: IntentId | null; // intentとの関連を保存する唯一の参照
+  offeringRef: OfferingRef; // annual bindingの正本。旧offeringIdは互換キー
+  linkDecision: LinkDecision | null; // link evidenceの唯一の保存先
 };
 type PlannerStateV22 = Omit<V21PlannerState, 'schemaVersion' | 'items'> & {
   schemaVersion: 22;
   items: Enrollment[];
   planIntents: PlanIntent[];
-  // items削除後の進捗/評価/todo/import参照も、reload後に同revisionで解決する。
+  // EnrollmentのないOfferingへのorphan参照専用。intent bindingは表さない。
   offeringCatalogRefs: Record<OfferingId, CatalogRef>;
 };
 // mediaSchoolingProgress / correspondenceProgress / courseEvaluations は
@@ -311,13 +323,19 @@ type PlanRow =
   | { kind: 'public'; course: PublicCourse };
 ```
 
-同offering IDのrevision差で進捗キーを増やさない。同一offeringにはstate内で一つの保存revisionのみを許す。`offeringCatalogRefs`を永続化し、item.offeringRef / intent.catalogRefと一致させる。progress/evaluation/todoにitemがない既存orphanも存在するため、2026参照はimmutable2026 manifestで解決する。未来のorphan参照もitem削除時にこのmapから削除せず、reload後も同じrevisionを解決する。新linkのsaveでmapも原子的に追加し、必要bundle revisionをregistryの保持対象にする。revision変更で異なる意味のrecordが必要なら新offering IDを発行し、進捗を自動コピーしない。
+PlanIntentはOffering bindingのfieldを持たず、courseIdは必ずCourseRegistryを参照する。provisional Courseでもintent作成は可能で、verified限定なのはauto-link条件である。courseId=nullのOfferingからPlanIntentを合成するvariantは定義しない。
+
+同offering IDのrevision差で進捗キーを増やさない。annual参照resolverは、Enrollmentが存在すればそのofferingRefを正本として使う。Enrollmentがない場合だけofferingCatalogRefsのorphan pinを使い、indexからPlanIntentとの関連を導出しない。active EnrollmentのIDはindexに二重保存しない。削除時に残存進捗/評価/todo/import等の参照がある場合、offeringRefをindexへ退避し、復元/re-add時には同revisionをEnrollmentへ移してindex entryを除く。pinの移動は同じoptimistic save内で行う。必要bundle revisionはどちらの参照からもregistryの保持対象にする。revision変更で異なる意味のrecordが必要なら新offering IDを発行し、進捗を自動コピーしない。
+
+既存offeringId fieldはv21の値を保つ互換キーであり、PlanIntentへの別bindingを表さない。offeringRef.offeringIdと同じ開講を指すことは検査するが、逆方向のintent bindingやactive revision indexの一致検査は設けない。
 
 新state schemaは2026 schemaの`$defs/PlannerState`を書き換えるのではなく、`planner_state_v22.schema.json`等の独立schemaとして作る。旧catalog validatorは既存schema、旧state検査はそのv21 defsを利用する。新annual/registry/curriculum schemaも独立versionとして作る。`plannerCatalog.ts`生成物の年literalを機械置換して再利用しない。
 
-JSON Schemaではintent bindingのnull組とstatus union、整数年度、required/extra property、ID formatを検証する。runtimeではregistry参照、year一致、revision存在、course補完値、scope/課程bridge、link相互参照、offering uniqueness、史学順序、import meta参照を検証する。linked pairのplannedYear/studyYear/希望時期の変更は一つのoperationで両側の対応fieldを同期する。生のPartial patchでlink IDや年度を編集させない。
+JSON SchemaではPlanIntentのcourseId必須・planned/dropped、整数年度、required/extra property、ID formatとEnrollment側の参照/evidence形状を検証する。runtimeではPlanIntent.courseIdのregistry存在、Enrollment.planIntentIdの参照先存在・planned状態・一意性、参照intentとのcourse/targetAcademicYear一致、offeringRefのrevision存在、scope/課程bridge、offering uniqueness、史学順序、import meta参照を検証する。planIntentIdがnonnullならlinkDecision必須、nullならlinkDecisionもnullとする。未link intentとintentなしEnrollmentはそれぞれ有効で、逆方向bindingの一致や保存されたlinked flagを検査する設計にはしない。補助indexはorphan用でactive EnrollmentのIDと重複させない。
 
-保存済みbindingのscope/課程検証はlinkDecisionにpinしたcontextを基準とする。画面のselectedScopeIdや利用者の課程選択が後から変わっただけで保存stateを不正としてlockしたり、intentを新scopeへ書換えたりしない。新contextではreview表示と算入可否の再確認を行い、既存pairは保持する。未link intentの新規auto-linkだけは現在の明示contextとの一致を要求する。
+link/unlink時のbinding更新対象はEnrollmentのみ。希望暦年/年次/時期のユーザー編集では、希望を保持するintentと既存UIのEnrollment側スケジュールを必要に応じて同じ操作で更新するが、これはbindingの二重保存ではなく利用者が指定した予定の更新である。link成立のためにPlanIntentへderived stateを保存しない。生のPartial patchでlink IDや開講年度を編集させない。
+
+保存済みbindingのscope/課程検証はEnrollment.linkDecisionにpinしたcontextを基準とする。画面のselectedScopeIdや利用者の課程選択が後から変わっただけで保存stateを不正としてlockしたり、intentを新scopeへ書換えたりしない。新contextではreview表示と算入可否の再確認を行い、既存Enrollmentのbindingは保持する。未link intentの新規auto-linkだけは現在の明示contextとの一致を要求する。
 
 ## Migration v21 -> proposed version
 
@@ -326,10 +344,10 @@ JSON Schemaではintent bindingのnull組とstatus union、整数年度、requir
 1. raw JSONとschemaVersionを検査する。v22 clientは23以上をunsupportedとしてlockする。v21 clientは22をlockする既存挙動を維持する。未知versionをv21へdowngradeして保存しない。
 2. v1〜v20は既存migrationの結果をv21へ正規化してから新段階を通す。v21入力も認定domain recoveryを含め、従来安全に読めるものを同じ基準で受け入れる。現行の早期return/final wrapperに新v22段階がskipされないよう明示pipelineにする。
 3. immutable2026 effective adapterで全既存offeringIdを解決する。v21-validなら2026のIDとして解決できる。欠落/重複等の構造不正は原文保持+lockし、itemをdropしない。
-4. itemsの旧fieldをすべてspreadして保持し、`planIntentId=null`、`offeringRef={offeringId, academicYear:2026, revisionId: pinned2026Manifest}`を追加する。参照年度はsourceの事実であり、plannedYearから作らない。
+4. itemsの旧fieldをすべてspreadして保持し、`planIntentId=null`、`linkDecision=null`、`offeringRef={offeringId, academicYear:2026, revisionId: pinned2026Manifest}`を追加する。annual参照はEnrollment.offeringRefを正本とし、既存itemにintent bindingを作らない。参照年度はsourceの事実であり、plannedYearから作らない。
 5. offeringがmatchedで、nonnull courseIdが2026 CourseRegistryに存在する場合だけそのcourseIdを補完する。全209 Courseは当初provisionalなので`catalog_provisional`とする。courseId=null、manual_review、outside_mapping_scopeは`courseId=null` / `unresolved`。元offeringに書かれたcourseId/sourceはcatalog側に残るため情報は消えない。名前・mapping・importから補完しない。後のverified ledgerによる補完は別の明示operationで行う。
-6. `planIntents=[]`とschemaVersion=22を追加する。既存未来plannedYearを未来Offeringに変換しない。既存earned/in_progress等、nonstandard term、null予定、earnedOrder、配列順を保持する。
-7. publicCourses、todos、mediaSchoolingProgress、courseEvaluations、correspondenceProgress、importedStudyRecords、importedCourseAchievements、importedCourseUserMeta、graduationProfile（放送大学認定含む）、thesisSelection、thesisProgressByScope、thesisGuidanceByScopeは既存field/value/keyをそのまま保持する。orphan進捗も残す。importの再repair/再matchをv21→22の副作用にしない。items/todos/進捗/評価/import候補・選択/認定科目の参照から、2026 catalogで解決できるIDだけを`offeringCatalogRefs`へpinする。現行v21 validatorはimport候補・選択の全参照を強制検証していないため、既存の解決不能import IDを移行失敗や削除の理由にしない。その元値は保持してwarning対象とする。必須annual itemやprogressの壊れた参照とは区別する。
+6. `planIntents=[]`とschemaVersion=22を追加する。migrationで未来intentを自動生成せず、courseId=nullでも既存Enrollmentを失わない。未来plannedYearを持つ旧itemも2026参照のまま保持し、CourseRegistryにcourseIdが存在する科目だけが後の明示操作でfuture intentを作れる。null identityはUIで未来計画不可と示し、name/mapping/subjectCodeから補完しない。既存earned/in_progress等、nonstandard term、null予定、earnedOrder、配列順を保持する。
+7. publicCourses、todos、mediaSchoolingProgress、courseEvaluations、correspondenceProgress、importedStudyRecords、importedCourseAchievements、importedCourseUserMeta、graduationProfile（放送大学認定含む）、thesisSelection、thesisProgressByScope、thesisGuidanceByScopeは既存field/value/keyをそのまま保持する。orphan進捗も残す。importの再repair/再matchをv21→22の副作用にしない。todos/進捗/評価/import候補・選択/認定科目の参照から、対応Enrollmentがなく、2026 catalogで解決できるIDだけを`offeringCatalogRefs`へpinする。active itemのofferingRefやintent bindingをindexへコピーしない。現行v21 validatorはimport候補・選択の全参照を強制検証していないため、既存の解決不能import IDを移行失敗や削除の理由にしない。その元値は保持してwarning対象とする。必須annual itemやprogressの壊れた参照とは区別する。
 8. v22 schema/runtime検証を行う。loadでは保存しない。明示的な通常saveが成功するときだけv22をprimary keyへ書く。原子的な全stateのsaveとraw比較を維持し、失敗ならUIと保存stateを変えない。
 
 storage keyは`hosei-planner:v1`のまま。`BACKUP_KEY`のbytesをmigrationで変更しない。recovery resetは従来の明示操作だけで、backup失敗時にprimaryを消さない。
@@ -340,7 +358,7 @@ migrationのlosslessとは既存semantic fieldの保持であり、全JSON bytes
 
 ## Auto-link algorithm
 
-registryへ新年度bundleを登録すると、未linkのplanned intentsだけを再評価する。catalog追加は保存stateを書き換えない。純粋assessmentを計算し、auto_linkableなpairだけを通常の競合保護された一括saveでlinkする。dropped intent、既存linked pair、年度外のitem、importのmanual choiceは対象外。
+registryへ新年度bundleを登録すると、`intent.status=planned`かつそのidをplanIntentIdで参照するEnrollmentが存在しないintentだけを再評価する。linked/unlinkedはこの検索結果から導出し、保存しない。catalog追加は保存stateを書き換えない。純粋assessmentを計算し、auto_linkableなintentについてEnrollmentだけを通常の競合保護されたsaveで追加する。dropped intent、既存linked Enrollment、年度外のitem、importのmanual choiceは対象外。
 
 1. 対象年度のbundleを検証し、どのrevisionを今回評価するかmanifestで一意に固定する。invalid bundleは未登録として警告する。年度不明時に最新年を代用しない。
 2. intent.courseIdの**exact stable ID**で候補を列挙し、offering.academicYear===targetAcademicYearを必須にする。名称/subjectCode/classCode、前年方式、希望時期の近さでmatchしない。
@@ -349,11 +367,11 @@ registryへ新年度bundleを登録すると、未linkのplanned intentsだけ�
 5. selected scopeとintent.scopeId、および明示適用課程のcontextが一致するか確認する。scope未選択、unknown/legacy課程、作成後にcontextが変わった場合は候補表示+review。current_2026でも対象年からその課程へのverified bridgeが必要。manual_curated・officialVerified=falseの対応をmatchedというだけでauto-link用verified bridgeへ昇格しない。年度横断の対応evidenceを別途承認する。common scopeはCurriculumBundleの明示common関係に従い、別学科を推測で共通扱いしない。
 6. 候補が複数ならcandidates。通信/スクーリング/メディアのどれかを選ぶのは利用者。希望時期などで自動pickしない。1件に一意の場合だけ次へ進む。
 7. 参考にした過去bundleとsemantic差分を比較する。offering.credits、構成単位、対象scope、category/field/requirementType、schoolingOnly/mediaOnly、eligibleYears、bridgeの意味を比較する。年度ごとのID変更そのものは意味の変更としない。比較するbaselineは同方式/同variantの参考群とし、前年の通信4単位とスクーリング2単位を同じ1値へ潰さない。一意なbaselineがない、null→既知、bridge不足でもreview。referenceがない場合も初回manual確認を要求する。
-8. 単位/mapping変更ならreviewとしてwarningを提示し、offeringIdはnullのまま。手動確認で変更内容を了承した時のみlink可能にし、了承codesとsource/bridge revisionを残す。hopeのcourse/year/時期や既存earnedの単位を書き換えない。method/periodの変化もcandidateの公式値を明示し、希望と衝突すればreviewする。
+8. 単位/mapping変更ならreviewとしてwarningを提示し、対応Enrollmentを作らず未linkのまま。手動確認で変更内容を了承した時のみlink可能にし、了承codesとsource/bridge revisionをEnrollment.linkDecisionに残す。PlanIntentのcourse/year/時期や既存earnedの単位を書き換えない。method/periodの変化もcandidateの公式値を明示し、希望と衝突すればreviewする。
 9. same offeringの既存item、他intentのclaim、revision違いの進捗参照を検査する。衝突があればauto-link不可。既存recordに自動mergeせず、利用者に既存行の利用または別候補を示す。
-10. 全条件が通れば`auto_linkable`。同じofferingRef/courseIdのplanned itemを作り、planIntentId、catalogRef、linkDecision、offeringCatalogRefsを設定する。plannedYear/studyYear/希望時期を維持し、評価/進捗/earnedOrderは作らない（earnedOrder=null）。保存直前に再検証し、同じrawに対する一つのsaveで全参照を確定する。
+10. 全条件が通れば`auto_linkable`。Enrollmentをplannedで作り、planIntentIdとofferingRefにbindingを、linkDecisionにreview evidenceを保存する。既存PlanIntentは変更しない。plannedYear/studyYear/希望時期は初期値として引き継ぎ、評価/進捗/earnedOrderは作らない（earnedOrder=null）。通常はitems追加だけが更新対象で、offeringCatalogRefsへactive bindingを追加しない。候補の既存orphan pinがある場合のみ、同revisionであることを検査してEnrollmentへpinを移し、index entryを削除する。保存直前に再検証し、同じrawに対する一つのoptimistic saveで確定する。
 
-手動選択では複数候補の中から指定した1件を同じresolverで再評価する。全候補での一意性は不要だが、選択候補のverified identity・対象年度・scope/課程bridge・保存衝突の検査は必須。credits/mappingや希望との変更は差分を明示して了承を記録する。coverage不足で他候補が未確認ならその点も明示し、選んだsource-backed開講だけが確認できたことを表示する。identity ambiguity/manual_review、verified bridge不在、競合を単なる了承で通過させない。利用者の課程設定修正やsource ledger監査で根拠が整ってからlinkする。
+手動選択では複数候補の中から指定した1件を同じresolverで再評価する。全候補での一意性は不要だが、選択候補のverified identity・対象年度・scope/課程bridge・保存衝突の検査は必須。credits/mappingや希望との変更は差分を明示して了承をEnrollment.linkDecisionへ記録する。既存のintentなしplanned Enrollmentを利用する明示操作も、同じ安全検査を通してそのEnrollmentだけにplanIntentId/linkDecisionを設定する。coverage不足で他候補が未確認ならその点も明示し、選んだsource-backed開講だけが確認できたことを表示する。identity ambiguity/manual_review、verified bridge不在、競合を単なる了承で通過させない。利用者の課程設定修正やsource ledger監査で根拠が整ってからlinkする。
 
 ```text
 assess(intent, registry, state) -> candidates + reasons + result
@@ -364,10 +382,11 @@ assess(intent, registry, state) -> candidates + reasons + result
   1候補 + 全安全条件成立            -> auto_linkable
 
 applyLinkDecision(state, assessedRevision, expectedRaw)
-  assessment再検査 -> intent+item pairを構成 -> validate -> 一括save
+  assessment再検査 -> Enrollmentを作成（PlanIntent不変）
+  -> orphan pinがあればEnrollmentへ移す -> validate -> optimistic save
 ```
 
-再実行はidempotent。既存linkを最新revisionへ自動移動しない。catalog訂正や科目廃止が判明したら保存pairを残してreview表示にする。sourceから消えたことだけでは「未来も開講しない」と断定せず、収録範囲/公式廃止evidenceを区別する。手動linkもexact identity/yearと構造整合は必須であり、選択UIで安全条件を無効化しない。
+再実行はidempotent。既存Enrollmentのbindingを最新revisionへ自動移動しない。catalog訂正や科目廃止が判明したらEnrollmentの正本を残してreview表示にする。sourceから消えたことだけでは「未来も開講しない」と断定せず、収録範囲/公式廃止evidenceを区別する。手動linkもexact identity/yearと構造整合は必須であり、選択UIで安全条件を無効化しない。
 
 ## Affected files/modules
 
@@ -379,10 +398,10 @@ applyLinkDecision(state, assessedRevision, expectedRaw)
 | `src/data/planner_catalog_2026.json`, 2026 manual/official override JSON | bytes/IDs維持。manifestへsource digest登録。2027 bundleは別data pathで追加 |
 | `catalog.ts`, `manualMappingOverrides.ts` | 2026専用adapter化、件数686検査とledger provenance維持。新`courseRegistry.ts`, `annualCatalogRegistry.ts`, `curriculumRegistry.ts`, `offeringCurriculumBridge.ts`で独立resolver |
 | `storage.ts` | v21→22段階、version上限、safe補完、shadow/expectedRaw/backup保持。bundle未取得と壊れたstateを区別し、参照不明を削除しない |
-| `validation.ts` | legacy schemaとv22 stateを分離。intent union、link pair、course/year/revision/bridgeと既存特殊順序を検証 |
-| `plannerItemState.ts`, `removeUndo.ts` | offering item操作を保持。新`planIntentState.ts`, `planLinker.ts`でintentId CRUD、pair保存、取消/Undo、衝突防止。raw Partial patchでrebindしない |
+| `validation.ts` | legacy schemaとv22 stateを分離。intentのregistry courseId、Enrollmentだけに置くbinding/evidence、参照先・一意性・course/year/revision/bridgeと既存特殊順序を検証。orphan indexとactive Enrollmentの重複禁止 |
+| `plannerItemState.ts`, `removeUndo.ts` | offering item操作を保持。新`planIntentState.ts`, `planLinker.ts`でintentId CRUD、Enrollmentのみのlink/unlink、取消、削除/Undo時のorphan pin移動、衝突防止。raw Partial patchでrebindしない |
 | `src/pages/PlannerPage.tsx` | catalog singleton依存をview-specific resolverへ。年度selector/未来intent CRUD/candidate review・auto-link通知。saveRecoveredState経由の保存、error lock、undoImportを維持 |
-| `CourseSearch.tsx`, `PlannedCourseList.tsx` | offering検索とcourse検索を年度別modeにする。PlanRow union表示、未確認label、希望時期/開講期・暦年/開講年度・年次の別UI。2026の追加操作を維持 |
+| `CourseSearch.tsx`, `PlannedCourseList.tsx` | offering検索とregistry course検索を年度別modeにする。courseId=nullは未来計画不可の明示と追加無効化。PlanRow unionとderived link表示、未確認label、希望時期/開講期・暦年/開講年度・年次の別UI。2026の追加操作を維持 |
 | `planTable.ts`, `yearEligibility.ts` | offering専用form/progress helpersを維持し、intentへ呼ばない。未来eligibilityを前年から確定せず参考化。targetYear変数の年次意味を明確化 |
 | `annualPlan.ts`, `calculations.ts`, `AnnualCreditLimitNotice.tsx`, `CreditSummary.tsx`, `CategorySummary.tsx` | unknown未来件数、暦年別group、linked pair一回、policy source/年度未確認を表示。2026 legacy projectionを保持 |
 | `mediaSchooling.ts`, `MediaSchoolingProgress.tsx`, `MediaProgressShareModal.tsx` | offeringId progress保持、未link intent除外。registryで確認したdeliveryのみ利用し、shareは年度を混ぜず同一year+categoryへ分ける |
@@ -405,10 +424,10 @@ applyLinkDecision(state, assessedRevision, expectedRaw)
 
 | PR | scope | acceptance criteria |
 | --- | --- | --- |
-| 1. Foundation model + migration | v22 intent/enrollment型・schema、CourseRegistryとimmutable2026 manifest/adapter、storage migration、validation、最低限のplan read model。新年度catalog/UIはまだ追加しない | v21 field全保持、全686参照解決、全209 provisional維持、null/manual/outside保持、未来schema lock、shadow/backup/競合維持。既存2026動作・進捗・計算不変。model-only intent fixtureのsave/reload可 |
-| 2. Future-plan CRUD / UI | 年度selector、course-level追加/編集/取消/Undo、未確認表示、予定暦年/年次/希望時期、未来件数・export、公開科目参考label | 2027/2028 intentをofferingなしで保存/reloadできる。未来属性を前年コピーしない。invalid status不可。2026検索・table mobile/desktopの既存操作維持。未取得計画でgraduation/guidance増加なし |
-| 3. Annual registry + safe linker + annual-aware import | 複数年度bundle validator/index、Course verification ledger、curriculum bridge、pure assessment、unique auto-link/候補選択/review、revision pin、import/unified/計算dedupの年度対応 | synthetic2027の一意条件でlink、複数/差分/曖昧/部分source/衝突は自動pickしない。2026 bytes保持、過去年importが未来計画へ誤合流しない。repeatable実績を潰さず不明は保留。実際の2027公式data追加は行わない |
-| 4. Regression / hardening | 特例・repeatable・全学科graduation/指導・media share年度分離・annual policy表示・extension/export回帰、保存失敗/競合/欠落source/Undoの統合検証、説明整理 | マトリクス全項目、177件既存回帰の安全条件、desktop/mobile導線、fake年fixture非配信、false固定。2026課程でfuture bridgeなしの算入保留、release可能な既存state互換を確認 |
+| 1. Foundation model + migration | v22 course-level intent/enrollment型・schema、Enrollment binding正本、orphan専用index、CourseRegistryとimmutable2026 manifest/adapter、storage migration、validation、derived plan read model。新年度catalog/UIはまだ追加しない | v21 field全保持、全686参照解決、全209 provisional維持、null/manual/outside保持、未来schema lock、shadow/backup/競合維持。PlanIntentにbindingなし、registry courseId必須、active参照のindex二重保存なし。既存2026動作・進捗・計算不変。provisional intent fixtureのsave/reload可 |
+| 2. Future-plan CRUD / UI | 年度selector、registry course-level追加/編集/取消/Undo、未確認表示、null identityの未来計画不可表示、予定暦年/年次/希望時期、未来件数・export、公開科目参考label | 登録済みverified/provisional courseIdの2027/2028 intentを保存/reloadできる。null/未登録courseIdは未来追加不可、名前からCourseを生成しない。未来属性を前年コピーしない。invalid status不可。2026検索・table mobile/desktopの既存操作維持。未取得計画でgraduation/guidance増加なし |
+| 3. Annual registry + safe linker + annual-aware import | 複数年度bundle validator/index、Course verification ledger、curriculum bridge、pure assessment、Enrollmentのみのunique auto-link/候補選択/review/unlink、削除/Undoのorphan revision移動、import/unified/計算dedupの年度対応 | synthetic2027の一意条件でEnrollmentにだけbinding/evidenceを保存しPlanIntent不変、linked状態は導出。複数/差分/曖昧/部分source/衝突は自動pickしない。provisionalはauto-link不可。2026 bytes保持、過去年importが未来計画へ誤合流しない。repeatable実績を潰さず不明は保留。実際の2027公式data追加は行わない |
+| 4. Regression / hardening | 特例・repeatable・全学科graduation/指導・media share年度分離・annual policy表示・extension/export回帰、binding正本・orphan pin・null identity制約・保存失敗/競合/欠落source/Undoの統合検証、説明整理 | マトリクス全項目、177件既存回帰の安全条件、desktop/mobile導線、fake年fixture非配信、false固定。2026課程でfuture bridgeなしの算入保留、release可能な既存state互換を確認 |
 
 PR3はcatalogを複数年度で公開できるようにする段階であり、import/identity/dedup対応が完成する前にglobal multi-year offeringsを既存importへ渡してreleaseしない。PR4は新機能の安全条件を先送りするPRではなく、PR1〜3でそれぞれ成立させた条件を横断検証する段階。
 
@@ -416,9 +435,9 @@ PR3はcatalogを複数年度で公開できるようにする段階であり、i
 
 ## Open questions
 
-未解決の判断事項は **1件**。future plan CRUDとlossless migrationはこの回答を待たず実装可能だが、productionでのcross-year auto-link有効化には回答が必要。
+未解決の判断事項は **1件**。PR1のlossless migrationとPR2のfuture plan CRUDのblockingではない。productionでのcross-year auto-linkを有効化するPR3までに回答が必要。
 
-1. **年度横断のcourse identityをverifiedに昇格する根拠と承認手順は何か。** 大学資料/元生成snapshotのどのstable identifierを採用し、元生成工程を入手できない場合の手動equivalence ledgerを誰がどのsourceで承認するか。現行209 provisional UUIDをそのままstable IDとして保存する設計は決定済みだが、名称一致だけでverifiedにはしない。根拠を確保できないcourseは計画可能・自動link停止を継続する。
+1. **年度横断のcourse identityをverifiedに昇格する根拠と承認手順は何か。** 大学資料/元生成snapshotのどのstable identifierを採用し、元生成工程を入手できない場合の手動equivalence ledgerを誰がどのsourceで承認するか。現行209 provisional UUIDをそのままstable IDとして保存する設計は決定済みだが、名称一致だけでverifiedにはしない。CourseRegistryに存在するcourseIdはverifiedの根拠未確保でも計画可能・自動link停止を継続する。courseId=nullのOfferingの未来計画不可とは区別する。
 
 同一annual offeringの複数attempt storage、auth/cloud sync、実際の2027開講/要件は本roadmapの判断待ち項目として広げず、明示non-goal/別data auditに置く。
 
@@ -427,9 +446,11 @@ PR3はcatalogを複数年度で公開できるようにする段階であり、i
 - **保存データ不変:** migrationは旧field/value/key/orderを失わず、loadは書かない。未来schema、壊れた参照、競合時はraw保持+変更lock。認定shadowとrecovery backupは別々に維持する。
 - **年度と課程の独立:** plannedYear、targetAcademicYear、Offering.academicYear、studyYear、curriculum versionは独立。年度selectorが適用課程を変更しない。
 - **source不変:** 2026 rawとledger provenanceを保持し、2027追加で上書きしない。最新revisionで過去の単位・mappingを書換えない。参照revisionを解決できなければ削除せずlock/reviewする。
-- **identityの保守性:** matched mapping≠verified Course。全209 provisionalと348 null IDsを隠さない。名称/コードの一致から安全なcross-year linkを捏造しない。
+- **identityの保守性:** matched mapping≠verified Course。全209 provisionalと348 null IDsを隠さない。future PlanIntentはregistryに存在するcourseIdのみで作成可能。provisionalは計画可・auto-link不可、nullは2026既存利用可・未来計画不可。name/mapping/subjectCodeからCourseを捏造せず、監査後のidentity付与/registry収録を待つ。全2026開講の未来計画対応を保証しない。
 - **unknownを0としない:** 未確認単位・方式・期・availability・annual policyは未知件数/理由を出す。未確認候補を「開講確定」にしない。
-- **linkの原子性:** intent/item pairとsource revisionは一括save。片側だけ存在する状態をvalidationで拒否。候補再評価は純粋で、既存link/status/評価を変えない。
+- **linkの正本:** Enrollment.planIntentId + Enrollment.offeringRefだけがbindingを保存し、evidenceはEnrollment.linkDecisionに置く。PlanIntentに逆方向bindingやlinked flagを持たせず、対応Enrollmentの有無から導出する。参照先存在・一意性・course/対象年度・evidenceを検査し、未link intentとintentなしEnrollmentの両方を許容する。
+- **最小の原子的更新:** 通常linkはEnrollment追加、unlinkはそのEnrollmentのplanIntentId/linkDecisionクリアだけで成立し、PlanIntentを更新しない。候補再評価は純粋で、既存link/status/評価を変えない。削除/Undoやorphan pin移動に必要な更新だけを同じoptimistic saveで確定する。
+- **orphan indexの役割:** offeringCatalogRefsはEnrollmentのないOffering参照のrevision pin専用で、intent bindingを保存・推定しない。active Enrollmentの参照を二重保存しない。削除時の残存参照にだけpinを退避し、Undo/re-addでEnrollmentへ移す。
 - **進捗identity維持:** media/correspondence/evaluation/todoはannual offeringのキーを維持し、courseIdへ合体しない。計画削除後のorphanとUndo/re-add復元を保持する。
 - **取得事実と意図の独立:** future intentは取得単位・公式成績にならない。earned/failedはcomponent評価から推定しない。import row ID/fingerprint/raw/manual choiceを保持する。
 - **重複と繰返しの両立:** 同source factは一回、異なるclass/year/確認済み履修回は保持。courseIdだけでrepeatableを統合しない。意味の異なるaggregate/componentは不明のまま保留する。
