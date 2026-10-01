@@ -1133,14 +1133,32 @@ function thesisProgressCard(catalog: PlannerCatalog, scopeId: string, progress: 
 function literaturePartialExceptionCard(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], cards: ProgressCard[]): ProgressCard[] {
   const department = catalog.programs.find(program => program.scopeId === scopeId)?.department;
   if (!['日本文学科', '史学科', '地理学科'].includes(department ?? '')) return [];
-  const totalId = department === '日本文学科' ? 'professional-japanese-total' : department === '史学科' ? 'professional-history-total' : 'professional-geography-total';
-  const professional = cards.find(card => card.requirementId === totalId);
+  // This is intentionally a candidate only.  In particular, a partial must not
+  // be silently converted into an ordinary two credits by the normal allocator.
   const partial = items.some(item => {
     if (item.status !== 'earned') return false;
     const offering = offerings.get(item.offeringId);
-    return offering?.method === 'schooling' && offering.credits === 2 && eligibleMappings(offering).some(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育' && mapping.requirementType === '選択' && mapping.curriculumCredits === 4);
+    if (offering?.method !== 'schooling' || offering.credits !== 2) return false;
+    const mappings = eligibleMappings(offering).filter(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育' && mapping.requirementType === '選択');
+    return mappings.length > 0 && mappings.every(mapping => mapping.curriculumCredits === 4);
   });
-  if (professional?.earned !== 80 || !partial) return [];
+  if (!partial) return [];
+  const ids = department === '日本文学科'
+    ? ['professional-required', 'professional-required-elective', 'professional-elective']
+    : department === '史学科'
+      ? ['professional-history-required', 'professional-history-schooling-required-elective', 'professional-history-elective']
+      : ['professional-geography-required', 'professional-geography-schooling-required', 'professional-geography-required-elective', 'professional-geography-elective'];
+  const requiredCards = ids.map(id => cards.find(card => card.requirementId === id));
+  // The grouped cards include their field details (history and geography), so a
+  // satisfied status is the safe single source for each department's minima.
+  if (requiredCards.some(card => !card || card.status !== 'satisfied' || card.earned === null)) return [];
+  const total = department === '史学科'
+    ? requiredCards.reduce((sum, card) => sum + (card!.earned ?? 0), 0)
+    : cards.find(card => card.requirementId === (department === '日本文学科' ? 'professional-japanese-total' : 'professional-geography-total'))?.earned;
+  // Partial curriculum rows deliberately remain outside the normal allocator.
+  // Japanese and geography expose the resulting 80 directly; history exposes
+  // the three mutually-exclusive 16 + 8 + 50 buckets instead.
+  if (total === null || total === undefined || (department === '史学科' ? total !== 74 : total !== 80)) return [];
   return [{ requirementId: 'literature-professional-80-plus-partial-2', label: '文学部 80＋部分修得2単位の特例候補', ruleType: 'manual_review', status: 'unknown', earned: 80, inProgress: 0, planned: 0, target: 82, unit: 'credits', reason: '教授会判断が必要な特例候補です。Plannerは82単位達成とは判定しません。', note: '分野要件を含む正式な判定は大学へ確認してください。' }];
 }
 

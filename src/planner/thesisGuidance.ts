@@ -24,24 +24,40 @@ export function guidanceEligibilityCreditResult(state: GuidanceState, catalog: P
   };
   const excluded = (categories: string[]) => categories.some(category => /教職|教科専門|その他専門/.test(category));
   const creditsByIdentity = new Map<string, { credits: number; ceiling: number }>();
+  // A two-credit schooling offering can be one half of a four-credit curriculum
+  // course.  The offering is therefore not an identity ceiling.  Never choose a
+  // larger candidate when the curriculum metadata disagrees: that would turn an
+  // ambiguous import into optimistic eligibility.
+  const uniqueCredits = (values: Array<number | null>) => {
+    const known = [...new Set(values.filter((value): value is number => value !== null))];
+    return known.length === 1 ? known[0] : null;
+  };
   const add = (identity: string, credits: number, ceiling: number) => {
     const previous = creditsByIdentity.get(identity) ?? { credits: 0, ceiling };
-    previous.ceiling = Math.max(previous.ceiling, ceiling);
+    if (previous.ceiling !== ceiling) return false;
     previous.credits = Math.min(previous.ceiling, previous.credits + credits);
     creditsByIdentity.set(identity, previous);
+    return true;
   };
   for (const item of state.items) if (item.status === 'earned') {
     const resolved = relevantMappings(item.offeringId);
     if (!resolved || resolved.offering.credits === null) return { credits: null, status: 'unknown', reason: '修得済みの計画科目を資格単位へ安全に分類できません。' };
-    if (!excluded(resolved.mappings.map(mapping => mapping.category))) add(resolved.offering.courseId ?? resolved.offering.id, resolved.offering.credits, resolved.offering.credits);
+    const ceiling = uniqueCredits(resolved.mappings.map(mapping => mapping.curriculumCredits));
+    if (ceiling === null) return { credits: null, status: 'unknown', reason: '修得済みの計画科目の構成単位を一意に確認できません。' };
+    if (!excluded(resolved.mappings.map(mapping => mapping.category)) && !add(resolved.offering.courseId ?? resolved.offering.id, resolved.offering.credits, ceiling)) return { credits: null, status: 'unknown', reason: '同一科目の構成単位が一致しません。' };
   }
   for (const row of state.importedCourseAchievements) {
     if (row.earnedCreditsTotal === null || row.earnedCreditsTotal <= 0) continue;
     const courseId = resolveSafeImportedCourseId(row, offerings);
     const candidates = courseId ? [...offerings.values()].filter(offering => offering.courseId === courseId && offering.resolutionStatus === 'matched') : [];
     const relevant = candidates.map(candidate => relevantMappings(candidate.id)).filter((value): value is NonNullable<typeof value> => Boolean(value));
-    if (!courseId || !relevant.length || relevant.some(value => value.offering.credits === null)) return { credits: null, status: 'unknown', reason: '成績取込の修得実績を資格単位へ安全に分類できません。' };
-    if (!excluded(relevant.flatMap(value => value.mappings.map(mapping => mapping.category)))) add(courseId, row.earnedCreditsTotal, Math.max(...relevant.map(value => value.offering.credits!)));
+    if (!courseId || !relevant.length) return { credits: null, status: 'unknown', reason: '成績取込の修得実績を資格単位へ安全に分類できません。' };
+    const mappingCredits = uniqueCredits(relevant.flatMap(value => value.mappings.map(mapping => mapping.curriculumCredits)));
+    const ceiling = row.compositionCredits !== null
+      ? (mappingCredits === null || mappingCredits === row.compositionCredits ? row.compositionCredits : null)
+      : mappingCredits;
+    if (ceiling === null) return { credits: null, status: 'unknown', reason: '成績取込の構成単位を一意に確認できません。' };
+    if (!excluded(relevant.flatMap(value => value.mappings.map(mapping => mapping.category))) && !add(courseId, row.earnedCreditsTotal, ceiling)) return { credits: null, status: 'unknown', reason: '同一科目の構成単位が一致しません。' };
   }
   const limit = state.selectedScopeId ? publicCourseLimitFor(catalog, state.selectedScopeId) : null;
   if (state.publicCourses.some(course => course.status === 'earned') && !limit) return { credits: null, status: 'unknown', reason: '公開科目の算入上限を確認できません。' };
@@ -64,6 +80,11 @@ function valid(step: ThesisGuidanceStep, years: number, referenceDate: Date): Gu
   const until = new Date(step.passedOn); until.setFullYear(until.getFullYear() + years);
   return { label: `${years}年間の有効期間`, status: until >= referenceDate ? 'satisfied' : 'unsatisfied' };
 }
+function validAndPassed(first: ThesisGuidanceStep, next: ThesisGuidanceStep | undefined, years: number, referenceDate: Date, label: string): GuidanceCondition {
+  const firstValidity = valid(first, years, referenceDate);
+  if (firstValidity.status !== 'satisfied') return { ...firstValidity, label };
+  return { label, status: next?.status === 'passed' ? 'satisfied' : 'unsatisfied' };
+}
 /** Procedures only; credit inputs remain intentionally external and never declare graduation. */
 export function thesisGuidanceViews(catalog: PlannerCatalog, scopeId: string | null, profile: GraduationProfile, progress: ThesisGuidanceProgress, eligibilityCredits: number | null, referenceDate: Date): GuidanceStepView[] {
   const department = catalog.programs.find(p => p.scopeId === scopeId)?.department;
@@ -73,9 +94,9 @@ export function thesisGuidanceViews(catalog: PlannerCatalog, scopeId: string | n
   if (['日本文学科', '史学科', '地理学科'].includes(department ?? '')) {
     const first = step('first', '第1次指導', [year(profile, 3), credit(60), ...(department === '地理学科' ? [{ label: '地理調査法リポート提出', status: progress.geographyReportSubmitted === null ? 'unknown' as const : progress.geographyReportSubmitted ? 'satisfied' as const : 'unsatisfied' as const }] : [])]);
     const rows = [step('general', '卒業論文一般指導（任意）', [year(profile, 2)]), first, step('second', '第2次指導', [valid(first.step, 3, referenceDate)])];
-    if (department !== '日本文学科') rows.push(step('third', '第3次指導', [{ label: '第1・第2次指導に合格', status: first.step.status === 'passed' && progress.steps.second?.status === 'passed' ? 'satisfied' : 'unsatisfied' }]));
-    rows.push(step('submission', '卒論提出申請（参考）', [year(profile, 4), credit(100), passed(progress, 'first', 'second', ...(department === '日本文学科' ? [] : ['third']))])); return rows;
+    if (department !== '日本文学科') rows.push(step('third', '第3次指導', [validAndPassed(first.step, progress.steps.second, 3, referenceDate, '第1次指導が3年以内で第2次指導に合格')]));
+    rows.push(step('submission', '卒論提出申請（参考）', [year(profile, 4), credit(100), validAndPassed(first.step, progress.steps.second, 3, referenceDate, '第1次指導が3年以内で第2次指導に合格'), ...(department === '日本文学科' ? [] : [passed(progress, 'third')]) ])); return rows;
   }
-  if (['経済学科', '商業学科'].includes(department ?? '')) { const plan = step('plan', '卒業論文計画書指導', [year(profile, 4), credit(80)]); return [step('general', '卒業論文一般指導（任意）', [year(profile, 2)]), plan, step('interim', '卒業論文中間報告書指導', [valid(plan.step, 2, referenceDate)]), step('submission', '卒論提出申請（参考）', [year(profile, 4), credit(100), passed(progress, 'plan', 'interim')])]; }
+  if (['経済学科', '商業学科'].includes(department ?? '')) { const plan = step('plan', '卒業論文計画書指導', [year(profile, 4), credit(80)]); return [step('general', '卒業論文一般指導（任意）', [year(profile, 2)]), plan, step('interim', '卒業論文中間報告書指導', [valid(plan.step, 2, referenceDate)]), step('submission', '卒論提出申請（参考）', [year(profile, 4), credit(100), validAndPassed(plan.step, progress.steps.interim, 2, referenceDate, '計画書指導が2年以内で中間報告書指導に合格')])]; }
   return [];
 }

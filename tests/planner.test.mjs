@@ -3099,6 +3099,41 @@ test('round2: eligibility counts confirmed imported partials once, recognition d
   assert.equal(guidanceEligibilityCreditResult({ ...base, importedCourseAchievements: [{ ...row(2), rawName: '照合不能な修得実績', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] }, catalog).status, 'unknown');
 });
 
+test('round2 blockers: guidance uses composition ceilings and downstream guidance keeps expiry evidence', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const split = catalog.offerings.find(offering => offering.resolutionStatus === 'matched' && offering.method === 'schooling' && offering.credits === 2 && offering.courseId
+    && offering.mappingIds.some(id => { const mapping = catalog.mappings.find(row => row.mappingId === id); return mapping?.scopeId === scope && mapping.curriculumCredits === 4; }));
+  assert.ok(split, 'real two-credit schooling half with a four-credit curriculum mapping');
+  const state = { ...initialState(), selectedScopeId: scope, graduationProfile: initialGraduationProfile() };
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(split.id, 'earned'), item(split.id, 'earned')] }, catalog).credits, 4, 'two planner halves reach their four-credit composition ceiling');
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(split.id, 'earned')] }, catalog).credits, 2, 'one half remains two credits');
+  const imported = { id: 'same-course-import', fingerprint: 'same-course-import', source: 'hosei_import', rawName: split.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: split.courseId, selectedOfferingId: split.id, selectionSource: 'manual', match: 'exact_unique', candidateOfferingIds: [split.id] };
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(split.id, 'earned'), item(split.id, 'earned')], importedCourseAchievements: [imported] }, catalog).credits, 4, 'planner and import duplicates do not exceed the ceiling');
+
+  const profile = { ...initialGraduationProfile(), currentStudyYear: 4 };
+  const passed = passedOn => ({ status: 'passed', passedOn });
+  const history = thesisGuidanceViews(catalog, catalog.programs.find(program => program.department === '史学科').scopeId, profile, { steps: { first: passed('2023-09-30'), second: passed('2026-01-01'), third: passed('2026-02-01') }, geographyReportSubmitted: null }, 100, new Date('2026-10-01'));
+  assert.equal(history.find(row => row.id === 'third').conditions[0].status, 'unsatisfied');
+  assert.equal(history.find(row => row.id === 'submission').conditions[2].status, 'unsatisfied');
+  const economy = thesisGuidanceViews(catalog, catalog.programs.find(program => program.department === '経済学科').scopeId, profile, { steps: { plan: passed(null), interim: passed('2026-01-01') }, geographyReportSubmitted: null }, 100, new Date('2026-10-01'));
+  assert.equal(economy.find(row => row.id === 'interim').conditions[0].status, 'unknown');
+  assert.equal(economy.find(row => row.id === 'submission').conditions[2].status, 'unknown');
+});
+
+test('round2 blockers: literature 80 plus partial candidate requires every department field minimum', () => {
+  const candidate = fixture => calculateGraduationProgress(fixture.catalog.offerings.map(row => item(row.id, 'earned')), fixture.catalog, fixture.scope, [], 'selected', [], [], initialGraduationProfile(), { selection: 'selected', status: 'earned' }).cards.find(row => row.requirementId === 'literature-professional-80-plus-partial-2');
+  const japanese = professionalFixture('日本文学科', [['required', '必修'], ['re', '選択必修'], ['elective', '選択'], ['partial', '選択', null, 4]], [['required', 20, ['required']], ['re', 20, ['re']], ['elective', 32, ['elective']], ['partial', 2, ['partial'], 'schooling']]);
+  const history = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['west', '選択', '西洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 46, ['jp']], ['east', 2, ['east']], ['west', 2, ['west']], ['partial', 2, ['partial'], 'schooling']]);
+  const geography = professionalFixture('地理学科', [['required', '必修'], ['schooling', 'スクーリング必修'], ['humanA', '選択必修', '人文地理の分野'], ['humanB', '選択必修', '人文地理の分野'], ['naturalA', '選択必修', '自然地理の分野'], ['naturalB', '選択必修', '自然地理の分野'], ['regional', '選択必修', '地誌・その他の分野'], ['elective', '選択'], ['partial', '選択', null, 4]], [['required', 12, ['required']], ['schooling', 6, ['schooling'], 'schooling'], ['human-a', 4, ['humanA']], ['human-b', 4, ['humanB']], ['natural-a', 4, ['naturalA']], ['natural-b', 4, ['naturalB']], ['regional', 26, ['regional']], ['elective', 12, ['elective']], ['partial', 2, ['partial'], 'schooling']]);
+  for (const fixture of [japanese, history, geography]) {
+    const card = candidate(fixture);
+    assert.equal(card?.status, 'unknown', fixture.catalog.programs.find(program => program.scopeId === fixture.scope)?.department);
+    assert.equal(card?.earned, 80, 'candidate never promotes the partial into ordinary earned credits');
+  }
+  const missingHistoryField = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 48, ['jp']], ['east', 2, ['east']], ['partial', 2, ['partial'], 'schooling']]);
+  assert.equal(candidate(missingHistoryField), undefined, 'missing a history field suppresses the candidate');
+});
+
 test('round2: v19 migration keeps records and profile, while v21 is locked', () => {
   const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
   const legacy = { ...initialState(), schemaVersion: 19, selectedScopeId: scope, items: [item(first.id, 'earned')], thesisProgressByScope: { [scope]: { selection: 'selected', status: 'planned' } }, importedCourseAchievements: [{ id: 'kept', fingerprint: 'kept', source: 'hosei_import', rawName: first.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: first.courseId, selectedOfferingId: first.id, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [first.id] }], graduationProfile: { ...initialGraduationProfile(), currentStudyYear: 4 } };
