@@ -917,15 +917,16 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
   const replace = (source: ProgressCard[], id: string, fn: (card: ProgressCard) => ProgressCard) => source.map(card => card.requirementId === id ? fn(card) : card);
   let next = replace(cards, 'group-general', card => {
     const fields = ['humanities', 'social', 'natural'] as const;
+    const recognitionMayApply = ['transfer_second_year', 'transfer_third_year', 'bachelor_admission', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType);
     const exempt = fields.every(key => general[key].mode === 'exempt');
     const credited = fields.reduce((sum, key) => sum + (general[key].mode === 'recognized' ? general[key].credits ?? 0 : 0), 0);
     const details = card.details?.map((detail, index) => {
       const row = general[fields[index]];
       const earned = row.mode === 'exempt' ? detail.target : (detail.earned ?? 0) + (row.mode === 'recognized' ? row.credits ?? 0 : 0);
-      return row.mode === 'unknown' && earned < detail.target ? { ...detail, earned: null, reason: '認定情報未確認' } : { ...detail, earned };
+      return recognitionMayApply && row.mode === 'unknown' && earned < detail.target ? { ...detail, earned: null, reason: '認定情報未確認' } : { ...detail, earned };
     });
     const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && (card.earned ?? 0) + credited >= 36;
-    const unknown = profile.admissionType !== 'first_year' && !exempt && details?.some(detail => detail.earned === null);
+    const unknown = recognitionMayApply && !exempt && details?.some(detail => detail.earned === null);
     return { ...card, earned: exempt ? 0 : unknown ? null : Math.min(card.target ?? 36, (card.earned ?? 0) + credited), details,
       status: exempt || completed ? 'satisfied' : unknown ? 'unknown' : card.status,
       reason: unknown ? '一般教育の認定情報が未確認です。0単位認定とは扱いません。' : card.reason,
@@ -935,7 +936,7 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     const row = profile.recognizedCredits.foreignLanguage ?? { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null };
     if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
     if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && (row.schoolingEquivalentCredits ?? 0) >= 2) return { ...card, earned: 4, status: 'satisfied', note: `${card.note ?? ''} 公式認定の内訳を反映しています。` };
-    if (row.mode === 'unknown' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 外国語の認定結果を確認してください。` };
+    if (row.mode === 'unknown' && profile.admissionType !== 'unknown' && profile.admissionType !== 'first_year' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 外国語の認定結果を確認してください。` };
     if (row.mode === 'recognized' && row.credits === 4 && row.language === 'unknown') return { ...card, status: 'unknown', earned: null, reason: '同一言語要件未確認です。公式認定結果の言語を確認してください。' };
     if (row.mode === 'recognized' && row.credits === 4 && row.schoolingEquivalentCredits === null) return { ...card, status: 'unknown', earned: null, reason: 'スクーリング相当認定単位が未確認です。0単位とは扱いません。' };
     if (row.mode === 'recognized' && row.credits === 4 && (row.schoolingEquivalentCredits ?? 0) < 2) return { ...card, status: 'unsatisfied', earned: 4, reason: 'スクーリング相当認定単位が2単位未満です。' };
@@ -945,7 +946,7 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     const row = profile.recognizedCredits.physicalEducation ?? { mode: 'unknown' as const, credits: null };
     if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
     if (row.mode === 'recognized' && row.credits === 2) return { ...card, earned: 2, status: 'satisfied', note: `${card.note ?? ''} 公式認定を反映しています。` };
-    if (row.mode === 'unknown' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 保健体育の認定結果を確認してください。` };
+    if (row.mode === 'unknown' && profile.admissionType !== 'unknown' && profile.admissionType !== 'first_year' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 保健体育の認定結果を確認してください。` };
     return card;
   });
   return next;

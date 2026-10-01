@@ -406,8 +406,8 @@ test('grouped requirements use earned credits, one language, and one mapped offe
   const card = (items, id) => calculateGraduationProgress(items, fixture, scope).cards.find(row => row.requirementId === `group-${id}`);
   const empty = calculateGraduationProgress([], fixture, scope);
   assert.equal(empty.graduationCheckComplete, false);
-  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).status), ['unsatisfied', 'unknown', 'unknown']);
-  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).earned), [0, null, null]);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).status), ['unsatisfied', 'unsatisfied', 'unsatisfied']);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).earned), [0, 0, 0]);
   assert.ok(empty.cards.every(row => row.ruleType !== 'max_credits'));
   for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress'], ['earned', 'earned']]) {
     const general = card([item('literature', status)], 'general');

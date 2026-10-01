@@ -1,4 +1,4 @@
-import type { PlannerCatalog, PlannerState } from './plannerCatalog';
+import type { GraduationProfile, PlannerCatalog, PlannerState } from './plannerCatalog';
 import { validateState } from './validation';
 import { repairImportedAchievements } from './importedAchievementRepair';
 import { graduationProfileValidationError, initialGraduationProfile, MAX_RECOGNIZED_CREDITS_2026, schoolingRecognitionCap } from './graduationProfile';
@@ -8,7 +8,7 @@ export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
 export const initialState = (): PlannerState => ({ schemaVersion: 19, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
-export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null };
+export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null };
 
 function recoverRecognitionProfile(profile: PlannerState['graduationProfile']): PlannerState['graduationProfile'] | null {
   const base = initialGraduationProfile();
@@ -22,7 +22,9 @@ function recoverRecognitionProfile(profile: PlannerState['graduationProfile']): 
       ...base.recognizedCredits, ...credits,
       totalCredits: typeof credits.totalCredits === 'number' && (credits.totalCredits < 0 || credits.totalCredits > MAX_RECOGNIZED_CREDITS_2026) ? null : credits.totalCredits ?? null,
       schoolingEquivalentCredits: typeof credits.schoolingEquivalentCredits === 'number' && (credits.schoolingEquivalentCredits < 0 || credits.schoolingEquivalentCredits > schoolingRecognitionCap(current as PlannerState['graduationProfile'])) ? null : credits.schoolingEquivalentCredits ?? null,
-      general: { ...base.recognizedCredits.general, ...general },
+      general: Object.fromEntries(Object.entries({ ...base.recognizedCredits.general, ...general }).map(([key, row]) => [key, row && typeof row === 'object' && typeof (row as { credits?: unknown }).credits === 'number' && ((row as { credits: number }).credits < 0 || (row as { credits: number }).credits > 36) ? { mode: 'unknown', credits: null } : row])) as PlannerState['graduationProfile']['recognizedCredits']['general'],
+      foreignLanguage: credits.foreignLanguage && typeof credits.foreignLanguage === 'object' && (((credits.foreignLanguage as { credits?: unknown }).credits as number) > 4 || ((credits.foreignLanguage as { schoolingEquivalentCredits?: unknown }).schoolingEquivalentCredits as number) > 2) ? { ...base.recognizedCredits.foreignLanguage, language: (credits.foreignLanguage as { language?: typeof base.recognizedCredits.foreignLanguage.language }).language ?? 'unknown' } : credits.foreignLanguage ?? base.recognizedCredits.foreignLanguage,
+      physicalEducation: credits.physicalEducation && typeof credits.physicalEducation === 'object' && (((credits.physicalEducation as { credits?: unknown }).credits as number) > 2) ? base.recognizedCredits.physicalEducation : credits.physicalEducation ?? base.recognizedCredits.physicalEducation,
       professionalCourses: Array.isArray(credits.professionalCourses) ? credits.professionalCourses.filter(row => Number.isFinite(row.credits) && row.credits >= 0 && row.credits <= MAX_RECOGNIZED_CREDITS_2026) : base.recognizedCredits.professionalCourses,
     },
   } as PlannerState['graduationProfile'];
@@ -44,7 +46,7 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
       if (!profile) throw new Error('Invalid state');
       const recovered = { ...(state as PlannerState), graduationProfile: profile };
       if (!validateState(recovered, catalog)) throw new Error('Invalid state');
-      return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。' };
+      return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。', recoveredRecognitionRaw: (state as PlannerState).graduationProfile };
     }
     return { state, raw, error: null };
   } catch {
@@ -138,6 +140,15 @@ export function saveState(store: Store, state: PlannerState, expectedRaw: string
   if (!validateState(state, catalog)) throw new Error('保存データの形式が不正です。');
   if (store.getItem(STORAGE_KEY) !== expectedRaw) throw new Error('別の画面で保存データが変更されました。再読み込みしてください。');
   const raw = JSON.stringify(state);
+  store.setItem(STORAGE_KEY, raw);
+  return raw;
+}
+
+/** Preserve uncorrected invalid recognition fields during unrelated saves. */
+export function saveStateWithRecognitionShadow(store: Store, state: PlannerState, expectedRaw: string | null, catalog: PlannerCatalog, shadow: GraduationProfile): string {
+  if (!validateState(state, catalog)) throw new Error('保存データの形式が不正です。');
+  if (store.getItem(STORAGE_KEY) !== expectedRaw) throw new Error('別の画面で保存データが変更されました。再読み込みしてください。');
+  const raw = JSON.stringify({ ...state, graduationProfile: shadow });
   store.setItem(STORAGE_KEY, raw);
   return raw;
 }

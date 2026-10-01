@@ -9,7 +9,7 @@ import GraduationProgress from '../components/planner/GraduationProgress';
 import GraduationProfileSettings from '../components/planner/GraduationProfileSettings';
 import { catalog, offeringsById } from '../planner/catalog';
 import { summarizeCredits } from '../planner/calculations';
-import { initialState, loadState, recoverState, saveState, STORAGE_KEY, type LoadResult } from '../planner/storage';
+import { initialState, loadState, recoverState, saveState, saveStateWithRecognitionShadow, STORAGE_KEY, type LoadResult } from '../planner/storage';
 import type { ImportedCourseUserMeta, PlannerItem, PlannerState, PublicCourse } from '../planner/plannerCatalog';
 import { calculateGraduationProgress } from '../planner/graduationProgress';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
@@ -85,8 +85,11 @@ export default function PlannerPage() {
   function commit(next: PlannerState, message: string): boolean {
     if (loaded.error) return false;
     try {
-      const raw = saveState(window.localStorage, next, loaded.raw, catalog);
-      setLoaded({ state: next, raw, error: null });
+      const profileEdited = next.graduationProfile !== state.graduationProfile;
+      const raw = loaded.recoveredRecognitionRaw && !profileEdited
+        ? saveStateWithRecognitionShadow(window.localStorage, next, loaded.raw, catalog, loaded.recoveredRecognitionRaw)
+        : saveState(window.localStorage, next, loaded.raw, catalog);
+      setLoaded({ state: next, raw, error: null, recognitionWarning: loaded.recoveredRecognitionRaw && !profileEdited ? loaded.recognitionWarning : null, recoveredRecognitionRaw: loaded.recoveredRecognitionRaw && !profileEdited ? loaded.recoveredRecognitionRaw : null });
       setSaveError(null);
       setNotice(message);
       return true;
