@@ -3,6 +3,7 @@ import type { GraduationProfile } from './plannerCatalog';
 /** 2026 requirements: the largest current degree total is law without thesis (128). */
 export const MAX_RECOGNIZED_CREDITS_2026 = 128;
 export const MAX_GENERAL_RECOGNIZED_CREDITS_2026 = 36;
+export const MAX_OPEN_UNIVERSITY_RECOGNIZED_CREDITS_2026 = 10;
 export const MAX_SCHOOLING_RECOGNITION_2026 = 30;
 
 export function schoolingRecognitionCap(profile: Pick<GraduationProfile, 'admissionType'>): number {
@@ -21,6 +22,7 @@ export const initialGraduationProfile = (): GraduationProfile => ({
 
 export const emptyRecognizedCredits = () => ({
   totalCredits: null, schoolingEquivalentCredits: null,
+  openUniversityCredits: null,
   general: { humanities: { mode: 'unknown' as const, credits: null }, social: { mode: 'unknown' as const, credits: null }, natural: { mode: 'unknown' as const, credits: null } },
   foreignLanguage: { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null },
   physicalEducation: { mode: 'unknown' as const, credits: null }, professionalCourses: [],
@@ -67,7 +69,7 @@ export function recognizedCreditBreakdownTotal(credits: GraduationProfile['recog
   const general = Object.values(legacy.general ?? {}).reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0);
   const foreign = legacy.foreignLanguage?.mode === 'recognized' ? legacy.foreignLanguage.credits ?? 0 : 0;
   const physical = legacy.physicalEducation?.mode === 'recognized' ? legacy.physicalEducation.credits ?? 0 : 0;
-  return general + foreign + physical + (legacy.professionalCourses ?? []).reduce((sum, row) => sum + row.credits, 0);
+  return general + foreign + physical + (legacy.openUniversityCredits ?? 0) + (legacy.professionalCourses ?? []).reduce((sum, row) => sum + row.credits, 0);
 }
 
 export function hasCreditBearingRecognition(credits: GraduationProfile['recognizedCredits']): boolean {
@@ -101,7 +103,7 @@ export function graduationProfileValidationError(profile: GraduationProfile): st
     return '入学年度は4桁の西暦（1000〜9999）で入力してください。';
   }
 
-  const { totalCredits, schoolingEquivalentCredits } = profile.recognizedCredits;
+  const { totalCredits, schoolingEquivalentCredits, openUniversityCredits } = profile.recognizedCredits;
   if ((totalCredits !== null && (!Number.isFinite(totalCredits) || totalCredits < 0 || totalCredits > MAX_RECOGNIZED_CREDITS_2026))
     || (schoolingEquivalentCredits !== null && (!Number.isFinite(schoolingEquivalentCredits) || schoolingEquivalentCredits < 0 || schoolingEquivalentCredits > schoolingRecognitionCap(profile)))) {
     return '認定単位は0以上の数値で入力してください。';
@@ -114,6 +116,7 @@ export function graduationProfileValidationError(profile: GraduationProfile): st
   if (modes.some(row => row.mode === 'exempt' && row.credits !== null)) return '免除と認定単位は同時に指定できません。免除は修得単位ではありません。';
   const outside = (value: number | null, cap: number) => value !== null && (!Number.isFinite(value) || value < 0 || value > cap);
   if (fields.some(row => outside(row.credits, MAX_GENERAL_RECOGNIZED_CREDITS_2026))
+    || outside(openUniversityCredits, MAX_OPEN_UNIVERSITY_RECOGNIZED_CREDITS_2026)
     || outside(profile.recognizedCredits.foreignLanguage.credits, 4)
     || outside(profile.recognizedCredits.physicalEducation.credits, 2)
     || profile.recognizedCredits.professionalCourses.some(row => !Number.isFinite(row.credits) || row.credits < 0 || row.credits > MAX_RECOGNIZED_CREDITS_2026)) return '区分別の認定単位が公式上限を超えています。';
@@ -127,7 +130,7 @@ export function graduationProfileValidationError(profile: GraduationProfile): st
   }
   const detailed = recognizedCreditBreakdownTotal(profile.recognizedCredits);
   if (detailed > MAX_RECOGNIZED_CREDITS_2026) return '内訳の認定単位が2026年度の卒業所要単位上限を超えています。';
-  const generalRecognized = fields.reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0);
+  const generalRecognized = fields.reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0) + (openUniversityCredits ?? 0);
   if (generalRecognized > MAX_GENERAL_RECOGNIZED_CREDITS_2026) return '一般教育の認定単位は合計36単位以下で入力してください。';
   if (totalCredits !== null && detailed > totalCredits) return '内訳の認定単位が公式認定単位合計を超えています。';
   const cap = schoolingRecognitionCap(profile);

@@ -1,12 +1,12 @@
 import type { GraduationProfile, PlannerCatalog, PlannerState } from './plannerCatalog';
 import { validateState } from './validation';
 import { repairImportedAchievements } from './importedAchievementRepair';
-import { graduationProfileValidationError, initialGraduationProfile, MAX_GENERAL_RECOGNIZED_CREDITS_2026, MAX_RECOGNIZED_CREDITS_2026, recognizedCreditBreakdownTotal, schoolingRecognitionCap } from './graduationProfile';
+import { graduationProfileValidationError, initialGraduationProfile, MAX_GENERAL_RECOGNIZED_CREDITS_2026, MAX_OPEN_UNIVERSITY_RECOGNIZED_CREDITS_2026, MAX_RECOGNIZED_CREDITS_2026, recognizedCreditBreakdownTotal, schoolingRecognitionCap } from './graduationProfile';
 import { normalizeThesisProgressState } from './thesisSelection';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 20, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
+export const initialState = (): PlannerState => ({ schemaVersion: 21, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null; invalidRecognitionPaths?: string[] };
 
@@ -26,7 +26,7 @@ function recoverRecognitionProfile(profile: GraduationProfile): GraduationProfil
   const modes = ['unknown', 'none', 'recognized', 'exempt'];
   const numeric = (value: unknown) => value === null || typeof value === 'number';
   const safe = (value: number | null, max: number) => value !== null && (!Number.isFinite(value) || value < 0 || value > max) ? null : value;
-  if (!numeric(credits.totalCredits) || !numeric(credits.schoolingEquivalentCredits)) return null;
+  if (!numeric(credits.totalCredits) || !numeric(credits.schoolingEquivalentCredits) || !numeric(credits.openUniversityCredits)) return null;
   for (const field of ['humanities', 'social', 'natural'] as const) {
     const row = credits.general[field];
     if (!object(row) || !modes.includes(row.mode as string) || !numeric(row.credits)) return null;
@@ -45,6 +45,7 @@ function recoverRecognitionProfile(profile: GraduationProfile): GraduationProfil
   const target = repaired.recognizedCredits;
   target.totalCredits = safe(credits.totalCredits, MAX_RECOGNIZED_CREDITS_2026);
   target.schoolingEquivalentCredits = safe(credits.schoolingEquivalentCredits, schoolingRecognitionCap(profile));
+  target.openUniversityCredits = safe(credits.openUniversityCredits, MAX_OPEN_UNIVERSITY_RECOGNIZED_CREDITS_2026);
   for (const field of ['humanities', 'social', 'natural'] as const) {
     const row = target.general[field];
     row.credits = safe(row.credits, MAX_GENERAL_RECOGNIZED_CREDITS_2026);
@@ -63,7 +64,7 @@ function recoverRecognitionProfile(profile: GraduationProfile): GraduationProfil
   target.professionalCourses = credits.professionalCourses.filter(row => Number.isFinite(row.credits) && row.credits >= 0 && row.credits <= MAX_RECOGNIZED_CREDITS_2026);
 
   const generalRows = [target.general.humanities, target.general.social, target.general.natural];
-  let generalTotal = generalRows.reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0);
+  let generalTotal = generalRows.reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : 0), 0) + (target.openUniversityCredits ?? 0);
   for (const row of [...generalRows].reverse()) {
     if (generalTotal <= MAX_GENERAL_RECOGNIZED_CREDITS_2026) break;
     if (row.mode === 'recognized' && row.credits !== null) { generalTotal -= row.credits; row.credits = null; }
@@ -86,13 +87,14 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)
       || !Number.isInteger((parsed as Record<string, unknown>).schemaVersion)
       || (parsed as Record<string, unknown>).schemaVersion as number < 1
-      || (parsed as Record<string, unknown>).schemaVersion as number > 20) throw new Error('Unsupported schema');
+      || (parsed as Record<string, unknown>).schemaVersion as number > 21) throw new Error('Unsupported schema');
     const migrated = migrateState(parsed, catalog) as Record<string, unknown>;
-    // v20 only adds independent procedure records and an explicit study year;
+    // v21 adds explicit Open University recognition while preserving every
+    // preceding state field and recognition-recovery shadow.
     // wrap every earlier migration result so no recognition/import shadow is lost.
-    const state = normalizeThesisProgressState((migrated.schemaVersion === 20 ? migrated : {
-      ...migrated, schemaVersion: 20, thesisGuidanceByScope: {},
-      graduationProfile: { ...initialGraduationProfile(), ...(migrated.graduationProfile as object) },
+    const state = normalizeThesisProgressState((migrated.schemaVersion === 21 ? migrated : {
+      ...migrated, schemaVersion: 21, thesisGuidanceByScope: {},
+      graduationProfile: { ...initialGraduationProfile(), ...(migrated.graduationProfile as object), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...((migrated.graduationProfile as Record<string, unknown> | undefined)?.recognizedCredits as object) } },
     }) as PlannerState, catalog);
     const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
     if (!profile) throw new Error('Invalid recognition structure');
@@ -125,12 +127,17 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
   const v3 = v2.schemaVersion === 2 ? { ...v2, schemaVersion: 3, publicCourses: [] } : v2;
   const v4 = v3.schemaVersion === 3 ? { ...v3, schemaVersion: 4, thesisSelection: 'undecided' } : v3;
   const v5 = v4.schemaVersion === 4 ? { ...v4, schemaVersion: 5, mediaSchoolingProgress: {} } : v4;
-  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7 && v5.schemaVersion !== 8 && v5.schemaVersion !== 9 && v5.schemaVersion !== 10 && v5.schemaVersion !== 11 && v5.schemaVersion !== 12 && v5.schemaVersion !== 13 && v5.schemaVersion !== 14 && v5.schemaVersion !== 15 && v5.schemaVersion !== 16 && v5.schemaVersion !== 17 && v5.schemaVersion !== 18 && v5.schemaVersion !== 19 && v5.schemaVersion !== 20) return value;
+  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7 && v5.schemaVersion !== 8 && v5.schemaVersion !== 9 && v5.schemaVersion !== 10 && v5.schemaVersion !== 11 && v5.schemaVersion !== 12 && v5.schemaVersion !== 13 && v5.schemaVersion !== 14 && v5.schemaVersion !== 15 && v5.schemaVersion !== 16 && v5.schemaVersion !== 17 && v5.schemaVersion !== 18 && v5.schemaVersion !== 19 && v5.schemaVersion !== 20 && v5.schemaVersion !== 21) return value;
   const v6 = v5.schemaVersion === 5 ? { ...v5, schemaVersion: 6, courseEvaluations: {} } : v5;
   const v7 = v6.schemaVersion === 6 ? { ...v6, schemaVersion: 7, correspondenceProgress: {} } : v6;
   // v9 component records intentionally have no reconstructed course aggregate.
   // They remain visible, but cannot be used as graduation achievements.
-  if (v7.schemaVersion === 20) return v7;
+  if (v7.schemaVersion === 21) return v7;
+  if (v7.schemaVersion === 20) {
+    const prior = typeof v7.graduationProfile === 'object' && v7.graduationProfile !== null ? v7.graduationProfile as Record<string, unknown> : {};
+    const recognized = typeof prior.recognizedCredits === 'object' && prior.recognizedCredits !== null ? prior.recognizedCredits as Record<string, unknown> : {};
+    return { ...v7, schemaVersion: 21, graduationProfile: { ...initialGraduationProfile(), ...prior, recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...recognized, openUniversityCredits: null } } };
+  }
   if (v7.schemaVersion === 19) return { ...v7, schemaVersion: 20, thesisGuidanceByScope: {}, graduationProfile: { ...initialGraduationProfile(), ...(v7.graduationProfile as object) } };
   if (v7.schemaVersion === 18) {
     const prior = typeof v7.graduationProfile === 'object' && v7.graduationProfile !== null ? v7.graduationProfile as Record<string, unknown> : {};

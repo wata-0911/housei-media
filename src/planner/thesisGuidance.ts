@@ -63,9 +63,9 @@ export function guidanceEligibilityCreditResult(state: GuidanceState, catalog: P
   if (state.publicCourses.some(course => course.status === 'earned') && !limit) return { credits: null, status: 'unknown', reason: '公開科目の算入上限を確認できません。' };
   const publicCredits = limit ? evaluatePublicCourseLimit(state.publicCourses, limit).countedCredits : 0;
   const recognized = state.graduationProfile.recognizedCredits;
-  const detailedRecognized = Object.values(recognized.general).reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : row.mode === 'exempt' ? 12 : 0), 0) + (recognized.foreignLanguage.mode === 'recognized' ? recognized.foreignLanguage.credits ?? 0 : recognized.foreignLanguage.mode === 'exempt' ? 4 : 0) + (recognized.physicalEducation.mode === 'recognized' ? recognized.physicalEducation.credits ?? 0 : recognized.physicalEducation.mode === 'exempt' ? 2 : 0) + recognized.professionalCourses.reduce((sum, row) => sum + row.credits, 0);
+  const detailedRecognized = Object.values(recognized.general).reduce((sum, row) => sum + (row.mode === 'recognized' ? row.credits ?? 0 : row.mode === 'exempt' ? 12 : 0), 0) + (recognized.foreignLanguage.mode === 'recognized' ? recognized.foreignLanguage.credits ?? 0 : recognized.foreignLanguage.mode === 'exempt' ? 4 : 0) + (recognized.physicalEducation.mode === 'recognized' ? recognized.physicalEducation.credits ?? 0 : recognized.physicalEducation.mode === 'exempt' ? 2 : 0) + recognized.professionalCourses.reduce((sum, row) => sum + row.credits, 0) + (state.graduationProfile.admissionType === 'bachelor_admission' ? 0 : recognized.openUniversityCredits ?? 0);
   // Aggregate recognition already includes the detail: it is never another bucket.
-  const recognitionCredits = recognized.totalCredits === null ? detailedRecognized : Math.max(recognized.totalCredits, detailedRecognized);
+  const recognitionCredits = recognized.totalCredits === null ? detailedRecognized : recognized.totalCredits;
   return { credits: [...creditsByIdentity.values()].reduce((sum, value) => sum + value.credits, 0) + publicCredits + recognitionCredits, status: 'known' };
 }
 
