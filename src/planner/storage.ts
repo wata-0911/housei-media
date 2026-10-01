@@ -6,7 +6,7 @@ import { normalizeThesisProgressState } from './thesisSelection';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 19, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
+export const initialState = (): PlannerState => ({ schemaVersion: 20, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null; invalidRecognitionPaths?: string[] };
 
@@ -83,7 +83,17 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     raw = store.getItem(STORAGE_KEY);
     if (raw === null) return { state: initialState(), raw, error: null };
     const parsed: unknown = JSON.parse(raw);
-    const state = normalizeThesisProgressState(migrateState(parsed, catalog) as PlannerState, catalog);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)
+      || !Number.isInteger((parsed as Record<string, unknown>).schemaVersion)
+      || (parsed as Record<string, unknown>).schemaVersion as number < 1
+      || (parsed as Record<string, unknown>).schemaVersion as number > 20) throw new Error('Unsupported schema');
+    const migrated = migrateState(parsed, catalog) as Record<string, unknown>;
+    // v20 only adds independent procedure records and an explicit study year;
+    // wrap every earlier migration result so no recognition/import shadow is lost.
+    const state = normalizeThesisProgressState((migrated.schemaVersion === 20 ? migrated : {
+      ...migrated, schemaVersion: 20, thesisGuidanceByScope: {},
+      graduationProfile: { ...initialGraduationProfile(), ...(migrated.graduationProfile as object) },
+    }) as PlannerState, catalog);
     const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
     if (!profile) throw new Error('Invalid recognition structure');
     if (!validateState(state, catalog)) {
@@ -115,12 +125,13 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
   const v3 = v2.schemaVersion === 2 ? { ...v2, schemaVersion: 3, publicCourses: [] } : v2;
   const v4 = v3.schemaVersion === 3 ? { ...v3, schemaVersion: 4, thesisSelection: 'undecided' } : v3;
   const v5 = v4.schemaVersion === 4 ? { ...v4, schemaVersion: 5, mediaSchoolingProgress: {} } : v4;
-  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7 && v5.schemaVersion !== 8 && v5.schemaVersion !== 9 && v5.schemaVersion !== 10 && v5.schemaVersion !== 11 && v5.schemaVersion !== 12 && v5.schemaVersion !== 13 && v5.schemaVersion !== 14 && v5.schemaVersion !== 15 && v5.schemaVersion !== 16 && v5.schemaVersion !== 17 && v5.schemaVersion !== 18 && v5.schemaVersion !== 19) return value;
+  if (v5.schemaVersion !== 5 && v5.schemaVersion !== 6 && v5.schemaVersion !== 7 && v5.schemaVersion !== 8 && v5.schemaVersion !== 9 && v5.schemaVersion !== 10 && v5.schemaVersion !== 11 && v5.schemaVersion !== 12 && v5.schemaVersion !== 13 && v5.schemaVersion !== 14 && v5.schemaVersion !== 15 && v5.schemaVersion !== 16 && v5.schemaVersion !== 17 && v5.schemaVersion !== 18 && v5.schemaVersion !== 19 && v5.schemaVersion !== 20) return value;
   const v6 = v5.schemaVersion === 5 ? { ...v5, schemaVersion: 6, courseEvaluations: {} } : v5;
   const v7 = v6.schemaVersion === 6 ? { ...v6, schemaVersion: 7, correspondenceProgress: {} } : v6;
   // v9 component records intentionally have no reconstructed course aggregate.
   // They remain visible, but cannot be used as graduation achievements.
-  if (v7.schemaVersion === 19) return v7;
+  if (v7.schemaVersion === 20) return v7;
+  if (v7.schemaVersion === 19) return { ...v7, schemaVersion: 20, thesisGuidanceByScope: {}, graduationProfile: { ...initialGraduationProfile(), ...(v7.graduationProfile as object) } };
   if (v7.schemaVersion === 18) {
     const prior = typeof v7.graduationProfile === 'object' && v7.graduationProfile !== null ? v7.graduationProfile as Record<string, unknown> : {};
     const recognized = typeof prior.recognizedCredits === 'object' && prior.recognizedCredits !== null ? prior.recognizedCredits as Record<string, unknown> : {};

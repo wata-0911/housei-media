@@ -30,6 +30,7 @@ import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/
 import { graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill } from '../src/planner/graduationProfile.ts';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
 import { annualCreditLimitReferences } from '../src/planner/annualPlan.ts';
+import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/thesisGuidance.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -344,7 +345,7 @@ test('graduation coverage keeps calculations intact and exposes official sources
   const general = progress.cards.find(row => row.requirementId === 'group-general');
   const law = progress.cards.find(row => row.requirementId === 'professional-law-required-elective');
   assert.equal(general.coverageStatus, 'supported');
-  assert.deepEqual(general.sourceRefs, [{ title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: 'p.46' }]);
+  assert.deepEqual(general.sourceRefs, [{ title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: 'p.44' }, { title: '2026年度 学習のしおり（教育課程表）', year: 2026, page: 'p.45' }]);
   assert.equal(law.coverageStatus, 'partial');
   assert.ok(law.sourceRefs.some(source => source.page === 'p.47'));
   assert.equal(progress.graduationCheckComplete, false);
@@ -412,8 +413,10 @@ test('grouped requirements use earned credits, one language, and one mapped offe
   assert.ok(empty.cards.every(row => row.ruleType !== 'max_credits'));
   for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress'], ['earned', 'earned']]) {
     const general = card([item('literature', status)], 'general');
-    assert.equal(general[key], 4);
-    assert.equal(general.details[0][key], 4);
+    // The fixture mapping is a 2-credit curriculum row. A 4-credit offering
+    // may not inflate graduation credit beyond its official composition value.
+    assert.equal(general[key], status === 'earned' ? 2 : 4);
+    assert.equal(general.details[0][key], status === 'earned' ? 2 : 4);
     assert.equal(general.status, 'unsatisfied');
     const foreign = card([item('english2', status)], 'foreign');
     assert.equal(foreign[key], 2);
@@ -481,7 +484,7 @@ test('all six statuses round-trip, including null course identity', () => {
 test('invalid JSON, schema version, references, duplicate items and invalid fields remain intact', () => {
   const valid = { ...initialState(), items: [item(first.id)] };
   const invalid = [
-    '{broken', JSON.stringify({ ...valid, schemaVersion: 20 }),
+    '{broken', JSON.stringify({ ...valid, schemaVersion: 21 }),
     JSON.stringify({ ...valid, items: [item('missing')] }),
     JSON.stringify({ ...valid, items: [item(first.id), item(first.id)] }),
     JSON.stringify({ ...valid, selectedScopeId: 'missing' }),
@@ -1102,7 +1105,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   const store = memoryStore(JSON.stringify(v1));
   const loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.equal(loaded.state.items[0].earnedOrder, null);
   assert.deepEqual(loaded.state.publicCourses, []);
   assert.equal(store.getItem(STORAGE_KEY), JSON.stringify(v1));
@@ -1110,7 +1113,7 @@ test('history seminar completion order is unique, consecutive, earned-only, and 
   delete v2.publicCourses;
   const v2Loaded = loadState(memoryStore(JSON.stringify(v2)), catalog);
   assert.equal(v2Loaded.error, null);
-  assert.equal(v2Loaded.state.schemaVersion, 19);
+  assert.equal(v2Loaded.state.schemaVersion, 20);
   assert.deepEqual(v2Loaded.state.publicCourses, []);
 });
 
@@ -1120,7 +1123,7 @@ test('v3 state migrates through v6 without losing saved planner data, and valida
   delete v3.thesisSelection;
   const loaded = loadState(memoryStore(JSON.stringify(v3)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.equal(loaded.state.thesisSelection, 'undecided');
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: current.items, publicCourses: current.publicCourses, todos: current.todos, selectedScopeId: current.selectedScopeId });
   assert.equal(validateState({ ...current, thesisSelection: 'selected' }, catalog), true);
@@ -1285,7 +1288,7 @@ test('v4 migration adds empty media progress without losing items, public course
   delete saved.mediaSchoolingProgress;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, {});
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
   assert.deepEqual(calculateGraduationProgress(loaded.state.items, catalog, loaded.state.selectedScopeId, loaded.state.publicCourses, loaded.state.thesisSelection), calculateGraduationProgress(saved.items, catalog, saved.selectedScopeId, saved.publicCourses, saved.thesisSelection));
@@ -1308,7 +1311,7 @@ test('v5 migration preserves planner and media data while adding empty evaluatio
   delete saved.courseEvaluations;
   const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.courseEvaluations, {});
   assert.deepEqual(loaded.state.mediaSchoolingProgress, { [media.id]: { ...mediaSchoolingProgress[media.id], assessments: [] } });
   assert.deepEqual({ items: loaded.state.items, publicCourses: loaded.state.publicCourses, thesisSelection: loaded.state.thesisSelection, todos: loaded.state.todos, selectedScopeId: loaded.state.selectedScopeId }, { items: saved.items, publicCourses: saved.publicCourses, thesisSelection: saved.thesisSelection, todos: saved.todos, selectedScopeId: saved.selectedScopeId });
@@ -2080,7 +2083,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
   const legacy = { ...initialState(), schemaVersion: 6, correspondenceProgress: undefined };
   delete legacy.correspondenceProgress;
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.correspondenceProgress, {});
   assert.deepEqual(loaded.state.courseEvaluations, legacy.courseEvaluations);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
@@ -2089,7 +2092,7 @@ test('unknown correspondence requirements never claim credit and v6 migration re
 test('v7 migration preserves legacy values while adding study year and null final grades', () => {
   const legacy = { ...initialState(), schemaVersion: 7, items: [{ offeringId: first.id, status: 'in_progress', plannedYear: 2026, plannedTerm: '春休み', earnedOrder: null }], publicCourses: [{ id: '44444444-4444-4444-8444-444444444444', title: '公開科目', status: 'planned', plannedYear: 2027, plannedTerm: '夏期', credits: 2 }], courseEvaluations: { [first.id]: { offeringId: first.id, reportGrade: 'A', schoolingGrade: 'B' } } };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.items[0], { ...legacy.items[0], studyYear: null });
   assert.equal(loaded.state.publicCourses[0].studyYear, null); assert.equal(loaded.state.publicCourses[0].finalGrade, null);
   assert.deepEqual(loaded.state.courseEvaluations[first.id], { ...legacy.courseEvaluations[first.id], finalGrade: null });
@@ -2121,7 +2124,7 @@ test('media assessments are optional, preserve all supported types, and survive 
   assert.equal(setTotalLessons(base, 14)?.totalLessons, 14); assert.equal(setTotalLessons(base, 15)?.totalLessons, 15);
   const v8 = { ...initialState(), schemaVersion: 8, mediaSchoolingProgress: { [media.id]: { offeringId: media.id, totalLessons: 15, lessons: [] } } };
   const loaded = loadState(memoryStore(JSON.stringify(v8)), catalog);
-  assert.equal(loaded.state.schemaVersion, 19); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
+  assert.equal(loaded.state.schemaVersion, 20); assert.deepEqual(loaded.state.mediaSchoolingProgress[media.id].assessments, []);
   const state = { ...initialState(), items: [item(media.id)], mediaSchoolingProgress: { [media.id]: withAll } };
   const raw = JSON.stringify(state); assert.deepEqual(loadState(memoryStore(raw), catalog).state.mediaSchoolingProgress[media.id].assessments, withAll.assessments);
 });
@@ -2402,7 +2405,7 @@ test('v13 repair safely restores catalog identity, orphan components, and pendin
   const component = { id: 'orphan', fingerprint: 'orphan', source: 'hosei_import', rawName: matched.name, offeringId: null, match: 'unmatched', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: 'A', sourceCourseId: 'gone', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
   const legacy = { ...initialState(), schemaVersion: 12, importedCourseAchievements: [row], importedStudyRecords: [component] };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
-  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 20);
   assert.equal(loaded.state.importedCourseAchievements[0].courseId, matched.courseId);
   assert.equal(loaded.state.importedStudyRecords[0].sourceCourseId, row.id);
   const derived = deriveImportedAchievements(loaded.state.importedStudyRecords, offeringsById, [], loaded.state.importedCourseAchievements);
@@ -2454,7 +2457,7 @@ test('v14 base-name repair keeps Roman numerals, safely classifies null-identity
   assert.equal(mediaDerived.mediaPending.length, 1, 'base-name media candidates remain available for confirmation');
   const v13 = { ...initialState(), schemaVersion: 13, selectedScopeId: scope, importedCourseAchievements: [row], items: [item(first.id, 'earned')] };
   const migrated = loadState(memoryStore(JSON.stringify(v13)), catalog);
-  assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 19);
+  assert.equal(migrated.error, null); assert.equal(migrated.state.schemaVersion, 20);
   assert.deepEqual(migrated.state.items, v13.items, 'migration does not mutate plan items');
 });
 
@@ -2628,7 +2631,7 @@ test('v14 state migrates to v16 without dropping imports, selections, or saved p
   const legacy = { ...initialState(), schemaVersion: 14, mediaSchoolingProgress: { [media.id]: progressFor(media.id, {}) }, importedCourseAchievements: [{ id: 'legacy-row', fingerprint: 'legacy-row', source: 'hosei_import', rawName: '保存済み', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 0, schoolingCreditsTotal: null, compositionCredits: null, recognizedExemption: null, additionalEnrollment: null, academicYear: null, yearSource: 'unknown', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] };
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
   assert.deepEqual(loaded.state.importedCourseUserMeta, {});
@@ -2641,7 +2644,7 @@ test('v15 graduation profile migration preserves planner, imported, and media da
   delete legacy.graduationProfile;
   const loaded = loadState(memoryStore(JSON.stringify(legacy)), catalog);
   assert.equal(loaded.error, null);
-  assert.equal(loaded.state.schemaVersion, 19);
+  assert.equal(loaded.state.schemaVersion, 20);
   assert.deepEqual(loaded.state.items, legacy.items);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
   assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements);
@@ -2989,7 +2992,7 @@ test('official-audit: transfer prefills leave route-dependent schooling unknown 
   assert.equal(officialRecognitionPrefill('bachelor_admission').schoolingEquivalentCredits, 15);
   assert.equal(officialRecognitionPrefill('transfer_second_year').general.humanities.credits, 8);
   assert.equal(officialRecognitionPrefill('transfer_third_year').general.humanities.credits, 12);
-  const saved = { ...initialState(), schemaVersion: 19, graduationProfile: { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_third_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, schoolingEquivalentCredits: 15 } } };
+  const saved = { ...initialState(), schemaVersion: 20, graduationProfile: { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_third_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, schoolingEquivalentCredits: 15 } } };
   assert.equal(loadState(memoryStore(JSON.stringify(saved)), catalog).state.graduationProfile.recognizedCredits.schoolingEquivalentCredits, 15);
 });
 
@@ -3010,7 +3013,7 @@ test('official-audit: Japanese literature and geography professional 82 totals f
       ['common-human', '一般教育', '人文', 12, 'correspondence'], ['common-social', '一般教育', '社会', 12, 'correspondence'], ['common-natural', '一般教育', '自然', 12, 'correspondence'],
       ['common-foreign', '外国語', '英語', 4, 'schooling'], ['common-physical', '保健体育', null, 2, 'schooling'],
     ];
-    fixture.catalog.mappings.push(...common.map(([mappingId, category, field]) => ({ ...mapping, mappingId, scopeId: commonScope, category, field, requirementType: null, curriculumCredits: 2 })));
+    fixture.catalog.mappings.push(...common.map(([mappingId, category, field, credits]) => ({ ...mapping, mappingId, scopeId: commonScope, category, field, requirementType: null, curriculumCredits: credits })));
     fixture.catalog.offerings.push(...common.map(([id, category, field, credits, method]) => ({ ...offering, id, name: id === 'common-physical' ? '健康・スポーツ科学概論' : id, credits, method, mappingIds: [id], resolutionStatus: 'matched' })));
     // Mapping IDs above intentionally equal offering IDs: this keeps the fixture's
     // common buckets isolated from its professional mappings.
@@ -3044,4 +3047,112 @@ test('safe recognized professional identities feed every department once without
     const duplicate = calculateGraduationProgress([item(chosen.offering.id, 'earned')], catalog, program.scopeId, [], 'selected', [], [], profile).cards.filter(card => card.requirementId.startsWith('professional-'));
     assert.equal(duplicate.reduce((sum, card) => sum + (card.earned ?? 0), 0), cards.reduce((sum, card) => sum + (card.earned ?? 0), 0), `${department} planner duplicate is not double counted`);
   }
+});
+
+test('round2: current study year and geography report survive v20 reload without admission-year inference', () => {
+  const geography = catalog.programs.find(program => program.department === '地理学科').scopeId;
+  for (const currentStudyYear of [null, 1, 2, 3, 4]) {
+    for (const geographyReportSubmitted of [null, true, false]) {
+      const saved = { ...initialState(), selectedScopeId: geography, graduationProfile: { ...initialGraduationProfile(), admissionYear: 2000, currentStudyYear }, thesisGuidanceByScope: { [geography]: { steps: {}, geographyReportSubmitted } } };
+      const loaded = loadState(memoryStore(JSON.stringify(saved)), catalog);
+      assert.equal(loaded.error, null);
+      assert.equal(loaded.state.graduationProfile.currentStudyYear, currentStudyYear);
+      assert.equal(guidanceForScope(loaded.state, geography).geographyReportSubmitted, geographyReportSubmitted);
+    }
+  }
+  const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
+  assert.match(source, /現在の在学年次/);
+  assert.match(source, /aria-label="現在の在学年次"/);
+});
+
+test('round2: thesis procedures use explicit year, report status, fixed expiry, and department submission steps', () => {
+  const scope = department => catalog.programs.find(program => program.department === department).scopeId;
+  const profile = currentStudyYear => ({ ...initialGraduationProfile(), currentStudyYear });
+  const passedStep = passedOn => ({ status: 'passed', passedOn });
+  const japanese = thesisGuidanceViews(catalog, scope('日本文学科'), profile(3), { steps: { first: passedStep('2024-10-01') }, geographyReportSubmitted: null }, 60, new Date('2027-09-30'));
+  assert.equal(japanese.find(row => row.id === 'first').conditions[0].status, 'satisfied');
+  assert.equal(japanese.find(row => row.id === 'second').conditions[0].status, 'satisfied');
+  assert.equal(japanese.some(row => row.id === 'third'), false);
+  const expired = thesisGuidanceViews(catalog, scope('日本文学科'), profile(3), { steps: { first: passedStep('2024-10-01') }, geographyReportSubmitted: null }, 60, new Date('2027-10-02'));
+  assert.equal(expired.find(row => row.id === 'second').conditions[0].status, 'unsatisfied');
+  const noDate = thesisGuidanceViews(catalog, scope('日本文学科'), profile(3), { steps: { first: passedStep(null) }, geographyReportSubmitted: null }, 60, new Date('2027-01-01'));
+  assert.equal(noDate.find(row => row.id === 'second').conditions[0].status, 'unknown');
+  const geographyUnknown = thesisGuidanceViews(catalog, scope('地理学科'), profile(3), { steps: {}, geographyReportSubmitted: null }, 60, new Date('2026-01-01'));
+  const geographyFalse = thesisGuidanceViews(catalog, scope('地理学科'), profile(3), { steps: {}, geographyReportSubmitted: false }, 60, new Date('2026-01-01'));
+  assert.equal(geographyUnknown.find(row => row.id === 'first').conditions.at(-1).status, 'unknown');
+  assert.equal(geographyFalse.find(row => row.id === 'first').conditions.at(-1).status, 'unsatisfied');
+  const law = thesisGuidanceViews(catalog, scope('法律学科'), profile(3), { steps: { general: passedStep('2026-01-01') }, geographyReportSubmitted: null }, 100, new Date('2026-01-01'));
+  assert.equal(law.find(row => row.id === 'submission').conditions[0].status, 'unsatisfied');
+  const economy = thesisGuidanceViews(catalog, scope('経済学科'), profile(4), { steps: { plan: passedStep('2024-10-01'), interim: passedStep('2026-01-01') }, geographyReportSubmitted: null }, 100, new Date('2026-09-30'));
+  assert.equal(economy.find(row => row.id === 'submission').conditions.every(condition => condition.status === 'satisfied'), true);
+});
+
+test('round2: eligibility counts confirmed imported partials once, recognition detail and bachelor exemptions, while unsafe rows remain unknown', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const offering = catalog.offerings.find(row => row.resolutionStatus === 'matched' && row.courseId && row.credits === 4 && row.mappingIds.some(id => catalog.mappings.find(mapping => mapping.mappingId === id && (mapping.scopeId === scope || catalog.programs.find(program => program.isCommon).scopeId === mapping.scopeId) && !/教職|教科専門|その他専門/.test(mapping.category))));
+  assert.ok(offering);
+  const row = credits => ({ id: `import-${credits}`, fingerprint: `import-${credits}`, source: 'hosei_import', rawName: offering.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: credits, schoolingCreditsTotal: credits, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: offering.id, selectionSource: 'manual', match: 'exact_unique', candidateOfferingIds: [offering.id] });
+  const base = { ...initialState(), selectedScopeId: scope, graduationProfile: { ...initialGraduationProfile(), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, totalCredits: null, general: { humanities: { mode: 'recognized', credits: 24 }, social: { mode: 'none', credits: null }, natural: { mode: 'none', credits: null } } } } };
+  assert.equal(guidanceEligibilityCreditResult({ ...base, importedCourseAchievements: [row(2), { ...row(2), id: 'import-two', fingerprint: 'import-two' }] }, catalog).credits, 28, '2+2 is capped at the 4-credit course identity');
+  const bachelor = { ...base, graduationProfile: { ...base.graduationProfile, admissionType: 'bachelor_admission', recognizedCredits: officialRecognitionPrefill('bachelor_admission') } };
+  assert.equal(guidanceEligibilityCreditResult(bachelor, catalog).credits, 42);
+  assert.equal(guidanceEligibilityCreditResult({ ...base, importedCourseAchievements: [{ ...row(2), rawName: '照合不能な修得実績', courseId: null, selectedOfferingId: null, selectionSource: 'none', match: 'unmatched', candidateOfferingIds: [] }] }, catalog).status, 'unknown');
+});
+
+test('round2 blockers: guidance uses composition ceilings and downstream guidance keeps expiry evidence', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const split = catalog.offerings.filter(offering => offering.resolutionStatus === 'matched' && offering.method === 'schooling' && offering.credits === 2 && offering.courseId
+    && offering.mappingIds.some(id => { const mapping = catalog.mappings.find(row => row.mappingId === id); return mapping?.scopeId === scope && mapping.curriculumCredits === 4; }));
+  const firstHalf = split.find(offering => split.some(other => other.id !== offering.id && other.courseId === offering.courseId));
+  const secondHalf = firstHalf && split.find(offering => offering.id !== firstHalf.id && offering.courseId === firstHalf.courseId);
+  assert.ok(firstHalf && secondHalf, 'two distinct real two-credit offerings share one four-credit curriculum course');
+  assert.notEqual(firstHalf.id, secondHalf.id);
+  assert.equal(firstHalf.courseId, secondHalf.courseId);
+  const state = { ...initialState(), selectedScopeId: scope, graduationProfile: initialGraduationProfile() };
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(firstHalf.id, 'earned'), item(secondHalf.id, 'earned')] }, catalog).credits, 4, 'two real offerings reach their shared four-credit composition ceiling');
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(firstHalf.id, 'earned')] }, catalog).credits, 2, 'one offering remains two credits');
+  const imported = { id: 'same-course-import', fingerprint: 'same-course-import', source: 'hosei_import', rawName: firstHalf.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: firstHalf.courseId, selectedOfferingId: firstHalf.id, selectionSource: 'manual', match: 'exact_unique', candidateOfferingIds: [firstHalf.id] };
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(firstHalf.id, 'earned'), item(secondHalf.id, 'earned')], importedCourseAchievements: [imported] }, catalog).credits, 4, 'planner offerings and imported achievement do not exceed the shared ceiling');
+
+  const profile = { ...initialGraduationProfile(), currentStudyYear: 4 };
+  const passed = passedOn => ({ status: 'passed', passedOn });
+  const history = thesisGuidanceViews(catalog, catalog.programs.find(program => program.department === '史学科').scopeId, profile, { steps: { first: passed('2023-09-30'), second: passed('2026-01-01'), third: passed('2026-02-01') }, geographyReportSubmitted: null }, 100, new Date('2026-10-01'));
+  assert.equal(history.find(row => row.id === 'third').conditions[0].status, 'unsatisfied');
+  assert.equal(history.find(row => row.id === 'submission').conditions[2].status, 'unsatisfied');
+  const economy = thesisGuidanceViews(catalog, catalog.programs.find(program => program.department === '経済学科').scopeId, profile, { steps: { plan: passed(null), interim: passed('2026-01-01') }, geographyReportSubmitted: null }, 100, new Date('2026-10-01'));
+  assert.equal(economy.find(row => row.id === 'interim').conditions[0].status, 'unknown');
+  assert.equal(economy.find(row => row.id === 'submission').conditions[2].status, 'unknown');
+});
+
+test('round2 blockers: literature 80 plus partial candidate uses completed 80 credits and required fields', () => {
+  const progress = fixture => calculateGraduationProgress(fixture.catalog.offerings.map(row => item(row.id, 'earned')), fixture.catalog, fixture.scope, [], 'selected', [], [], initialGraduationProfile(), { selection: 'selected', status: 'earned' });
+  const candidate = fixture => progress(fixture).cards.find(row => row.requirementId === 'literature-professional-80-plus-partial-2');
+  const japanese = professionalFixture('日本文学科', [['required', '必修'], ['re', '選択必修'], ['elective', '選択'], ['partial', '選択', null, 4]], [['required', 20, ['required']], ['re', 20, ['re']], ['elective', 32, ['elective']], ['partial', 2, ['partial'], 'schooling']]);
+  const history = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['west', '選択', '西洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 44, ['jp']], ['east', 2, ['east']], ['west', 2, ['west']], ['partial', 2, ['partial'], 'schooling']]);
+  const geography = professionalFixture('地理学科', [['required', '必修'], ['schooling', 'スクーリング必修'], ['humanA', '選択必修', '人文地理の分野'], ['humanB', '選択必修', '人文地理の分野'], ['naturalA', '選択必修', '自然地理の分野'], ['naturalB', '選択必修', '自然地理の分野'], ['regional', '選択必修', '地誌・その他の分野'], ['elective', '選択'], ['partial', '選択', null, 4]], [['required', 12, ['required']], ['schooling', 6, ['schooling'], 'schooling'], ['human-a', 4, ['humanA']], ['human-b', 4, ['humanB']], ['natural-a', 4, ['naturalA']], ['natural-b', 4, ['naturalB']], ['regional', 26, ['regional']], ['elective', 12, ['elective']], ['partial', 2, ['partial'], 'schooling']]);
+  for (const fixture of [japanese, history, geography]) {
+    const card = candidate(fixture);
+    assert.equal(card?.status, 'unknown', fixture.catalog.programs.find(program => program.scopeId === fixture.scope)?.department);
+    assert.equal(card?.earned, 80, 'candidate never promotes the partial into ordinary earned credits');
+  }
+  const historyProfessional = progress(history).cards.filter(card => card.requirementId.startsWith('professional-history-'));
+  assert.equal(historyProfessional.reduce((sum, card) => sum + (card.earned ?? 0), 0), 72, 'history candidate totals 72 professional credits before the thesis');
+  const missingHistoryField = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 48, ['jp']], ['east', 2, ['east']], ['partial', 2, ['partial'], 'schooling']]);
+  assert.equal(candidate(missingHistoryField), undefined, 'missing a history field suppresses the candidate');
+  const historyAt82 = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['west', '選択', '西洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 46, ['jp']], ['east', 2, ['east']], ['west', 2, ['west']], ['partial', 2, ['partial'], 'schooling']]);
+  assert.equal(candidate(historyAt82), undefined, 'history already at the normal 82 credits is not a partial-completion candidate');
+});
+
+test('round2: v19 migration keeps records and profile, while v21 is locked', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const legacy = { ...initialState(), schemaVersion: 19, selectedScopeId: scope, items: [item(first.id, 'earned')], thesisProgressByScope: { [scope]: { selection: 'selected', status: 'planned' } }, importedCourseAchievements: [{ id: 'kept', fingerprint: 'kept', source: 'hosei_import', rawName: first.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: first.courseId, selectedOfferingId: first.id, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [first.id] }], graduationProfile: { ...initialGraduationProfile(), currentStudyYear: 4 } };
+  const migrated = loadState(memoryStore(JSON.stringify(legacy)), catalog);
+  assert.equal(migrated.error, null);
+  assert.equal(migrated.state.schemaVersion, 20);
+  assert.deepEqual(migrated.state.items, legacy.items);
+  assert.deepEqual(migrated.state.thesisProgressByScope, legacy.thesisProgressByScope);
+  assert.equal(migrated.state.importedCourseAchievements[0].id, 'kept');
+  assert.equal(migrated.state.graduationProfile.currentStudyYear, 4);
+  assert.deepEqual(migrated.state.thesisGuidanceByScope, {});
+  assert.notEqual(loadState(memoryStore(JSON.stringify({ ...legacy, schemaVersion: 21 })), catalog).error, null);
 });

@@ -989,7 +989,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": {
-          "const": 19
+          "const": 20
         },
         "selectedScopeId": {
           "anyOf": [
@@ -1018,6 +1018,7 @@
             "additionalProperties": false
           }
         },
+        "thesisGuidanceByScope": { "type": "object", "additionalProperties": { "type": "object", "properties": { "steps": { "type": "object", "additionalProperties": { "type": "object", "properties": { "status": { "enum": ["not_started", "planned", "passed", "failed"] }, "passedOn": { "anyOf": [{ "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }, { "type": "null" }] } }, "required": ["status", "passedOn"], "additionalProperties": false } }, "geographyReportSubmitted": { "anyOf": [{ "type": "boolean" }, { "type": "null" }] } }, "required": ["steps", "geographyReportSubmitted"], "additionalProperties": false } },
         "items": {
           "type": "array",
           "items": {
@@ -1108,13 +1109,14 @@
         }, "required": ["id", "fingerprint", "source", "rawName", "offeringId", "match", "method", "academicYear", "yearSource", "rawYear", "term", "rawTerm", "date", "credits", "grade"], "additionalProperties": false } },
         "importedCourseAchievements": { "type": "array", "items": { "type": "object", "properties": { "id": { "type": "string", "minLength": 1 }, "fingerprint": { "type": "string", "minLength": 1 }, "source": { "const": "hosei_import" }, "rawName": { "type": "string", "minLength": 1 }, "categoryRaw": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "capturedAt": { "type": "string" }, "earnedCreditsTotal": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "schoolingCreditsTotal": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "compositionCredits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "recognizedExemption": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "additionalEnrollment": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "academicYear": { "anyOf": [{ "type": "integer" }, { "type": "null" }] }, "yearSource": { "enum": ["source", "inferred", "manual", "unknown"] }, "courseId": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "selectedOfferingId": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "selectionSource": { "enum": ["none", "auto", "manual"] }, "match": { "enum": ["exact_unique", "ambiguous", "unmatched"] }, "candidateOfferingIds": { "type": "array", "items": { "type": "string" } } }, "required": ["id", "fingerprint", "source", "rawName", "categoryRaw", "capturedAt", "earnedCreditsTotal", "schoolingCreditsTotal", "compositionCredits", "recognizedExemption", "additionalEnrollment", "academicYear", "yearSource", "courseId", "selectedOfferingId", "selectionSource", "match", "candidateOfferingIds"], "additionalProperties": false } },
         "importedCourseUserMeta": { "type": "object", "additionalProperties": { "type": "object", "properties": { "lifecycleStatus": { "anyOf": [{ "enum": ["in_progress", "waiting"] }, { "type": "null" }] }, "plannedYear": { "anyOf": [{ "type": "integer" }, { "type": "null" }] }, "plannedTerm": { "anyOf": [{ "type": "string" }, { "type": "null" }] }, "studyYear": { "anyOf": [{ "enum": [1, 2, 3, 4] }, { "type": "null" }] } }, "required": ["lifecycleStatus", "plannedYear", "plannedTerm", "studyYear"], "additionalProperties": false } },
-        "graduationProfile": { "type": "object", "properties": { "admissionYear": { "anyOf": [{ "type": "integer", "minimum": 1000, "maximum": 9999 }, { "type": "null" }] }, "admissionType": { "enum": ["first_year", "transfer_second_year", "transfer_third_year", "bachelor_admission", "hosei_internal_transfer", "other_transfer", "unknown"] }, "recognizedCredits": { "type": "object", "properties": { "totalCredits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "schoolingEquivalentCredits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] } }, "required": ["totalCredits", "schoolingEquivalentCredits"], "additionalProperties": true }, "curriculumApplicability": { "enum": ["current_2026", "legacy_or_transition", "unknown"] } }, "required": ["admissionYear", "admissionType", "recognizedCredits", "curriculumApplicability"], "additionalProperties": true }
+        "graduationProfile": { "type": "object", "properties": { "admissionYear": { "anyOf": [{ "type": "integer", "minimum": 1000, "maximum": 9999 }, { "type": "null" }] }, "currentStudyYear": { "anyOf": [{ "enum": [1, 2, 3, 4] }, { "type": "null" }] }, "admissionType": { "enum": ["first_year", "transfer_second_year", "transfer_third_year", "bachelor_admission", "hosei_internal_transfer", "other_transfer", "unknown"] }, "recognizedCredits": { "type": "object", "properties": { "totalCredits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] }, "schoolingEquivalentCredits": { "anyOf": [{ "type": "number", "minimum": 0 }, { "type": "null" }] } }, "required": ["totalCredits", "schoolingEquivalentCredits"], "additionalProperties": true }, "curriculumApplicability": { "enum": ["current_2026", "legacy_or_transition", "unknown"] } }, "required": ["admissionYear", "currentStudyYear", "admissionType", "recognizedCredits", "curriculumApplicability"], "additionalProperties": true }
       },
       "required": [
         "schemaVersion",
         "selectedScopeId",
         "thesisSelection",
         "thesisProgressByScope",
+        "thesisGuidanceByScope",
         "items",
         "publicCourses",
         "todos",

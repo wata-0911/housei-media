@@ -13,6 +13,7 @@ export function schoolingRecognitionCap(profile: Pick<GraduationProfile, 'admiss
 
 export const initialGraduationProfile = (): GraduationProfile => ({
   admissionYear: null,
+  currentStudyYear: null,
   admissionType: 'unknown',
   recognizedCredits: emptyRecognizedCredits(),
   curriculumApplicability: 'unknown',
