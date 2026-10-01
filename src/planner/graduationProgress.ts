@@ -513,13 +513,26 @@ function curriculumCourseLabel(offering: Offering) {
     .replace(/（地理）$/, '');
 }
 
+function isCalligraphyPracticum(entry: CurriculumEntry) {
+  return entry.label === '書道実技';
+}
+
+function completedCurriculumCredits(entry: CurriculumEntry) {
+  // 2026 p.48: 書道実技 is completed by correspondence + one schooling
+  // credit, or by two schooling credits. Correspondence-only completion is
+  // deliberately not treated as a completed curriculum course.
+  if (isCalligraphyPracticum(entry) && entry.earnedSchooling < 1) return 0;
+  return entry.earned >= entry.mapping.curriculumCredits! ? entry.mapping.curriculumCredits! : 0;
+}
+
 function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
   totals.inProgress += entry.inProgress;
   totals.planned += entry.planned;
   // A mapping becomes one completed curriculum course only after all of its
   // official curriculum credits have been earned across its offerings.
-  if (entry.earned >= entry.mapping.curriculumCredits!) {
-    totals.earned += entry.mapping.curriculumCredits!;
+  const completed = completedCurriculumCredits(entry);
+  if (completed > 0) {
+    totals.earned += completed;
     totals.courses.add(entry.mapping.mappingId);
   }
 }
@@ -747,11 +760,11 @@ function professionalCards(
   const publicCourseBreakdown = () => publicCourseCredits > 0 ? ` + 公開科目算入 ${publicCourseCredits}単位` : '';
   const partialCourses = (type: string): ProgressCard['partialCourses'] => [...entries.values()]
     .filter(entry => entry.mapping.requirementType === type
-      && entry.earned > 0 && entry.earned < entry.mapping.curriculumCredits!)
+      && entry.earned > 0 && completedCurriculumCredits(entry) < entry.mapping.curriculumCredits!)
     .map(entry => ({
       mappingId: entry.mapping.mappingId,
       label: entry.label,
-      earned: entry.earned,
+      earned: isCalligraphyPracticum(entry) && entry.earnedSchooling < 1 ? 0 : entry.earned,
       target: entry.mapping.curriculumCredits!,
     }))
     .sort((a, b) => a.label.localeCompare(b.label, 'ja'));
@@ -763,11 +776,21 @@ function professionalCards(
     const requiredElectiveTargetValue = requiredElectiveTarget ?? 20;
     const threshold = overflowRule?.threshold ?? 0;
     const elective = withOverflow(normal('選択'), requiredElective, threshold);
+    const thesisCredits = thesisSelection === 'selected' ? thesisCreditsForDepartment(program.department) ?? 0 : 0;
+    const total = {
+      earned: required.earned + requiredElective.earned + normal('選択').earned + (thesisStatus === 'earned' ? thesisCredits : 0),
+      inProgress: required.inProgress + requiredElective.inProgress + normal('選択').inProgress + (thesisStatus === 'in_progress' ? thesisCredits : 0),
+      planned: required.planned + requiredElective.planned + normal('選択').planned + (thesisStatus === 'planned' ? thesisCredits : 0),
+      schooling: 0,
+      courses: new Set<string>(),
+    };
     return [
       { ...make('professional-required', '専門教育：必修', required, 20, required.earned >= 20), partialCourses: partialCourses('必修') },
       { ...make('professional-required-elective', '専門教育：選択必修', requiredElective, requiredElectiveTargetValue, requiredElective.earned >= requiredElectiveTargetValue), partialCourses: partialCourses('選択必修') },
       { ...make('professional-elective', '専門教育：選択', elective, 24, elective.earned >= 24, undefined,
         `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。超過分は選択必修の達成値には重ねて算入しません。`, overflowRuleReason), partialCourses: partialCourses('選択') },
+      make('professional-japanese-total', '専門教育：合計', total, 82, total.earned >= 82, undefined,
+        '必修・選択必修・選択と卒業論文（必修）を、各要件カードの上限とは別に相互排他的に合計します。', baseReason),
     ];
   }
 
@@ -808,6 +831,14 @@ function professionalCards(
     const elective = withOverflow(normal('選択'), requiredElective, threshold);
     const human = normal('選択必修:人文地理の分野'), natural = normal('選択必修:自然地理の分野'), regional = normal('選択必修:地誌・その他の分野');
     const fieldsMet = human.earned >= 8 && human.courses.size >= 2 && natural.earned >= 8 && natural.courses.size >= 2 && regional.earned >= 16;
+    const thesisCredits = thesisSelection === 'selected' ? thesisCreditsForDepartment(program.department) ?? 0 : 0;
+    const total = {
+      earned: required.earned + schooling.earned + requiredElective.earned + normal('選択').earned + (thesisStatus === 'earned' ? thesisCredits : 0),
+      inProgress: required.inProgress + schooling.inProgress + requiredElective.inProgress + normal('選択').inProgress + (thesisStatus === 'in_progress' ? thesisCredits : 0),
+      planned: required.planned + schooling.planned + requiredElective.planned + normal('選択').planned + (thesisStatus === 'planned' ? thesisCredits : 0),
+      schooling: 0,
+      courses: new Set<string>(),
+    };
     return [
       { ...make('professional-geography-required', '専門教育：必修', required, 12, required.earned >= 12), partialCourses: partialCourses('必修') },
       { ...make('professional-geography-schooling-required', '専門教育：スクーリング必修', schooling, 6, schooling.earned >= 6), partialCourses: partialCourses('スクーリング必修') },
@@ -816,6 +847,8 @@ function professionalCards(
         `人文・自然はそれぞれ科目数も満たす必要があります。${geographyTransferDetails.filter(detail => /演習|地誌/.test(detail)).join('。')}。2013年度以前の救済措置は自動判定しません。`), partialCourses: partialCourses('選択必修') },
       { ...make('professional-geography-elective', '専門教育：選択', elective, 12, elective.earned >= 12, undefined,
         `純粋な選択 ${catalogElectiveEarned()}単位 + 選択必修超過 ${overflow(requiredElective, threshold)}単位${publicCourseBreakdown()}。${geographyTransferDetails.join('。')}。`, overflowRuleReason), partialCourses: partialCourses('選択') },
+      make('professional-geography-total', '専門教育：合計', total, 82, total.earned >= 82, undefined,
+        '必修・スクーリング必修・選択必修・選択と卒業論文（必修）を、特殊振替を含む相互排他的な配分から合計します。', baseReason),
     ];
   }
 
@@ -964,6 +997,8 @@ function countedOverallCredits(cards: ProgressCard[], department: string | null)
   if (department === '法律学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-law-total')?.earned ?? 0);
   if (department === '経済学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-economics-total')?.earned ?? 0);
   if (department === '商業学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-commerce-total')?.earned ?? 0);
+  if (department === '日本文学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-japanese-total')?.earned ?? 0);
+  if (department === '地理学科') return commonCredits + (cards.find(card => card.requirementId === 'professional-geography-total')?.earned ?? 0);
   const professionalCredits = cards.filter(card => card.requirementId.startsWith('professional-')
     && !card.requirementId.endsWith('-schooling') && card.requirementId !== 'professional-law-total')
     .reduce((sum, card) => sum + (card.earned ?? 0), 0);

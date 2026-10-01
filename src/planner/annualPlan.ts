@@ -46,6 +46,31 @@ export function groupAnnualPlan(items: PlannerItem[], offerings: Map<string, Off
   });
 }
 
+export type AnnualCreditLimitReference = {
+  year: number;
+  correspondenceCredits: number;
+  schoolingRegistrationCredits: number;
+  knownTotalCredits: number;
+  exceedsOfficial49: boolean;
+};
+
+/** Advisory only: does not infer teacher-training/qualification courses or thesis year. */
+export function annualCreditLimitReferences(items: PlannerItem[], offerings: Map<string, Offering>): AnnualCreditLimitReference[] {
+  const rows = new Map<number, AnnualCreditLimitReference>();
+  for (const item of items) {
+    if (item.plannedYear === null) continue;
+    const offering = offerings.get(item.offeringId);
+    if (!offering || offering.credits === null) continue;
+    const row = rows.get(item.plannedYear) ?? { year: item.plannedYear, correspondenceCredits: 0, schoolingRegistrationCredits: 0, knownTotalCredits: 0, exceedsOfficial49: false };
+    if (offering.method === 'correspondence') row.correspondenceCredits += offering.credits;
+    else row.schoolingRegistrationCredits += offering.credits;
+    row.knownTotalCredits = row.correspondenceCredits + row.schoolingRegistrationCredits;
+    row.exceedsOfficial49 = row.knownTotalCredits > 49 || row.schoolingRegistrationCredits > 49;
+    rows.set(item.plannedYear, row);
+  }
+  return [...rows.values()].sort((a, b) => a.year - b.year);
+}
+
 function mappingCategory(mapping: Mapping): CreditClassification {
   if (mapping.category === '一般教育' && ['人文', '社会', '自然', 'その他'].includes(mapping.field ?? '')) {
     return `一般教育：${mapping.field}` as CreditCategory;

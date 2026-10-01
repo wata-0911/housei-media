@@ -28,8 +28,11 @@ export const emptyRecognizedCredits = () => ({
 /** Explicit helper only: callers must still save the returned profile. */
 export function officialRecognitionPrefill(route: GraduationProfile['admissionType']) {
   const base = emptyRecognizedCredits();
-  if (route === 'transfer_second_year') return { ...base, general: { humanities: { mode: 'recognized' as const, credits: 8 }, social: { mode: 'recognized' as const, credits: 8 }, natural: { mode: 'recognized' as const, credits: 8 } }, schoolingEquivalentCredits: 7 };
-  if (route === 'transfer_third_year') return { ...base, general: { humanities: { mode: 'recognized' as const, credits: 12 }, social: { mode: 'recognized' as const, credits: 12 }, natural: { mode: 'recognized' as const, credits: 12 } }, schoolingEquivalentCredits: 15 };
+  // The transfer route establishes the general-education recognition, but the
+  // official material distinguishes a fixed schooling recognition from a cap
+  // based on the prior school.  The route alone cannot select between them.
+  if (route === 'transfer_second_year') return { ...base, general: { humanities: { mode: 'recognized' as const, credits: 8 }, social: { mode: 'recognized' as const, credits: 8 }, natural: { mode: 'recognized' as const, credits: 8 } } };
+  if (route === 'transfer_third_year') return { ...base, general: { humanities: { mode: 'recognized' as const, credits: 12 }, social: { mode: 'recognized' as const, credits: 12 }, natural: { mode: 'recognized' as const, credits: 12 } } };
   if (route === 'bachelor_admission') return { ...base, general: { humanities: { mode: 'exempt' as const, credits: null }, social: { mode: 'exempt' as const, credits: null }, natural: { mode: 'exempt' as const, credits: null } }, foreignLanguage: { ...base.foreignLanguage, mode: 'exempt' as const }, physicalEducation: { mode: 'exempt' as const, credits: null }, schoolingEquivalentCredits: 15 };
   return base;
 }

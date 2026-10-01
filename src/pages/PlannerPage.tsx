@@ -3,7 +3,7 @@ import CourseSearch from '../components/planner/CourseSearch';
 import PlannedCourseList from '../components/planner/PlannedCourseList';
 import ProgramSettings from '../components/planner/ProgramSettings';
 import CategorySummary from '../components/planner/CategorySummary';
-import { createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
+import { annualCreditLimitReferences, createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
 import CreditSummary from '../components/planner/CreditSummary';
 import GraduationProgress from '../components/planner/GraduationProgress';
 import GraduationProfileSettings from '../components/planner/GraduationProfileSettings';
@@ -20,6 +20,7 @@ import PlannerExportActions from '../components/planner/PlannerExportActions';
 import { plannerExportPresentation } from '../planner/plannerExport';
 import GradeImportPanel from '../components/planner/GradeImportPanel';
 import ImportedAchievements from '../components/planner/ImportedAchievements';
+import AnnualCreditLimitNotice from '../components/planner/AnnualCreditLimitNotice';
 import { applyImport, importedEarnedCreditsTotal, type ImportedCourseAchievement, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
 import { deriveImportedAchievements, managedImportedMedia } from '../planner/importedAchievementCalculations';
 import { createUnifiedCourseRows } from '../planner/unifiedCourseView';
@@ -56,6 +57,7 @@ export default function PlannerPage() {
   const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta);
   const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
   const exportPresentation = plannerExportPresentation(state, catalog);
+  const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -224,6 +226,7 @@ export default function PlannerPage() {
         <button type="button" role="tab" aria-selected={activeTab === 'media'} onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
       </div>
       {loaded.recognitionWarning && <p role="alert" className="mt-4 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{loaded.recognitionWarning}</p>}
+      {activeTab === 'annual' && <AnnualCreditLimitNotice rows={annualLimitRows} />}
       {activeTab === 'annual'
         ? <div className="space-y-6"><GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} /><ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} warnings={importedDerived.warnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} /><CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} /><PlannedCourseList classify={classify} unifiedRows={unifiedCourseRows} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} importedUserMeta={state.importedCourseUserMeta} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} /><PlannerExportActions presentation={exportPresentation} />{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}{selectablePrograms(catalog).some(p => p.scopeId === state.selectedScopeId) && <><GraduationProfileSettings profile={state.graduationProfile} catalog={catalog} scopeId={state.selectedScopeId} disabled={loaded.error !== null} onChange={graduationProfile => commit({ ...state, graduationProfile }, '卒業判定設定を保存しました。')} /><GraduationProgress progress={graduationProgress} /></>}</div>
         : activeTab === 'media'
