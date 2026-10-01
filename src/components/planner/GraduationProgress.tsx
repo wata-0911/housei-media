@@ -24,6 +24,7 @@ export default function GraduationProgress({ progress }: { progress: Progress })
         <p className="mt-2 text-lg"><span className="font-semibold">修得済み {row.earned ?? '—'}</span> / {row.target === null ? '—' : `${row.target}単位`}</p>
         <p className="mt-1 text-xs font-medium text-slate-700">判定範囲：{coverageLabel[row.coverageStatus]}</p>
         <p className="mt-2 text-xs text-gray-700">{row.id === 'overall-reference-progress' ? `認定単位 ${row.recognizedCredits ?? '—'}単位を含む` : `認定スクーリング相当 ${row.recognizedCredits ?? '—'}単位を含む`}</p>
+        {row.exemptionCredits !== null && row.exemptionCredits !== undefined && <p className="mt-1 text-xs text-gray-700">卒業要件上の免除 {row.exemptionCredits}単位相当（修得・認定済み単位には加えません）</p>}
         {row.earned !== null && row.target !== null && <p className="mt-1 text-sm text-[#002255]">参考：あと{Math.max(0, row.target - row.earned)}単位</p>}
         {row.reason && <p className="mt-2 text-xs leading-relaxed text-amber-800">{row.unknownReasonCategory && `${UNKNOWN_REASON_CATEGORY_LABEL[row.unknownReasonCategory]}：`}{row.reason}</p>}
         <p className="mt-2 text-xs text-gray-600">この数値だけで卒業可否は判定しません。</p>
@@ -37,7 +38,7 @@ export default function GraduationProgress({ progress }: { progress: Progress })
         <p className={`mt-1 text-sm font-medium ${row.ruleType === 'public_course_limit' ? 'text-[#002255]' : row.status === 'satisfied' ? 'text-emerald-700' : 'text-amber-700'}`}>{row.ruleType === 'public_course_limit' ? '卒業算入の上限' : statusLabel(row.status, row.earned, row.target, row.unit)}</p>
         <p className="mt-1 text-xs font-medium text-slate-700">判定範囲：{coverageLabel[row.coverageStatus ?? 'unknown']}</p>
         <p className="mt-2 break-words text-xs leading-relaxed text-gray-600">参考：履修中 {row.inProgress ?? '—'}{row.unit === 'courses' ? '科目' : '単位'} / 計画中 {row.planned ?? '—'}{row.unit === 'courses' ? '科目' : '単位'}</p>
-        {row.details && <ul className="mt-3 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{row.details.map(detail => <li key={detail.label} className="break-words">{detail.label}：{detail.earned} / {detail.target}{detail.unit === 'courses' ? '科目' : '単位'}（履修中 {detail.inProgress}・計画中 {detail.planned}{detail.schooling !== undefined ? `・修得済みスクーリング ${detail.schooling}` : ''}）</li>)}</ul>}
+        {row.details && <ul className="mt-3 space-y-1 border-t border-gray-100 pt-2 text-xs text-gray-700">{row.details.map(detail => <li key={detail.label} className="break-words">{detail.label}：{detail.earned ?? '—'} / {detail.target}{detail.unit === 'courses' ? '科目' : '単位'}（{detail.reason ?? `履修中 ${detail.inProgress}・計画中 ${detail.planned}${detail.schooling !== undefined ? `・修得済みスクーリング ${detail.schooling}` : ''}`}）</li>)}</ul>}
         {row.partialCourses && row.partialCourses.length > 0 && <div className="mt-3 border-t border-gray-100 pt-2 text-xs leading-relaxed text-gray-700">
           <p className="font-medium text-[#002255]">未完成のカリキュラム科目（卒業算入前）</p>
           <ul className="mt-1 space-y-1">{row.partialCourses.map(course => <li key={course.mappingId} className="break-words">{course.label} {course.earned} / {course.target}単位（あと{course.target - course.earned}単位で卒業算入）</li>)}</ul>

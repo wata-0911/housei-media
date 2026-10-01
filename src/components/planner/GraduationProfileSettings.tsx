@@ -1,93 +1,32 @@
-import { useState } from 'react';
-import type { GraduationProfile } from '../../planner/plannerCatalog';
-import { GRADUATION_PROFILE_PREREQUISITE_LABEL, graduationProfileValidationError, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber } from '../../planner/graduationProfile';
+import { useMemo, useState } from 'react';
+import type { GraduationProfile, PlannerCatalog, RecognitionMode } from '../../planner/plannerCatalog';
+import { GRADUATION_PROFILE_PREREQUISITE_LABEL, graduationProfileValidationError, MAX_RECOGNIZED_CREDITS_2026, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, schoolingRecognitionCap, unallocatedRecognizedCredits } from '../../planner/graduationProfile';
 
-type GraduationProfileSettingsProps = { profile: GraduationProfile; disabled: boolean; onChange: (profile: GraduationProfile) => void };
+type Props = { profile: GraduationProfile; disabled: boolean; onChange: (profile: GraduationProfile) => void; catalog: PlannerCatalog; scopeId: string | null; recognitionWarning?: string | null };
+type GeneralKey = 'humanities' | 'social' | 'natural';
+const modes: Array<[RecognitionMode, string]> = [['unknown', '未確認'], ['none', 'なし'], ['recognized', '認定'], ['exempt', '免除']];
 
-export default function GraduationProfileSettings(props: GraduationProfileSettingsProps) {
-  const { profile } = props;
-  // Only a saved value for one of these drafts resets it. Updating another setting must not interrupt typing.
-  const profileKey = [profile.admissionYear, profile.recognizedCredits.totalCredits, profile.recognizedCredits.schoolingEquivalentCredits].join('|');
-  return <GraduationProfileSettingsForm key={profileKey} {...props} />;
-}
-
-function GraduationProfileSettingsForm({ profile, disabled, onChange }: GraduationProfileSettingsProps) {
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [admissionYearDraft, setAdmissionYearDraft] = useState(profile.admissionYear?.toString() ?? '');
-  const [admissionYearError, setAdmissionYearError] = useState<string | null>(null);
-  const [totalCreditsDraft, setTotalCreditsDraft] = useState(profile.recognizedCredits.totalCredits?.toString() ?? '');
-  const [schoolingEquivalentCreditsDraft, setSchoolingEquivalentCreditsDraft] = useState(profile.recognizedCredits.schoolingEquivalentCredits?.toString() ?? '');
-  const [recognizedCreditsError, setRecognizedCreditsError] = useState<string | null>(null);
-  const missing = missingGraduationProfilePrerequisites(profile);
-
-  const update = (patch: Partial<GraduationProfile>) => {
-    const next = { ...profile, ...patch };
-    const error = graduationProfileValidationError(next);
-    if (error) { setValidationError(error); return; }
-    setValidationError(null);
-    onChange(next);
+export default function GraduationProfileSettings(props: Props) {
+  const { profile, disabled, onChange, catalog, scopeId, recognitionWarning } = props;
+  const [error, setError] = useState<string | null>(recognitionWarning ?? null); const [query, setQuery] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const mappings = useMemo(() => new Map(catalog.mappings.map(row => [row.mappingId, row])), [catalog]);
+  const update = (next: GraduationProfile) => { const message = graduationProfileValidationError(next); if (message) setError(message); else { setError(null); onChange(next); } };
+  const clear = (...keys: string[]) => setDrafts(current => { const next = { ...current }; keys.forEach(key => delete next[key]); return next; });
+  const input = (key: string, label: string, value: number | null, max: number | undefined, save: (value: number | null) => void, locked = false) => {
+    const effectiveMax = max ?? (key === 'total' ? MAX_RECOGNIZED_CREDITS_2026 : key === 'schooling' ? schoolingRecognitionCap(profile) : undefined);
+    const commit = () => { const raw = drafts[key] ?? (value === null ? '' : String(value)); if (!raw.trim()) { save(null); clear(key); return; } const parsed = normalizeNonnegativeNumber(raw); if (parsed === null || (effectiveMax !== undefined && parsed > effectiveMax)) { setError(`${label}は0${effectiveMax === undefined ? '' : `〜${effectiveMax}`}の数値で入力してください。変更は保存していません。`); return; } save(parsed); clear(key); };
+    return <input aria-label={label} type="number" min="0" max={effectiveMax} value={drafts[key] ?? (value === null ? '' : String(value))} disabled={disabled || locked} onChange={e => setDrafts(current => ({ ...current, [key]: e.target.value }))} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} className="border p-2" />;
   };
-  const commitAdmissionYear = () => {
-    const admissionYear = normalizeAdmissionYear(admissionYearDraft);
-    if (admissionYearDraft.trim() !== '' && admissionYear === null) {
-      setAdmissionYearError('入学年度は4桁の西暦（1000〜9999）で入力してください。');
-      return;
-    }
-    setAdmissionYearError(null);
-    update({ admissionYear });
-  };
-  const commitRecognizedCredits = () => {
-    const totalCredits = normalizeNonnegativeNumber(totalCreditsDraft);
-    if (totalCreditsDraft.trim() !== '' && totalCredits === null) {
-      setValidationError('認定単位は0以上の数値で入力してください。');
-      return;
-    }
-    const schoolingEquivalentCredits = normalizeNonnegativeNumber(schoolingEquivalentCreditsDraft);
-    if (schoolingEquivalentCreditsDraft.trim() !== '' && schoolingEquivalentCredits === null) {
-      setRecognizedCreditsError('スクーリング相当認定単位は0以上の数値で入力してください。');
-      return;
-    }
-    const next = { ...profile, recognizedCredits: { totalCredits, schoolingEquivalentCredits } };
-    const error = graduationProfileValidationError(next);
-    if (error) {
-      setRecognizedCreditsError(null);
-      setValidationError(error);
-      return;
-    }
-    setRecognizedCreditsError(null);
-    setValidationError(null);
-    onChange(next);
-  };
-
-  return <section aria-labelledby="graduation-profile-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
-    <h2 id="graduation-profile-heading" className="text-xl text-[#002255]">卒業判定設定</h2>
-    <p className="mt-3 border-l-4 border-sky-600 bg-sky-50 p-3 text-sm leading-relaxed">この情報は卒業要件の参考判定に使います。未入力の項目は推測せず、判定保留になります。</p>
-    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-      <label className="grid gap-1 text-sm">入学年度
-        <input aria-label="入学年度" type="number" inputMode="numeric" min="1000" max="9999" step="1" value={admissionYearDraft} disabled={disabled} onChange={event => { setAdmissionYearDraft(event.target.value); setAdmissionYearError(null); }} onBlur={commitAdmissionYear} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="例: 2025" />
-        <span className="text-xs text-gray-600">4桁の西暦で入力します。現在年からは推測しません。</span>
-      </label>
-      <label className="grid gap-1 text-sm">入学区分
-        <select aria-label="入学区分" value={profile.admissionType} disabled={disabled} onChange={event => update({ admissionType: event.target.value as GraduationProfile['admissionType'] })} className="border border-gray-300 px-3 py-2">
-          <option value="unknown">未選択</option><option value="first_year">1年次入学</option><option value="transfer">編入学</option>
-        </select>
-      </label>
-      <label className="grid gap-1 text-sm">認定単位
-        <input aria-label="認定単位" type="text" inputMode="decimal" value={totalCreditsDraft} disabled={disabled} onChange={event => { setTotalCreditsDraft(event.target.value); setRecognizedCreditsError(null); setValidationError(null); }} onBlur={commitRecognizedCredits} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="0" />
-        <span className="text-xs text-gray-600">入学前・編入時などの公式な認定単位。0単位も保存できます。</span>
-      </label>
-      <label className="grid gap-1 text-sm">認定単位のうちスクーリング相当（任意）
-        <input aria-label="認定単位のうちスクーリング相当" type="text" inputMode="decimal" value={schoolingEquivalentCreditsDraft} disabled={disabled} onChange={event => { setSchoolingEquivalentCreditsDraft(event.target.value); setRecognizedCreditsError(null); setValidationError(null); }} onBlur={commitRecognizedCredits} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="border border-gray-300 px-3 py-2" placeholder="公式な内訳がある場合のみ" />
-        <span className="text-xs text-gray-600">公式に区別されている場合のみ入力してください。内訳は推測しません。</span>
-      </label>
-      <label className="grid gap-1 text-sm sm:col-span-2">適用課程
-        <select aria-label="適用課程" value={profile.curriculumApplicability} disabled={disabled} onChange={event => update({ curriculumApplicability: event.target.value as GraduationProfile['curriculumApplicability'] })} className="border border-gray-300 px-3 py-2">
-          <option value="unknown">未選択（確認が必要）</option><option value="current_2026">2026年度の現行課程</option><option value="legacy_or_transition">旧課程・経過措置・個別適用</option>
-        </select>
-        <span className="text-xs text-gray-600">入学年度から自動で確定しません。</span>
-      </label>
-    </div>
-    {(admissionYearError ?? recognizedCreditsError ?? validationError) && <p role="alert" className="mt-4 text-sm text-red-700">{admissionYearError ?? recognizedCreditsError ?? validationError} 変更は保存していません。</p>}
-    {missing.length > 0 && <p className="mt-4 text-sm text-amber-800">判定前に確認が必要：{missing.map(key => GRADUATION_PROFILE_PREREQUISITE_LABEL[key]).join('、')}</p>}
-  </section>;
+  const general = (key: GeneralKey, label: string) => { const row = profile.recognizedCredits.general[key]; return <label className="grid gap-1 text-sm">{label}<select value={row.mode} disabled={disabled} onChange={e => { const mode = e.target.value as RecognitionMode; clear(`general-${key}`); update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, general: { ...profile.recognizedCredits.general, [key]: { mode, credits: mode === 'exempt' ? null : row.credits } } } }); }} className="border p-2">{modes.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select>{input(`general-${key}`, `${label}認定単位`, row.credits, 36, credits => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, general: { ...profile.recognizedCredits.general, [key]: { ...row, credits } } } }), row.mode === 'exempt')}</label>; };
+  const foreign = profile.recognizedCredits.foreignLanguage; const physical = profile.recognizedCredits.physicalEducation;
+  const candidates = useMemo(() => !scopeId ? [] : catalog.offerings.filter(offering => {
+    if (offering.resolutionStatus !== 'matched' || offering.name === '卒業論文' || offering.credits === null || /史学演習|史特講|歴史資料学/.test(offering.name)) return false;
+    const match = offering.mappingIds.map(id => mappings.get(id)).filter((m): m is NonNullable<typeof m> => Boolean(m)).filter(m => m.scopeId === scopeId && m.category === '専門教育');
+    const normalizedQuery = query.trim().normalize('NFKC').toLocaleLowerCase('ja-JP');
+    return match.length === 1 && match[0].curriculumCredits !== null && match[0].curriculumCredits <= offering.credits && (!normalizedQuery || offering.name.normalize('NFKC').toLocaleLowerCase('ja-JP').includes(normalizedQuery)) && !profile.recognizedCredits.professionalCourses.some(row => row.courseId ? row.courseId === offering.courseId : row.offeringId === offering.id);
+  }).slice(0, 12), [catalog, mappings, profile.recognizedCredits.professionalCourses, query, scopeId]);
+  const add = (id: string) => { const offering = catalog.offerings.find(row => row.id === id); if (!offering || !scopeId || offering.credits === null) return; const map = offering.mappingIds.map(x => mappings.get(x)).filter((x): x is NonNullable<typeof x> => Boolean(x)).filter(x => x.scopeId === scopeId && x.category === '専門教育'); if (offering.name === '卒業論文' || /史学演習|史特講|歴史資料学/.test(offering.name) || map.length !== 1 || map[0].curriculumCredits === null || map[0].curriculumCredits > offering.credits) return; update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, professionalCourses: [...profile.recognizedCredits.professionalCourses, { id: crypto.randomUUID(), offeringId: offering.id, courseId: offering.courseId, mappingId: map[0].mappingId, name: offering.name, credits: offering.credits }] } }); };
+  const detailed = recognizedCreditBreakdownTotal(profile.recognizedCredits); const unallocated = unallocatedRecognizedCredits(profile.recognizedCredits); const missing = missingGraduationProfilePrerequisites(profile);
+  return <section aria-labelledby="graduation-profile-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="graduation-profile-heading" className="text-xl text-[#002255]">卒業判定・編入認定設定</h2><p className="mt-3 border-l-4 border-sky-600 bg-sky-50 p-3 text-sm">公式の認定結果を正として入力します。未入力を0単位とは扱いません。免除は修得単位に加えません。</p><div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="grid gap-1 text-sm">入学年度<input aria-label="入学年度" type="number" value={drafts.year ?? (profile.admissionYear === null ? '' : String(profile.admissionYear))} disabled={disabled} onChange={e => setDrafts(current => ({ ...current, year: e.target.value }))} onBlur={() => { const raw = drafts.year ?? ''; const year = normalizeAdmissionYear(raw); if (raw.trim() && year === null) { setError('入学年度は4桁の西暦（1000〜9999）で入力してください。変更は保存していません。'); return; } update({ ...profile, admissionYear: year }); clear('year'); }} className="border p-2" /></label><label className="grid gap-1 text-sm">入学区分<select aria-label="入学区分" value={profile.admissionType} disabled={disabled} onChange={e => update({ ...profile, admissionType: e.target.value as GraduationProfile['admissionType'] })} className="border p-2"><option value="unknown">未選択</option><option value="first_year">1年次入学</option><option value="transfer_second_year">2年次編入</option><option value="transfer_third_year">3年次編入</option><option value="bachelor_admission">学士入学</option><option value="hosei_internal_transfer">法政内部等（個別認定）</option><option value="other_transfer">その他・個別認定</option></select></label></div>{['transfer_second_year', 'transfer_third_year', 'bachelor_admission'].includes(profile.admissionType) && <button type="button" disabled={disabled} className="mt-4 border border-sky-700 px-3 py-2 text-sm text-sky-800" onClick={() => { clear('total', 'schooling', 'foreign-credits', 'foreign-schooling', 'physical'); update({ ...profile, recognizedCredits: { ...officialRecognitionPrefill(profile.admissionType), totalCredits: profile.recognizedCredits.totalCredits } }); }}>公式標準値を適用して保存</button>}<fieldset className="mt-6 grid gap-3 sm:grid-cols-3"><legend className="font-medium">一般教育</legend>{general('humanities', '人文')}{general('social', '社会')}{general('natural', '自然')}</fieldset><div className="mt-6 grid gap-4 sm:grid-cols-2"><fieldset className="grid gap-1 text-sm"><legend>外国語</legend><select aria-label="外国語認定区分" value={foreign.mode} disabled={disabled} onChange={e => { const mode = e.target.value as RecognitionMode; clear('foreign-credits', 'foreign-schooling'); update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, foreignLanguage: mode === 'recognized' ? { ...foreign, mode } : { mode, credits: null, language: 'unknown', schoolingEquivalentCredits: null } } }); }} className="border p-2">{modes.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select>{foreign.mode === 'recognized' && <><p className="text-xs text-gray-700">公式認定結果に記載がある場合のみ入力してください。</p>{input('foreign-credits', '外国語認定単位', foreign.credits, 4, credits => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, foreignLanguage: { ...foreign, credits, schoolingEquivalentCredits: foreign.schoolingEquivalentCredits !== null && (credits === null || foreign.schoolingEquivalentCredits > credits) ? null : foreign.schoolingEquivalentCredits } } }))}<label className="grid gap-1 text-sm">言語<select aria-label="外国語の言語" value={foreign.language} disabled={disabled} onChange={e => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, foreignLanguage: { ...foreign, language: e.target.value as typeof foreign.language } } })} className="border p-2"><option value="english">英語</option><option value="german">ドイツ語</option><option value="french">フランス語</option><option value="unknown">不明</option></select></label>{input('foreign-schooling', '外国語認定のうちスクーリング相当', foreign.schoolingEquivalentCredits, Math.min(2, foreign.credits ?? 2), schoolingEquivalentCredits => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, foreignLanguage: { ...foreign, schoolingEquivalentCredits } } }))}</>}</fieldset><fieldset className="grid gap-1 text-sm"><legend>保健体育</legend><select aria-label="保健体育認定区分" value={physical.mode} disabled={disabled} onChange={e => { const mode = e.target.value as RecognitionMode; clear('physical'); update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, physicalEducation: mode === 'exempt' ? { mode, credits: null } : { ...physical, mode } } }); }} className="border p-2">{modes.map(([v, n]) => <option key={v} value={v}>{n}</option>)}</select>{input('physical', '保健体育認定単位', physical.credits, 2, credits => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, physicalEducation: { ...physical, credits } } }), physical.mode === 'exempt')}</fieldset><label className="grid gap-1 text-sm">公式認定単位・合計（旧データ互換）{input('total', '認定単位', profile.recognizedCredits.totalCredits, undefined, totalCredits => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, totalCredits } }))}</label><label className="grid gap-1 text-sm">スクーリング相当{input('schooling', '認定単位のうちスクーリング相当', profile.recognizedCredits.schoolingEquivalentCredits, undefined, schoolingEquivalentCredits => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, schoolingEquivalentCredits } }))}</label></div><p className="mt-3 text-xs text-gray-700">認定単位合計: {profile.recognizedCredits.totalCredits ?? '未入力'} / 内訳割当済み: {detailed} / 未配分: {unallocated ?? '未確定'}（未配分は全体所要単位の参考だけに反映）</p><section className="mt-6 border-t pt-4"><h3 className="font-medium">専門教育の認定済み科目</h3><p className="mt-1 text-xs text-gray-700">2026カタログで学科と算入区分を一意に確認できる科目だけ追加できます。卒業論文・要確認の候補は追加できません。</p><input aria-label="専門認定科目を検索" value={query} onChange={e => setQuery(e.target.value)} disabled={disabled || !scopeId} className="mt-3 w-full border p-2" placeholder="科目名で検索" />{candidates.map(row => <div key={row.id} className="mt-2 flex justify-between gap-2 text-sm"><span>{row.name}（{row.credits}単位）</span><button type="button" className="border px-2 py-1" disabled={disabled} onClick={() => add(row.id)}>認定済みに追加</button></div>)}{profile.recognizedCredits.professionalCourses.map(row => <div key={row.id} className="mt-2 flex justify-between gap-2 text-sm"><span>{row.name}（{row.credits}単位・{mappings.get(row.mappingId ?? '')?.requirementType ?? '区分確認'}）</span><button type="button" className="border px-2 py-1" disabled={disabled} onClick={() => update({ ...profile, recognizedCredits: { ...profile.recognizedCredits, professionalCourses: profile.recognizedCredits.professionalCourses.filter(candidate => candidate.id !== row.id) } })}>削除</button></div>)}</section><label className="mt-5 grid gap-1 text-sm">適用課程<select aria-label="適用課程" value={profile.curriculumApplicability} disabled={disabled} onChange={e => update({ ...profile, curriculumApplicability: e.target.value as GraduationProfile['curriculumApplicability'] })} className="border p-2"><option value="unknown">未選択（確認が必要）</option><option value="current_2026">2026年度の現行課程</option><option value="legacy_or_transition">旧課程・経過措置・個別適用</option></select></label>{error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}{missing.length > 0 && <p className="mt-4 text-sm text-amber-800">判定前に確認が必要：{missing.map(key => GRADUATION_PROFILE_PREREQUISITE_LABEL[key]).join('、')}</p>}</section>;
 }
