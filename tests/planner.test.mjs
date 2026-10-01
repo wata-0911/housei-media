@@ -6,6 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import FuturePlanNotice from '../src/components/planner/FuturePlanNotice.tsx';
 import AnnualCreditLimitNotice from '../src/components/planner/AnnualCreditLimitNotice.tsx';
+import BrowserExtensionEntrySection, { PLANNER_EXTENSION_PUBLIC_URL } from '../src/components/planner/BrowserExtensionEntrySection.tsx';
 import { futurePlanNote, planningTermLabel } from '../src/planner/futurePlanning.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -50,6 +51,24 @@ const publicCourse = (id, status = 'planned', title = `公開科目 ${id}`) => (
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
+
+test('planner extension entry is visibly disabled without a public URL', () => {
+  const html = renderToStaticMarkup(createElement(BrowserExtensionEntrySection));
+  assert.equal(PLANNER_EXTENSION_PUBLIC_URL, null);
+  assert.match(html, /ブラウザ拡張機能で成績を取り込む/);
+  assert.match(html, /公開準備中/);
+  assert.match(html, /<button[^>]*disabled=""/);
+  assert.doesNotMatch(html, /<a\b/);
+  assert.doesNotMatch(html, /href=/);
+});
+
+test('planner extension entry becomes an external link when its public URL is configured', () => {
+  const html = renderToStaticMarkup(createElement(BrowserExtensionEntrySection, { publicUrl: 'https://chromewebstore.google.com/' }));
+  assert.match(html, /<a[^>]*href="https:\/\/chromewebstore\.google\.com\/"/);
+  assert.match(html, /target="_blank"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+  assert.doesNotMatch(html, /<button\b/);
+});
 
 test('year eligibility uses the common mapping for a first-year offering', () => {
   const offering = catalog.offerings.find(current => current.name === '健康・スポーツ科学概論');
