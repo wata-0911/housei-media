@@ -29,6 +29,7 @@ import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievemen
 import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
 import { graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill } from '../src/planner/graduationProfile.ts';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
+import { annualCreditLimitReferences } from '../src/planner/annualPlan.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -2931,11 +2932,11 @@ test('reference totals accept official transfer recognition including zero, neve
   assert.match(missingSchooling.reason, /認定スクーリング相当/);
 });
 
-test('official second-year, third-year, and bachelor recognition scenarios are usable for all six departments', () => {
+test('official second-year, third-year, and bachelor recognition scenarios preserve only confirmed route values', () => {
   const programs = [...new Map(catalog.programs.filter(program => ['法律学科', '日本文学科', '史学科', '地理学科', '経済学科', '商業学科'].includes(program.department)).map(program => [program.department, program])).values()];
   assert.equal(programs.length, 6);
   for (const program of programs) {
-    for (const [route, schooling] of [['transfer_second_year', 7], ['transfer_third_year', 15], ['bachelor_admission', 15]]) {
+    for (const [route, schooling] of [['transfer_second_year', null], ['transfer_third_year', null], ['bachelor_admission', 15]]) {
       const credits = officialRecognitionPrefill(route);
       const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: route, curriculumApplicability: 'current_2026', recognizedCredits: credits };
       assert.equal(graduationProfileValidationError(profile), null, `${program.department} ${route}`);
@@ -2958,6 +2959,75 @@ test('v18 transfer profile preserves thesis progress, safely routes old transfer
   assert.deepEqual(loaded.state.thesisProgressByScope, legacy.thesisProgressByScope);
   assert.equal(loaded.state.graduationProfile.recognizedCredits.totalCredits, 42);
   assert.equal(loadState(memoryStore(JSON.stringify(loaded.state)), catalog).error, null);
+});
+
+test('official-audit: law political science counts two completed offerings and caps a third', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const political = catalog.offerings.filter(offering => offering.courseId === '20e12e86-1398-4db1-954b-b7197405643f');
+  assert.equal(political.length, 3);
+  const progress = rows => calculateGraduationProgress(rows.map(offering => item(offering.id, 'earned')), catalog, scope).cards
+    .find(card => card.requirementId === 'professional-law-elective');
+  assert.equal(progress(political.slice(0, 2)).earned, 4);
+  assert.equal(progress(political).earned, 4);
+});
+
+test('official-audit: calligraphy needs earned schooling and never uses planned or in-progress credit', () => {
+  const scope = catalog.programs.find(program => program.department === '日本文学科').scopeId;
+  const calligraphy = catalog.offerings.filter(offering => offering.courseId === '27fce75b-3bfa-4190-99c9-3419efa03380');
+  const correspondence = calligraphy.find(offering => offering.method === 'correspondence');
+  const schooling = calligraphy.filter(offering => offering.method === 'schooling');
+  const elective = rows => calculateGraduationProgress(rows, catalog, scope).cards.find(card => card.requirementId === 'professional-elective');
+  assert.equal(elective([item(correspondence.id, 'earned')]).earned, 0);
+  assert.equal(elective([item(correspondence.id, 'earned'), item(schooling[0].id, 'earned')]).earned, 2);
+  assert.equal(elective([item(schooling[0].id, 'earned'), item(schooling[1].id, 'earned')]).earned, 2);
+  assert.equal(elective([item(correspondence.id, 'planned'), item(schooling[0].id, 'in_progress')]).earned, 0);
+});
+
+test('official-audit: transfer prefills leave route-dependent schooling unknown and preserve saved v19 values', () => {
+  assert.equal(officialRecognitionPrefill('transfer_second_year').schoolingEquivalentCredits, null);
+  assert.equal(officialRecognitionPrefill('transfer_third_year').schoolingEquivalentCredits, null);
+  assert.equal(officialRecognitionPrefill('bachelor_admission').schoolingEquivalentCredits, 15);
+  assert.equal(officialRecognitionPrefill('transfer_second_year').general.humanities.credits, 8);
+  assert.equal(officialRecognitionPrefill('transfer_third_year').general.humanities.credits, 12);
+  const saved = { ...initialState(), schemaVersion: 19, graduationProfile: { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_third_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, schoolingEquivalentCredits: 15 } } };
+  assert.equal(loadState(memoryStore(JSON.stringify(saved)), catalog).state.graduationProfile.recognizedCredits.schoolingEquivalentCredits, 15);
+});
+
+test('official-audit: annual limit reference warns without changing saveable plan data or inferring 60-credit eligibility', () => {
+  const offerings = new Map([
+    ['correspondence', { id: 'correspondence', method: 'correspondence', credits: 25 }],
+    ['schooling', { id: 'schooling', method: 'schooling', credits: 25 }],
+  ]);
+  const rows = annualCreditLimitReferences([item('correspondence', 'planned'), item('schooling', 'planned')], offerings);
+  assert.deepEqual(rows, [{ year: 2026, correspondenceCredits: 25, schoolingRegistrationCredits: 25, knownTotalCredits: 50, exceedsOfficial49: true }]);
+});
+
+test('official-audit: Japanese literature and geography professional 82 totals feed the 124 reference without card-cap double counting', () => {
+  const withCommon42 = fixture => {
+    const commonScope = catalog.programs.find(program => program.isCommon).scopeId;
+    const mapping = fixture.catalog.mappings[0]; const offering = fixture.catalog.offerings[0];
+    const common = [
+      ['common-human', '一般教育', '人文', 12, 'correspondence'], ['common-social', '一般教育', '社会', 12, 'correspondence'], ['common-natural', '一般教育', '自然', 12, 'correspondence'],
+      ['common-foreign', '外国語', '英語', 4, 'schooling'], ['common-physical', '保健体育', null, 2, 'schooling'],
+    ];
+    fixture.catalog.mappings.push(...common.map(([mappingId, category, field]) => ({ ...mapping, mappingId, scopeId: commonScope, category, field, requirementType: null, curriculumCredits: 2 })));
+    fixture.catalog.offerings.push(...common.map(([id, category, field, credits, method]) => ({ ...offering, id, name: id === 'common-physical' ? '健康・スポーツ科学概論' : id, credits, method, mappingIds: [id], resolutionStatus: 'matched' })));
+    // Mapping IDs above intentionally equal offering IDs: this keeps the fixture's
+    // common buckets isolated from its professional mappings.
+    return fixture;
+  };
+  const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'first_year', curriculumApplicability: 'current_2026' };
+  const commonItems = ['common-human', 'common-social', 'common-natural', 'common-foreign', 'common-physical'].map(id => item(id, 'earned'));
+  const japanese = withCommon42(professionalFixture('日本文学科', [['required', '必修', null, 20], ['required-elective', '選択必修', null, 30], ['elective', '選択', null, 24]], [['required', 20, ['required']], ['required-elective', 30, ['required-elective']], ['elective', 24, ['elective']]]));
+  const japaneseProgress = calculateGraduationProgress([...commonItems, item('required', 'earned'), item('required-elective', 'earned'), item('elective', 'earned')], japanese.catalog, japanese.scope, [], 'selected', [], [], profile, { selection: 'selected', status: 'earned' });
+  assert.equal(japaneseProgress.cards.find(card => card.requirementId === 'professional-japanese-total').earned, 82);
+  assert.equal(japaneseProgress.cards.find(card => card.requirementId === 'professional-elective').earned, 24);
+  assert.equal(japaneseProgress.referenceProgress[0].earned, 124);
+  const geography = withCommon42(professionalFixture('地理学科', [['required', '必修', null, 12], ['schooling', 'スクーリング必修', null, 6], ['required-elective', '選択必修', '地誌・その他の分野', 44], ['elective', '選択', null, 12]], [['required', 12, ['required']], ['schooling', 6, ['schooling'], 'schooling'], ['required-elective', 44, ['required-elective']], ['elective', 12, ['elective']]]));
+  const geographyProgress = calculateGraduationProgress([...commonItems, item('required', 'earned'), item('schooling', 'earned'), item('required-elective', 'earned'), item('elective', 'earned')], geography.catalog, geography.scope, [], 'selected', [], [], profile, { selection: 'selected', status: 'earned' });
+  assert.equal(geographyProgress.cards.find(card => card.requirementId === 'professional-geography-total').earned, 82);
+  assert.equal(geographyProgress.cards.find(card => card.requirementId === 'professional-geography-elective').earned, 12);
+  assert.equal(geographyProgress.referenceProgress[0].earned, 124);
 });
 
 test('safe recognized professional identities feed every department once without a study-year gate', () => {
