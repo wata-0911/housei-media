@@ -1,7 +1,7 @@
 import type { PlannerCatalog, PlannerState } from './plannerCatalog';
 import { validateState } from './validation';
 import { repairImportedAchievements } from './importedAchievementRepair';
-import { initialGraduationProfile } from './graduationProfile';
+import { graduationProfileValidationError, initialGraduationProfile, MAX_RECOGNIZED_CREDITS_2026, schoolingRecognitionCap } from './graduationProfile';
 import { normalizeThesisProgressState } from './thesisSelection';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
@@ -9,6 +9,25 @@ export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
 export const initialState = (): PlannerState => ({ schemaVersion: 19, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null };
+
+function recoverRecognitionProfile(profile: PlannerState['graduationProfile']): PlannerState['graduationProfile'] | null {
+  const base = initialGraduationProfile();
+  const current = profile as Partial<PlannerState['graduationProfile']>;
+  const credits = current.recognizedCredits as Partial<PlannerState['graduationProfile']['recognizedCredits']> | undefined;
+  if (!credits) return null;
+  const general = credits.general ?? base.recognizedCredits.general;
+  const repaired = {
+    ...base, ...current,
+    recognizedCredits: {
+      ...base.recognizedCredits, ...credits,
+      totalCredits: typeof credits.totalCredits === 'number' && (credits.totalCredits < 0 || credits.totalCredits > MAX_RECOGNIZED_CREDITS_2026) ? null : credits.totalCredits ?? null,
+      schoolingEquivalentCredits: typeof credits.schoolingEquivalentCredits === 'number' && (credits.schoolingEquivalentCredits < 0 || credits.schoolingEquivalentCredits > schoolingRecognitionCap(current as PlannerState['graduationProfile'])) ? null : credits.schoolingEquivalentCredits ?? null,
+      general: { ...base.recognizedCredits.general, ...general },
+      professionalCourses: Array.isArray(credits.professionalCourses) ? credits.professionalCourses.filter(row => Number.isFinite(row.credits) && row.credits >= 0 && row.credits <= MAX_RECOGNIZED_CREDITS_2026) : base.recognizedCredits.professionalCourses,
+    },
+  } as PlannerState['graduationProfile'];
+  return graduationProfileValidationError(repaired) === null ? repaired : null;
+}
 
 export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
   let raw: string | null = null;
@@ -21,7 +40,9 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
       // A later validation tightening must not lock otherwise-safe planner data.
       // Keep the raw bytes for optimistic-save protection, but hold only the
       // invalid recognition profile out of calculation until the user re-enters it.
-      const recovered = { ...(state as PlannerState), graduationProfile: initialGraduationProfile() };
+      const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
+      if (!profile) throw new Error('Invalid state');
+      const recovered = { ...(state as PlannerState), graduationProfile: profile };
       if (!validateState(recovered, catalog)) throw new Error('Invalid state');
       return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。' };
     }
