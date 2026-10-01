@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import type { GraduationProfile, PlannerCatalog, RecognitionMode } from '../../planner/plannerCatalog';
 import { GRADUATION_PROFILE_PREREQUISITE_LABEL, graduationProfileValidationError, MAX_RECOGNIZED_CREDITS_2026, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, schoolingRecognitionCap, unallocatedRecognizedCredits } from '../../planner/graduationProfile';
 
-type Props = { profile: GraduationProfile; disabled: boolean; onChange: (profile: GraduationProfile) => void; catalog: PlannerCatalog; scopeId: string | null };
+type Props = { profile: GraduationProfile; disabled: boolean; onChange: (profile: GraduationProfile) => void; catalog: PlannerCatalog; scopeId: string | null; recognitionWarning?: string | null };
 type GeneralKey = 'humanities' | 'social' | 'natural';
 const modes: Array<[RecognitionMode, string]> = [['unknown', '未確認'], ['none', 'なし'], ['recognized', '認定'], ['exempt', '免除']];
 
 export default function GraduationProfileSettings(props: Props) {
-  const { profile, disabled, onChange, catalog, scopeId } = props;
-  const [error, setError] = useState<string | null>(null); const [query, setQuery] = useState('');
+  const { profile, disabled, onChange, catalog, scopeId, recognitionWarning } = props;
+  const [error, setError] = useState<string | null>(recognitionWarning ?? null); const [query, setQuery] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const mappings = useMemo(() => new Map(catalog.mappings.map(row => [row.mappingId, row])), [catalog]);
   const update = (next: GraduationProfile) => { const message = graduationProfileValidationError(next); if (message) setError(message); else { setError(null); onChange(next); } };

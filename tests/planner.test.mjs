@@ -2724,6 +2724,19 @@ test('foreign and PE recognition distinguish confirmed zero, missing recognition
   assert.deepEqual([explicitZero.find(row => row.requirementId === 'group-foreign').status, explicitZero.find(row => row.requirementId === 'group-physical').status], ['unsatisfied', 'unsatisfied']);
 });
 
+test('general recognition distinguishes unknown from confirmed none and preserves first-year calculation', () => {
+  const scope = catalog.programs.find(program => program.department === '経済学科').scopeId;
+  const profile = (admissionType, general) => ({ ...initialGraduationProfile(), admissionYear: 2026, admissionType, curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, totalCredits: 0, schoolingEquivalentCredits: 0, general } });
+  const empty = initialGraduationProfile().recognizedCredits.general;
+  const general = p => calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], p).cards.find(row => row.requirementId === 'group-general');
+  assert.equal(general(profile('transfer_second_year', empty)).status, 'unknown');
+  const none = { humanities: { mode: 'none', credits: null }, social: { mode: 'none', credits: null }, natural: { mode: 'none', credits: null } };
+  assert.deepEqual([general(profile('transfer_second_year', none)).status, general(profile('transfer_second_year', none)).earned], ['unsatisfied', 0]);
+  assert.equal(general(profile('first_year', empty)).status, 'unsatisfied');
+  assert.equal(general(profile('transfer_second_year', { humanities: { mode: 'recognized', credits: 8 }, social: { mode: 'unknown', credits: null }, natural: { mode: 'none', credits: null } })).status, 'unknown');
+  assert.equal(general(profile('transfer_third_year', officialRecognitionPrefill('transfer_third_year').general)).status, 'satisfied');
+});
+
 test('bachelor reference separates exemptions from earned credits and preserves law thesis branches', () => {
   const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
   const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'bachelor_admission', curriculumApplicability: 'current_2026', recognizedCredits: officialRecognitionPrefill('bachelor_admission') };

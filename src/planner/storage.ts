@@ -8,7 +8,7 @@ export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
 export const initialState = (): PlannerState => ({ schemaVersion: 19, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
-export type LoadResult = { state: PlannerState; raw: string | null; error: string | null };
+export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null };
 
 export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
   let raw: string | null = null;
@@ -17,7 +17,14 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     if (raw === null) return { state: initialState(), raw, error: null };
     const parsed: unknown = JSON.parse(raw);
     const state = normalizeThesisProgressState(migrateState(parsed, catalog) as PlannerState, catalog);
-    if (!validateState(state, catalog)) throw new Error('Invalid state');
+    if (!validateState(state, catalog)) {
+      // A later validation tightening must not lock otherwise-safe planner data.
+      // Keep the raw bytes for optimistic-save protection, but hold only the
+      // invalid recognition profile out of calculation until the user re-enters it.
+      const recovered = { ...(state as PlannerState), graduationProfile: initialGraduationProfile() };
+      if (!validateState(recovered, catalog)) throw new Error('Invalid state');
+      return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。' };
+    }
     return { state, raw, error: null };
   } catch {
     return { state: initialState(), raw, error: '保存データを読み込めません。形式・バージョン・科目参照・重複、またはブラウザの保存設定を確認してください。元データは上書きしていません。' };

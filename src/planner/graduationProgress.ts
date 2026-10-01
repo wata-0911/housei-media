@@ -79,7 +79,7 @@ export type ReferenceProgress = {
 };
 
 export type ProgressCard = RequirementProgress & {
-  details?: Array<{ label: string; earned: number; inProgress: number; planned: number; target: number; schooling?: number; unit?: 'credits' | 'courses' }>;
+  details?: Array<{ label: string; earned: number | null; inProgress: number; planned: number; target: number; schooling?: number; unit?: 'credits' | 'courses'; reason?: string | null }>;
   partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
   note?: string;
   repeatableCourses?: Array<{ label: string; earned: number; counted: number; limit: number; courses: number; limitCourses: number }>;
@@ -921,10 +921,14 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     const credited = fields.reduce((sum, key) => sum + (general[key].mode === 'recognized' ? general[key].credits ?? 0 : 0), 0);
     const details = card.details?.map((detail, index) => {
       const row = general[fields[index]];
-      return { ...detail, earned: row.mode === 'exempt' ? detail.target : detail.earned + (row.mode === 'recognized' ? row.credits ?? 0 : 0) };
+      const earned = row.mode === 'exempt' ? detail.target : (detail.earned ?? 0) + (row.mode === 'recognized' ? row.credits ?? 0 : 0);
+      return row.mode === 'unknown' && earned < detail.target ? { ...detail, earned: null, reason: '認定情報未確認' } : { ...detail, earned };
     });
-    return { ...card, earned: exempt ? 0 : Math.min(card.target ?? 36, (card.earned ?? 0) + credited), details,
-      status: exempt || (details?.every(detail => detail.earned >= detail.target) && (card.earned ?? 0) + credited >= 36) ? 'satisfied' : card.status,
+    const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && (card.earned ?? 0) + credited >= 36;
+    const unknown = profile.admissionType !== 'first_year' && !exempt && details?.some(detail => detail.earned === null);
+    return { ...card, earned: exempt ? 0 : unknown ? null : Math.min(card.target ?? 36, (card.earned ?? 0) + credited), details,
+      status: exempt || completed ? 'satisfied' : unknown ? 'unknown' : card.status,
+      reason: unknown ? '一般教育の認定情報が未確認です。0単位認定とは扱いません。' : card.reason,
       note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : credited ? ' 公式認定単位を反映しています。' : ''}` };
   });
   next = replace(next, 'group-foreign', card => {
