@@ -101,6 +101,16 @@ const GROUP_RULES = new Set([
   'common_foreign_choose_one', 'common_foreign_exact_credits', 'common_foreign_min_schooling_credits', 'common_foreign_max_credits',
 ]);
 
+// These source rules remain in the catalog, but are not independent learner
+// checks. The common total is already exactly covered by the three grouped
+// cards (general 36, foreign 4, physical 2). Open University recognition has
+// no input model yet, so surfacing its catalog row would warn every learner;
+// add it back as a manual-review path when that recognition input exists.
+const REFERENCE_ONLY_REQUIREMENT_RULES = new Set([
+  'common_total_min_credits',
+  'common_open_university_max_credits',
+]);
+
 const CONDITION_ALLOWLIST: Partial<Record<StructuredRequirement['ruleType'], string[][]>> = {
   // Every condition listed here has a corresponding calculation below.  This
   // is deliberately not a list of conditions that are merely harmless to
@@ -1209,14 +1219,17 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const hasUnresolvedEarned = calculationItems.some(item => item.status === 'earned'
     && offerings.get(item.offeringId)?.resolutionStatus === 'manual_review'
     && !(scopeId === HISTORY_SCOPE_ID && (isHistorySeminar(offerings.get(item.offeringId)) || isHistoricalSources(offerings.get(item.offeringId)))));
-  const requirements = requirementsForScope(catalog, scopeId).flatMap(requirement => {
+  const requirements = requirementsForScope(catalog, scopeId)
+    .filter(requirement => !(requirement.status === 'structured'
+      && REFERENCE_ONLY_REQUIREMENT_RULES.has(requirement.ruleId)))
+    .flatMap(requirement => {
     if (requirement.status === 'structured' && requirement.ruleType === 'required_course' && requirement.target.course_name === '卒業論文') return [];
     if (requirement.status === 'unsupported') return [unknown(requirement, requirement.reason || '未対応の要件です')];
     const condition = thesisCondition(requirement, currentSelection);
     if (condition === 'inactive') return [];
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
-    return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, hasUnresolvedEarned)];
-  });
+      return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, hasUnresolvedEarned)];
+    });
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
   const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status);

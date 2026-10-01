@@ -1926,6 +1926,32 @@ test('2026 common, history, geography, and law special credit transfers follow t
   assert.equal(lawCards.find(row => row.requirementId === 'professional-law-elective').earned, 10); // 8 capped 法律学特講 + 2 allowed partial.
 });
 
+test('official-audit: law seminar counts four two-credit enrollments and excludes the fifth from professional totals', () => {
+  const law = professionalFixture('法律学科', [['seminar', '選択']],
+    Array.from({ length: 5 }, (_, index) => [`seminar-${index + 1}`, 2, ['seminar'], 'schooling']));
+  for (const offering of law.catalog.offerings) offering.name = `法律学演習（第${offering.id.at(-1)}回）`;
+  const progress = calculateGraduationProgress(law.catalog.offerings.map(offering => item(offering.id, 'earned')), law.catalog, law.scope, [], 'not_selected');
+  const elective = progress.cards.find(row => row.requirementId === 'professional-law-elective');
+  const total = progress.cards.find(row => row.requirementId === 'professional-law-total');
+  assert.equal(elective.earned, 8);
+  assert.equal(total.earned, 8);
+  assert.deepEqual(elective.repeatableCourses, [{ label: '法律学演習', earned: 10, counted: 8, limit: 8, courses: 5, limitCourses: 4 }]);
+});
+
+test('official-audit: common total is covered by grouped cards without a duplicate unknown requirement', () => {
+  const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const progress = calculateGraduationProgress([], catalog, law);
+  const hiddenRuleIds = new Set(['common_total_min_credits', 'common_open_university_max_credits']);
+  const hiddenRequirementIds = new Set(catalog.requirements
+    .filter(requirement => requirement.status === 'structured' && hiddenRuleIds.has(requirement.ruleId))
+    .map(requirement => requirement.id));
+  assert.ok(progress.cards.some(card => card.requirementId === 'group-general' && card.target === 36));
+  assert.ok(progress.cards.some(card => card.requirementId === 'group-foreign' && card.target === 4));
+  assert.ok(progress.cards.some(card => card.requirementId === 'group-physical' && card.target === 2));
+  assert.ok(progress.requirements.every(requirement => !hiddenRequirementIds.has(requirement.requirementId)));
+  assert.ok(progress.unknownReasons.every(summary => !summary.labels.some(label => label === '教養課程' || label === '放送大学')));
+});
+
 test('geography 2026 staged transfers allocate each completed identity once and cap only the official rules', () => {
   const allocate = (kind, credits) => allocateGeographyTransfers(kind, credits.map((value, index) => ({ id: `${kind}-${index}`, credits: value, status: 'earned' })));
   assert.deepEqual(allocate('fieldStudy', [1, 1]).allocations.map(row => [row.bucket, row.credits]), [['スクーリング必修', 1], ['スクーリング必修', 1]]);
