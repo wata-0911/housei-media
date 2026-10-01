@@ -1,3 +1,12 @@
+import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
+import MediaSchoolingProgress from '../src/components/planner/MediaSchoolingProgress.tsx';
+import CorrespondenceProgress from '../src/components/planner/CorrespondenceProgress.tsx';
+import CourseEvaluations from '../src/components/planner/CourseEvaluations.tsx';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import FuturePlanNotice from '../src/components/planner/FuturePlanNotice.tsx';
+import AnnualCreditLimitNotice from '../src/components/planner/AnnualCreditLimitNotice.tsx';
+import { futurePlanNote, planningTermLabel } from '../src/planner/futurePlanning.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -3224,4 +3233,97 @@ test('open university recognition counts only toward general total and never dup
   const base = { ...initialState(), selectedScopeId: scope, graduationProfile: { ...profile, recognizedCredits: { ...recognized, general: { ...recognized.general, humanities: { mode: 'recognized', credits: 8 } } } } };
   assert.equal(guidanceEligibilityCreditResult(base, catalog).credits, 34);
   assert.equal(guidanceEligibilityCreditResult({ ...base, graduationProfile: { ...base.graduationProfile, recognizedCredits: { ...base.graduationProfile.recognizedCredits, totalCredits: 40 } } }, catalog).credits, 40);
+});
+
+
+for (const plannedYear of [2027, 2028, 2029, 2035, 9999]) {
+  test(`v21 future planning persists ${plannedYear} without changing the 2026 offering or desired term`, () => {
+    const offering = catalog.offerings.find(value => isMediaSchooling(value));
+    const original = structuredClone(offering);
+    const items = updatePlannerItem([plannerItemFromCourseSearch(offering.id)], offering.id, { plannedYear, plannedTerm: '冬期', studyYear: 2 });
+    const state = { ...initialState(), items };
+    const store = memoryStore();
+    saveState(store, state, null, catalog);
+    const loaded = loadState(store, catalog);
+    assert.equal(loaded.error, null);
+    assert.equal(loaded.state.schemaVersion, 21);
+    assert.deepEqual(loaded.state, state);
+    assert.equal(loaded.state.items[0].offeringId, offering.id);
+    assert.equal(offering.academicYear, 2026);
+    assert.deepEqual(offering, original);
+    assert.equal(planningTermLabel(items[0], offering), '冬期（希望時期）');
+    assert.equal(planningTermLabel({ ...items[0], plannedTerm: null }, offering), '希望時期未設定');
+    assert.equal(annualCreditLimitReferences(items, offeringsById)[0].year, plannedYear);
+    const exported = plannerExportPresentation(state, catalog);
+    assert.equal(exported.rows[0].plannedYear, plannedYear);
+    assert.equal(exported.rows[0].plannedTerm, '冬期');
+    assert.match(plannerExportCsv(exported), /2026年度カタログを参考.*将来年度の開講は未確認/);
+  });
+}
+
+test('future plans never increase earned credits, graduation satisfaction or 60/80/100 guidance eligibility', () => {
+  const items = catalog.offerings.map((offering, index) => ({ ...plannerItemFromCourseSearch(offering.id), plannedYear: index % 2 ? 2028 : 2027 }));
+  assert.equal(summarizeCredits(items, offeringsById).earned, 0);
+  for (const program of catalog.programs.filter(value => !value.isCommon)) {
+    const state = { ...initialState(), selectedScopeId: program.scopeId, items };
+    const baseline = { ...state, items: [] };
+    const progress = rows => calculateGraduationProgress(rows, catalog, program.scopeId);
+    const earnedView = value => ({ cards: value.cards.map(card => [card.requirementId, card.earned, card.status]), requirements: value.requirements.map(row => [row.id, row.earned, row.status]) });
+    assert.deepEqual(earnedView(progress(items)), earnedView(progress([])));
+    const eligibility = guidanceEligibilityCreditResult(state, catalog);
+    assert.deepEqual(eligibility, guidanceEligibilityCreditResult(baseline, catalog));
+    assert.equal(eligibility.credits, 0);
+    for (const threshold of [60, 80, 100]) assert.ok(eligibility.credits < threshold);
+  }
+});
+
+test('future notice renders provisional catalog reference only for years beyond the offering year', () => {
+  for (const plannedYear of [2027, 2028, 2035]) {
+    const planned = { ...item(first.id), plannedYear };
+    const html = renderToStaticMarkup(createElement(FuturePlanNotice, { item: planned, offering: first }));
+    assert.match(html, /仮計画/);
+    assert.match(html, /2026年度カタログを参考/);
+    assert.match(html, /将来年度の開講は未確認/);
+    assert.match(html, /方式・開講期・担当教員・シラバスは2026年度情報（参考）/);
+  }
+  assert.equal(renderToStaticMarkup(createElement(FuturePlanNotice, { item: item(first.id), offering: first })), '');
+  assert.equal(futurePlanNote({ plannedYear: null }, first), null);
+  assert.equal(planningTermLabel(item(first.id), first), first.period ?? '期未設定');
+});
+
+test('future annual limits explicitly reference 2026 while normal 2026 wording remains intact', () => {
+  for (const year of [2026, 2027, 2028]) {
+    const rows = annualCreditLimitReferences([{ ...item(first.id), plannedYear: year }], offeringsById);
+    const html = renderToStaticMarkup(createElement(AnnualCreditLimitNotice, { rows }));
+    if (year > 2026) assert.match(html, /2026年度ルールを参考表示・将来年度の上限は未確認/);
+    else { assert.match(html, /公式49単位の参考/); assert.doesNotMatch(html, /将来年度の上限は未確認/); }
+  }
+});
+
+
+test('planner desktop/mobile and progress screens show future references without borrowing official periods', async () => {
+  const { createCreditClassifier } = await import('../src/planner/annualPlan.ts');
+  const classify = createCreditClassifier(catalog, null);
+  const media = catalog.offerings.find(isMediaSchooling);
+  const correspondence = catalog.offerings.find(value => value.method === 'correspondence');
+  const noop = () => {};
+  for (const plannedYear of [2026, 2027, 2028]) {
+    const items = [media, correspondence].map(offering => ({ ...item(offering.id), plannedYear }));
+    const common = { items, offerings: offeringsById, disabled: false, onChange: noop };
+    const list = renderToStaticMarkup(createElement(PlannedCourseList, { ...common, classify, unifiedRows: createUnifiedCourseRows(items, [], offeringsById), publicCourses: [], correspondenceProgress: {}, mediaProgress: {}, evaluations: {}, importedUserMeta: {}, onRemove: noop, onChangePublicCourse: noop, onRemovePublicCourse: noop, onChangeEvaluation: noop, onChangeCorrespondence: noop, onChangeImportedMeta: noop, onOpenMedia: noop }));
+    const screens = [
+      renderToStaticMarkup(createElement(MediaSchoolingProgress, { ...common, progress: {}, importedAchievements: [], importedManaged: [], importedPending: [], onResolveImportedMedia: noop })),
+      renderToStaticMarkup(createElement(CorrespondenceProgress, { ...common, progress: {} })),
+      renderToStaticMarkup(createElement(CourseEvaluations, { ...common, evaluations: {} })),
+    ];
+    for (const html of [list, ...screens]) {
+      if (plannedYear > 2026) { assert.match(html, /仮計画/); assert.match(html, /2026年度カタログを参考/); assert.match(html, /将来年度の開講は未確認/); }
+      else assert.doesNotMatch(html, /仮計画|将来年度の開講は未確認/);
+    }
+    if (plannedYear > 2026) {
+      assert.equal((list.match(/将来年度の開講は未確認/g) ?? []).length, 4, 'both desktop rows and mobile cards warn');
+      assert.match(list, /毎年2月.*法政通信/);
+      for (const html of screens) assert.match(html, /希望時期未設定/);
+    }
+  }
 });

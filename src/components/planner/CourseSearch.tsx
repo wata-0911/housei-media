@@ -21,6 +21,7 @@ export default function CourseSearch({ classify, catalog, selectedScopeId, offer
   const unknownCount = targetYear === null ? 0 : queryMatches.filter(offering => yearEligibility(offering, selectedScopeId, targetYear, catalog) === 'unknown').length;
   return <section aria-labelledby="course-search-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="course-search-heading" className="text-xl text-[#002255] mb-5">科目を探す</h2>
+    <p className="mb-4 text-sm text-gray-600">2026年度カタログの科目です。追加後、計画年度に2027年以降の西暦を入力して仮計画を作れます。ここに表示する方式・期は2026年度情報です。</p>
     <label htmlFor="course-query" className="block text-sm mb-2">科目名・科目コード・クラスコード・開講区分・期</label>
     <input id="course-query" type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(30); }}
       placeholder="例：政治学、前期メディア" className="w-full border border-gray-300 p-3 rounded-sm focus:ring-2 focus:ring-[#002255]" />

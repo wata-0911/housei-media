@@ -1,3 +1,5 @@
+import FuturePlanNotice from './FuturePlanNotice';
+import { planningTermLabel } from '../../planner/futurePlanning';
 import { useState } from 'react';
 import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, gradeLabel, usesLegacyReportEvaluation } from '../../planner/courseEvaluations';
 import type { CourseEvaluation, CourseGrade, Offering, PlannerItem } from '../../planner/plannerCatalog';
@@ -25,7 +27,8 @@ function EvaluationCard({ item, offering, saved, disabled, onChange }: { item: P
   const change = (field: 'reportGrade' | 'schoolingGrade', grade: CourseGrade | null) => onChange(item.offeringId, { ...saved, [field]: grade });
   return <article className="min-w-0 border border-gray-200 bg-white p-4 sm:p-6">
     <h3 className="break-words text-lg font-medium text-[#002255]">{offering.name}</h3>
-    <p className="mt-1 break-words text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {item.plannedTerm ?? offering.period ?? '期未設定'} / {offering.deliveryCategory ?? (offering.method === 'schooling' ? 'スクーリング' : '通信')} / {statusLabels[item.status]}</p>
+    <p className="mt-1 break-words text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {planningTermLabel(item, offering)} / {offering.deliveryCategory ?? (offering.method === 'schooling' ? 'スクーリング' : '通信')} / {statusLabels[item.status]}</p>
+    <FuturePlanNotice item={item} offering={offering} />
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
       {usesLegacyReportEvaluation(offering) ? <GradeSelect label="リポート評価" value={saved.reportGrade} disabled={disabled} onChange={grade => change('reportGrade', grade)} /> : <p className="rounded-sm bg-[#f5f7fa] p-3 text-sm text-gray-700">リポート評価は「通信学習」タブで設題ごとに記録します。</p>}
       {offering.method === 'schooling' && <GradeSelect label="スクーリング評価" value={saved.schoolingGrade} disabled={disabled} onChange={grade => change('schoolingGrade', grade)} />}

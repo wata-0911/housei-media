@@ -1,3 +1,4 @@
+import { futurePlanNote } from './futurePlanning';
 import { createCreditClassifier } from './annualPlan';
 import { correspondenceCreditResult, progressForCorrespondence } from './correspondenceProgress';
 import { evaluationFor, gradeLabel } from './courseEvaluations';
@@ -64,7 +65,7 @@ export function plannerExportPresentation(state: PlannerState, catalog: PlannerC
       statusLabel: statusLabels[item.status],
       progressSummary: progressSummaryForOffering(item, offering, state.correspondenceProgress, state.mediaSchoolingProgress),
       finalGrade: evaluation.finalGrade,
-      classificationLabel: classify(offering),
+      classificationLabel: [classify(offering), futurePlanNote(item, offering)].filter(Boolean).join(' / '),
       requiredReports: null,
       passedReports: null,
       examGrade: null,

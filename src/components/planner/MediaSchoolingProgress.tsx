@@ -1,3 +1,5 @@
+import FuturePlanNotice from './FuturePlanNotice';
+import { planningTermLabel } from '../../planner/futurePlanning';
 import { useState } from 'react';
 import { addAssessment, assessmentLabel, mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment, type ImportedMediaShareItem } from '../../planner/mediaSchooling';
 import type { MediaAssessment, MediaCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
@@ -40,7 +42,8 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
   };
   return <article className="border border-gray-200 bg-white p-4 sm:p-6 min-w-0">
     <h3 className="font-medium text-lg break-words text-[#002255]">{offering.name}</h3>
-    <p className="mt-1 text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {item.plannedTerm ?? offering.period ?? '期未設定'} / {statusLabels[item.status]}</p>
+    <p className="mt-1 text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {planningTermLabel(item, offering)} / {statusLabels[item.status]}</p>
+    <FuturePlanNotice item={item} offering={offering} />
     <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <label className="block text-sm">全回数
         <input aria-label={`${offering.name}の全回数`} inputMode="numeric" value={draft} disabled={disabled} onChange={event => { setDraft(event.target.value); setError(''); }} onBlur={saveTotal} placeholder="未設定" className="mt-1 w-full border border-gray-300 rounded-sm p-2 disabled:opacity-50" />
