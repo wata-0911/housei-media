@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import FuturePlanNotice from '../src/components/planner/FuturePlanNotice.tsx';
 import AnnualCreditLimitNotice from '../src/components/planner/AnnualCreditLimitNotice.tsx';
 import BrowserExtensionEntrySection, { PLANNER_EXTENSION_PUBLIC_URL } from '../src/components/planner/BrowserExtensionEntrySection.tsx';
+import PlannerProfileTab from '../src/components/planner/PlannerProfileTab.tsx';
 import { futurePlanNote, planningTermLabel } from '../src/planner/futurePlanning.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -3345,4 +3346,86 @@ test('planner desktop/mobile and progress screens show future references without
       for (const html of screens) assert.match(html, /希望時期未設定/);
     }
   }
+});
+
+test('planner exposes annual, media, and profile as accessible responsive tabs with one profile settings UI', () => {
+  const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
+  const profileTab = readFileSync(new URL('../src/components/planner/PlannerProfileTab.tsx', import.meta.url), 'utf8');
+  const program = readFileSync(new URL('../src/components/planner/ProgramSettings.tsx', import.meta.url), 'utf8');
+  assert.equal((page.match(/role="tab"/g) ?? []).length, 3);
+  assert.match(page, /'annual' \| 'media' \| 'profile'/);
+  for (const label of ['年間履修計画', 'メディア', 'プロフィール']) assert.match(page, new RegExp(label));
+  assert.match(page, /role="tablist"/);
+  assert.equal((page.match(/aria-selected=/g) ?? []).length, 3);
+  assert.match(page, /grid-cols-3/);
+  assert.match(page, /activeTab === 'annual'.*annual-panel/s);
+  assert.match(page, /activeTab === 'media'.*media-panel/s);
+  assert.match(page, /activeTab === 'profile'.*profile-panel/s);
+  assert.equal((page.match(/<PlannerProfileTab/g) ?? []).length, 1);
+  assert.doesNotMatch(page, /GraduationProfileSettings/);
+  assert.equal((profileTab.match(/<GraduationProfileSettings/g) ?? []).length, 1);
+  assert.match(profileTab, /hideBasicFields/);
+  assert.doesNotMatch(program, /所属を選択してください|profile-program-scope/);
+});
+
+test('profile tab gathers personal settings, keeps recovery warning visible, and only reserves future account UI', () => {
+  const warning = '保存済みの認定情報に無効な値があります。確認・修正してください。';
+  const html = renderToStaticMarkup(createElement(PlannerProfileTab, {
+    catalog,
+    scopeId: null,
+    profile: initialGraduationProfile(),
+    disabled: false,
+    recognitionWarning: warning,
+    onScopeChange: () => {},
+    onProfileChange: () => {},
+  }));
+  for (const label of ['基本情報', '所属学科', '入学年度', '現在の在学年次', '入学区分', '認定単位・卒業判定設定', '一般教育', '人文', '社会', '自然', '放送大学認定単位', '外国語', '保健体育', '専門教育の認定済み科目', 'アカウント・データ保存']) assert.match(html, new RegExp(label));
+  assert.match(html, new RegExp(warning));
+  assert.match(html, /アカウント・クラウド保存は今後対応予定/);
+  assert.doesNotMatch(html, /ログイン|新規登録|https?:\/\//);
+});
+
+test('profile edits persist through the existing planner state and feed graduation and guidance calculations', () => {
+  const scope = catalog.programs.find(program => program.department === '経済学科').scopeId;
+  const recognizedCredits = {
+    ...initialGraduationProfile().recognizedCredits,
+    totalCredits: 12,
+    schoolingEquivalentCredits: 4,
+    general: {
+      ...initialGraduationProfile().recognizedCredits.general,
+      humanities: { mode: 'recognized', credits: 4 },
+    },
+  };
+  const graduationProfile = {
+    ...initialGraduationProfile(),
+    admissionYear: 2026,
+    currentStudyYear: 3,
+    admissionType: 'other_transfer',
+    curriculumApplicability: 'current_2026',
+    recognizedCredits,
+  };
+  const next = { ...stateForScopeChange(initialState(), catalog, scope), graduationProfile };
+  const store = memoryStore();
+  saveState(store, next, null, catalog);
+  const reloaded = loadState(store, catalog);
+  assert.equal(reloaded.error, null);
+  assert.equal(reloaded.state.selectedScopeId, scope);
+  assert.equal(reloaded.state.graduationProfile.admissionYear, 2026);
+  assert.equal(reloaded.state.graduationProfile.currentStudyYear, 3);
+  assert.equal(reloaded.state.graduationProfile.admissionType, 'other_transfer');
+  assert.deepEqual(reloaded.state.graduationProfile.recognizedCredits, recognizedCredits);
+  assert.equal(reloaded.state.schemaVersion, 21);
+  assert.equal(guidanceEligibilityCreditResult(reloaded.state, catalog).credits, 12);
+  const progress = calculateGraduationProgress([], catalog, scope, [], thesisProgressForScope(reloaded.state, catalog, scope).selection, [], [], reloaded.state.graduationProfile, thesisProgressForScope(reloaded.state, catalog, scope));
+  assert.equal(progress.referenceProgress.find(row => row.id === 'overall-reference-progress')?.recognizedCredits, 12);
+  const source = [
+    readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/components/planner/PlannerProfileTab.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/components/planner/ProfileBasicSettings.tsx', import.meta.url), 'utf8'),
+  ].join('\n');
+  assert.match(source, /scopeId=\{state\.selectedScopeId\}/);
+  assert.match(source, /profile=\{state\.graduationProfile\}/);
+  assert.match(source, /stateForScopeChange\(state, catalog, selectedScopeId\)/);
+  assert.match(source, /commit\(\{ \.\.\.state, graduationProfile \}/);
+  assert.doesNotMatch(source, /userProfile|profileStorage|localStorage\.setItem/);
 });
