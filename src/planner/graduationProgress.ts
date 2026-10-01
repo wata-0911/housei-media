@@ -79,6 +79,8 @@ export type ReferenceProgress = {
 };
 
 export type ProgressCard = RequirementProgress & {
+  /** Internal uncapped value used when a cross-card rule needs the actual allocation. */
+  normalEarned?: number;
   details?: Array<{ label: string; earned: number | null; inProgress: number; planned: number; target: number; schooling?: number; unit?: 'credits' | 'courses'; reason?: string | null }>;
   partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
   note?: string;
@@ -771,7 +773,7 @@ function professionalCards(
     details?: ProgressCard['details'], note?: string, reason = baseReason): ProgressCard => ({
     requirementId: id, label, ruleType: 'professional_group',
     status: reason ? 'unknown' : satisfied ? 'satisfied' : 'unsatisfied',
-    earned: reason ? null : target === null ? totals.earned : Math.min(target, totals.earned),
+    earned: reason ? null : target === null ? totals.earned : Math.min(target, totals.earned), normalEarned: totals.earned,
     inProgress: totals.inProgress, planned: totals.planned, target, unit: 'credits', reason, details, note,
     repeatableCourses: [...repeatables.values()].filter(repeat => repeat.type === label.split('：').at(-1)).map(repeat => ({ label: repeat.name, earned: repeat.earned, counted: Math.min(repeat.earned, repeat.limit), limit: repeat.limit, courses: repeat.courses.size, limitCourses: repeat.limitCourses })),
   });
@@ -1149,16 +1151,31 @@ function literaturePartialExceptionCard(items: PlannerItem[], catalog: PlannerCa
       ? ['professional-history-required', 'professional-history-schooling-required-elective', 'professional-history-elective']
       : ['professional-geography-required', 'professional-geography-schooling-required', 'professional-geography-required-elective', 'professional-geography-elective'];
   const requiredCards = ids.map(id => cards.find(card => card.requirementId === id));
-  // The grouped cards include their field details (history and geography), so a
-  // satisfied status is the safe single source for each department's minima.
-  if (requiredCards.some(card => !card || card.status !== 'satisfied' || card.earned === null)) return [];
-  const total = department === '史学科'
-    ? requiredCards.reduce((sum, card) => sum + (card!.earned ?? 0), 0)
+  if (requiredCards.some(card => !card || card.earned === null || card.status === 'unknown')) return [];
+  const thesis = cards.find(card => card.requirementId === `thesis-progress-${scopeId}`);
+  if (!thesis || thesis.status !== 'satisfied' || thesis.earned === null) return [];
+
+  // The grouped cards are the authoritative minima for Japanese literature and
+  // geography. History's normal elective card has a 50-credit target, however,
+  // so it must not be required here: the valid 80 + 2 pattern can have 48
+  // completed elective credits plus the separate two-credit partial. Its field
+  // details remain mandatory, and every other department must meet its minima.
+  const minimaMet = department === '史学科'
+    ? requiredCards[0]!.status === 'satisfied'
+      && requiredCards[1]!.status === 'satisfied'
+      && requiredCards[2]!.details?.every(detail => detail.earned !== null && detail.earned >= detail.target)
+    : requiredCards.every(card => card!.status === 'satisfied');
+  if (!minimaMet) return [];
+
+  const professionalTotal = department === '史学科'
+    ? requiredCards.reduce((sum, card) => sum + (card!.normalEarned ?? 0), 0)
     : cards.find(card => card.requirementId === (department === '日本文学科' ? 'professional-japanese-total' : 'professional-geography-total'))?.earned;
-  // Partial curriculum rows deliberately remain outside the normal allocator.
-  // Japanese and geography expose the resulting 80 directly; history exposes
-  // the three mutually-exclusive 16 + 8 + 50 buckets instead.
-  if (total === null || total === undefined || (department === '史学科' ? total !== 74 : total !== 80)) return [];
+  // The partial curriculum row deliberately remains outside the normal
+  // allocator. In particular, history has no professional-history-total card:
+  // compose its mutually-exclusive buckets and the already-completed thesis.
+  const total = professionalTotal === null || professionalTotal === undefined ? null
+    : department === '史学科' ? professionalTotal + thesis.earned : professionalTotal;
+  if (total !== 80) return [];
   return [{ requirementId: 'literature-professional-80-plus-partial-2', label: '文学部 80＋部分修得2単位の特例候補', ruleType: 'manual_review', status: 'unknown', earned: 80, inProgress: 0, planned: 0, target: 82, unit: 'credits', reason: '教授会判断が必要な特例候補です。Plannerは82単位達成とは判定しません。', note: '分野要件を含む正式な判定は大学へ確認してください。' }];
 }
 

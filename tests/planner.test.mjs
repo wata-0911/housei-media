@@ -3101,14 +3101,18 @@ test('round2: eligibility counts confirmed imported partials once, recognition d
 
 test('round2 blockers: guidance uses composition ceilings and downstream guidance keeps expiry evidence', () => {
   const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
-  const split = catalog.offerings.find(offering => offering.resolutionStatus === 'matched' && offering.method === 'schooling' && offering.credits === 2 && offering.courseId
+  const split = catalog.offerings.filter(offering => offering.resolutionStatus === 'matched' && offering.method === 'schooling' && offering.credits === 2 && offering.courseId
     && offering.mappingIds.some(id => { const mapping = catalog.mappings.find(row => row.mappingId === id); return mapping?.scopeId === scope && mapping.curriculumCredits === 4; }));
-  assert.ok(split, 'real two-credit schooling half with a four-credit curriculum mapping');
+  const firstHalf = split.find(offering => split.some(other => other.id !== offering.id && other.courseId === offering.courseId));
+  const secondHalf = firstHalf && split.find(offering => offering.id !== firstHalf.id && offering.courseId === firstHalf.courseId);
+  assert.ok(firstHalf && secondHalf, 'two distinct real two-credit offerings share one four-credit curriculum course');
+  assert.notEqual(firstHalf.id, secondHalf.id);
+  assert.equal(firstHalf.courseId, secondHalf.courseId);
   const state = { ...initialState(), selectedScopeId: scope, graduationProfile: initialGraduationProfile() };
-  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(split.id, 'earned'), item(split.id, 'earned')] }, catalog).credits, 4, 'two planner halves reach their four-credit composition ceiling');
-  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(split.id, 'earned')] }, catalog).credits, 2, 'one half remains two credits');
-  const imported = { id: 'same-course-import', fingerprint: 'same-course-import', source: 'hosei_import', rawName: split.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: split.courseId, selectedOfferingId: split.id, selectionSource: 'manual', match: 'exact_unique', candidateOfferingIds: [split.id] };
-  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(split.id, 'earned'), item(split.id, 'earned')], importedCourseAchievements: [imported] }, catalog).credits, 4, 'planner and import duplicates do not exceed the ceiling');
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(firstHalf.id, 'earned'), item(secondHalf.id, 'earned')] }, catalog).credits, 4, 'two real offerings reach their shared four-credit composition ceiling');
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(firstHalf.id, 'earned')] }, catalog).credits, 2, 'one offering remains two credits');
+  const imported = { id: 'same-course-import', fingerprint: 'same-course-import', source: 'hosei_import', rawName: firstHalf.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 4, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: firstHalf.courseId, selectedOfferingId: firstHalf.id, selectionSource: 'manual', match: 'exact_unique', candidateOfferingIds: [firstHalf.id] };
+  assert.equal(guidanceEligibilityCreditResult({ ...state, items: [item(firstHalf.id, 'earned'), item(secondHalf.id, 'earned')], importedCourseAchievements: [imported] }, catalog).credits, 4, 'planner offerings and imported achievement do not exceed the shared ceiling');
 
   const profile = { ...initialGraduationProfile(), currentStudyYear: 4 };
   const passed = passedOn => ({ status: 'passed', passedOn });
@@ -3120,18 +3124,23 @@ test('round2 blockers: guidance uses composition ceilings and downstream guidanc
   assert.equal(economy.find(row => row.id === 'submission').conditions[2].status, 'unknown');
 });
 
-test('round2 blockers: literature 80 plus partial candidate requires every department field minimum', () => {
-  const candidate = fixture => calculateGraduationProgress(fixture.catalog.offerings.map(row => item(row.id, 'earned')), fixture.catalog, fixture.scope, [], 'selected', [], [], initialGraduationProfile(), { selection: 'selected', status: 'earned' }).cards.find(row => row.requirementId === 'literature-professional-80-plus-partial-2');
+test('round2 blockers: literature 80 plus partial candidate uses completed 80 credits and required fields', () => {
+  const progress = fixture => calculateGraduationProgress(fixture.catalog.offerings.map(row => item(row.id, 'earned')), fixture.catalog, fixture.scope, [], 'selected', [], [], initialGraduationProfile(), { selection: 'selected', status: 'earned' });
+  const candidate = fixture => progress(fixture).cards.find(row => row.requirementId === 'literature-professional-80-plus-partial-2');
   const japanese = professionalFixture('日本文学科', [['required', '必修'], ['re', '選択必修'], ['elective', '選択'], ['partial', '選択', null, 4]], [['required', 20, ['required']], ['re', 20, ['re']], ['elective', 32, ['elective']], ['partial', 2, ['partial'], 'schooling']]);
-  const history = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['west', '選択', '西洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 46, ['jp']], ['east', 2, ['east']], ['west', 2, ['west']], ['partial', 2, ['partial'], 'schooling']]);
+  const history = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['west', '選択', '西洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 44, ['jp']], ['east', 2, ['east']], ['west', 2, ['west']], ['partial', 2, ['partial'], 'schooling']]);
   const geography = professionalFixture('地理学科', [['required', '必修'], ['schooling', 'スクーリング必修'], ['humanA', '選択必修', '人文地理の分野'], ['humanB', '選択必修', '人文地理の分野'], ['naturalA', '選択必修', '自然地理の分野'], ['naturalB', '選択必修', '自然地理の分野'], ['regional', '選択必修', '地誌・その他の分野'], ['elective', '選択'], ['partial', '選択', null, 4]], [['required', 12, ['required']], ['schooling', 6, ['schooling'], 'schooling'], ['human-a', 4, ['humanA']], ['human-b', 4, ['humanB']], ['natural-a', 4, ['naturalA']], ['natural-b', 4, ['naturalB']], ['regional', 26, ['regional']], ['elective', 12, ['elective']], ['partial', 2, ['partial'], 'schooling']]);
   for (const fixture of [japanese, history, geography]) {
     const card = candidate(fixture);
     assert.equal(card?.status, 'unknown', fixture.catalog.programs.find(program => program.scopeId === fixture.scope)?.department);
     assert.equal(card?.earned, 80, 'candidate never promotes the partial into ordinary earned credits');
   }
+  const historyProfessional = progress(history).cards.filter(card => card.requirementId.startsWith('professional-history-'));
+  assert.equal(historyProfessional.reduce((sum, card) => sum + (card.earned ?? 0), 0), 72, 'history candidate totals 72 professional credits before the thesis');
   const missingHistoryField = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 48, ['jp']], ['east', 2, ['east']], ['partial', 2, ['partial'], 'schooling']]);
   assert.equal(candidate(missingHistoryField), undefined, 'missing a history field suppresses the candidate');
+  const historyAt82 = professionalFixture('史学科', [['required', '必修'], ['schooling', 'スクーリング選択必修'], ['jp', '選択', '日本史の分野'], ['east', '選択', '東洋史の分野'], ['west', '選択', '西洋史の分野'], ['partial', '選択', null, 4]], [['required', 16, ['required']], ['schooling', 8, ['schooling'], 'schooling'], ['jp', 46, ['jp']], ['east', 2, ['east']], ['west', 2, ['west']], ['partial', 2, ['partial'], 'schooling']]);
+  assert.equal(candidate(historyAt82), undefined, 'history already at the normal 82 credits is not a partial-completion candidate');
 });
 
 test('round2: v19 migration keeps records and profile, while v21 is locked', () => {
