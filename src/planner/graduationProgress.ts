@@ -10,7 +10,7 @@ import type {
   ThesisProgress,
   GraduationProfile,
 } from './plannerCatalog';
-import { hasCreditBearingRecognition, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from './graduationProfile';
+import { graduationProfileValidationError, hasCreditBearingRecognition, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from './graduationProfile';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistoricalSources, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
@@ -900,6 +900,8 @@ function publicCourseCard(publicCourses: PublicCourse[], catalog: PlannerCatalog
 }
 
 function referencePrerequisiteReason(profile: GraduationProfile, program: { department: string | null }, thesisSelection: ThesisSelection): string | null {
+  const credits = profile.recognizedCredits as Partial<GraduationProfile['recognizedCredits']>;
+  if (credits.general && credits.foreignLanguage && credits.physicalEducation && credits.professionalCourses && graduationProfileValidationError(profile)) return '認定単位の入力を確認してください。異常な認定値は全体参考進捗に算入しません。';
   if (profile.curriculumApplicability === 'unknown') return '適用課程が未確認のため、2026年度の必要単位を適用できません。';
   if (profile.curriculumApplicability === 'legacy_or_transition') return '旧課程・経過措置では2026年度の必要単位を適用しません。';
   if (profile.admissionType === 'unknown') return '入学区分が未入力のため、個別の認定単位を扱えません。';

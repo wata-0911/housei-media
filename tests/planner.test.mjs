@@ -2669,6 +2669,28 @@ test('graduation profile saves only internally consistent prerequisites and reje
   assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { ...state.graduationProfile.recognizedCredits, totalCredits: -1, schoolingEquivalentCredits: null } } }, catalog), false);
   assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { ...state.graduationProfile.recognizedCredits, totalCredits: 10, schoolingEquivalentCredits: 12 } } }, catalog), false);
   assert.equal(validateState({ ...state, graduationProfile: { ...state.graduationProfile, recognizedCredits: { ...state.graduationProfile.recognizedCredits, totalCredits: 0, schoolingEquivalentCredits: 0 } } }, catalog), true);
+  assert.equal(graduationProfileValidationError({ ...state.graduationProfile, admissionType: 'transfer_second_year', recognizedCredits: { ...state.graduationProfile.recognizedCredits, totalCredits: 128, schoolingEquivalentCredits: 7 } }), null);
+  for (const totalCredits of [129, 1000, 10000, 9924]) assert.match(graduationProfileValidationError({ ...state.graduationProfile, recognizedCredits: { ...state.graduationProfile.recognizedCredits, totalCredits } }), /認定単位/);
+  assert.match(graduationProfileValidationError({ ...state.graduationProfile, admissionType: 'transfer_second_year', recognizedCredits: { ...state.graduationProfile.recognizedCredits, totalCredits: 128, schoolingEquivalentCredits: 8 } }), /認定単位/);
+});
+
+test('second-year admission and safe recognition candidates survive persistence for all departments', () => {
+  const scope = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_second_year', curriculumApplicability: 'current_2026', recognizedCredits: officialRecognitionPrefill('transfer_second_year') };
+  const saved = saveState(memoryStore(), { ...initialState(), selectedScopeId: scope, graduationProfile: profile }, null, catalog);
+  assert.equal(loadState(memoryStore(saved), catalog).state.graduationProfile.admissionType, 'transfer_second_year');
+  for (const department of ['法律学科', '日本文学科', '史学科', '地理学科', '経済学科', '商業学科']) {
+    const program = catalog.programs.find(row => row.department === department);
+    const safe = catalog.offerings.some(offering => {
+      const maps = offering.mappingIds.map(id => catalog.mappings.find(row => row.mappingId === id)).filter(Boolean).filter(row => row.scopeId === program.scopeId && row.category === '専門教育');
+      return offering.resolutionStatus === 'matched' && offering.name !== '卒業論文' && offering.credits !== null && !/史学演習|史特講|歴史資料学/.test(offering.name) && maps.length === 1 && maps[0].curriculumCredits !== null && maps[0].curriculumCredits <= offering.credits;
+    });
+    assert.equal(safe, true, department);
+  }
+  const invalid = { ...profile, recognizedCredits: { ...profile.recognizedCredits, totalCredits: 9924 } };
+  const overall = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], invalid).referenceProgress[0];
+  assert.deepEqual([overall.earned, overall.target], [null, null]);
+  assert.match(overall.reason, /認定単位の入力/);
 });
 
 test('recognized-credit controls expose explicit prefill, allocation, and safe professional search', () => {
