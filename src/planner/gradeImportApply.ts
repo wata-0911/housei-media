@@ -94,7 +94,7 @@ export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], e
   }
   return rows;
 }
-export function applyImport(state: PlannerState, units: ImportPreviewUnit[]): PlannerState {
+export function applyImport<T extends Omit<PlannerState, 'schemaVersion'>>(state: T, units: ImportPreviewUnit[]): T {
   const selected = units.filter(unit => unit.selected && !unit.sourceDuplicate);
   const selectedSources = [...new Map(selected.map(unit => [unit.sourceCourse.fingerprint, unit])).values()];
   const sourceIdFor = new Map(selectedSources.map(unit => [unit.sourceCourse.id, unit.sourceExistingId ?? unit.sourceCourse.id]));

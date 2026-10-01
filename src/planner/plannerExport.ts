@@ -44,7 +44,7 @@ function assessmentSummary(course: ReturnType<typeof progressFor>): string | nul
 }
 
 /** Builds export-only data from current plan rows. Orphan state is intentionally not enumerated. */
-export function plannerExportPresentation(state: PlannerState, catalog: PlannerCatalog): PlannerExportPresentation {
+export function plannerExportPresentation(state: Omit<PlannerState, 'schemaVersion'>, catalog: PlannerCatalog): PlannerExportPresentation {
   const offerings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
   const program = catalog.programs.find(entry => entry.scopeId === state.selectedScopeId && !entry.isCommon);

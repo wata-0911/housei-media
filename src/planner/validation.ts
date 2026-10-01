@@ -1,6 +1,9 @@
 import Ajv2020 from 'ajv/dist/2020';
 import schema from './planner_catalog_2026.schema.json';
-import type { PlannerCatalog, PlannerState } from './plannerCatalog';
+import type { PlannerCatalog, PlannerState as V21PlannerState } from './plannerCatalog';
+import type { PlannerState } from './plannerStateV22';
+import { validateLegacyStateShape, validateRecognitionRecoveryShape, validateStateShape } from './stateSchemaValidation';
+import { validFoundation } from './plannerFoundation';
 import { isHistoryCompletionOrderCourse, validHistoricalSourceOrders, validHistorySeminarOrders } from './historySeminar';
 import { isMediaSchooling } from './mediaSchooling';
 import { isCorrespondenceOffering, validCorrespondenceProgress } from './correspondenceProgress';
@@ -10,12 +13,17 @@ import { thesisPolicyForScope } from './thesisSelection';
 const ajv = new Ajv2020({ allErrors: true });
 ajv.addFormat('uuid', /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 export const validateCatalog = ajv.compile<PlannerCatalog>(schema);
-const validateStateSchema = ajv.compile<PlannerState>({
-  ...schema, $ref: '#/$defs/PlannerState',
-});
 
 export function validateState(value: unknown, catalog: PlannerCatalog): value is PlannerState {
-  if (!validateStateSchema(value)) return false;
+  if (!validateStateShape(value) || !validateRecognitionRecoveryShape(value.graduationProfile)) return false;
+  return validFoundation(value, catalog) && validLegacySemantics(value, catalog);
+}
+
+export function validateLegacyState(value: unknown, catalog: PlannerCatalog): value is V21PlannerState {
+  return validateLegacyStateShape(value) && validateRecognitionRecoveryShape(value.graduationProfile) && validLegacySemantics(value, catalog);
+}
+
+function validLegacySemantics(value: Omit<V21PlannerState, 'schemaVersion'>, catalog: PlannerCatalog): boolean {
   const offerings = new Set(catalog.offerings.map(o => o.id));
   const ids = value.items.map(item => item.offeringId);
   const todoIds = value.todos.map(todo => todo.id);

@@ -6,7 +6,7 @@ export function plannerItemFromCourseSearch(offeringId: string): PlannerItem {
 }
 
 /** Apply the same lifecycle rule used by the editable Planner row. */
-export function updatePlannerItem(items: PlannerItem[], offeringId: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>): PlannerItem[] {
+export function updatePlannerItem<T extends PlannerItem>(items: T[], offeringId: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>): T[] {
   return items.map(item => item.offeringId === offeringId
     ? { ...item, ...patch, ...(patch.status && patch.status !== 'earned' ? { earnedOrder: null } : {}) }
     : item);

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:housei-media:planner-state:v22",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "selectedScopeId", "thesisSelection", "thesisProgressByScope", "thesisGuidanceByScope", "items", "publicCourses", "todos", "mediaSchoolingProgress", "courseEvaluations", "correspondenceProgress", "importedStudyRecords", "importedCourseAchievements", "importedCourseUserMeta", "graduationProfile", "planIntents", "offeringCatalogRefs"],
+  "properties": {
+    "schemaVersion": { "const": 22 },
+    "selectedScopeId": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/selectedScopeId" },
+    "thesisSelection": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/thesisSelection" },
+    "thesisProgressByScope": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/thesisProgressByScope" },
+    "thesisGuidanceByScope": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/thesisGuidanceByScope" },
+    "publicCourses": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/publicCourses" },
+    "todos": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/todos" },
+    "mediaSchoolingProgress": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/mediaSchoolingProgress" },
+    "courseEvaluations": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/courseEvaluations" },
+    "correspondenceProgress": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/correspondenceProgress" },
+    "importedStudyRecords": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/importedStudyRecords" },
+    "importedCourseAchievements": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/importedCourseAchievements" },
+    "importedCourseUserMeta": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/importedCourseUserMeta" },
+    "graduationProfile": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerState/properties/graduationProfile" },
+    "items": { "type": "array", "items": { "$ref": "#/$defs/Enrollment" } },
+    "planIntents": { "type": "array", "items": { "$ref": "#/$defs/PlanIntent" } },
+    "offeringCatalogRefs": { "type": "object", "propertyNames": { "$ref": "#/$defs/Id" }, "additionalProperties": { "$ref": "#/$defs/CatalogRef" } }
+  },
+  "$defs": {
+    "Id": { "type": "string", "format": "uuid" },
+    "Year": { "type": "integer", "minimum": 1000, "maximum": 9999 },
+    "CatalogRef": {
+      "type": "object", "additionalProperties": false, "required": ["academicYear", "revisionId"],
+      "properties": { "academicYear": { "$ref": "#/$defs/Year" }, "revisionId": { "type": "string", "minLength": 1 } }
+    },
+    "OfferingRef": {
+      "type": "object", "additionalProperties": false, "required": ["academicYear", "revisionId", "offeringId"],
+      "properties": { "academicYear": { "$ref": "#/$defs/Year" }, "revisionId": { "type": "string", "minLength": 1 }, "offeringId": { "$ref": "#/$defs/Id" } }
+    },
+    "PlanIntent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "courseId", "targetAcademicYear", "plannedYear", "preferredTerm", "studyYear", "scopeId", "curriculumVersionId", "status", "reference"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" }, "courseId": { "$ref": "#/$defs/Id" },
+        "targetAcademicYear": { "$ref": "#/$defs/Year" },
+        "plannedYear": { "anyOf": [{ "$ref": "#/$defs/Year" }, { "type": "null" }] },
+        "preferredTerm": { "type": ["string", "null"] },
+        "studyYear": { "enum": [1, 2, 3, 4, null] },
+        "scopeId": { "anyOf": [{ "$ref": "#/$defs/Id" }, { "type": "null" }] },
+        "curriculumVersionId": { "type": ["string", "null"], "minLength": 1 },
+        "status": { "enum": ["planned", "dropped"] },
+        "reference": { "anyOf": [{ "type": "null" }, {
+          "type": "object", "additionalProperties": false, "required": ["catalog", "offeringIds"],
+          "properties": { "catalog": { "$ref": "#/$defs/CatalogRef" }, "offeringIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } } }
+        }] }
+      }
+    },
+    "LinkDecision": {
+      "type": "object", "additionalProperties": false, "required": ["source", "scopeId", "curriculumRef", "bridgeDigest", "acceptedChangeCodes"],
+      "properties": {
+        "source": { "enum": ["auto", "manual"] }, "scopeId": { "$ref": "#/$defs/Id" },
+        "curriculumRef": { "type": "object", "additionalProperties": false, "required": ["id", "revisionId"], "properties": { "id": { "type": "string", "minLength": 1 }, "revisionId": { "type": "string", "minLength": 1 } } },
+        "bridgeDigest": { "type": "string", "minLength": 1 }, "acceptedChangeCodes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "Enrollment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["offeringId", "status", "plannedYear", "plannedTerm", "studyYear", "earnedOrder", "courseId", "courseIdentityResolution", "planIntentId", "offeringRef", "linkDecision"],
+      "properties": {
+        "offeringId": { "$ref": "#/$defs/Id" },
+        "status": { "enum": ["planned", "in_progress", "waiting", "earned", "failed", "dropped"] },
+        "plannedYear": { "anyOf": [{ "$ref": "#/$defs/Year" }, { "type": "null" }] },
+        "plannedTerm": { "type": ["string", "null"] }, "studyYear": { "enum": [1, 2, 3, 4, null] },
+        "earnedOrder": { "$ref": "urn:housei-media:legacy-2026#/$defs/PlannerItem/properties/earnedOrder" },
+        "courseId": { "anyOf": [{ "$ref": "#/$defs/Id" }, { "type": "null" }] },
+        "courseIdentityResolution": { "enum": ["catalog_provisional", "verified", "unresolved"] },
+        "planIntentId": { "anyOf": [{ "$ref": "#/$defs/Id" }, { "type": "null" }] },
+        "offeringRef": { "$ref": "#/$defs/OfferingRef" },
+        "linkDecision": { "anyOf": [{ "$ref": "#/$defs/LinkDecision" }, { "type": "null" }] }
+      }
+    }
+  }
+}

@@ -1,12 +1,15 @@
-import type { GraduationProfile, PlannerCatalog, PlannerState } from './plannerCatalog';
-import { validateState } from './validation';
+import type { GraduationProfile, PlannerCatalog, PlannerState as V21PlannerState } from './plannerCatalog';
+import type { PlannerState } from './plannerStateV22';
+import { validateState, validateLegacyState } from './validation';
+import { validateRecognitionRecoveryShape } from './stateSchemaValidation';
+import { migrateV21ToV22, pinOfferingRecords } from './plannerFoundation';
 import { repairImportedAchievements } from './importedAchievementRepair';
 import { graduationProfileValidationError, initialGraduationProfile, MAX_GENERAL_RECOGNIZED_CREDITS_2026, MAX_OPEN_UNIVERSITY_RECOGNIZED_CREDITS_2026, MAX_RECOGNIZED_CREDITS_2026, recognizedCreditBreakdownTotal, schoolingRecognitionCap } from './graduationProfile';
 import { normalizeThesisProgressState } from './thesisSelection';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 21, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
+export const initialState = (): PlannerState => ({ schemaVersion: 22, planIntents: [], offeringCatalogRefs: {}, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null; invalidRecognitionPaths?: string[] };
 
@@ -87,24 +90,40 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)
       || !Number.isInteger((parsed as Record<string, unknown>).schemaVersion)
       || (parsed as Record<string, unknown>).schemaVersion as number < 1
-      || (parsed as Record<string, unknown>).schemaVersion as number > 21) throw new Error('Unsupported schema');
+      || (parsed as Record<string, unknown>).schemaVersion as number > 22) throw new Error('Unsupported schema');
     const migrated = migrateState(parsed, catalog) as Record<string, unknown>;
     // v21 adds explicit Open University recognition while preserving every
     // preceding state field and recognition-recovery shadow.
     // wrap every earlier migration result so no recognition/import shadow is lost.
-    const state = normalizeThesisProgressState((migrated.schemaVersion === 21 ? migrated : {
+    const candidate = migrated.schemaVersion === 22 || migrated.schemaVersion === 21 ? migrated : normalizeThesisProgressState({
       ...migrated, schemaVersion: 21, thesisGuidanceByScope: {},
       graduationProfile: { ...initialGraduationProfile(), ...(migrated.graduationProfile as object), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...((migrated.graduationProfile as Record<string, unknown> | undefined)?.recognizedCredits as object) } },
-    }) as PlannerState, catalog);
-    const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
+    } as V21PlannerState, catalog);
+    const originalProfile = candidate.graduationProfile;
+    if (!validateRecognitionRecoveryShape(originalProfile)) throw new Error('Invalid recognition structure');
+    const validOriginal = candidate.schemaVersion === 22 ? validateState(candidate, catalog) : validateLegacyState(candidate, catalog);
+    // Domain recovery can normalize values beyond the isolated bad field. Do
+    // not apply it to a valid profile/state: every valid v21 field is lossless.
+    const profile = validOriginal ? originalProfile : recoverRecognitionProfile(originalProfile);
     if (!profile) throw new Error('Invalid recognition structure');
-    if (!validateState(state, catalog)) {
+    const safeCandidate = { ...candidate, graduationProfile: profile };
+    let state: PlannerState;
+    if (candidate.schemaVersion === 22) {
+      if (!validateState(safeCandidate, catalog)) throw new Error('Invalid state');
+      state = safeCandidate;
+    } else {
+      if (!validateLegacyState(safeCandidate, catalog)) throw new Error('Invalid legacy state');
+      state = migrateV21ToV22(safeCandidate, catalog);
+      // Invalid recognized rows remain in the recovery shadow. Pin their known
+      // Offering references too, without putting those rows into calculations.
+      state = { ...pinOfferingRecords({ ...state, graduationProfile: originalProfile }, catalog), graduationProfile: profile };
+      if (!validateState(state, catalog)) throw new Error('Invalid migrated state');
+    }
+    if (JSON.stringify(originalProfile) !== JSON.stringify(profile)) {
       // A later validation tightening must not lock otherwise-safe planner data.
       // Keep the raw bytes for optimistic-save protection, but hold only the
       // invalid recognition profile out of calculation until the user re-enters it.
-      const recovered = { ...(state as PlannerState), graduationProfile: profile };
-      if (!validateState(recovered, catalog)) throw new Error('Invalid state');
-      return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。', recoveredRecognitionRaw: (state as PlannerState).graduationProfile, invalidRecognitionPaths: recognitionPaths((state as PlannerState).graduationProfile.recognizedCredits, profile.recognizedCredits) };
+      return { state, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。', recoveredRecognitionRaw: originalProfile, invalidRecognitionPaths: recognitionPaths(originalProfile.recognizedCredits, profile.recognizedCredits) };
     }
     return { state, raw, error: null };
   } catch {
@@ -149,9 +168,9 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
   const legacyThesisProgress = typeof v7.selectedScopeId === 'string' ? { [v7.selectedScopeId]: { selection: v7.thesisSelection === 'selected' || v7.thesisSelection === 'not_selected' ? v7.thesisSelection : 'undecided', status: 'not_started' } } : {};
   if (v7.schemaVersion === 15) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, graduationProfile: initialGraduationProfile() };
   if (v7.schemaVersion === 14) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
-  if (v7.schemaVersion === 13) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
-  if (v7.schemaVersion === 12) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
-  if (v7.schemaVersion === 11) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedCourseAchievements: Array.isArray(v7.importedCourseAchievements) ? v7.importedCourseAchievements.map(row => typeof row === 'object' && row !== null && !Array.isArray(row) ? { ...row as Record<string, unknown>, selectionSource: (row as Record<string, unknown>).selectedOfferingId ? 'auto' : 'none' } : row) : [] } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
+  if (v7.schemaVersion === 13) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as V21PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
+  if (v7.schemaVersion === 12) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as V21PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
+  if (v7.schemaVersion === 11) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedCourseAchievements: Array.isArray(v7.importedCourseAchievements) ? v7.importedCourseAchievements.map(row => typeof row === 'object' && row !== null && !Array.isArray(row) ? { ...row as Record<string, unknown>, selectionSource: (row as Record<string, unknown>).selectedOfferingId ? 'auto' : 'none' } : row) : [] } as unknown as V21PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
   if (v7.schemaVersion === 10) {
     const records = Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords as Record<string, unknown>[] : [];
     const rows = new Map<string, Record<string, unknown>>();
@@ -160,7 +179,7 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
       if (!id || rows.has(id) || typeof record.earnedCreditsTotal !== 'number') continue;
       rows.set(id, { id, fingerprint: `migrated:${id}`, source: 'hosei_import', rawName: record.rawName, categoryRaw: null, capturedAt: typeof record.capturedAt === 'string' ? record.capturedAt : '', earnedCreditsTotal: record.earnedCreditsTotal, schoolingCreditsTotal: record.schoolingCreditsTotal ?? null, compositionCredits: record.compositionCredits ?? null, recognizedExemption: record.recognizedExemption ?? null, additionalEnrollment: record.additionalEnrollment ?? null, academicYear: record.academicYear ?? null, yearSource: record.yearSource ?? 'unknown', courseId: null, selectedOfferingId: record.offeringId ?? null, match: record.match ?? 'unmatched', candidateOfferingIds: [] });
     }
-    return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedStudyRecords: records, importedCourseAchievements: [...rows.values()].map(row => ({ ...row, selectionSource: row.selectedOfferingId ? 'auto' : 'none' })) } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
+    return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedStudyRecords: records, importedCourseAchievements: [...rows.values()].map(row => ({ ...row, selectionSource: row.selectedOfferingId ? 'auto' : 'none' })) } as unknown as V21PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
   }
   if (v7.schemaVersion === 9) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedStudyRecords: Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords : [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
   if (v7.schemaVersion === 8) return {

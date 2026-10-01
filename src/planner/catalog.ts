@@ -2,6 +2,7 @@ import data from '../data/planner_catalog_2026.json';
 import { validateCatalog } from './validation';
 import { createMappingResolver } from './plannerHelpers';
 import { applyManualMappingOverrides } from './manualMappingOverrides';
+import { create2026CatalogAdapter } from './catalogFoundation';
 
 function loadCatalog() {
   const input: unknown = data;
@@ -25,3 +26,11 @@ function loadCatalog() {
 
 export const catalog = loadCatalog();
 export const offeringsById = new Map(catalog.offerings.map(o => [o.id, o]));
+
+function foundationAdapter() {
+  const input: unknown = data;
+  if (!validateCatalog(input)) throw new Error('2026 snapshot validation failed');
+  return create2026CatalogAdapter(input, catalog);
+}
+export const catalog2026Adapter = foundationAdapter();
+export const courseRegistry2026 = catalog2026Adapter.courses;

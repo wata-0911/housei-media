@@ -43,7 +43,7 @@ export function thesisProgressForScope(state: Pick<PlannerState, 'thesisSelectio
 }
 
 /** A thesis decision belongs to the selected program and is never carried across programs. */
-export function stateForScopeChange(state: PlannerState, catalog: PlannerCatalog, selectedScopeId: string | null): PlannerState {
+export function stateForScopeChange<T extends Omit<PlannerState, 'schemaVersion'>>(state: T, catalog: PlannerCatalog, selectedScopeId: string | null): T {
   if (selectedScopeId === null) return { ...state, selectedScopeId, thesisSelection: 'undecided' };
   const progress = thesisProgressForScope(state, catalog, selectedScopeId);
   return {
@@ -54,7 +54,7 @@ export function stateForScopeChange(state: PlannerState, catalog: PlannerCatalog
   };
 }
 
-export function setThesisProgressForScope(state: PlannerState, catalog: PlannerCatalog, scopeId: string | null, patch: Partial<ThesisProgress>): PlannerState {
+export function setThesisProgressForScope<T extends Omit<PlannerState, 'schemaVersion'>>(state: T, catalog: PlannerCatalog, scopeId: string | null, patch: Partial<ThesisProgress>): T {
   if (scopeId === null) return state;
   const current = thesisProgressForScope(state, catalog, scopeId);
   const next = normalizedProgress(thesisPolicyForScope(catalog, scopeId), { ...current, ...patch });
@@ -62,7 +62,7 @@ export function setThesisProgressForScope(state: PlannerState, catalog: PlannerC
 }
 
 /** Normalize persisted v18 data before validation; status is preserved for required scopes. */
-export function normalizeThesisProgressState(state: PlannerState, catalog: PlannerCatalog): PlannerState {
+export function normalizeThesisProgressState<T extends Omit<PlannerState, 'schemaVersion'>>(state: T, catalog: PlannerCatalog): T {
   const progressByScope = Object.fromEntries(Object.entries(state.thesisProgressByScope).map(([scopeId, progress]) => [scopeId, normalizedProgress(thesisPolicyForScope(catalog, scopeId), progress)]));
   const selected = state.selectedScopeId;
   if (selected !== null && thesisPolicyForScope(catalog, selected) === 'required' && !progressByScope[selected]) {

@@ -1,18 +1,18 @@
 import type { PlannerItem, PublicCourse } from './plannerCatalog';
 
-export type RemovedPlannerItem = { item: PlannerItem; index: number };
+export type RemovedPlannerItem<T extends PlannerItem = PlannerItem> = { item: T; index: number };
 export type RemovedPublicCourse = { course: PublicCourse; index: number };
-export type RemovedPlanEntry = { kind: 'item'; removed: RemovedPlannerItem } | { kind: 'publicCourse'; removed: RemovedPublicCourse };
+export type RemovedPlanEntry<T extends PlannerItem = PlannerItem> = { kind: 'item'; removed: RemovedPlannerItem<T> } | { kind: 'publicCourse'; removed: RemovedPublicCourse };
 
 /** Removes one offering without mutating the saved plan. */
-export function removePlannerItem(items: PlannerItem[], offeringId: string): RemovedPlannerItem | null {
+export function removePlannerItem<T extends PlannerItem>(items: T[], offeringId: string): RemovedPlannerItem<T> | null {
   const index = items.findIndex(item => item.offeringId === offeringId);
   if (index === -1) return null;
   return { item: items[index], index };
 }
 
 /** Restores a removed item at its original position unless it has since been re-added. */
-export function restorePlannerItem(items: PlannerItem[], removed: RemovedPlannerItem): PlannerItem[] | null {
+export function restorePlannerItem<T extends PlannerItem>(items: T[], removed: RemovedPlannerItem<T>): T[] | null {
   if (items.some(item => item.offeringId === removed.item.offeringId)) return null;
   const index = Math.min(Math.max(removed.index, 0), items.length);
   return [...items.slice(0, index), removed.item, ...items.slice(index)];

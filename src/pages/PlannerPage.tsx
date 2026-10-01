@@ -11,9 +11,11 @@ import ThesisGuidance from '../components/planner/ThesisGuidance';
 import { catalog, offeringsById } from '../planner/catalog';
 import { summarizeCredits } from '../planner/calculations';
 import { initialState, loadState, recoverState, saveRecoveredState, STORAGE_KEY, type LoadResult } from '../planner/storage';
-import type { ImportedCourseUserMeta, PlannerItem, PlannerState, PublicCourse } from '../planner/plannerCatalog';
+import type { ImportedCourseUserMeta, PlannerItem, PublicCourse } from '../planner/plannerCatalog';
+import type { PlannerState, Enrollment } from '../planner/plannerStateV22';
+import { addEnrollment, enrollmentFromLegacy, pinOfferingRecords, removeEnrollment } from '../planner/plannerFoundation';
 import { calculateGraduationProgress } from '../planner/graduationProgress';
-import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
+import { removePlannerItem, removePublicCourse, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
 import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/publicCourses';
 import { setThesisProgressForScope, stateForScopeChange, thesisProgressForScope } from '../planner/thesisSelection';
 import MediaSchoolingProgress from '../components/planner/MediaSchoolingProgress';
@@ -47,7 +49,7 @@ export default function PlannerPage() {
   const [loaded, setLoaded] = useState(readSavedState);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
-  const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
+  const [undoItem, setUndoItem] = useState<RemovedPlanEntry<Enrollment> | null>(null);
   const [undoImport, setUndoImport] = useState<PlannerState | null>(null);
   const [activeTab, setActiveTab] = useState<'annual' | 'media'>('annual');
   const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
@@ -90,7 +92,7 @@ export default function PlannerPage() {
   function commit(next: PlannerState, message: string): boolean {
     if (loaded.error) return false;
     try {
-      setLoaded(saveRecoveredState(window.localStorage, next, loaded, catalog));
+      setLoaded(saveRecoveredState(window.localStorage, pinOfferingRecords(next, catalog), loaded, catalog));
       setSaveError(null);
       setNotice(message);
       return true;
@@ -102,7 +104,7 @@ export default function PlannerPage() {
 
   function addOffering(id: string) {
     if (state.items.some(item => item.offeringId === id)) return;
-    commit({ ...state, items: [...state.items, plannerItemFromCourseSearch(id)] }, `${offeringsById.get(id)!.name}を追加・保存しました。`);
+    commit(addEnrollment(state, enrollmentFromLegacy(plannerItemFromCourseSearch(id), catalog), catalog), `${offeringsById.get(id)!.name}を追加・保存しました。`);
   }
 
   function changeItem(id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) {
@@ -139,7 +141,7 @@ export default function PlannerPage() {
     const removed = removePlannerItem(state.items, id);
     if (!removed) return;
     const offering = offeringsById.get(id);
-    if (commit({ ...state, items: state.items.filter(item => item.offeringId !== id) }, `「${offering?.name ?? '科目'}」を履修計画から削除しました。`)) {
+    if (commit(removeEnrollment(state, id), `「${offering?.name ?? '科目'}」を履修計画から削除しました。`)) {
       setUndoItem({ kind: 'item', removed });
     }
   }
@@ -153,10 +155,11 @@ export default function PlannerPage() {
   function undoRemove() {
     if (!undoItem) return;
     if (undoItem.kind === 'item') {
-      const restored = restorePlannerItem(state.items, undoItem.removed);
+      const restored = state.items.some(item => item.offeringId === undoItem.removed.item.offeringId)
+        ? null : addEnrollment(state, undoItem.removed.item, catalog, undoItem.removed.index);
       const label = offeringsById.get(undoItem.removed.item.offeringId)?.name ?? '科目';
       if (restored === null) { setUndoItem(null); setNotice(`「${label}」はすでに履修計画へ追加されているため、元に戻しませんでした。`); return; }
-      if (commit({ ...state, items: restored }, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
+      if (commit(restored, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
       return;
     }
     const restored = restorePublicCourse(state.publicCourses, undoItem.removed);
