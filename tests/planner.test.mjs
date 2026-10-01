@@ -33,7 +33,7 @@ import { correspondenceRequirementFor, structuredRequirementCount } from '../src
 import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planTable.ts';
 import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
 import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
-import { academicYearFromDate, applyImport, groupImportedAchievements, hasCorrespondenceEvidence, importedEarnedCreditsTotal, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
+import { academicYearFromDate, applyImport, autoPlannerOfferingIdForImport, groupImportedAchievements, hasCorrespondenceEvidence, importedEarnedCreditsTotal, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
 import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
 import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/importedAchievementCalculations.ts';
 import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
@@ -2266,7 +2266,7 @@ test('grade import skips empty correspondence and infers schooling years without
   const offerings = [{ ...catalog.offerings[0], id: 'correspondence-id', name: '共通名', method: 'correspondence' }, { ...catalog.offerings[0], id: 'schooling-id', name: '共通名', method: 'schooling' }];
   const preview = importPreview(data, offerings);
   assert.equal(preview.length, 1); assert.equal(preview[0].method, 'schooling'); assert.equal(preview[0].academicYear, 2025); assert.equal(preview[0].yearSource, 'source'); assert.equal(schoolingAcademicYear('25'), 2025);
-  const next = applyImport(initialState(), preview); assert.equal(next.importedStudyRecords.length, 1); assert.equal(next.items.length, 0); assert.equal(next.courseEvaluations && Object.keys(next.courseEvaluations).length, 0);
+  const next = applyImport(initialState(), preview, offerings); assert.equal(next.importedStudyRecords.length, 1); assert.equal(next.items.length, 0); assert.equal(next.courseEvaluations && Object.keys(next.courseEvaluations).length, 0);
   assert.equal(importPreview(data, offerings, next.importedStudyRecords).every(row => row.duplicate), true);
 });
 
@@ -2291,14 +2291,14 @@ test('grade import infers academic years and selects every non-duplicate compone
   assert.deepEqual(preview.filter(unit => unit.method === 'correspondence').map(unit => [unit.rawName, unit.academicYear, unit.yearSource, unit.selected]), [['一致', 2026, 'inferred', true], ['曖昧', 2025, 'inferred', true], ['未一致', 2025, 'inferred', true]]);
   assert.equal(academicYearFromDate('2026-03-31'), 2025); assert.equal(academicYearFromDate('2026-04-01'), 2026);
   assert.deepEqual(inferredCorrespondenceYear(makeCourse('x', null, ['2026-01-01', '2026-04-01']), data.capturedAt), { academicYear: 2026, date: '2026-04-01' });
-  const applied = applyImport(initialState(), preview); const duplicatePreview = importPreview(data, offerings, applied.importedStudyRecords, applied.importedCourseAchievements);
+  const applied = applyImport(initialState(), preview, offerings); const duplicatePreview = importPreview(data, offerings, applied.importedStudyRecords, applied.importedCourseAchievements);
   assert.ok(duplicatePreview.every(unit => unit.duplicate && !unit.selected));
   assert.equal(applied.items.length, 0); assert.equal(Object.keys(applied.courseEvaluations).length, 0);
 });
 
 test('imported achievement grouping and manual edits preserve import identity', () => {
   const unit = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [{ rawName: '古い実績', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '', value: null }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2025/03/31', rawCredits: '', rawGrade: '', date: '2025-03-31', credits: null, grade: null, pendingMarker: false }, schoolings: [] }] }, [], [])[0];
-  const state = applyImport(initialState(), [unit]); const edited = { ...state.importedStudyRecords[0], academicYear: 2024, yearSource: 'manual', term: '冬' };
+  const state = applyImport(initialState(), [unit], []); const edited = { ...state.importedStudyRecords[0], academicYear: 2024, yearSource: 'manual', term: '冬' };
   assert.equal(edited.fingerprint, state.importedStudyRecords[0].fingerprint); assert.equal(edited.yearSource, 'manual'); assert.equal(edited.term, '冬');
   assert.deepEqual(groupImportedAchievements([edited, { ...edited, id: 'newer', academicYear: 2026 }, { ...edited, id: 'none', academicYear: null }]).map(([year]) => year), [2026, 2024, null]);
   assert.equal(state.items.length, 0); assert.equal(Object.keys(state.courseEvaluations).length, 0);
@@ -2311,7 +2311,7 @@ test('direct handoff accepts only contract JSON, makes a preview, and never appl
   const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [{ rawName: '確認用科目', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '', value: null }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [emptySchooling, emptySchooling] }] };
   const offerings = [{ ...catalog.offerings[0], id: 'direct-offering', name: '確認用科目', method: 'correspondence' }];
   const accepted = previewDirectGradeHandoff(data, offerings, []);
-  assert.ok(accepted); assert.equal(accepted.units.length, 1); assert.equal(applyImport(initialState(), []).importedStudyRecords.length, 0);
+  assert.ok(accepted); assert.equal(accepted.units.length, 1); assert.equal(applyImport(initialState(), [], offerings).importedStudyRecords.length, 0);
   assert.equal(previewDirectGradeHandoff({ ...data, schemaVersion: 2 }, offerings, []), null);
   const handoffToken = '11111111-1111-4111-8111-111111111111';
   assert.equal(gradeHandoffToken(`#hosei-import=${handoffToken}`), handoffToken);
@@ -2384,7 +2384,7 @@ test('source grade-table rows retain official earned credits without component d
   const course = name => ({ rawName: name, categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] });
   const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: Array.from({ length: 20 }, (_, index) => course(`未照合${index}`)) };
   const preview = importPreview(data, []);
-  const applied = applyImport(initialState(), preview);
+  const applied = applyImport(initialState(), preview, []);
   assert.equal(applied.importedStudyRecords.length, 0, 'no invented component is stored');
   assert.equal(applied.importedCourseAchievements.length, 20);
   assert.equal(importedEarnedCreditsTotal(applied.importedCourseAchievements), 40);
@@ -2398,7 +2398,7 @@ test('reimport adds a missing source row even when its detail component already 
   const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] };
   const preview = importPreview(data, []);
   const legacyComponentOnly = { ...initialState(), importedStudyRecords: [preview[0]] };
-  const reapplied = applyImport(legacyComponentOnly, importPreview(data, [], legacyComponentOnly.importedStudyRecords));
+  const reapplied = applyImport(legacyComponentOnly, importPreview(data, [], legacyComponentOnly.importedStudyRecords), []);
   assert.equal(reapplied.importedStudyRecords.length, 1);
   assert.equal(reapplied.importedCourseAchievements.length, 1);
   assert.equal(importedEarnedCreditsTotal(reapplied.importedCourseAchievements), 2);
@@ -2410,7 +2410,7 @@ test('source row identity ignores capture time and categoryRaw overrides a safe 
   const derived = deriveImportedAchievements([], offeringsById, [], [row]);
   assert.equal(derived.categoryOverrides.get(`imported-category:${row.id}`), '外国語');
   const course = { rawName: '同一行', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] };
-  const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] }, []));
+  const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] }, []), []);
   const laterPreview = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-01T00:00:00.000Z', courses: [course] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
   assert.ok(laterPreview.every(unit => unit.sourceDuplicate && !unit.selected));
 });
@@ -2439,9 +2439,9 @@ test('raw categories count unmatched source rows once while graduation remains u
 
 test('source rows upsert changed earned credits and auto normal schooling stays pending for media review', () => {
   const course = earned => ({ rawName: '更新科目', categoryRaw: null, compositionCredits: { raw: String(earned), value: earned }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: String(earned), value: earned }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] });
-  const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-01-01T00:00:00.000Z', courses: [course(2)] }, []));
+  const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-01-01T00:00:00.000Z', courses: [course(2)] }, []), []);
   const update = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-02-01T00:00:00.000Z', courses: [course(4)] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
-  const updated = applyImport(firstImport, update);
+  const updated = applyImport(firstImport, update, []);
   assert.equal(updated.importedCourseAchievements.length, 1); assert.equal(importedEarnedCreditsTotal(updated.importedCourseAchievements), 4);
   const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched'); const normal = catalog.offerings.find(value => value.courseId === media.courseId && value.method === 'schooling' && !isMediaSchooling(value));
   const component = { id: 'auto-normal', fingerprint: 'auto-normal', source: 'hosei_import', rawName: normal.name, offeringId: normal.id, match: 'exact_unique', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: null, sourceCourseId: 'auto-row', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
@@ -2488,9 +2488,9 @@ test('v13 repair leaves manual and ambiguous data untouched, and import identity
   const duplicateRows = [{ ...ambiguous, id: 'same-a', rawName: matched.name }, { ...ambiguous, id: 'same-b', rawName: matched.name }];
   assert.equal(repairImportedAchievements({ ...initialState(), importedCourseAchievements: duplicateRows, importedStudyRecords: [orphan] }, catalog).state.importedStudyRecords[0].sourceCourseId, 'gone', 'ambiguous orphan links are never guessed');
   const course = (term) => ({ rawName: '英語Ｓ', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '2', value: 2 }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [{ rawYear: '25', rawTerm: term, rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term, date: null, credits: 2, grade: 'A' }, { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null }] });
-  const first = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course('夏'), course('冬')] }, []));
+  const first = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course('夏'), course('冬')] }, []), []);
   assert.equal(first.importedCourseAchievements.length, 2);
-  const update = applyImport(first, importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-01T00:00:00.000Z', courses: [course('夏'), course('冬')] }, [], first.importedStudyRecords, first.importedCourseAchievements));
+  const update = applyImport(first, importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-01T00:00:00.000Z', courses: [course('夏'), course('冬')] }, [], first.importedStudyRecords, first.importedCourseAchievements), []);
   assert.equal(update.importedCourseAchievements.length, 2, 'capture time does not duplicate distinct same-name rows');
 });
 
@@ -3428,4 +3428,234 @@ test('profile edits persist through the existing planner state and feed graduati
   assert.match(source, /stateForScopeChange\(state, catalog, selectedScopeId\)/);
   assert.match(source, /commit\(\{ \.\.\.state, graduationProfile \}/);
   assert.doesNotMatch(source, /userProfile|profileStorage|localStorage\.setItem/);
+});
+
+// Auto-registration uses the real import preview and application paths.
+const autoImportBaseOffering = catalog.offerings.find(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null && offering.method === 'correspondence');
+function autoImportCourse(rawName, patch = {}) {
+  const emptySchooling = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
+  return { rawName, categoryRaw: null, compositionCredits: { raw: '4', value: 4 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2025/07/01', rawCredits: '4', rawGrade: 'S', date: '2025-07-01', credits: 4, grade: 'S', pendingMarker: false }, schoolings: [emptySchooling, emptySchooling], ...patch };
+}
+const autoImportData = courses => ({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-02T00:00:00.000Z', courses });
+const autoImportOfferings = [{ ...autoImportBaseOffering, id: 'auto-exact', name: '自動仮登録の一意科目' }];
+const autoImportFixture = () => autoImportData([autoImportCourse(autoImportOfferings[0].name)]);
+
+test('auto import: exact offering retains official facts and creates an ordinary planned item', () => {
+  const units = importPreview(autoImportFixture(), autoImportOfferings);
+  const before = initialState(); const snapshot = structuredClone(before);
+  const next = applyImport(before, units, autoImportOfferings);
+  assert.equal(next.importedCourseAchievements.length, 1);
+  assert.equal(next.importedStudyRecords.length, 1);
+  assert.deepEqual(next.importedCourseAchievements[0], units[0].sourceCourse);
+  assert.equal(next.importedStudyRecords[0].grade, 'S');
+  assert.equal(next.importedStudyRecords[0].sourceCourseId, next.importedCourseAchievements[0].id);
+  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: null }]);
+  assert.notEqual(next.items[0].status, 'earned');
+  assert.equal('finalGrade' in next.items[0], false);
+  assert.deepEqual(next.courseEvaluations, {});
+  assert.deepEqual(before, snapshot);
+});
+
+test('auto import: existing items, final grades, and all progress remain untouched', () => {
+  for (const status of ['planned', 'in_progress', 'waiting', 'earned', 'failed', 'dropped']) {
+    const existing = { offeringId: 'auto-exact', status, plannedYear: 2027, plannedTerm: '後期', studyYear: 3, earnedOrder: 2 };
+    const state = { ...initialState(), items: [existing], courseEvaluations: { 'auto-exact': { finalGrade: 'A' } }, correspondenceProgress: { 'auto-exact': { retained: true } }, mediaSchoolingProgress: { 'auto-exact': { retained: true } } };
+    const next = applyImport(state, importPreview(autoImportFixture(), autoImportOfferings), autoImportOfferings);
+    assert.equal(next.items.length, 1);
+    assert.equal(next.items[0], existing);
+    for (const field of ['items', 'courseEvaluations', 'correspondenceProgress', 'mediaSchoolingProgress']) assert.deepEqual(next[field], state[field]);
+    assert.equal(next.importedCourseAchievements.length, 1);
+  }
+});
+
+test('auto import: repeated source rows and components produce one item per offering', () => {
+  const schoolingOfferings = [{ ...autoImportOfferings[0], method: 'schooling' }];
+  const slot = { rawYear: '25', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '前期', date: null, credits: 2, grade: 'A' };
+  const course = autoImportCourse(schoolingOfferings[0].name, { schoolings: [slot, slot] });
+  const next = applyImport(initialState(), importPreview(autoImportData([course, course]), schoolingOfferings), schoolingOfferings);
+  assert.equal(next.importedCourseAchievements.length, 2);
+  assert.equal(next.importedStudyRecords.length, 6, 'unmatched correspondence details are also preserved');
+  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: 2025, plannedTerm: '前期' }]);
+});
+
+test('auto import: reimport neither multiplies items nor replaces learner edits', () => {
+  const data = autoImportFixture();
+  const first = applyImport(initialState(), importPreview(data, autoImportOfferings), autoImportOfferings);
+  const edited = { ...first, items: first.items.map(current => ({ ...current, status: 'waiting', plannedYear: 2028, plannedTerm: '後期', studyYear: 4 })) };
+  const preview = importPreview(data, autoImportOfferings, edited.importedStudyRecords, edited.importedCourseAchievements);
+  assert.ok(preview.every(unit => unit.sourceDuplicate && !unit.selected));
+  assert.deepEqual(applyImport(edited, preview, autoImportOfferings), edited);
+  assert.equal(applyImport(edited, importPreview(data, autoImportOfferings), autoImportOfferings).items.length, 1, 'even a stale preview cannot multiply planner items');
+});
+
+test('auto import: course-unique representatives and ambiguous variants never create items', () => {
+  const variants = [autoImportOfferings[0], { ...autoImportOfferings[0], id: 'auto-variant', period: '後期' }];
+  for (const offerings of [variants, [...variants].reverse()]) {
+    const units = importPreview(autoImportFixture(), offerings);
+    assert.equal(units[0].sourceCourse.match, 'exact_unique', 'course identity is unique');
+    assert.equal(units[0].sourceCourse.courseId, variants[0].courseId);
+    assert.ok(units[0].sourceCourse.selectedOfferingId, 'legacy representative is retained');
+    assert.equal(units[0].match, 'ambiguous', 'offering identity is not unique');
+    assert.equal(autoPlannerOfferingIdForImport(units[0], offerings), null);
+    const next = applyImport(initialState(), units, offerings);
+    assert.equal(next.items.length, 0);
+    assert.equal(next.importedCourseAchievements.length, 1);
+    assert.equal(next.importedStudyRecords.length, 1);
+  }
+});
+
+test('auto import: ambiguous course identities and unmatched records stay imported-only', () => {
+  for (const offerings of [[], [autoImportOfferings[0], { ...autoImportOfferings[0], id: 'another-course', courseId: 'other-course' }]]) {
+    const units = importPreview(autoImportFixture(), offerings);
+    const next = applyImport(initialState(), units, offerings);
+    assert.equal(next.items.length, 0);
+    assert.equal(next.importedCourseAchievements.length, 1);
+    assert.equal(next.importedStudyRecords.length, 1);
+    assert.equal(createUnifiedCourseRows(next.items, next.importedCourseAchievements, new Map(offerings.map(offering => [offering.id, offering])))[0].source, 'imported');
+  }
+});
+
+test('auto import: method can uniquely identify a component despite multiple course offerings', () => {
+  const offerings = [{ ...autoImportOfferings[0], id: 'schooling-representative', method: 'schooling' }, autoImportOfferings[0]];
+  const units = importPreview(autoImportFixture(), offerings);
+  assert.equal(units[0].sourceCourse.selectedOfferingId, 'schooling-representative');
+  assert.equal(units[0].sourceCourse.candidateOfferingIds.length, 2);
+  assert.equal(autoPlannerOfferingIdForImport(units[0], offerings), 'auto-exact');
+  assert.equal(applyImport(initialState(), units, offerings).items[0].offeringId, 'auto-exact');
+});
+
+test('auto import: course-only rows require one offering across every method', () => {
+  const data = autoImportData([autoImportCourse(autoImportOfferings[0].name, { creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false } })]);
+  for (const method of ['correspondence', 'schooling']) {
+    const offerings = [{ ...autoImportOfferings[0], method }];
+    const units = importPreview(data, offerings);
+    assert.equal(units[0].courseOnly, true);
+    const next = applyImport(initialState(), units, offerings);
+    assert.equal(next.items.length, 1);
+    assert.equal(next.importedCourseAchievements.length, 1);
+    assert.equal(next.importedStudyRecords.length, 0);
+    const multiple = [...offerings, { ...offerings[0], id: 'other-method', method: method === 'schooling' ? 'correspondence' : 'schooling' }];
+    assert.equal(applyImport(initialState(), importPreview(data, multiple), multiple).items.length, 0);
+  }
+});
+
+test('auto import: unresolved catalog mapping and inconsistent preview selections are rejected', () => {
+  const units = importPreview(autoImportFixture(), autoImportOfferings);
+  for (const unit of [{ ...units[0], offeringId: 'wrong' }, { ...units[0], candidates: [] }, { ...units[0], match: 'ambiguous' }]) {
+    assert.equal(autoPlannerOfferingIdForImport(unit, autoImportOfferings), null);
+  }
+  for (const patch of [{ resolutionStatus: 'manual_review' }, { courseId: null }]) {
+    const offerings = [{ ...autoImportOfferings[0], ...patch }];
+    assert.equal(applyImport(initialState(), importPreview(autoImportFixture(), offerings), offerings).items.length, 0);
+  }
+  assert.equal(applyImport(initialState(), units.map(unit => ({ ...unit, selected: false })), autoImportOfferings).items.length, 0);
+});
+
+test('auto import: year and term prefill require explicit compatible and consistent evidence', () => {
+  const offerings = [{ ...autoImportOfferings[0], method: 'schooling' }];
+  const slot = { rawYear: '25', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '前期', date: null, credits: 2, grade: 'A' };
+  const data = slots => autoImportData([autoImportCourse(offerings[0].name, { schoolings: slots })]);
+  const run = slots => applyImport(initialState(), importPreview(data(slots), offerings), offerings).items[0];
+  assert.deepEqual([run([slot, slot]).plannedYear, run([slot, slot]).plannedTerm], [2025, '前期']);
+  const conflicting = run([slot, { ...slot, rawYear: '26', year: '26', rawTerm: '後期', term: '後期' }]);
+  assert.deepEqual([conflicting.plannedYear, conflicting.plannedTerm], [null, null]);
+  const inferred = run([{ ...slot, rawYear: '', year: null, rawTerm: '夏', term: '夏' }, { ...slot, rawYear: '', year: null, rawTerm: '夏', term: '夏' }]);
+  assert.deepEqual([inferred.plannedYear, inferred.plannedTerm], [null, null]);
+  const preview = importPreview(data([slot, slot]), offerings).map(unit => ({ ...unit, academicYear: 2027, yearSource: 'manual', term: '後期' }));
+  const manual = applyImport(initialState(), preview, offerings).items[0];
+  assert.equal(manual.plannedYear, 2027);
+  assert.equal(manual.plannedTerm, null, 'changed free text is not treated as source term');
+});
+
+test('auto import: official earned credits enter totals, categories, graduation and eligibility once', () => {
+  const offering = catalog.offerings.find(current => current.method === 'correspondence' && current.resolutionStatus === 'matched' && current.courseId !== null && current.credits > 0 && catalog.offerings.filter(other => other.name === current.name && other.method === current.method).length === 1);
+  assert.ok(offering);
+  const data = autoImportData([autoImportCourse(offering.name, { earnedCredits: { raw: String(offering.credits), value: offering.credits } })]);
+  const applied = applyImport(initialState(), importPreview(data, catalog.offerings), catalog.offerings);
+  assert.equal(applied.items.length, 1);
+  assert.equal(summarizeCredits(applied.items, offeringsById).earned, 0);
+  assert.equal(importedEarnedCreditsTotal(applied.importedCourseAchievements), offering.credits);
+  for (const program of selectablePrograms(catalog)) {
+    const state = { ...applied, selectedScopeId: program.scopeId };
+    const baseline = { ...state, items: [] };
+    const derive = current => deriveImportedAchievements(current.importedStudyRecords, offeringsById, current.items, current.importedCourseAchievements, catalog, program.scopeId);
+    const derived = derive(state);
+    assert.deepEqual(derived, derive(baseline));
+    const merged = new Map([...offeringsById, ...derived.offerings.map(current => [current.id, current])]);
+    assert.equal(summarizeCredits([...state.items, ...derived.items], merged).earned, offering.credits);
+    const categories = current => summarizeCategories(current.items, catalog, program.scopeId, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides).map(row => [row.category, row.earned]);
+    assert.deepEqual(categories(state), categories(baseline));
+    const graduation = current => calculateGraduationProgress(current.items, catalog, program.scopeId, [], 'undecided', current.importedStudyRecords, current.importedCourseAchievements, current.graduationProfile);
+    const progress = graduation(state); const before = graduation(baseline);
+    assert.equal(progress.graduationCheckComplete, false);
+    assert.equal(progress.importedContributionCount, 1);
+    const earned = value => [...value.cards, ...value.requirements, ...value.referenceProgress].map(row => [row.requirementId, row.earned]);
+    assert.deepEqual(earned(progress), earned(before));
+    const eligibility = guidanceEligibilityCreditResult(state, catalog);
+    assert.deepEqual(eligibility, guidanceEligibilityCreditResult(baseline, catalog));
+    assert.deepEqual(thesisGuidanceViews(catalog, program.scopeId, state.graduationProfile, { steps: {}, geographyReportSubmitted: null }, eligibility.credits, new Date('2026-10-02')), thesisGuidanceViews(catalog, program.scopeId, baseline.graduationProfile, { steps: {}, geographyReportSubmitted: null }, guidanceEligibilityCreditResult(baseline, catalog).credits, new Date('2026-10-02')));
+  }
+  assert.deepEqual(annualCreditLimitReferences(applied.items, offeringsById), [], 'inferred year does not manufacture an annual registration');
+  const rows = createUnifiedCourseRows(applied.items, applied.importedCourseAchievements, offeringsById);
+  assert.equal(rows.length, 1); assert.equal(rows[0].source, 'planner_imported');
+  assert.equal(rows[0].plannerItem.status, 'planned');
+  assert.equal(importedAchievementStatusLabel(rows[0].importedAchievements[0]), '修得済み（成績表）');
+});
+
+test('auto import: ordinary items survive v21 persistence and full snapshot undo restores earlier items', () => {
+  const data = autoImportData([autoImportCourse(autoImportBaseOffering.name)]);
+  const before = { ...initialState(), items: [item(catalog.offerings.find(offering => offering.id !== autoImportBaseOffering.id).id, 'waiting')] };
+  const undoSnapshot = structuredClone(before);
+  const next = applyImport(before, importPreview(data, [autoImportBaseOffering]), [autoImportBaseOffering]);
+  assert.equal(next.items.length, before.items.length + 1);
+  const store = memoryStore(); const raw = saveState(store, next, null, catalog);
+  const loaded = loadState(store, catalog); assert.equal(loaded.error, null); assert.deepEqual(loaded.state, next);
+  saveState(store, before, raw, catalog);
+  assert.deepEqual(loadState(store, catalog).state, undoSnapshot);
+  assert.equal(next.schemaVersion, 21); assert.equal(STORAGE_KEY, 'hosei-planner:v1');
+  const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
+  assert.match(page, /setUndoImport\(state\)/);
+  assert.match(page, /undoImport && commit\(undoImport,/);
+});
+
+test('auto import: direct handoff and manual JSON use the same application behavior', () => {
+  const data = autoImportFixture();
+  const direct = previewDirectGradeHandoff(JSON.parse(JSON.stringify(data)), autoImportOfferings, []);
+  assert.ok(direct);
+  const manual = applyImport(initialState(), importPreview(data, autoImportOfferings), autoImportOfferings);
+  const fromDirect = applyImport(initialState(), direct.units, autoImportOfferings);
+  assert.deepEqual(fromDirect.items, manual.items);
+  assert.equal(fromDirect.importedStudyRecords.length, manual.importedStudyRecords.length);
+  assert.equal(fromDirect.importedCourseAchievements.length, manual.importedCourseAchievements.length);
+  const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
+  const panel = readFileSync(new URL('../src/components/planner/GradeImportPanel.tsx', import.meta.url), 'utf8');
+  assert.match(page, /onApply=\{applyGradeImport\} directImport=\{directImport\}/);
+  assert.match(page, /applyImport\(state, units, catalog\.offerings\)/);
+  assert.match(panel, /setUnits\(importPreview\(directImport, offerings, existing, existingCourses\)\)/);
+  assert.match(panel, /onApply\(units\)/);
+  assert.match(page, /next\.items\.length - state\.items\.length/);
+});
+
+test('auto import: desktop and mobile keep planner controls beside official imported status', () => {
+  const offering = autoImportBaseOffering;
+  const next = applyImport(initialState(), importPreview(autoImportData([autoImportCourse(offering.name)]), [offering]), [offering]);
+  const noop = () => {};
+  const html = renderToStaticMarkup(createElement(PlannedCourseList, { classify: createCreditClassifier(catalog, null), unifiedRows: createUnifiedCourseRows(next.items, next.importedCourseAchievements, offeringsById), publicCourses: [], offerings: offeringsById, correspondenceProgress: {}, mediaProgress: {}, evaluations: {}, importedUserMeta: {}, disabled: false, onChange: noop, onRemove: noop, onChangePublicCourse: noop, onRemovePublicCourse: noop, onChangeEvaluation: noop, onChangeCorrespondence: noop, onChangeImportedMeta: noop, onOpenMedia: noop }));
+  assert.ok((html.match(/修得済み（成績表）/g) ?? []).length >= 2, 'official status appears on desktop and mobile');
+  assert.ok((html.match(/>計画中</g) ?? []).length >= 2, 'planner status stays visible on desktop and mobile');
+  assert.match(html, />開く<\/button>/);
+  assert.match(html, />詳細を開く<\/button>/);
+  assert.ok((html.match(/未評価/g) ?? []).length >= 2);
+});
+
+test('auto import: multiple safe component offerings keep the unified view uncoalesced', () => {
+  const offerings = [autoImportOfferings[0], { ...autoImportOfferings[0], id: 'auto-schooling', method: 'schooling' }];
+  const slot = { rawYear: '25', rawTerm: '夏', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '夏', date: null, credits: 2, grade: 'A' };
+  const data = autoImportData([autoImportCourse(offerings[0].name, { schoolings: [slot, { ...slot, rawTerm: '冬', term: '冬' }] })]);
+  const next = applyImport(initialState(), importPreview(data, offerings), offerings);
+  assert.deepEqual(next.items.map(current => current.offeringId), ['auto-exact', 'auto-schooling']);
+  const rows = createUnifiedCourseRows(next.items, next.importedCourseAchievements, new Map(offerings.map(offering => [offering.id, offering])));
+  assert.equal(rows.length, 3);
+  assert.equal(rows.filter(row => row.source === 'imported').length, 1);
+  assert.equal(rows.filter(row => row.source === 'planner_imported').length, 0);
 });

@@ -15,3 +15,16 @@
 スクーリングの明示年度は `25` を `2025` に正規化して初期値にし、元の文字列も保持します。通信には年度列がないため、日付だけから年度を決めず未設定にします。利用者が直した年度はmanual、将来安全な既存計画から補う場合だけinferredとして表示します。
 
 `*4` は保留マーカー付きの4単位であり、`pendingMarker: true` と `credits: 4` を同時に保持します。componentの試験・スクーリング評価は最終評価へコピーしません。カタログにないImported Courseは卒業要件mappingを持たず、`graduationCheckComplete=false` は変わりません。
+
+## 成績取り込み時の履修計画への仮登録（schema v21）
+
+取り込みは公式の `ImportedCourseAchievement` / `ImportedStudyRecord` を保持したうえで、具体的なOfferingを安全に一意照合できる場合だけ通常の `PlannerItem` も作成します。手動JSONと拡張機能のdirect handoffは、同じプレビュー・反映経路を通ります。
+
+- 詳細レコードは既存の名前（trim・空白正規化）＋履修形態matcherの候補が1件で、プレビューの照合先とも一致する場合に登録します。詳細のない成績表行は、履修形態を問わず名前の候補が1件である場合に限ります。いずれもカタログ上 `resolutionStatus=matched` かつ `courseId` が存在することを確認します。
+- `sourceCourseFor` の `exact_unique` はcourseIdの一意性を表し、`selectedOfferingId` は代表Offeringの場合があります。自動登録helperはこの代表値を使用せず、現在の全カタログから具体Offeringの候補数を再確認します。曖昧・未一致はImported-onlyとして保持します。新たなfuzzy matchingや表示時identityの書き換えは行いません。
+- 生成は検索追加と同じ `plannerItemFromCourseSearch` を使います。状態は `planned`、学年・修得順は `null`、評価や進捗はコピーしません。年度はsourceの明示値またはプレビューでのmanual入力が、同じOfferingの選択済みレコード間で一致する場合だけ設定します。推定年度や競合は `null` です。Plannerの既定年度2026をimportの確定年度として扱いません。
+- 時期は元の期と一致し、既存Plannerの標準値（前期・後期・通年・夏期・冬期・その他）で、同じOfferingのレコード間に競合がない場合だけ設定します。「夏」「冬」「前期メディア」等は変換・推測せず `null` にします。
+- 同一Offeringの既存PlannerItemとその評価・進捗は上書きしません。同じ取り込み内・再取り込みでもPlannerItemは増殖しません。公式状態の表示は既存のunified viewを維持し、Planner状態へ同期しません。
+- 公式修得単位はImported側の科目行aggregateを正本とします。自動PlannerItemは修得済みにせず、修得単位・区分・卒業進捗・指導条件へ単位を二重計上しません。年度上限の参考表示には通常の計画として含まれ、推定年度から年次を作成しません。
+- 反映noticeは成績表行・詳細レコード・PlannerItemの実際の追加差分を表示します。既存のundo用state全体のsnapshotが、自動PlannerItemも含めて取り込み前へ戻します。
+- 保存schemaは21、キーは `hosei-planner:v1`、`graduationCheckComplete=false` を維持します。永続provenanceを追加しないため、取り込み後の手動照合変更によるPlannerItemの生成・削除は対象外です。

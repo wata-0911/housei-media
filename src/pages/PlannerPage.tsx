@@ -180,8 +180,11 @@ export default function PlannerPage() {
     }
   }
   function applyGradeImport(units: ImportPreviewUnit[]) {
-    const next = applyImport(state, units);
-    if (commit(next, `${next.importedStudyRecords.length - state.importedStudyRecords.length}件の履修実績を保存しました。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
+    const next = applyImport(state, units, catalog.offerings);
+    const addedItems = next.items.length - state.items.length;
+    const addedCourses = next.importedCourseAchievements.length - state.importedCourseAchievements.length;
+    const addedRecords = next.importedStudyRecords.length - state.importedStudyRecords.length;
+    if (commit(next, `${addedCourses}件の成績表行と${addedRecords}件の履修実績を保存し、${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
     return false;
   }
   function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
