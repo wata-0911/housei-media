@@ -7,8 +7,8 @@ export default function AnnualCreditLimitNotice({ rows }: { rows: AnnualCreditLi
     <p className="mt-2 text-sm text-gray-700">教職・資格科目を含む場合は合計60単位までと案内されていますが、スクーリング登録単位数は49単位までです。計画の保存や操作はこの参考表示で制限しません。</p>
     {rows.length === 0 ? <p className="mt-3 text-sm text-gray-600">年度を設定した科目がありません。</p> : <ul className="mt-4 space-y-2 text-sm">
       {rows.map(row => <li key={row.year} className={`border p-3 ${row.exceedsOfficial49 ? 'border-amber-500 bg-amber-100 text-amber-950' : 'border-amber-200 bg-white'}`}>
-        <span className="font-medium">{row.year}年度：</span>通信 {row.correspondenceCredits}単位 + スクーリング登録 {row.schoolingRegistrationCredits}単位 = 既知合計 {row.knownTotalCredits}単位（公式49単位の参考）
-        {row.exceedsOfficial49 && <p className="mt-1">49単位を超える見込みです。公式の登録・申請条件と個別の扱いを確認してください。この表示は保存や履修状態を変更しません。</p>}
+        <span className="font-medium">{row.year}年度：</span>通信 {row.correspondenceCredits}単位 + スクーリング登録 {row.schoolingRegistrationCredits}単位 = 既知合計 {row.knownTotalCredits}単位（{row.year > 2026 ? '2026年度ルールを参考表示・将来年度の上限は未確認' : '公式49単位の参考'}）
+        {row.exceedsOfficial49 && <p className="mt-1">{row.year > 2026 ? '2026年度の参考上限49単位を超えています。将来年度の上限と' : '49単位を超える見込みです。'}公式の登録・申請条件と個別の扱いを確認してください。この表示は保存や履修状態を変更しません。</p>}
       </li>)}
     </ul>}
   </section>;
