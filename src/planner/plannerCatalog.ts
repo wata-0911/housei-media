@@ -284,6 +284,7 @@ export type RecognizedCredits = {
 };
 export type GraduationProfile = {
   admissionYear: number | null;
+  currentStudyYear: 1 | 2 | 3 | 4 | null;
   admissionType: AdmissionType;
   recognizedCredits: RecognizedCredits;
   /** Explicit choice only: admission year does not decide a curriculum. */
@@ -291,12 +292,13 @@ export type GraduationProfile = {
 };
 
 export type PlannerState = {
-  schemaVersion: 19;
+  schemaVersion: 20;
   selectedScopeId: string | null;
   /** v17 compatibility value; the scoped record below is authoritative. */
   thesisSelection: ThesisSelection;
   /** Thesis progress is intentionally independent of annual offerings and mappings. */
   thesisProgressByScope: Record<string, ThesisProgress>;
+  thesisGuidanceByScope: Record<string, ThesisGuidanceProgress>;
   items: Array<PlannerItem>;
   publicCourses: Array<PublicCourse>;
   todos: Array<PlannerTodo>;
@@ -319,6 +321,9 @@ export type PlannerState = {
 export type ThesisSelection = 'undecided' | 'selected' | 'not_selected';
 export type ThesisProgressStatus = 'not_started' | 'planned' | 'in_progress' | 'earned';
 export type ThesisProgress = { selection: ThesisSelection; status: ThesisProgressStatus };
+export type ThesisGuidanceStatus = 'not_started' | 'planned' | 'passed' | 'failed';
+export type ThesisGuidanceStep = { status: ThesisGuidanceStatus; passedOn: string | null };
+export type ThesisGuidanceProgress = { steps: Record<string, ThesisGuidanceStep>; geographyReportSubmitted: boolean | null };
 
 export type RequirementEvaluation = {
   requirementId: string;
