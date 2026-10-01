@@ -8,7 +8,14 @@ export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
 export const initialState = (): PlannerState => ({ schemaVersion: 19, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
-export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null };
+export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null; invalidRecognitionPaths?: string[] };
+
+function recognitionPaths(raw: unknown, recovered: unknown, prefix = 'recognizedCredits'): string[] {
+  if (Object.is(raw, recovered)) return [];
+  if (!raw || !recovered || typeof raw !== 'object' || typeof recovered !== 'object') return [prefix];
+  const keys = new Set([...Object.keys(raw as object), ...Object.keys(recovered as object)]);
+  return [...keys].flatMap(key => recognitionPaths((raw as Record<string, unknown>)[key], (recovered as Record<string, unknown>)[key], `${prefix}.${key}`));
+}
 
 function recoverRecognitionProfile(profile: PlannerState['graduationProfile']): PlannerState['graduationProfile'] | null {
   const base = initialGraduationProfile();
@@ -46,7 +53,7 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
       if (!profile) throw new Error('Invalid state');
       const recovered = { ...(state as PlannerState), graduationProfile: profile };
       if (!validateState(recovered, catalog)) throw new Error('Invalid state');
-      return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。', recoveredRecognitionRaw: (state as PlannerState).graduationProfile };
+      return { state: recovered, raw, error: null, recognitionWarning: '保存済みの認定情報に無効な値があります。確認・修正してください。', recoveredRecognitionRaw: (state as PlannerState).graduationProfile, invalidRecognitionPaths: recognitionPaths((state as PlannerState).graduationProfile.recognizedCredits, profile.recognizedCredits) };
     }
     return { state, raw, error: null };
   } catch {
@@ -145,12 +152,23 @@ export function saveState(store: Store, state: PlannerState, expectedRaw: string
 }
 
 /** Preserve uncorrected invalid recognition fields during unrelated saves. */
-export function saveStateWithRecognitionShadow(store: Store, state: PlannerState, expectedRaw: string | null, catalog: PlannerCatalog, shadow: GraduationProfile): string {
+export function saveStateWithRecognitionShadow(store: Store, state: PlannerState, expectedRaw: string | null, catalog: PlannerCatalog, shadow: GraduationProfile, paths: string[]): string {
   if (!validateState(state, catalog)) throw new Error('保存データの形式が不正です。');
   if (store.getItem(STORAGE_KEY) !== expectedRaw) throw new Error('別の画面で保存データが変更されました。再読み込みしてください。');
-  const raw = JSON.stringify({ ...state, graduationProfile: shadow });
+  const profile = structuredClone(state.graduationProfile) as GraduationProfile;
+  for (const path of paths) {
+    const keys = path.split('.').slice(1); let target = profile as unknown as Record<string, unknown>; const source = shadow as unknown as Record<string, unknown>;
+    for (let index = 0; index < keys.length - 1; index += 1) target = target[keys[index]] as Record<string, unknown>;
+    const value = keys.reduce<unknown>((current, key) => current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, source);
+    target[keys[keys.length - 1]] = value;
+  }
+  const raw = JSON.stringify({ ...state, graduationProfile: profile });
   store.setItem(STORAGE_KEY, raw);
   return raw;
+}
+
+export function recognitionPathValue(profile: GraduationProfile, path: string): unknown {
+  return path.split('.').slice(1).reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined, profile);
 }
 
 export function recoverState(store: Store, expectedRaw: string, catalog: PlannerCatalog): string {
