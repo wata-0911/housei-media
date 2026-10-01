@@ -99,6 +99,14 @@ export function graduationProfileValidationError(profile: GraduationProfile): st
   if (fields.some(row => row.credits !== null && (row.credits < 0 || row.credits > 36))
     || (profile.recognizedCredits.foreignLanguage.credits !== null && (profile.recognizedCredits.foreignLanguage.credits < 0 || profile.recognizedCredits.foreignLanguage.credits > 4))
     || (profile.recognizedCredits.physicalEducation.credits !== null && (profile.recognizedCredits.physicalEducation.credits < 0 || profile.recognizedCredits.physicalEducation.credits > 2))) return '区分別の認定単位が公式上限を超えています。';
+  const foreign = profile.recognizedCredits.foreignLanguage;
+  if (foreign.mode !== 'recognized' && (foreign.language !== 'unknown' || foreign.schoolingEquivalentCredits !== null)) return '外国語が認定以外の場合、言語とスクーリング相当は指定できません。';
+  if (foreign.schoolingEquivalentCredits !== null
+    && (!Number.isFinite(foreign.schoolingEquivalentCredits) || foreign.schoolingEquivalentCredits < 0
+      || foreign.schoolingEquivalentCredits > 2
+      || foreign.credits === null || foreign.schoolingEquivalentCredits > foreign.credits)) {
+    return '外国語のスクーリング相当は、認定単位以下かつ2単位以下で入力してください。';
+  }
   const detailed = recognizedCreditBreakdownTotal(profile.recognizedCredits);
   if (totalCredits !== null && detailed > totalCredits) return '内訳の認定単位が公式認定単位合計を超えています。';
   const cap = profile.admissionType === 'transfer_second_year' ? 7 : profile.admissionType === 'transfer_third_year' || profile.admissionType === 'bachelor_admission' ? 15 : null;

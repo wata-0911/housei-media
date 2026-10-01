@@ -406,8 +406,8 @@ test('grouped requirements use earned credits, one language, and one mapped offe
   const card = (items, id) => calculateGraduationProgress(items, fixture, scope).cards.find(row => row.requirementId === `group-${id}`);
   const empty = calculateGraduationProgress([], fixture, scope);
   assert.equal(empty.graduationCheckComplete, false);
-  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).status), ['unsatisfied', 'unsatisfied', 'unsatisfied']);
-  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).earned), [0, 0, 0]);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).status), ['unsatisfied', 'unknown', 'unknown']);
+  assert.deepEqual(['general', 'foreign', 'physical'].map(id => card([], id).earned), [0, null, null]);
   assert.ok(empty.cards.every(row => row.ruleType !== 'max_credits'));
   for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress'], ['earned', 'earned']]) {
     const general = card([item('literature', status)], 'general');
@@ -2673,11 +2673,51 @@ test('graduation profile saves only internally consistent prerequisites and reje
 
 test('recognized-credit controls expose explicit prefill, allocation, and safe professional search', () => {
   const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
-  assert.match(source, /公式標準値をフォームへ適用（保存）/);
+  assert.match(source, /公式標準値を適用して保存/);
+  assert.match(source, /外国語認定のうちスクーリング相当/);
+  assert.match(source, /公式認定結果に記載がある場合のみ入力/);
+  assert.doesNotMatch(source, /onChange=\{\(\) => undefined\}/);
   assert.match(source, /内訳割当済み/);
   assert.match(source, /専門教育の認定済み科目/);
   assert.match(source, /offering\.name === '卒業論文'/);
   assert.match(source, /match\.length === 1/);
+});
+
+test('foreign and PE recognition distinguish confirmed zero, missing recognition, and foreign conditions', () => {
+  const scope = catalog.programs.find(program => program.department === '経済学科').scopeId;
+  const base = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'other_transfer', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, totalCredits: 0, schoolingEquivalentCredits: 0 } };
+  const card = profile => calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], profile).cards;
+  const foreign = credits => card({ ...base, recognizedCredits: { ...base.recognizedCredits, foreignLanguage: { mode: 'recognized', credits: 4, language: 'english', schoolingEquivalentCredits: credits } } }).find(row => row.requirementId === 'group-foreign');
+  assert.equal(foreign(2).status, 'satisfied');
+  const languageUnknown = card({ ...base, recognizedCredits: { ...base.recognizedCredits, foreignLanguage: { mode: 'recognized', credits: 4, language: 'unknown', schoolingEquivalentCredits: 2 } } }).find(row => row.requirementId === 'group-foreign');
+  assert.deepEqual([languageUnknown.status, languageUnknown.earned], ['unknown', null]);
+  assert.match(languageUnknown.reason, /同一言語要件未確認/);
+  assert.deepEqual([foreign(1).status, foreign(1).earned], ['unsatisfied', 4]);
+  assert.match(foreign(1).reason, /2単位未満/);
+  const missingForeign = card(base).find(row => row.requirementId === 'group-foreign');
+  const missingPe = card(base).find(row => row.requirementId === 'group-physical');
+  assert.deepEqual([missingForeign.status, missingForeign.earned], ['unknown', null]);
+  assert.deepEqual([missingPe.status, missingPe.earned], ['unknown', null]);
+  const explicitZero = card({ ...base, recognizedCredits: { ...base.recognizedCredits, foreignLanguage: { mode: 'recognized', credits: 0, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'recognized', credits: 0 } } });
+  assert.deepEqual([explicitZero.find(row => row.requirementId === 'group-foreign').status, explicitZero.find(row => row.requirementId === 'group-physical').status], ['unsatisfied', 'unsatisfied']);
+});
+
+test('bachelor reference separates exemptions from earned credits and preserves law thesis branches', () => {
+  const law = catalog.programs.find(program => program.department === '法律学科').scopeId;
+  const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'bachelor_admission', curriculumApplicability: 'current_2026', recognizedCredits: officialRecognitionPrefill('bachelor_admission') };
+  for (const [selection, expected] of [['selected', 82], ['not_selected', 86]]) {
+    const progress = calculateGraduationProgress([], catalog, law, [], selection, [], [], profile, { selection, status: 'not_started' });
+    const overall = progress.referenceProgress.find(row => row.id === 'overall-reference-progress');
+    assert.deepEqual([overall.label, overall.earned, overall.target, overall.exemptionCredits], ['卒業対象単位（参考）', 0, expected, 42]);
+    assert.equal(overall.recognizedCredits, 0);
+  }
+});
+
+test('foreign recognition validates its official schooling breakdown and prefill leaves foreign and PE unknown', () => {
+  const prefill = officialRecognitionPrefill('transfer_second_year');
+  assert.deepEqual([prefill.foreignLanguage.mode, prefill.physicalEducation.mode], ['unknown', 'unknown']);
+  const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'other_transfer', curriculumApplicability: 'current_2026', recognizedCredits: { ...initialGraduationProfile().recognizedCredits, foreignLanguage: { mode: 'recognized', credits: 4, language: 'english', schoolingEquivalentCredits: 3 } } };
+  assert.match(graduationProfileValidationError(profile), /スクーリング相当/);
 });
 
 test('missing graduation profile prerequisites never completes graduation evaluation or breaks coverage', () => {

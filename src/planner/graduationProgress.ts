@@ -69,6 +69,8 @@ export type ReferenceProgress = {
   earned: number | null;
   target: number | null;
   recognizedCredits: number | null;
+  /** Exemptions are requirement relief, never completed credits. */
+  exemptionCredits?: number | null;
   status: 'partial' | 'unknown';
   reason: string | null;
   coverageStatus: CoverageStatus;
@@ -927,12 +929,17 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     const row = profile.recognizedCredits.foreignLanguage ?? { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null };
     if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
     if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && (row.schoolingEquivalentCredits ?? 0) >= 2) return { ...card, earned: 4, status: 'satisfied', note: `${card.note ?? ''} 公式認定の内訳を反映しています。` };
+    if (row.mode === 'unknown' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 外国語の認定結果を確認してください。` };
+    if (row.mode === 'recognized' && row.credits === 4 && row.language === 'unknown') return { ...card, status: 'unknown', earned: null, reason: '同一言語要件未確認です。公式認定結果の言語を確認してください。' };
+    if (row.mode === 'recognized' && row.credits === 4 && row.schoolingEquivalentCredits === null) return { ...card, status: 'unknown', earned: null, reason: 'スクーリング相当認定単位が未確認です。0単位とは扱いません。' };
+    if (row.mode === 'recognized' && row.credits === 4 && (row.schoolingEquivalentCredits ?? 0) < 2) return { ...card, status: 'unsatisfied', earned: 4, reason: 'スクーリング相当認定単位が2単位未満です。' };
     return card;
   });
   next = replace(next, 'group-physical', card => {
     const row = profile.recognizedCredits.physicalEducation ?? { mode: 'unknown' as const, credits: null };
     if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
     if (row.mode === 'recognized' && row.credits === 2) return { ...card, earned: 2, status: 'satisfied', note: `${card.note ?? ''} 公式認定を反映しています。` };
+    if (row.mode === 'unknown' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 保健体育の認定結果を確認してください。` };
     return card;
   });
   return next;
@@ -1002,12 +1009,14 @@ function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[
   const schoolingReason = prerequisiteReason ?? (profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && schoolingRecognized === null
     ? '編入学の認定スクーリング相当単位が未入力です。0としては扱いません。'
     : schooling.uncertain ? '一部の修得済み科目はスクーリング算入先を一意に確認できないため、含めていません。' : null);
-  const make = (id: ReferenceProgress['id'], label: string, earned: number | null, referenceTarget: number | null, recognizedCredits: number | null, reason: string | null): ReferenceProgress => ({
-    id, label, earned, target: referenceTarget, recognizedCredits, status: reason ? 'unknown' : 'partial', coverageStatus: reason ? 'unknown' : 'partial', reason,
+  const bachelor = profile.admissionType === 'bachelor_admission' && prerequisiteReason === null;
+  const exemptionCredits = bachelor ? 42 : null;
+  const make = (id: ReferenceProgress['id'], label: string, earned: number | null, referenceTarget: number | null, recognizedCredits: number | null, reason: string | null, exemptions: number | null = null): ReferenceProgress => ({
+    id, label, earned, target: referenceTarget, recognizedCredits, exemptionCredits: exemptions, status: reason ? 'unknown' : 'partial', coverageStatus: reason ? 'unknown' : 'partial', reason,
     unknownReasonCategory: reason ? classifyUnknownReason(reason) : null, sourceRefs: sourcesForGraduationCard(id),
   });
   return [
-    make('overall-reference-progress', '全体所要単位（参考）', prerequisiteReason ? null : overallEarned, target, recognizedTotal, prerequisiteReason),
+    make('overall-reference-progress', bachelor ? '卒業対象単位（参考）' : '全体所要単位（参考）', prerequisiteReason ? null : overallEarned, bachelor && target !== null ? target - 42 : target, recognizedTotal, prerequisiteReason, exemptionCredits),
     make('schooling-reference-progress', 'スクーリング（参考）', prerequisiteReason || schoolingRecognized === null ? null : schooling.credits + schoolingRecognized, prerequisiteReason ? null : 30, schoolingRecognized, schoolingReason),
   ];
 }

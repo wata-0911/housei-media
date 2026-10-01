@@ -24,6 +24,7 @@ export default function GraduationProgress({ progress }: { progress: Progress })
         <p className="mt-2 text-lg"><span className="font-semibold">修得済み {row.earned ?? '—'}</span> / {row.target === null ? '—' : `${row.target}単位`}</p>
         <p className="mt-1 text-xs font-medium text-slate-700">判定範囲：{coverageLabel[row.coverageStatus]}</p>
         <p className="mt-2 text-xs text-gray-700">{row.id === 'overall-reference-progress' ? `認定単位 ${row.recognizedCredits ?? '—'}単位を含む` : `認定スクーリング相当 ${row.recognizedCredits ?? '—'}単位を含む`}</p>
+        {row.exemptionCredits !== null && row.exemptionCredits !== undefined && <p className="mt-1 text-xs text-gray-700">卒業要件上の免除 {row.exemptionCredits}単位相当（修得・認定済み単位には加えません）</p>}
         {row.earned !== null && row.target !== null && <p className="mt-1 text-sm text-[#002255]">参考：あと{Math.max(0, row.target - row.earned)}単位</p>}
         {row.reason && <p className="mt-2 text-xs leading-relaxed text-amber-800">{row.unknownReasonCategory && `${UNKNOWN_REASON_CATEGORY_LABEL[row.unknownReasonCategory]}：`}{row.reason}</p>}
         <p className="mt-2 text-xs text-gray-600">この数値だけで卒業可否は判定しません。</p>
