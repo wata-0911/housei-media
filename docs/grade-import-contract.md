@@ -28,3 +28,9 @@
 - 公式修得単位はImported側の科目行aggregateを正本とします。自動PlannerItemは修得済みにせず、修得単位・区分・卒業進捗・指導条件へ単位を二重計上しません。年度上限の参考表示には通常の計画として含まれ、推定年度から年次を作成しません。
 - 反映noticeは成績表行・詳細レコード・PlannerItemの実際の追加差分を表示します。既存のundo用state全体のsnapshotが、自動PlannerItemも含めて取り込み前へ戻します。
 - 保存schemaは21、キーは `hosei-planner:v1`、`graduationCheckComplete=false` を維持します。永続provenanceを追加しないため、取り込み後の手動照合変更によるPlannerItemの生成・削除は対象外です。
+
+### 保存済み成績の再取り込みによるPlannerItem補完
+
+公式成績の `sourceDuplicate` 判定とPlannerItem生成を分離します。保存済み成績のプレビューは公式保存対象としては未選択のままですが、既存と同じ安全条件で具体Offeringが決まり、そのPlannerItemが存在しない場合はPlannerItemだけを仮登録します。Importedの科目行・詳細・照合先等は書き換えず、同じ操作の再実行は完全no-opです。曖昧・未一致は補完しません。
+
+UIの実行ボタンも反映処理と同じpure helperで候補を判定し、安全な補完候補があれば件数を表示して実行できます。候補がなく公式成績への変更もなければボタンは無効です。初期値・年度と時期の安全な仮入力・公式単位の正本性・schema v21・全state snapshotによるundoは変更しません。

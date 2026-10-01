@@ -1,4 +1,5 @@
 import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
+import { GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
 import MediaSchoolingProgress from '../src/components/planner/MediaSchoolingProgress.tsx';
 import CorrespondenceProgress from '../src/components/planner/CorrespondenceProgress.tsx';
 import CourseEvaluations from '../src/components/planner/CourseEvaluations.tsx';
@@ -3658,4 +3659,154 @@ test('auto import: multiple safe component offerings keep the unified view uncoa
   assert.equal(rows.length, 3);
   assert.equal(rows.filter(row => row.source === 'imported').length, 1);
   assert.equal(rows.filter(row => row.source === 'planner_imported').length, 0);
+});
+
+function legacyAutoImportState(data = autoImportFixture(), offerings = autoImportOfferings) {
+  const previous = applyImport(initialState(), importPreview(data, offerings), offerings);
+  return { ...previous, items: [] };
+}
+function reimportPreview(data, offerings, state) {
+  return importPreview(data, offerings, state.importedStudyRecords, state.importedCourseAchievements);
+}
+function renderImportActions(units, plannedItems, offerings, disabled = false) {
+  return renderToStaticMarkup(createElement(GradeImportApplyActions, { units, plannedItems, offerings, disabled, onApply: () => {} }));
+}
+
+test('backfill: saved source and detail records are unchanged while one missing planned item is added', () => {
+  const data = autoImportFixture(); const before = legacyAutoImportState();
+  const snapshot = structuredClone(before);
+  assert.equal(before.importedCourseAchievements.length, 1);
+  assert.equal(before.importedStudyRecords.length, 1);
+  const preview = reimportPreview(data, autoImportOfferings, before);
+  assert.ok(preview.every(unit => unit.sourceDuplicate && unit.duplicate && !unit.selected));
+  const next = applyImport(before, preview, autoImportOfferings);
+  assert.equal(next.items.length, 1);
+  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: null }]);
+  assert.equal(next.items[0].status, 'planned');
+  assert.equal('finalGrade' in next.items[0], false);
+  assert.deepEqual(next.courseEvaluations, {});
+  assert.equal(next.importedCourseAchievements, before.importedCourseAchievements);
+  assert.equal(next.importedStudyRecords, before.importedStudyRecords);
+  assert.deepEqual(before, snapshot, 'backfill does not mutate the undo snapshot');
+  assert.equal(next.schemaVersion, 21); assert.equal(STORAGE_KEY, 'hosei-planner:v1');
+});
+
+test('backfill: a second preview/reimport and the stale first preview are complete no-ops', () => {
+  const data = autoImportFixture(); const legacy = legacyAutoImportState();
+  const firstPreview = reimportPreview(data, autoImportOfferings, legacy);
+  const first = applyImport(legacy, firstPreview, autoImportOfferings);
+  const secondPreview = reimportPreview(data, autoImportOfferings, first);
+  assert.equal(applyImport(first, secondPreview, autoImportOfferings), first);
+  assert.equal(applyImport(first, firstPreview, autoImportOfferings), first);
+  assert.equal(first.items.length, 1);
+  assert.equal(first.importedCourseAchievements.length, 1);
+  assert.equal(first.importedStudyRecords.length, 1);
+});
+
+test('backfill: legacy ambiguous and unmatched sources remain imported-only complete no-ops', () => {
+  const sameCourseVariants = [autoImportOfferings[0], { ...autoImportOfferings[0], id: 'legacy-variant' }];
+  const ambiguousCourses = [autoImportOfferings[0], { ...autoImportOfferings[0], id: 'legacy-other-course', courseId: 'different-course' }];
+  for (const offerings of [sameCourseVariants, ambiguousCourses, []]) {
+    const data = autoImportFixture(); const legacy = legacyAutoImportState(data, offerings);
+    const preview = reimportPreview(data, offerings, legacy);
+    assert.ok(preview.every(unit => unit.sourceDuplicate && !unit.selected));
+    assert.equal(preview[0].match, offerings.length ? 'ambiguous' : 'unmatched');
+    assert.equal(applyImport(legacy, preview, offerings), legacy);
+    assert.equal(legacy.items.length, 0);
+    assert.equal(legacy.importedCourseAchievements.length, 1);
+    assert.equal(legacy.importedStudyRecords.length, 1);
+    const html = renderImportActions(preview, [], offerings);
+    assert.match(html, /<button[^>]*disabled=""/);
+    assert.doesNotMatch(html, /科目を履修計画に仮登録できます/);
+  }
+});
+
+test('backfill: legacy sources with an existing item preserve every user field and are complete no-ops', () => {
+  const data = autoImportFixture(); const legacy = legacyAutoImportState();
+  for (const status of ['planned', 'in_progress', 'waiting', 'earned', 'failed', 'dropped']) {
+    const before = { ...legacy, items: [{ ...plannerItemFromCourseSearch('auto-exact'), status, plannedYear: 2028, plannedTerm: '後期', studyYear: 4, earnedOrder: 3 }], courseEvaluations: { 'auto-exact': { finalGrade: 'A' } }, correspondenceProgress: { 'auto-exact': { retained: true } }, mediaSchoolingProgress: { 'auto-exact': { retained: true } } };
+    const snapshot = structuredClone(before);
+    const preview = reimportPreview(data, autoImportOfferings, before);
+    assert.equal(applyImport(before, preview, autoImportOfferings), before);
+    assert.deepEqual(before, snapshot);
+    assert.match(renderImportActions(preview, before.items, autoImportOfferings), /<button[^>]*disabled=""/);
+  }
+});
+
+test('backfill: source duplicates enable the real UI action only while a safe planner item is missing', () => {
+  const data = autoImportFixture(); const legacy = legacyAutoImportState();
+  const preview = reimportPreview(data, autoImportOfferings, legacy);
+  const html = renderImportActions(preview, legacy.items, autoImportOfferings);
+  assert.match(html, /成績表行は保存済みです。1科目を履修計画に仮登録できます/);
+  assert.doesNotMatch(html, /<button[^>]*disabled=/);
+  assert.match(renderImportActions(preview, legacy.items, autoImportOfferings, true), /<button[^>]*disabled=""/);
+  const next = applyImport(legacy, preview, autoImportOfferings);
+  const noOpHtml = renderImportActions(reimportPreview(data, autoImportOfferings, next), next.items, autoImportOfferings);
+  assert.match(noOpHtml, /<button[^>]*disabled=""/);
+  assert.doesNotMatch(noOpHtml, /科目を履修計画に仮登録できます/);
+  const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
+  assert.match(page, /<GradeImportPanel offerings=\{catalog\.offerings\} plannedItems=\{state\.items\}/);
+});
+
+test('backfill: duplicate components and course-only sources each create only one planner item', () => {
+  const slot = { rawYear: '25', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '前期', date: null, credits: 2, grade: 'A' };
+  const offerings = [{ ...autoImportOfferings[0], method: 'schooling' }];
+  const schoolingCourse = autoImportCourse(offerings[0].name, { schoolings: [slot, slot] });
+  const courseOnly = autoImportCourse(offerings[0].name, { creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false } });
+  for (const courses of [[schoolingCourse, schoolingCourse], [courseOnly]]) {
+    const data = autoImportData(courses); const legacy = legacyAutoImportState(data, offerings);
+    const preview = reimportPreview(data, offerings, legacy);
+    assert.ok(preview.every(unit => unit.sourceDuplicate));
+    const next = applyImport(legacy, preview, offerings);
+    assert.equal(next.items.length, 1);
+    assert.equal(next.items[0].status, 'planned');
+    assert.equal(next.items[0].plannedYear, courses[0] === schoolingCourse ? 2025 : null);
+    assert.equal(next.items[0].plannedTerm, courses[0] === schoolingCourse ? '前期' : null);
+    assert.equal(next.importedCourseAchievements, legacy.importedCourseAchievements);
+    assert.equal(next.importedStudyRecords, legacy.importedStudyRecords);
+    assert.match(renderImportActions(preview, legacy.items, offerings), /1科目を履修計画に仮登録できます/);
+  }
+});
+
+test('backfill: official earned totals, category progress, graduation and guidance count credits once', () => {
+  const offering = catalog.offerings.find(current => current.method === 'correspondence' && current.resolutionStatus === 'matched' && current.courseId !== null && current.credits > 0 && catalog.offerings.filter(other => other.name === current.name && other.method === current.method).length === 1);
+  assert.ok(offering);
+  const data = autoImportData([autoImportCourse(offering.name, { earnedCredits: { raw: String(offering.credits), value: offering.credits } })]);
+  const legacy = legacyAutoImportState(data, catalog.offerings);
+  const next = applyImport(legacy, reimportPreview(data, catalog.offerings, legacy), catalog.offerings);
+  assert.equal(next.items.length, 1);
+  assert.equal(summarizeCredits(next.items, offeringsById).earned, 0);
+  assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), offering.credits);
+  for (const { scopeId } of selectablePrograms(catalog)) {
+    const derive = state => deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, scopeId);
+    const derived = derive(next);
+    assert.deepEqual(derived, derive(legacy));
+    const merged = new Map([...offeringsById, ...derived.offerings.map(current => [current.id, current])]);
+    assert.equal(summarizeCredits([...next.items, ...derived.items], merged).earned, offering.credits);
+    const categories = state => summarizeCategories(state.items, catalog, scopeId, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides).map(row => [row.category, row.earned]);
+    assert.deepEqual(categories(next), categories(legacy));
+    const graduation = state => calculateGraduationProgress(state.items, catalog, scopeId, [], 'undecided', state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile);
+    const beforeProgress = graduation(legacy); const nextProgress = graduation(next);
+    const earned = progress => [...progress.cards, ...progress.requirements, ...progress.referenceProgress].map(row => [row.requirementId, row.earned]);
+    assert.deepEqual(earned(nextProgress), earned(beforeProgress));
+    assert.equal(nextProgress.importedContributionCount, 1);
+    assert.equal(nextProgress.graduationCheckComplete, false);
+    assert.deepEqual(guidanceEligibilityCreditResult({ ...next, selectedScopeId: scopeId }, catalog), guidanceEligibilityCreditResult({ ...legacy, selectedScopeId: scopeId }, catalog));
+  }
+});
+
+test('backfill: saved snapshot undo restores pre-backfill official facts and existing planner items', () => {
+  const offering = autoImportBaseOffering;
+  const data = autoImportData([autoImportCourse(offering.name)]);
+  const legacy = legacyAutoImportState(data, [offering]);
+  const existing = item(catalog.offerings.find(current => current.id !== offering.id).id, 'waiting');
+  const before = { ...legacy, items: [existing] }; const undoSnapshot = structuredClone(before);
+  const store = memoryStore(); const beforeRaw = saveState(store, before, null, catalog);
+  const next = applyImport(before, reimportPreview(data, [offering], before), [offering]);
+  assert.equal(next.items.length, 2);
+  assert.equal(next.items[0], existing);
+  const nextRaw = saveState(store, next, beforeRaw, catalog);
+  assert.deepEqual(loadState(store, catalog).state, next);
+  saveState(store, before, nextRaw, catalog);
+  assert.deepEqual(loadState(store, catalog).state, undoSnapshot);
 });
