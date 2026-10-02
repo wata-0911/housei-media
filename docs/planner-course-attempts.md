@@ -11,7 +11,7 @@
 | CourseSearch / searchOfferings | 名称・コード・方式・期と学年でOfferingを検索。Course完成状況による除外はない。追加済みボタンは同じOfferingだけ無効。他Offeringは選択可能。 |
 | PlannedCourseList / planTable / unifiedCourseView | Offering単位の行、学年別一覧、年度/時期/形態/状態編集。公式行は独立保持。一対一の旧Course identityのみ表示上coalesceする。複数Offeringは残る。今回この表示identityは変更しない。 |
 | annualPlan / annual limits | 年度・形態でOfferingの履修予定単位を集計。49単位の参考表示と卒論指導の60/80/100単位資格条件はCourse completionとは独立。 |
-| summarizeCredits | Offering単位のearned/in_progress/planned集計。waitingを含まない既存集計。CourseProgressではwaitingも予定に含む。画面の修得集計へは重複除外後のPlanner入力を渡す。 |
+| summarizeCredits | 明示した寄与単位（未設定ならOffering単位）のearned/in_progress/planned集計。waitingを含まない既存集計。CourseProgressではwaitingも予定に含む。画面の修得集計へは重複除外後のPlanner入力を渡す。 |
 | importedCourseAchievements / gradeImportApply | 公式成績表の一行aggregateとcomponentを別保存。Course照合とOffering照合も独立。新規PlannerItemは一意なOfferingだけ自動作成。 |
 | autoPlannerItemsForImport | 同じOfferingへの再生成をしない。既存項目の状態・学年・年度・時期・進捗・評価は上書きしない。sourceDuplicate時は未選択でも欠けたPlannerItemだけ補完。変更前は修得aggregateがあってもplannedだった。 |
 | importedAchievementCalculations / deriveImportedAchievements | 正の公式aggregateから計算専用の仮想Offering/earned Itemを作る。componentの単位は合計しない。旧Course identityのearned Plannerがあると公式行を除外するため、新規earnedへの変更前に入力側重複除外が必要。 |
@@ -48,17 +48,19 @@ same Offeringの複数回履修について、今回提示された資料・利�
 | 対象 | 監査結果と今回の扱い |
 | --- | --- |
 | PlannerItem / identity | 1 Offeringに1 Itemを履修回として再利用。任意の `courseCreditContribution?: number` を追加。Attempt ID、Enrollment、v23は不要。 |
-| CourseProgress | 明示値がある場合だけOffering.creditsの代わりに使う。修得済みおよびplanned/in_progress/waitingの予定込みに共通、failed/droppedは0。合計はuncapped。 |
+| CourseProgress / CreditSummary / CategorySummary | pure helper `plannerItemCreditContribution(item, offering)` が明示値、未設定ならOffering.creditsを返す。CourseProgressは修得済みおよびplanned/in_progress/waitingの予定込みに使用し、failed/droppedは0。Summaryは既存のearned/in_progress/planned対象を維持。合計はuncapped。 |
 | validation / storage | JSON Schemaで非負number、意味validationで有限かつ既知Offering.credits以下。不明単位の開講にoverrideは保存しない。Course targetを超える合計や寄与は別判断なので禁止しない。既存v22はfieldなしで従来どおり読み書きできる。 |
 | progress / grades | Offering IDの評価・通信・Media進捗ownerを変更せず、合否や設題数から寄与単位を設定しない。 |
-| official / graduation | 公式aggregateが正本。source-linked earnedの重複排除と卒業official-priorityを継続。metadataはCourseProgress専用で、既存卒業配分・修得概要・区分集計への入力単位を置換しない。Course completionと卒業配分は別。 |
-| annual plan / limit | 登録の参考単位はOffering.creditsのまま。Courseへの寄与2を開講登録4と混同しない。 |
+| official / graduation | 公式aggregateが正本。source-linked earnedの重複排除と卒業official-priorityを継続。metadataで公式aggregateや卒業配分の入力単位を置換しない。Summaryへは既存の重複除外済みPlanner入力と公式aggregateを渡す。Course completionと卒業配分は別。 |
+| annual plan / limit | 通信は共通helperの明示寄与（未設定ならOffering.credits）を使用する。スクーリングは登録単位なのでmetadataがあってもOffering.creditsを使用。年度・状態の既存対象と49単位参考判定を維持。 |
 | UI / unified view | exactな4単位Course・4単位通信Offeringの進捗詳細に2/4単位の明示選択を出す。未設定の4単位を自動で2にしない。公式集計優先のearned項目は編集対象から除き、read-onlyで表示。曖昧identityで選択を出さない。Unified rowは元Itemを保持。 |
 | share / export | CSV・画像へ明示した科目進捗寄与を別項目で出す。開講単位はそのまま。Media共有は既存のOffering進捗表示。 |
 | edit / delete / undo | 行編集は元Itemをspread、削除undoは元Itemを保持、取込undoは全state snapshot。metadataをlossless保持する。設定解除は任意fieldを削除し、従来の開講単位へ戻す。 |
 | repeatable / advisory | 個別Requirement、repeatableRules、Media電話確認advisoryを継続し、完成を理由とした禁止やhard blockを追加しない。 |
 
 単純capを採用しない。例えばschooling2 + correspondenceの明示寄与2は4になるが、schooling2 + correspondenceの明示寄与4なら6と超過候補2を維持する。v22への任意field追加なので、既存migrationや保存キーを変更しない。旧実装のstrict validatorへの新field入りstateの戻し互換性は保証しない。
+
+単位集計のP2 follow-upでは、同じしおりp.28の本文を確認した。年間履修単位数は通信学習の修得単位数とスクーリングの登録単位数等の合計である。p.31のスクーリング2+通信2に対応する明示入力を、通信の年間参考値にも使う。helperは状態・評価・公式実績を解釈せず、寄与値の選択だけを行う。スクーリング登録と卒業計算にはこのhelperを適用しない。保存metadataの追加・変更は不要なのでschemaVersion22を維持する。
 
 ## derived CourseProgress
 
@@ -115,6 +117,8 @@ foundation後の変更前planner 247件、初期実装後272件PASS。最初のf
 逆方向evidenceのP2修正で8件追加し、planner 289件 / extension 18件PASS。2 source→同一Offeringの両方選択・A非選択・B非選択、片方または両方保存済みのsourceDuplicate/backfillでplanned / source markerなしを確認した。修正前は非選択とbackfillの4ケースでearnedへの誤昇格を再現した。既存の1 source→複数Offeringの非選択、同一sourceの複数component→同一Offeringのearned、公式2+planned2→earned2/projected4、planned2→earned2のCourseProgress4/4、source-linked重複排除、卒業official-priority、保存/再読込/削除/undoの回帰もPASS。`npm run typecheck` / `npm run lint` / `npm run test:planner` / `npm run test:extension` / `npm run build` とdiff-checkが成功。schemaVersion22とgraduationCheckComplete=falseを維持。
 
 2+2 completion修正では15件を追加し、planner 304件 / extension 18件PASS。旧コードに先に追加した13件のうち9件で失敗を再現後、修正した。schooling2+通信寄与2、通信寄与4、独立6の超過候補、planned/in_progress/waitingからearnedへの移行、failed/dropped、明示0、非負・有限・Offering上限、Course target非cap、公式source-linked重複排除、8所属の卒業official-priority、v22保存/再読込/削除undo/全取込undo/設定解除、年間登録単位維持、unified row、CSV/画像と限定UIを検証。既存289件をすべて維持し、typecheck/lint/test:planner/test:extension/build/diff-checkもPASS。経済学の実Previewではスクーリングearned2+通信planned寄与2の修得2/予定込み4、通信earned後の修得4/予定込み4・超過なし、再読込後の2単位設定保持、通信を明示4へ変えたときの超過候補2を確認。console errorなし。schemaVersion22とgraduationCheckComplete=falseを維持。
+
+単位集計のP2 follow-upでは12件追加してplanner 316件 / extension 18件PASS。修正前に集計・年間参考値の8ケースで失敗を確認した。schooling earned2+通信明示2のCourseProgress・CreditSummary・CategorySummaryが4で一致し、planned/in_progressも明示2を使用すること、waiting/failed/droppedのSummary対象が従来どおりであることを確認。年間通信2/4、スクーリングmetadataに依存しない登録2、明示0、未設定時の従来6、49単位参考値の50/48判定、明示独立6をcapしないこと、source-linked公式4と8所属の卒業official-priorityを検証。既存304件は年間通信の期待値1件を今回の仕様へ更新して維持。typecheck/lint/test:planner/test:extension/build/diff-checkが成功し、既存のselection-independent evidence、backfill、曖昧identity、同名History、Law partial2、repeatable/Media、unified view、v22保存/再読込/削除/undoもPASS。schemaVersion22とgraduationCheckComplete=falseを維持。
 
 ローカルPreviewでは日本文芸学概論の公式2 + 夏期planned2が修得2/4・予定込み4/4になること、春期Offeringが引き続き追加可能なこと、自動earned通信4が二重加算されないこと、再読込で保持されること、console errorなしを確認した。
 

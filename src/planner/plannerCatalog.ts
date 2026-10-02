@@ -197,8 +197,9 @@ export type PlannerItem = {
   offeringId: string;
   /** Optional v22 source association for an auto-imported item. Official credits stay on the source row. */
   importedSourceCourseId?: string;
-  /** Explicit per-enrollment CourseProgress credits; absence uses Offering.credits.
-   * Does not override official aggregates, annual registration or graduation allocation. */
+  /** Explicit enrollment credits for CourseProgress, summaries and annual correspondence.
+   * Absence uses Offering.credits. Does not override official aggregates,
+   * schooling registration credits or graduation allocation. */
   courseCreditContribution?: number;
   status: "planned" | "in_progress" | "waiting" | "earned" | "failed" | "dropped";
   plannedYear: number | null;

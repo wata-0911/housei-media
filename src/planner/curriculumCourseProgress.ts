@@ -3,6 +3,7 @@ import type { CurriculumCourse, Offering, PlannerCatalog, PlannerItem } from './
 import { exactImportedCurriculumId } from './officialCourseCredits';
 import { isMediaSchooling } from './mediaSchooling';
 import { repeatableRule } from './repeatableRules';
+import { plannerItemCreditContribution } from './plannerItemCredits';
 
 export type CourseCompletion = 'complete' | 'incomplete' | 'unknown' | 'repeatable';
 export type CurriculumCourseAttempt = {
@@ -96,7 +97,7 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
       const planned = ['planned', 'in_progress', 'waiting'].includes(item.status);
       // Only explicit learner metadata overrides an opening's credit information.
       // Neither grades, other attempts nor remaining Course credits infer a value.
-      const credits = item.courseCreditContribution ?? offering.credits;
+      const credits = plannerItemCreditContribution(item, offering);
       if (earned && credits === null) unknownEarned = true;
       if ((earned || planned) && credits === null) unknownProjected = true;
       return { item, offering, officialEarnedPreferred, earnedContribution: earned ? credits ?? 0 : 0, projectedContribution: earned || planned ? credits ?? 0 : 0 };

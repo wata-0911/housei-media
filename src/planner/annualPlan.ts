@@ -1,6 +1,7 @@
 import type { Mapping, Offering, PlannerCatalog, PlannerItem, PublicCourse } from './plannerCatalog';
 import { createMappingResolver } from './plannerHelpers';
 import { summarizeCredits } from './calculations';
+import { plannerItemCreditContribution } from './plannerItemCredits';
 
 export const creditCategories = ['一般教育：人文', '一般教育：社会', '一般教育：自然', '一般教育：その他', '外国語', '保健体育', '専門教育'] as const;
 export const classificationStates = ['選択した所属のカリキュラム対象外', '教職等・通常カリキュラム対象外', '対応情報を確認中', '所属を選択すると区分を表示'] as const;
@@ -60,10 +61,14 @@ export function annualCreditLimitReferences(items: PlannerItem[], offerings: Map
   for (const item of items) {
     if (item.plannedYear === null) continue;
     const offering = offerings.get(item.offeringId);
-    if (!offering || offering.credits === null) continue;
+    if (!offering) continue;
+    // Correspondence counts the enrollment's intended earned credits; schooling
+    // counts registration credits even when its Course contribution is smaller.
+    const credits = offering.method === 'correspondence' ? plannerItemCreditContribution(item, offering) : offering.credits;
+    if (credits === null) continue;
     const row = rows.get(item.plannedYear) ?? { year: item.plannedYear, correspondenceCredits: 0, schoolingRegistrationCredits: 0, knownTotalCredits: 0, exceedsOfficial49: false };
-    if (offering.method === 'correspondence') row.correspondenceCredits += offering.credits;
-    else row.schoolingRegistrationCredits += offering.credits;
+    if (offering.method === 'correspondence') row.correspondenceCredits += credits;
+    else row.schoolingRegistrationCredits += credits;
     row.knownTotalCredits = row.correspondenceCredits + row.schoolingRegistrationCredits;
     row.exceedsOfficial49 = row.knownTotalCredits > 49 || row.schoolingRegistrationCredits > 49;
     rows.set(item.plannedYear, row);
