@@ -8,7 +8,7 @@ export function validImportedCurriculumIdentity(row: ImportedCourseAchievement, 
   if (fields.some(field => field === undefined)) return false;
   const ids = row.candidateCurriculumCourseIds!;
   const courses = new Set(catalog.curriculum?.courses.map(course => course.id) ?? []);
-  if (catalog.curriculum && ids.some(id => !courses.has(id))) return false;
+  if (ids.some(id => !courses.has(id))) return false;
   if (row.curriculumMatch === 'exact_unique') {
     if (!row.curriculumCourseId || ids.length !== 1 || ids[0] !== row.curriculumCourseId) return false;
   } else if (row.curriculumCourseId !== null || (row.curriculumMatch === 'unmatched' ? ids.length !== 0 : ids.length === 0)) return false;
@@ -21,8 +21,10 @@ export function validImportedCurriculumIdentity(row: ImportedCourseAchievement, 
       && row.curriculumCourseId === offering.curriculumCourseId
       && ids.length === 1 && ids[0] === offering.curriculumCourseId;
   }
-  // A manual opening selection does not resolve an ambiguous official curriculum relation.
+  // Annual selection is exact independently of its curriculum relation. Stage A may
+  // already have resolved one of the official candidates using imported source facts.
   const candidates = catalog.curriculum?.offeringRelations.find(relation => relation.offeringId === offering.id)?.candidateCurriculumCourseIds ?? [];
+  if (row.curriculumMatch === 'exact_unique') return candidates.includes(row.curriculumCourseId!);
   return row.curriculumCourseId === null
     && row.curriculumMatch === (candidates.length > 0 ? 'ambiguous' : 'unmatched')
     && ids.length === candidates.length && new Set(ids).size === ids.length

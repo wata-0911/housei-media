@@ -34,8 +34,12 @@ export function matchImportedCurriculumCourse(course: Pick<HoseiGradeImportCours
 
 /** An opening selection changes the annual match; clearing it retains the independently known course. */
 export function curriculumMatchForOfferingSelection(current: Partial<CurriculumImportMatch>, offering: Offering | undefined, curriculum: CurriculumCatalog): CurriculumImportMatch & { offeringMatch: 'exact_unique' | 'unmatched' } {
-  if (!offering) return { curriculumCourseId: current.curriculumCourseId ?? null,
-    curriculumMatch: current.curriculumMatch ?? 'unmatched', candidateCurriculumCourseIds: current.candidateCurriculumCourseIds ?? [], offeringMatch: 'unmatched' };
+  const retained = { curriculumCourseId: current.curriculumCourseId ?? null,
+    curriculumMatch: current.curriculumMatch ?? 'unmatched', candidateCurriculumCourseIds: current.candidateCurriculumCourseIds ?? [] };
+  if (!offering) return { ...retained, offeringMatch: 'unmatched' };
+  // Stage A is independent. A compatible opening retains it; an incompatible pair is
+  // rejected by identity validation before saving, without overwriting the known course.
+  if (current.curriculumMatch === 'exact_unique' && current.curriculumCourseId) return { ...retained, offeringMatch: 'exact_unique' };
   const courseId = offering.resolutionStatus === 'matched' ? offering.curriculumCourseId ?? null : null;
   const candidates = courseId ? [courseId] : curriculum.offeringRelations.find(relation => relation.offeringId === offering.id)?.candidateCurriculumCourseIds ?? [];
   return { curriculumCourseId: courseId, curriculumMatch: courseId ? 'exact_unique' : candidates.length ? 'ambiguous' : 'unmatched', candidateCurriculumCourseIds: candidates, offeringMatch: 'exact_unique' };

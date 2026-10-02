@@ -47,6 +47,15 @@ function importCourse(rawName, patch = {}) {
 }
 const importData = course => ({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-02T00:00:00.000Z', courses: [course] });
 const preview = (f, course = importCourse('制度科目')) => importPreview(importData(course), f.offerings, [], [], f.context);
+const japaneseHistoryCourseId = 'curriculum:db2833b3-2a18-4059-85e7-beeaae2d3107';
+const japaneseHistoryOfferingIds = ['2c368dad-a33c-4cbc-8a15-295a82cf36e2', 'a2b30fc5-0819-4d03-9301-eec9ddacb8a1'];
+const japaneseHistoryState = () => applyImport(initialState(), preview(catalog, importCourse('日本史概説')), catalog.offerings);
+const withoutCurriculumMatch = row => Object.fromEntries(Object.entries(row).filter(([key]) => !['curriculumCourseId', 'curriculumMatch', 'candidateCurriculumCourseIds', 'offeringMatch'].includes(key)));
+function legacyJapaneseHistoryState(patch = {}) {
+  const state = japaneseHistoryState();
+  const row = state.importedCourseAchievements[0];
+  return { ...state, schemaVersion: 21, importedCourseAchievements: [{ ...withoutCurriculumMatch(row), ...patch }] };
+}
 
 // Source coverage includes rows with no annual offering; names and credits do not come from an opening.
 test('curriculum: all 502 official source rows generate a deterministic complete master', () => {
@@ -334,12 +343,14 @@ test('identity validation: manual ambiguous curriculum relation requires the com
     assert.deepEqual(loadState(memory, ambiguous).state, state);
   }
   for (const patch of [
-    { curriculumCourseId: ids[0], curriculumMatch: 'exact_unique', candidateCurriculumCourseIds: [ids[0]] },
     { candidateCurriculumCourseIds: [ids[0]] },
     { candidateCurriculumCourseIds: [ids[0], ids[0]] },
     { candidateCurriculumCourseIds: [...ids, 'nonexistent-course'] },
     { curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] },
   ]) assert.equal(validImportedCurriculumIdentity({ ...matched, ...patch }, ambiguous), false);
+  for (const curriculumCourseId of ids) {
+    assert.equal(validImportedCurriculumIdentity({ ...matched, curriculumCourseId, curriculumMatch: 'exact_unique', candidateCurriculumCourseIds: [curriculumCourseId] }, ambiguous), true, 'independent Stage A may safely identify an official candidate');
+  }
 });
 
 test('identity validation: exact unresolved/outside openings cannot invent a curriculum identity', () => {
@@ -348,12 +359,160 @@ test('identity validation: exact unresolved/outside openings cannot invent a cur
     const offering = catalog.offerings.find(candidate => candidate.resolutionStatus === status);
     assert.ok(offering);
     assert.equal(offering.curriculumCourseId, null);
-    const matched = { ...row, ...curriculumMatchForOfferingSelection(row, offering, catalog.curriculum), selectedOfferingId: offering.id, selectionSource: 'manual' };
+    const matched = { ...row, ...curriculumMatchForOfferingSelection({}, offering, catalog.curriculum), selectedOfferingId: offering.id, selectionSource: 'manual' };
     assert.equal(validImportedCurriculumIdentity(matched, catalog), true);
     const id = catalog.curriculum.courses[0].id;
     assert.equal(validImportedCurriculumIdentity({ ...matched, curriculumCourseId: id, curriculumMatch: 'exact_unique', candidateCurriculumCourseIds: [id] }, catalog), false);
     assert.equal(validImportedCurriculumIdentity({ ...matched, curriculumMatch: 'ambiguous', candidateCurriculumCourseIds: [id] }, catalog), false);
   }
+});
+
+test('real catalog: 日本史概説 Stage A exact survives ambiguous opening selection, save/reload and clearing', () => {
+  const state = japaneseHistoryState(); const row = state.importedCourseAchievements[0];
+  const offering = catalog.offerings.find(value => value.id === japaneseHistoryOfferingIds[0]);
+  const relation = catalog.curriculum.offeringRelations.find(value => value.offeringId === offering.id);
+  assert.equal(row.curriculumCourseId, japaneseHistoryCourseId);
+  assert.equal(row.curriculumMatch, 'exact_unique');
+  assert.equal(row.compositionCredits, 4);
+  assert.equal(offering.curriculumCourseId, null);
+  assert.equal(relation.candidateCurriculumCourseIds.length, 2);
+  assert.ok(relation.candidateCurriculumCourseIds.includes(japaneseHistoryCourseId));
+  const selected = { ...row, ...curriculumMatchForOfferingSelection(row, offering, catalog.curriculum), selectedOfferingId: offering.id, selectionSource: 'manual', courseId: offering.courseId, match: 'ambiguous' };
+  assert.equal(selected.curriculumCourseId, japaneseHistoryCourseId);
+  assert.equal(selected.curriculumMatch, 'exact_unique');
+  assert.deepEqual(selected.candidateCurriculumCourseIds, [japaneseHistoryCourseId]);
+  assert.equal(selected.offeringMatch, 'exact_unique');
+  const selectedState = { ...state, importedCourseAchievements: [selected] }; const memory = store(null);
+  assert.equal(validateState(selectedState, catalog), true);
+  const raw = saveState(memory, selectedState, null, catalog);
+  const loaded = loadState(memory, catalog);
+  assert.equal(loaded.error, null);
+  assert.deepEqual(loaded.state, selectedState);
+  const reloaded = loaded.state.importedCourseAchievements[0];
+  const cleared = { ...reloaded, ...curriculumMatchForOfferingSelection(reloaded, undefined, catalog.curriculum), selectedOfferingId: null, selectionSource: 'none', courseId: null, match: 'unmatched' };
+  assert.equal(cleared.curriculumCourseId, japaneseHistoryCourseId);
+  assert.equal(cleared.curriculumMatch, 'exact_unique');
+  assert.equal(cleared.offeringMatch, 'unmatched');
+  const clearedState = { ...loaded.state, importedCourseAchievements: [cleared] };
+  saveState(memory, clearedState, raw, catalog);
+  assert.deepEqual(loadState(memory, catalog).state, clearedState);
+  for (const [key, value] of Object.entries(row)) {
+    if (!['selectedOfferingId', 'selectionSource', 'courseId', 'match', 'offeringMatch'].includes(key)) assert.deepEqual(cleared[key], value, key);
+  }
+  assert.deepEqual(clearedState.importedStudyRecords, state.importedStudyRecords);
+  assert.deepEqual(clearedState.items, state.items);
+});
+
+test('real catalog: an incompatible unique or ambiguous opening never silently overwrites Stage A', () => {
+  const state = japaneseHistoryState(); const row = state.importedCourseAchievements[0];
+  const incompatible = catalog.offerings.filter(offering => {
+    const relation = catalog.curriculum.offeringRelations.find(value => value.offeringId === offering.id);
+    return relation.candidateCurriculumCourseIds.length > 0 && !relation.candidateCurriculumCourseIds.includes(row.curriculumCourseId);
+  });
+  const unique = incompatible.find(offering => offering.curriculumCourseId);
+  const ambiguous = incompatible.find(offering => !offering.curriculumCourseId);
+  assert.ok(unique && ambiguous);
+  const memory = store(null); const raw = saveState(memory, state, null, catalog);
+  for (const offering of [unique, ambiguous]) {
+    const proposed = { ...row, ...curriculumMatchForOfferingSelection(row, offering, catalog.curriculum), selectedOfferingId: offering.id, selectionSource: 'manual' };
+    assert.equal(proposed.curriculumCourseId, row.curriculumCourseId);
+    assert.equal(proposed.curriculumMatch, 'exact_unique');
+    assert.deepEqual(proposed.candidateCurriculumCourseIds, row.candidateCurriculumCourseIds);
+    assert.equal(validImportedCurriculumIdentity(proposed, catalog), false);
+    assert.throws(() => saveState(memory, { ...state, importedCourseAchievements: [proposed] }, raw, catalog));
+    assert.equal(memory.getItem(STORAGE_KEY), raw);
+    assert.deepEqual(loadState(memory, catalog).state, state);
+  }
+});
+
+test('real catalog migration: v21 null course retains both ambiguous offering curriculum candidates losslessly', () => {
+  const legacy = legacyJapaneseHistoryState({ courseId: null, candidateOfferingIds: japaneseHistoryOfferingIds });
+  const raw = JSON.stringify(legacy); const memory = store(raw);
+  const loaded = loadState(memory, catalog);
+  assert.equal(loaded.error, null);
+  const row = loaded.state.importedCourseAchievements[0];
+  assert.equal(row.curriculumCourseId, null);
+  assert.equal(row.curriculumMatch, 'ambiguous');
+  assert.deepEqual(row.candidateCurriculumCourseIds, catalog.curriculum.offeringRelations.find(value => value.offeringId === japaneseHistoryOfferingIds[0]).candidateCurriculumCourseIds);
+  for (const [key, value] of Object.entries(legacy.importedCourseAchievements[0])) assert.deepEqual(row[key], value, key);
+  assert.deepEqual(loaded.state.importedStudyRecords, legacy.importedStudyRecords);
+  assert.equal(memory.getItem(STORAGE_KEY), raw);
+  saveState(memory, loaded.state, raw, catalog);
+  assert.deepEqual(loadState(memory, catalog).state, loaded.state);
+});
+
+test('real catalog migration: manual ambiguous selection retains generated candidates even without annual candidates', () => {
+  const legacy = legacyJapaneseHistoryState({ courseId: null, selectedOfferingId: japaneseHistoryOfferingIds[0], selectionSource: 'manual', candidateOfferingIds: [] });
+  const migrated = migrateCurriculumState(legacy, catalog); const row = migrated.importedCourseAchievements[0];
+  assert.equal(row.curriculumCourseId, null);
+  assert.equal(row.curriculumMatch, 'ambiguous');
+  assert.equal(row.offeringMatch, 'exact_unique');
+  assert.deepEqual(row.candidateCurriculumCourseIds, catalog.curriculum.offeringRelations.find(value => value.offeringId === row.selectedOfferingId).candidateCurriculumCourseIds);
+  for (const [key, value] of Object.entries(legacy.importedCourseAchievements[0])) assert.deepEqual(row[key], value, key);
+  const memory = store(JSON.stringify(legacy)); const loaded = loadState(memory, catalog);
+  assert.equal(loaded.error, null);
+  assert.deepEqual(loaded.state, migrated);
+  saveState(memory, migrated, loaded.raw, catalog);
+  assert.deepEqual(loadState(memory, catalog).state, migrated);
+});
+
+test('migration: unknown annual candidates retain only known curriculum evidence and prevent exact promotion', () => {
+  const f = fixture(); const row = preview(f)[0].sourceCourse;
+  for (const candidateOfferingIds of [[f.offerings[0].id, 'unknown-offering'], ['unknown-offering']]) {
+    const legacy = { ...initialState(), schemaVersion: 21, importedCourseAchievements: [{ ...withoutCurriculumMatch(row), courseId: null, selectedOfferingId: null, candidateOfferingIds }] };
+    const result = migrateCurriculumState(legacy, f).importedCourseAchievements[0];
+    assert.equal(result.curriculumCourseId, null);
+    assert.equal(result.curriculumMatch, candidateOfferingIds.length === 2 ? 'ambiguous' : 'unmatched');
+    assert.deepEqual(result.candidateCurriculumCourseIds, candidateOfferingIds.length === 2 ? [f.curriculum.courses[0].id] : []);
+    assert.deepEqual(result.candidateOfferingIds, candidateOfferingIds);
+  }
+  for (const selectionSource of ['auto', 'manual']) {
+    const legacy = legacyJapaneseHistoryState({ courseId: null, selectedOfferingId: japaneseHistoryOfferingIds[0], selectionSource, candidateOfferingIds: [japaneseHistoryOfferingIds[1], 'unknown-offering'] });
+    const migrated = migrateCurriculumState(legacy, catalog);
+    const result = migrated.importedCourseAchievements[0];
+    assert.equal(result.curriculumMatch, 'ambiguous');
+    assert.equal(result.curriculumCourseId, null);
+    assert.equal(result.candidateCurriculumCourseIds.length, 2);
+    assert.equal(result.offeringMatch, selectionSource === 'manual' ? 'exact_unique' : 'ambiguous');
+    assert.equal(validateState(migrated, catalog), true);
+    for (const [key, value] of Object.entries(legacy.importedCourseAchievements[0])) assert.deepEqual(result[key], value, key);
+  }
+  const unknownManual = legacyJapaneseHistoryState({ courseId: null, selectedOfferingId: 'unknown-offering', selectionSource: 'manual', candidateOfferingIds: [japaneseHistoryOfferingIds[0], 'unknown-offering'] });
+  const retained = migrateCurriculumState(unknownManual, catalog).importedCourseAchievements[0];
+  assert.equal(retained.curriculumCourseId, null);
+  assert.equal(retained.curriculumMatch, 'ambiguous');
+  assert.equal(retained.offeringMatch, 'ambiguous');
+  assert.equal(retained.selectedOfferingId, 'unknown-offering');
+  assert.deepEqual(retained.candidateCurriculumCourseIds, catalog.curriculum.offeringRelations.find(value => value.offeringId === japaneseHistoryOfferingIds[0]).candidateCurriculumCourseIds);
+});
+
+test('migration: safe legacy crosswalk survives a compatible ambiguous manual relation; conflicts remain reviewable', () => {
+  const f = fixture({ distinct: true }); const row = preview(f)[0].sourceCourse;
+  const [courseA, courseB] = f.offerings.map(offering => offering.curriculumCourseId);
+  const selectedOfferingId = f.offerings[1].id;
+  const generate = mappingIds => {
+    const input = { ...f, offerings: f.offerings.map(offering => offering.id === selectedOfferingId ? { ...offering, courseId: null, mappingIds } : offering) };
+    return attachCurriculumCatalog(input, generateCurriculumCatalog(input, f.rows, []));
+  };
+  const compatible = generate(f.mappings.map(mapping => mapping.mappingId));
+  const crosswalk = compatible.curriculum.legacyCourseRelations.find(relation => relation.legacyCourseId === row.courseId);
+  assert.equal(crosswalk.curriculumCourseId, courseA);
+  assert.deepEqual(compatible.curriculum.offeringRelations.find(relation => relation.offeringId === selectedOfferingId).candidateCurriculumCourseIds, [courseA, courseB].sort());
+  const legacy = { ...initialState(), schemaVersion: 21, importedCourseAchievements: [{ ...withoutCurriculumMatch(row), selectedOfferingId, selectionSource: 'manual' }] };
+  const migrated = migrateCurriculumState(legacy, compatible); const retained = migrated.importedCourseAchievements[0];
+  assert.equal(retained.curriculumCourseId, courseA);
+  assert.equal(retained.curriculumMatch, 'exact_unique');
+  assert.deepEqual(retained.candidateCurriculumCourseIds, [courseA]);
+  assert.equal(retained.offeringMatch, 'exact_unique');
+  assert.equal(validateState(migrated, compatible), true);
+  const conflict = generate([f.mappings[1].mappingId]);
+  const unresolved = migrateCurriculumState(legacy, conflict); const saved = unresolved.importedCourseAchievements[0];
+  assert.equal(saved.curriculumCourseId, courseA);
+  assert.equal(saved.curriculumMatch, 'exact_unique');
+  assert.equal(saved.offeringMatch, 'ambiguous');
+  assert.equal(saved.selectedOfferingId, selectedOfferingId);
+  assert.equal(validateState(unresolved, conflict), true);
+  for (const [key, value] of Object.entries(legacy.importedCourseAchievements[0])) assert.deepEqual(saved[key], value, key);
 });
 
 test('import: reimport and manual override preserve curriculum identity and learner metadata', () => {
