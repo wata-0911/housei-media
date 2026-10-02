@@ -1,8 +1,7 @@
-import CurriculumCourseProgress from '../components/planner/CurriculumCourseProgress';
 import { deriveCurriculumCourseProgress } from '../planner/curriculumCourseProgress';
 import { useCallback, useEffect, useState } from 'react';
 import CourseSearch from '../components/planner/CourseSearch';
-import PlannedCourseList from '../components/planner/PlannedCourseList';
+import CurriculumCourseList from '../components/planner/CurriculumCourseList';
 import ProgramSettings from '../components/planner/ProgramSettings';
 import CategorySummary from '../components/planner/CategorySummary';
 import { annualCreditLimitReferences, createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
@@ -26,7 +25,7 @@ import ImportedAchievements from '../components/planner/ImportedAchievements';
 import AnnualCreditLimitNotice from '../components/planner/AnnualCreditLimitNotice';
 import { applyImport, importedEarnedCreditsTotal, type ImportedCourseAchievement, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
 import { deriveImportedAchievements, managedImportedMedia } from '../planner/importedAchievementCalculations';
-import { createUnifiedCourseRows } from '../planner/unifiedCourseView';
+import { deriveCurriculumCourseView } from '../planner/curriculumCourseView';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/plannerItemState';
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
 import { guidanceEligibilityCredits, guidanceForScope } from '../planner/thesisGuidance';
@@ -62,7 +61,7 @@ export default function PlannerPage() {
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, thesisProgress.selection, state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile, thesisProgress);
   const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, state.selectedScopeId);
   const curriculumProgress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId);
-  const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta, state.importedStudyRecords);
+  const curriculumCourseView = deriveCurriculumCourseView(state, catalog);
   const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
   const exportPresentation = plannerExportPresentation(state, catalog);
   const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById, state.importedCourseAchievements);
@@ -249,8 +248,7 @@ export default function PlannerPage() {
         <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} warnings={importedDerived.warnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
-        <PlannedCourseList classify={classify} unifiedRows={unifiedCourseRows} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} importedUserMeta={state.importedCourseUserMeta} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
-        <CurriculumCourseProgress progress={curriculumProgress} catalog={catalog} disabled={loaded.error !== null} onChange={changeItem} />
+        <CurriculumCourseList catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
         <PlannerExportActions presentation={exportPresentation} />
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} /><ThesisGuidance catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} /></>}
