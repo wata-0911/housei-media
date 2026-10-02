@@ -21,6 +21,22 @@ export type Course = {
   identityStatus: "provisional";
 };
 
+/** Institutional subject from official curriculum rows. No annual delivery data. */
+export type CurriculumCourse = {
+  id: string;
+  canonicalName: string;
+  curriculumCredits: number | null;
+  mappingIds: string[];
+  scopeIds: string[];
+};
+export type CurriculumCatalog = {
+  schemaVersion: 1;
+  source: 'official_curriculum_mappings_2026';
+  courses: CurriculumCourse[];
+  offeringRelations: Array<{ offeringId: string; curriculumCourseId: string | null; candidateCurriculumCourseIds: string[] }>;
+  legacyCourseRelations: Array<{ legacyCourseId: string; curriculumCourseId: string | null; candidateCurriculumCourseIds: string[] }>;
+};
+
 export type Mapping = {
   mappingId: string;
   scopeId: string;
@@ -37,7 +53,10 @@ export type Mapping = {
   source: Source;
 };
 
+/** A concrete annual opening. `credits` means offering credits, never composition credits.
+ * `courseId` remains a legacy provisional calculation identity during this foundation. */
 export type Offering = {
+  curriculumCourseId?: string | null;
   id: string;
   courseId: string | null;
   academicYear: 2026;
@@ -161,6 +180,7 @@ export type Metadata = {
 };
 
 export type PlannerCatalog = {
+  curriculum?: CurriculumCatalog;
   schemaVersion: 1;
   academicYear: 2026;
   generatedFromSnapshot: "hosei-2026-v1-postgresql-import";
@@ -294,7 +314,7 @@ export type GraduationProfile = {
 };
 
 export type PlannerState = {
-  schemaVersion: 21;
+  schemaVersion: 22;
   selectedScopeId: string | null;
   /** v17 compatibility value; the scoped record below is authoritative. */
   thesisSelection: ThesisSelection;

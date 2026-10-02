@@ -5,6 +5,7 @@ import { isHistoryCompletionOrderCourse, validHistoricalSourceOrders, validHisto
 import { isMediaSchooling } from './mediaSchooling';
 import { isCorrespondenceOffering, validCorrespondenceProgress } from './correspondenceProgress';
 import { isValidGraduationProfile } from './graduationProfile';
+import { validImportedCurriculumIdentity } from './curriculumIdentityValidation';
 import { thesisPolicyForScope } from './thesisSelection';
 
 const ajv = new Ajv2020({ allErrors: true });
@@ -28,6 +29,7 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
   const importedIds = new Set(value.importedCourseAchievements.map(row => row.id));
   return (value.selectedScopeId === null || catalog.programs.some(p => p.scopeId === value.selectedScopeId))
     && isValidGraduationProfile(value.graduationProfile)
+    && value.importedCourseAchievements.every(row => validImportedCurriculumIdentity(row, catalog))
     && Object.entries(value.thesisProgressByScope).every(([scopeId, progress]) => thesisPolicyForScope(catalog, scopeId) !== 'required' || progress.selection === 'selected')
     && ids.every(id => offerings.has(id)) && new Set(ids).size === ids.length
     && new Set(todoIds).size === todoIds.length

@@ -147,3 +147,7 @@ mainへpushした後は、GitHub Actionsの検査結果とVercelのデプロイ�
 検証：`npm run typecheck`、`npm run lint`、`npm run test:planner`、`npm run build`。テストは実カタログの全件検索・未確定科目・6状態の保存・破損データ保全・単位数不明・保存失敗・復旧・既存状態保持を確認します。
 
 Plannerの区分表示は検索結果・年間計画・集計で共通化しています。一般教育：その他は通常区分です。選択所属外、教職等・通常カリキュラム対象外、対応情報を確認中は通常区分に加算せず参考集計に分離します。所属未選択時は所属の選択を案内します。保存形式とmapping ledgerは変更しません。
+
+### CurriculumCourse foundation
+
+教育課程表由来の制度科目と2026年度開講を分離する基盤を追加しました。生成・照合・v22移行・既存卒業要件との互換性は[設計と監査](docs/planner-curriculum-course-foundation.md)を参照してください。

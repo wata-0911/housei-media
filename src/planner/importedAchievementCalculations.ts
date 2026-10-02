@@ -114,7 +114,7 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
     const group = groups.get(record.sourceCourseId) ?? [];
     group.push(record); groups.set(record.sourceCourseId, group);
   }
-  const rows = sourceRows.length ? sourceRows : [...groups.entries()].map(([id, group]) => {
+  const rows: ImportedCourseAchievement[] = sourceRows.length ? sourceRows : [...groups.entries()].map(([id, group]) => {
     const first = group[0]; return { id, fingerprint: `legacy:${id}`, source: 'hosei_import' as const, rawName: first.rawName, categoryRaw: null, capturedAt: first.capturedAt ?? '', earnedCreditsTotal: first.earnedCreditsTotal ?? null, schoolingCreditsTotal: first.schoolingCreditsTotal ?? null, compositionCredits: first.compositionCredits ?? null, recognizedExemption: first.recognizedExemption ?? null, additionalEnrollment: first.additionalEnrollment ?? null, academicYear: first.academicYear, yearSource: first.yearSource, courseId: null, selectedOfferingId: null, selectionSource: 'none' as const, match: first.match, candidateOfferingIds: [] };
   });
   const items: PlannerItem[] = [], derivedOfferings: Offering[] = [], categoryItems: PlannerItem[] = [], categoryOfferings: Offering[] = [], media: ImportedMediaAchievement[] = [], mediaPending: ImportedMediaPending[] = [], unclassified: ImportedCourseAchievement[] = [], categoryOverrides = new Map<string, CreditCategory>();

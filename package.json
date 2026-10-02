@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run catalog:check && vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "test:planner": "node --import tsx --test tests/planner.test.mjs",
+    "test:planner": "node --import tsx --test tests/planner.test.mjs tests/curriculum-foundation.test.mjs",
     "test:extension": "node --test extension/hosei-planner-import/tests/*.test.mjs",
-    "build:extension-dev": "node scripts/build-extension-dev.mjs"
+    "build:extension-dev": "node scripts/build-extension-dev.mjs",
+    "catalog:generate": "node --import tsx scripts/generate-curriculum-catalog.mts",
+    "catalog:check": "node --import tsx scripts/generate-curriculum-catalog.mts --check"
   },
   "dependencies": {
     "ajv": "^8.20.0",
