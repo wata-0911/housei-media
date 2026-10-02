@@ -52,7 +52,7 @@ same Offeringの複数回履修について、今回提示された資料・利�
 | validation / storage | JSON Schemaで非負number、意味validationで有限かつ既知Offering.credits以下。不明単位の開講にoverrideは保存しない。Course targetを超える合計や寄与は別判断なので禁止しない。既存v22はfieldなしで従来どおり読み書きできる。 |
 | progress / grades | Offering IDの評価・通信・Media進捗ownerを変更せず、合否や設題数から寄与単位を設定しない。 |
 | official / graduation | 公式aggregateが正本。source-linked earnedの重複排除と卒業official-priorityを継続。metadataで公式aggregateや卒業配分の入力単位を置換しない。Summaryへは既存の重複除外済みPlanner入力と公式aggregateを渡す。Course completionと卒業配分は別。 |
-| annual plan / limit | 通信は共通helperの明示寄与（未設定ならOffering.credits）を使用する。スクーリングは登録単位なのでmetadataがあってもOffering.creditsを使用。年度・状態の既存対象と49単位参考判定を維持。 |
+| annual plan / limit | source-linked通信earnedは対応する公式行のearnedCreditsTotalを優先する。それ以外の通信は共通helperの明示寄与（未設定ならOffering.credits）を使用する。スクーリングは登録単位なので公式aggregate・metadataに関係なくOffering.creditsを使用。年度・状態の既存対象を維持し、49単位参考判定は既知小計を使用。通信nullは未確定件数を別表示する。 |
 | UI / unified view | exactな4単位Course・4単位通信Offeringの進捗詳細に2/4単位の明示選択を出す。未設定の4単位を自動で2にしない。公式集計優先のearned項目は編集対象から除き、read-onlyで表示。曖昧identityで選択を出さない。Unified rowは元Itemを保持。 |
 | share / export | CSV・画像へ明示した科目進捗寄与を別項目で出す。開講単位はそのまま。Media共有は既存のOffering進捗表示。 |
 | edit / delete / undo | 行編集は元Itemをspread、削除undoは元Itemを保持、取込undoは全state snapshot。metadataをlossless保持する。設定解除は任意fieldを削除し、従来の開講単位へ戻す。 |
@@ -61,6 +61,8 @@ same Offeringの複数回履修について、今回提示された資料・利�
 単純capを採用しない。例えばschooling2 + correspondenceの明示寄与2は4になるが、schooling2 + correspondenceの明示寄与4なら6と超過候補2を維持する。v22への任意field追加なので、既存migrationや保存キーを変更しない。旧実装のstrict validatorへの新field入りstateの戻し互換性は保証しない。
 
 単位集計のP2 follow-upでは、同じしおりp.28の本文を確認した。年間履修単位数は通信学習の修得単位数とスクーリングの登録単位数等の合計である。p.31のスクーリング2+通信2に対応する明示入力を、通信の年間参考値にも使う。helperは状態・評価・公式実績を解釈せず、寄与値の選択だけを行う。スクーリング登録と卒業計算にはこのhelperを適用しない。保存metadataの追加・変更は不要なのでschemaVersion22を維持する。
+
+公式partial aggregateのP2 follow-upでは、`annualCreditLimitReferences` の第3引数に公式行の配列を追加し、PlannerPageから保存済み公式行を渡す。通信・earned・source ID一致の3条件を満たす場合だけ公式aggregateを参照する。公式0は0、公式nullは明示metadataやOffering単位へfallbackしない。`correspondenceCredits` と `knownTotalCredits` は既知小計、derived型の `unknownCorrespondenceItems` は通信の未確定件数を示す。未確定だけの年度も表示し、既知小計が49以下でも上限内とは断定しない。既知小計だけで49を超える場合は超過表示を維持する。公式行が存在しない、source markerがない、earned以外の場合は従来の明示値/Offering単位を使用し、名前や同一Courseから公式sourceを推測しない。公式aggregateをlearner明示metadataへ自動保存せず、UI/exportの明示設定、卒業official-priority、schemaVersion22を維持する。
 
 ## derived CourseProgress
 
@@ -119,6 +121,8 @@ foundation後の変更前planner 247件、初期実装後272件PASS。最初のf
 2+2 completion修正では15件を追加し、planner 304件 / extension 18件PASS。旧コードに先に追加した13件のうち9件で失敗を再現後、修正した。schooling2+通信寄与2、通信寄与4、独立6の超過候補、planned/in_progress/waitingからearnedへの移行、failed/dropped、明示0、非負・有限・Offering上限、Course target非cap、公式source-linked重複排除、8所属の卒業official-priority、v22保存/再読込/削除undo/全取込undo/設定解除、年間登録単位維持、unified row、CSV/画像と限定UIを検証。既存289件をすべて維持し、typecheck/lint/test:planner/test:extension/build/diff-checkもPASS。経済学の実Previewではスクーリングearned2+通信planned寄与2の修得2/予定込み4、通信earned後の修得4/予定込み4・超過なし、再読込後の2単位設定保持、通信を明示4へ変えたときの超過候補2を確認。console errorなし。schemaVersion22とgraduationCheckComplete=falseを維持。
 
 単位集計のP2 follow-upでは12件追加してplanner 316件 / extension 18件PASS。修正前に集計・年間参考値の8ケースで失敗を確認した。schooling earned2+通信明示2のCourseProgress・CreditSummary・CategorySummaryが4で一致し、planned/in_progressも明示2を使用すること、waiting/failed/droppedのSummary対象が従来どおりであることを確認。年間通信2/4、スクーリングmetadataに依存しない登録2、明示0、未設定時の従来6、49単位参考値の50/48判定、明示独立6をcapしないこと、source-linked公式4と8所属の卒業official-priorityを検証。既存304件は年間通信の期待値1件を今回の仕様へ更新して維持。typecheck/lint/test:planner/test:extension/build/diff-checkが成功し、既存のselection-independent evidence、backfill、曖昧identity、同名History、Law partial2、repeatable/Media、unified view、v22保存/再読込/削除/undoもPASS。schemaVersion22とgraduationCheckComplete=falseを維持。
+
+年間通信の公式aggregate対応では9件追加し、planner 325件 / extension 18件PASS。修正前は追加9件のうち8件が失敗した。source-linked通信Offering4/公式2の4表示一致、公式4/0/null、明示metadataより公式値が優先されること、nullのみの年度の未確定表示、earned以外・source不一致時の従来値、スクーリング登録の独立性、49/51/47単位判定、既知50+未確定でも超過表示が残ることを確認。既存316件を維持し、derived型の未確定件数0を期待値へ追加した。typecheck/lint/test:planner/test:extension/build/diff-checkが成功。source-linked重複排除・8所属の卒業official-priority・v22保存/再読込/undoを継続し、schemaVersion22とgraduationCheckComplete=falseを維持した。公式値やlearner明示metadataを変更する保存処理は追加していない。
 
 ローカルPreviewでは日本文芸学概論の公式2 + 夏期planned2が修得2/4・予定込み4/4になること、春期Offeringが引き続き追加可能なこと、自動earned通信4が二重加算されないこと、再読込で保持されること、console errorなしを確認した。
 

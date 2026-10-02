@@ -65,7 +65,7 @@ export default function PlannerPage() {
   const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta);
   const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
   const exportPresentation = plannerExportPresentation(state, catalog);
-  const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById);
+  const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById, state.importedCourseAchievements);
   const profileNeedsAttention = state.selectedScopeId === null || missingGraduationProfilePrerequisites(state.graduationProfile).length > 0;
 
   useEffect(() => {

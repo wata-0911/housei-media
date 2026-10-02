@@ -3062,7 +3062,7 @@ test('official-audit: annual limit reference warns without changing saveable pla
     ['schooling', { id: 'schooling', method: 'schooling', credits: 25 }],
   ]);
   const rows = annualCreditLimitReferences([item('correspondence', 'planned'), item('schooling', 'planned')], offerings);
-  assert.deepEqual(rows, [{ year: 2026, correspondenceCredits: 25, schoolingRegistrationCredits: 25, knownTotalCredits: 50, exceedsOfficial49: true }]);
+  assert.deepEqual(rows, [{ year: 2026, correspondenceCredits: 25, unknownCorrespondenceItems: 0, schoolingRegistrationCredits: 25, knownTotalCredits: 50, exceedsOfficial49: true }]);
 });
 
 test('official-audit: Japanese literature and geography professional 82 totals feed the 124 reference without card-cap double counting', () => {

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { catalog, offeringsById } from '../src/planner/catalog.ts';
 import { deriveCurriculumCourseProgress, curriculumOfferingAdvisories, COMPLETED_COURSE_ADVISORY, MEDIA_REPEAT_ADVISORY } from '../src/planner/curriculumCourseProgress.ts';
 import { plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
-import { applyImport, importPreview } from '../src/planner/gradeImportApply.ts';
+import { applyImport, importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { deriveImportedAchievements } from '../src/planner/importedAchievementCalculations.ts';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
@@ -17,6 +17,7 @@ import { createUnifiedCourseRows } from '../src/planner/unifiedCourseView.ts';
 import { searchOfferings, summarizeCredits } from '../src/planner/calculations.ts';
 import CreditSummary from '../src/components/planner/CreditSummary.tsx';
 import CategorySummary from '../src/components/planner/CategorySummary.tsx';
+import AnnualCreditLimitNotice from '../src/components/planner/AnnualCreditLimitNotice.tsx';
 import CourseSearch from '../src/components/planner/CourseSearch.tsx';
 import CourseProgress from '../src/components/planner/CurriculumCourseProgress.tsx';
 import { plannerExportCsv, plannerExportPresentation } from '../src/planner/plannerExport.ts';
@@ -41,6 +42,97 @@ function official(f, credits = 2, patch = {}) {
     candidateOfferingIds: [], ...patch };
 }
 const progress = (f, items, rows = []) => deriveCurriculumCourseProgress(items, f, rows).courses[0];
+
+test('annual official: linked correspondence Offering4 and official2 agree across all four credit views', () => {
+  const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o]));
+  const row = official(f, 2, { categoryRaw: '専門教育' });
+  const items = [{ ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id }];
+  const snapshot = structuredClone({ items, row }); const scope = f.programs.find(p => !p.isCommon).scopeId;
+  const derived = deriveImportedAchievements([], map, items, [row], f, scope);
+  const summary = summarizeCredits(derived.plannerItems, map);
+  const categories = summarizeCategories(derived.plannerItems, f, scope, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides);
+  assert.equal(progress(f, items, [row]).earnedCredits, 2);
+  assert.equal(summary.earned + importedEarnedCreditsTotal([row]), 2);
+  assert.equal(summary.earned, 0, 'source-linked earned is excluded from plan-only credits');
+  assert.equal(categories.find(row => row.category === '専門教育').earned, 2);
+  assert.equal(annualCreditLimitReferences(items, map, [row])[0].correspondenceCredits, 2);
+  const html = renderToStaticMarkup(createElement(CreditSummary, { summary, importedEarnedCredits: importedEarnedCreditsTotal([row]) }));
+  assert.match(html, /成績表の修得済み<\/p><p[^>]*>2<span/);
+  assert.deepEqual({ items, row }, snapshot); assert.equal('courseCreditContribution' in items[0], false);
+  assert.equal(initialState().schemaVersion, 22);
+  for (const program of f.programs.filter(p => !p.isCommon)) {
+    const run = items => calculateGraduationProgress(items, f, program.scopeId, [], 'undecided', [], [row]);
+    assert.deepEqual(run(items), run([])); assert.equal(run(items).graduationCheckComplete, false);
+  }
+});
+for (const credits of [4, 0]) test(`annual official: source-linked official${credits} is authoritative even over explicit metadata`, () => {
+  const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o])); const row = official(f, credits);
+  for (const explicit of [undefined, 0, 2, 4]) {
+    const linked = { ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id, ...(explicit === undefined ? {} : { courseCreditContribution: explicit }) };
+    assert.equal(annualCreditLimitReferences([linked], map, [row])[0].correspondenceCredits, credits);
+    assert.equal(linked.courseCreditContribution, explicit);
+  }
+});
+test('annual official: official null remains unknown even with explicit2 and known schooling2', () => {
+  const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o])); const row = official(f, null);
+  for (const explicit of [undefined, 2]) {
+    const linked = { ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id, ...(explicit === undefined ? {} : { courseCreditContribution: explicit }) };
+    const items = [linked, item(f.offerings[0])]; const snapshot = structuredClone({ items, row });
+    const annual = annualCreditLimitReferences(items, map, [row])[0];
+    assert.deepEqual(annual, { year: 2026, correspondenceCredits: 0, unknownCorrespondenceItems: 1, schoolingRegistrationCredits: 2, knownTotalCredits: 2, exceedsOfficial49: false });
+    assert.deepEqual({ items, row }, snapshot);
+  }
+});
+test('annual official UI: a null-only correspondence year is visible as unknown, not confirmed zero or four', () => {
+  const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o])); const row = official(f, null);
+  const rows = annualCreditLimitReferences([{ ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id }], map, [row]);
+  assert.equal(rows.length, 1); assert.equal(rows[0].unknownCorrespondenceItems, 1); assert.equal(rows[0].knownTotalCredits, 0);
+  const html = renderToStaticMarkup(createElement(AnnualCreditLimitNotice, { rows }));
+  assert.match(html, /通信 既知0単位（未確定1件）/);
+  assert.match(html, /既知合計だけでは49単位以内か確認できません/);
+  assert.doesNotMatch(html, /通信 4単位|通信 0単位/);
+});
+test('annual official: only earned source-linked correspondence uses the matching official row', () => {
+  const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o])); const row = official(f, 0);
+  for (const status of ['planned', 'in_progress', 'waiting', 'failed', 'dropped']) {
+    const linked = { ...item(f.offerings[2], status), importedSourceCourseId: row.id, courseCreditContribution: 2 };
+    assert.equal(annualCreditLimitReferences([linked], map, [row])[0].correspondenceCredits, 2, status);
+    delete linked.courseCreditContribution;
+    assert.equal(annualCreditLimitReferences([linked], map, [row])[0].correspondenceCredits, 4, status);
+  }
+  for (const extra of [{}, { importedSourceCourseId: 'different-source' }]) {
+    const unlinked = { ...item(f.offerings[2], 'earned'), ...extra };
+    assert.equal(annualCreditLimitReferences([unlinked], map, [row])[0].correspondenceCredits, 4);
+    assert.equal(annualCreditLimitReferences([{ ...unlinked, courseCreditContribution: 2 }], map, [row])[0].correspondenceCredits, 2);
+  }
+});
+test('annual official: schooling registration ignores source-linked official and explicit contribution', () => {
+  const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o]));
+  for (const credits of [null, 0, 2, 4]) for (const explicit of [undefined, 0, 1, 2]) {
+    const row = official(f, credits);
+    const linked = { ...item(f.offerings[0], 'earned'), importedSourceCourseId: row.id, ...(explicit === undefined ? {} : { courseCreditContribution: explicit }) };
+    const annual = annualCreditLimitReferences([linked], map, [row])[0];
+    assert.equal(annual.schoolingRegistrationCredits, 2); assert.equal(annual.knownTotalCredits, 2);
+    assert.equal(annual.unknownCorrespondenceItems, 0);
+  }
+});
+test('annual official: 49-credit boundary uses official2/4/0 and retains unknown separately', () => {
+  const f = fixture(); const schools = Array.from({ length: 24 }, (_, index) => ({ ...f.offerings[0], id: `official-annual-school-${index}`, credits: index === 0 ? 1 : 2 }));
+  const map = new Map([...schools, f.offerings[2]].map(o => [o.id, o])); const linked = { ...item(f.offerings[2], 'earned'), importedSourceCourseId: 'official-row' };
+  const items = [...schools.map(o => item(o)), linked];
+  for (const [credits, total, exceeds, unknown] of [[2, 49, false, 0], [4, 51, true, 0], [0, 47, false, 0], [null, 47, false, 1]]) {
+    const annual = annualCreditLimitReferences(items, map, [official(f, credits)])[0];
+    assert.deepEqual([annual.knownTotalCredits, annual.exceedsOfficial49, annual.unknownCorrespondenceItems], [total, exceeds, unknown]);
+  }
+});
+test('annual official: known over49 still warns when another correspondence contribution is unknown', () => {
+  const f = fixture(); const schooling = { ...f.offerings[0], credits: 50 }; const map = new Map([schooling, f.offerings[2]].map(o => [o.id, o]));
+  const row = official(f, null); const items = [item(schooling), { ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id }];
+  const rows = annualCreditLimitReferences(items, map, [row]);
+  assert.equal(rows[0].knownTotalCredits, 50); assert.equal(rows[0].exceedsOfficial49, true); assert.equal(rows[0].unknownCorrespondenceItems, 1);
+  const html = renderToStaticMarkup(createElement(AnnualCreditLimitNotice, { rows }));
+  assert.match(html, /49単位を超える見込み/); assert.match(html, /未確定1件/);
+});
 
 test('contribution summaries: schooling earned2 plus correspondence explicit2 agree with CourseProgress4', () => {
   const f = fixture(); const items = [item(f.offerings[0], 'earned'), { ...item(f.offerings[2], 'earned'), courseCreditContribution: 2 }];
@@ -78,7 +170,7 @@ test('contribution summaries: waiting, failed and dropped keep their existing su
 test('annual contribution: correspondence explicit2 plus schooling registration2 totals4', () => {
   const f = fixture(); const items = [item(f.offerings[0], 'earned'), { ...item(f.offerings[2], 'earned'), courseCreditContribution: 2 }];
   const map = new Map(f.offerings.map(o => [o.id, o]));
-  assert.deepEqual(annualCreditLimitReferences(items, map), [{ year: 2026, correspondenceCredits: 2, schoolingRegistrationCredits: 2, knownTotalCredits: 4, exceedsOfficial49: false }]);
+  assert.deepEqual(annualCreditLimitReferences(items, map), [{ year: 2026, correspondenceCredits: 2, unknownCorrespondenceItems: 0, schoolingRegistrationCredits: 2, knownTotalCredits: 4, exceedsOfficial49: false }]);
 });
 test('annual contribution: correspondence explicit4 remains4', () => {
   const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o]));
@@ -89,20 +181,20 @@ test('annual contribution: the 49-credit reference uses explicit correspondence 
   const map = new Map([...schools, f.offerings[2]].map(o => [o.id, o]));
   const items = schools.map(o => item(o));
   const run = credits => annualCreditLimitReferences([...items, { ...item(f.offerings[2]), courseCreditContribution: credits }], map)[0];
-  assert.deepEqual(run(2), { year: 2026, correspondenceCredits: 2, schoolingRegistrationCredits: 48, knownTotalCredits: 50, exceedsOfficial49: true });
-  assert.deepEqual(run(0), { year: 2026, correspondenceCredits: 0, schoolingRegistrationCredits: 48, knownTotalCredits: 48, exceedsOfficial49: false });
+  assert.deepEqual(run(2), { year: 2026, correspondenceCredits: 2, unknownCorrespondenceItems: 0, schoolingRegistrationCredits: 48, knownTotalCredits: 50, exceedsOfficial49: true });
+  assert.deepEqual(run(0), { year: 2026, correspondenceCredits: 0, unknownCorrespondenceItems: 0, schoolingRegistrationCredits: 48, knownTotalCredits: 48, exceedsOfficial49: false });
 });
 test('annual contribution: schooling always uses Offering registration credits despite smaller contribution', () => {
   const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o]));
   const items = [{ ...item(f.offerings[0], 'earned'), courseCreditContribution: 1 }];
   assert.equal(summarizeCredits(items, map).earned, 1);
-  assert.deepEqual(annualCreditLimitReferences(items, map)[0], { year: 2026, correspondenceCredits: 0, schoolingRegistrationCredits: 2, knownTotalCredits: 2, exceedsOfficial49: false });
+  assert.deepEqual(annualCreditLimitReferences(items, map)[0], { year: 2026, correspondenceCredits: 0, unknownCorrespondenceItems: 0, schoolingRegistrationCredits: 2, knownTotalCredits: 2, exceedsOfficial49: false });
 });
 test('contribution summaries and annual reference: absent metadata keeps legacy Offering credits', () => {
   const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o]));
   const items = [item(f.offerings[0], 'earned'), item(f.offerings[2], 'earned')];
   assert.equal(summarizeCredits(items, map).earned, 6);
-  assert.deepEqual(annualCreditLimitReferences(items, map)[0], { year: 2026, correspondenceCredits: 4, schoolingRegistrationCredits: 2, knownTotalCredits: 6, exceedsOfficial49: false });
+  assert.deepEqual(annualCreditLimitReferences(items, map)[0], { year: 2026, correspondenceCredits: 4, unknownCorrespondenceItems: 0, schoolingRegistrationCredits: 2, knownTotalCredits: 6, exceedsOfficial49: false });
 });
 test('contribution summaries and annual reference: explicit zero does not fall back to Offering credits', () => {
   const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o]));
