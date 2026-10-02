@@ -22,12 +22,12 @@
 
 - 詳細レコードは既存の名前（trim・空白正規化）＋履修形態matcherの候補が1件で、プレビューの照合先とも一致する場合に登録します。詳細のない成績表行は、履修形態を問わず名前の候補が1件である場合に限ります。いずれもカタログ上 `resolutionStatus=matched` かつ `courseId` が存在することを確認します。
 - `sourceCourseFor` の `exact_unique` はcourseIdの一意性を表し、`selectedOfferingId` は代表Offeringの場合があります。自動登録helperはこの代表値を使用せず、現在の全カタログから具体Offeringの候補数を再確認します。曖昧・未一致はImported-onlyとして保持します。新たなfuzzy matchingや表示時identityの書き換えは行いません。
-- 生成は検索追加と同じ `plannerItemFromCourseSearch` を使います。一意な公式sourceの `earnedCreditsTotal !== null && earnedCreditsTotal > 0` が確認できる新規項目は `earned`、null / 0は `planned` です。複数sourceが同じOfferingへ競合する場合はplannedを維持します。component grade・schooling grade・exam grade・reportから修得を推測しません。学年・修得順は `null`、評価や進捗はコピーしません。年度はsourceの明示値またはプレビューでのmanual入力が、同じOfferingの選択済みレコード間で一致する場合だけ設定します。推定年度や競合は `null` です。Plannerの既定年度2026をimportの確定年度として扱いません。
+- 生成は検索追加と同じ `plannerItemFromCourseSearch` を使います。1つの公式source行が1つのdistinct Offeringだけに対応し、`earnedCreditsTotal !== null && earnedCreditsTotal > 0` が確認できる新規項目だけを `earned` とし、`importedSourceCourseId` を付けます。1行から複数Offeringが自動登録可能な場合は全て `planned` とし、source markerを付けません。null / 0や複数sourceが同じOfferingへ競合する場合もplannedです。同じOfferingへ一致する複数componentは1件として数えます。既存Itemもsourceごとの候補数に含め、欠けた1件の補完だけをearnedにしません。component grade・schooling grade・exam grade・reportから修得を推測しません。学年・修得順は `null`、評価や進捗はコピーしません。年度はsourceの明示値またはプレビューでのmanual入力が、同じOfferingの選択済みレコード間で一致する場合だけ設定します。推定年度や競合は `null` です。Plannerの既定年度2026をimportの確定年度として扱いません。
 - 時期は元の期と一致し、既存Plannerの標準値（前期・後期・通年・夏期・冬期・その他）で、同じOfferingのレコード間に競合がない場合だけ設定します。「夏」「冬」「前期メディア」等は変換・推測せず `null` にします。
 - 同一Offeringの既存PlannerItemとその評価・進捗は上書きしません。同じ取り込み内・再取り込みでもPlannerItemは増殖しません。公式状態の表示は既存のunified viewを維持し、Planner状態へ同期しません。
-- 公式修得単位はImported側の科目行aggregateを正本とします。新規earned PlannerItemに任意の `importedSourceCourseId` を保存し、公式sourceを関連づけます。exactなCurriculumCourseの公式行がある場合、そのCourseのearned PlannerItemも計算入力から除外します。修得単位・区分・卒業進捗・指導条件は公式aggregateを優先し、単位を二重計上しません。年度上限の参考表示には通常の計画として含まれ、推定年度から年次を作成しません。
+- 公式修得単位はImported側の科目行aggregateを正本とします。新規earned PlannerItemに任意の `importedSourceCourseId` を保存し、公式sourceを関連づけます。卒業計算・修得概要・区分・指導条件は、exactなCurriculumCourseの公式行がある場合にそのCourseのearned PlannerItemも計算入力から除外する保守的policyを維持します。CourseProgressでは別のpolicyを使い、source IDが公式行と一致するearned Itemだけを除外します。source linkのない別Offering earnedはCourseProgressへ加算し、卒業要件への正式反映には再取込を推奨します。CourseProgressと卒業側の公式単位計算は異なる概念です。年度上限の参考表示には通常の計画として含まれ、推定年度から年次を作成しません。
 - 反映noticeは成績表行・詳細レコード・PlannerItemの実際の追加差分を表示します。既存のundo用state全体のsnapshotが、自動PlannerItemも含めて取り込み前へ戻します。
-- 保存schemaは21、キーは `hosei-planner:v1`、`graduationCheckComplete=false` を維持します。永続provenanceを追加しないため、取り込み後の手動照合変更によるPlannerItemの生成・削除は対象外です。
+- 保存schemaは22、キーは `hosei-planner:v1`、`graduationCheckComplete=false` を維持します。任意source associationは保持しますが、取り込み後の手動照合変更によるPlannerItemの生成・削除は対象外です。
 
 ### 保存済み成績の再取り込みによるPlannerItem補完
 

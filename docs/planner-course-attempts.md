@@ -55,13 +55,14 @@ same Offeringの複数回履修について、今回提示された資料・利�
 - attempts（元Item、Offering、各寄与、officialEarnedPreferred）
 - officialAchievements / warnings
 
-earnedはsafeに紐づくPlanner earnedのOffering単位、または公式行のearnedCreditsTotal。exact公式行があるCourseでは、すべての同じCourseのPlanner earned寄与を0にして公式aggregateを優先する。公式nullは推測せずknown subtotalとunknownを表示、0は0。新しい自動earnedはsource associationでも計算から除外するので、制度科目照合が未解決でもOffering単位を公式実績に見立てない。
+earnedはsafeに紐づくPlanner earnedのOffering単位と、公式行のearnedCreditsTotalを合計する。CourseProgress専用の `plannerItemsWithoutImportedAttemptDuplicates` は、`importedSourceCourseId` が保存済み公式行IDと一致するearned Itemだけを重複除外する。同じCurriculumCourseという理由だけでは手入力のearnedを除外しない。公式nullは推測せずknown subtotalとunknownを表示、0は0。source-linked Itemは制度科目照合が未解決・異なる場合もOffering単位を公式実績に見立てず、unknownの警告を残す。
 
-projectedはearnedにplanned/in_progress/waitingのOffering.creditsを加えた値。failed/droppedは0。構成単位4と開講単位2を混同しない。公式成績は既修得全体の正本なので、成績表に含まれない新しい修得がある場合は公式行の更新・再取込を必要とする。旧自動planned項目を含む既存planned項目は、元sourceを推測して除外せず予定として保持する。
+projectedはearnedにplanned/in_progress/waitingのOffering.creditsを加えた値。failed/droppedは0。構成単位4と開講単位2を混同しない。公式2 + 別Offering planned2をearnedへ変更しても、CourseProgressは修得4/予定込み4を維持する。公式行と重複する証拠のない手入力earnedはCourseProgressに加算するが、卒業計算は公式aggregateを優先するため、正式反映には成績表の再取込を推奨する警告を表示する。旧自動planned項目を含む既存planned項目は、元sourceを推測して除外せず予定として保持する。
 
 | 4単位科目 | earned | projected | 修得完成 / 予定込み完成 |
 | --- | --- | --- | --- |
 | exact公式2 + planned Offering2 | 2 | 4 | incomplete / complete |
+| exact公式2 + 別Offeringのsource linkなしearned2 | 4 | 4 | complete / complete |
 | 別Offering earned2 + earned2 | 4 | 4 | complete / complete |
 | 通信Offering4 earned | 4 | 4 | complete / complete |
 | スクーリングOffering2 earnedのみ | 2 | 2 | incomplete / incomplete |
@@ -72,9 +73,9 @@ projectedはearnedにplanned/in_progress/waitingのOffering.creditsを加えた�
 
 ## importと既存計算入力
 
-一意な公式sourceのearnedCreditsTotal>0だけを根拠に、新規自動PlannerItemをearnedへ設定する。null/0または複数公式sourceの競合はplanned。component grade / schooling grade / exam grade / report statusは根拠にしない。評価・進捗をコピーしない。sourceDuplicateの補完は既存公式行IDを使い、既存PlannerItemは上書きしない。
+公式source行ごとに、安全に自動登録できるdistinct Offering数を先に確認する。1つのsourceが1つのOfferingだけに対応し、earnedCreditsTotal>0で、他sourceとの競合もない場合のみ、新規Itemをearnedにして `importedSourceCourseId` を保存する。1つのsourceから複数Offeringが登録可能なら、個々の修得はaggregateでは証明できないため、全てplannedでsource markerなしとする。null/0または複数公式sourceの競合もplanned。同一Offeringに一致する複数component slotは1件として数える。既存Itemに対応するOfferingもsource内の候補数に含め、欠けた1件だけを補完する場合も誤ってearnedへ昇格させない。component grade / schooling grade / exam grade / report statusは根拠にしない。評価・進捗をコピーしない。sourceDuplicateの補完は既存公式行IDを使い、既存PlannerItemは上書きしない。
 
-`plannerItemsWithoutOfficialEarned` が計算入力からearned重複を除外し、deriveImportedAchievementsは従来の公式aggregate仮想Itemを生成する。Planner表示用の元Itemは削除・変更しない。卒業計算、区分集計、修得単位の概要、卒論指導条件はこの入力境界を利用する。planned/in_progress/waitingは残す。exact公式行では同名の別制度科目のearnedを理由に公式aggregateを落とさない。exactがない既存手入力・legacyの重複判定は従来どおり保守的に残す。
+`plannerItemsWithoutOfficialEarned` は卒業計算と関連集計専用の保守的なofficial-priority policyであり、CourseProgressのsource-linked dedupとは別functionにする。exact公式行があるCourseのPlanner earnedを全て計算入力から除外し、deriveImportedAchievementsは従来の公式aggregate仮想Itemを生成する。Planner表示用の元Itemは削除・変更しない。卒業計算、区分集計、修得単位の概要、卒論指導条件はこの入力境界を利用する。planned/in_progress/waitingは残す。exact公式行では同名の別制度科目のearnedを理由に公式aggregateを落とさない。exactがない既存手入力・legacyの重複判定は従来どおり保守的に残す。
 
 **CourseProgressそのものは卒業配分エンジンへ未接続。** 今回卒業側を変えたのは公式正本を守るearned入力境界だけ。法律partial、史学特殊配分、反復上限、旧Course/mapping、認定、スクーリング参考値、年度制限の全面置換はしていない。Course exact / Offering不明でもCourseProgressには算入できるが、既存卒業側の分類まで確定できない公式行は引き続き保留となる。
 
@@ -90,15 +91,15 @@ projectedはearnedにplanned/in_progress/waitingのOffering.creditsを加えた�
 
 ## 検証と次段階
 
-変更前planner 247件PASS。今回25件追加しplanner 272件PASS、extension18件PASS。既存8所属回帰、法律partial、史学順序/概説、正の公式2/4に新規earnedが共存する8所属のofficial-only一致、検索・状態別予定加算・曖昧identity・反復判定・source/保存/undoを確認。typecheck/lint/build/diff-checkもPASS。graduationCheckComplete=falseを型・catalog・卒業結果で維持。
+foundation後の変更前planner 247件、初期実装後272件PASS。今回のfollow-upで5件追加しplanner 277件PASS、extension18件PASS。planned→earnedで進捗が逆戻りしないこと、公式source単位の複数Offering判定、backfill、distinct slot、手入力earnedとsource-linked earnedの保存・削除undoを追加検証した。既存8所属回帰、法律partial、史学順序/概説、正の公式2/4に新規earnedが共存する8所属のofficial-only一致、検索・状態別予定加算・曖昧identity・反復判定・source/保存/undoを確認。typecheck/lint/build/diff-checkもPASS。graduationCheckComplete=falseを型・catalog・卒業結果で維持。
 
 ローカルPreviewでは日本文芸学概論の公式2 + 夏期planned2が修得2/4・予定込み4/4になること、春期Offeringが引き続き追加可能なこと、自動earned通信4が二重加算されないこと、再読込で保持されること、console errorなしを確認した。
 
 Previewでさらに確認する項目:
 
-1. 公式2 + 予定2の「修得済み2/4」「予定込み4/4」と各履修回。
+1. 公式2 + 別Offering予定2の「修得済み2/4」「予定込み4/4」と、その予定をearnedへ変えた後の修得4/予定込み4、再取込を推奨する警告。
 2. earned2+2 / 通信earned4の完成、earned2だけの未完成。
-3. 公式4+自動earnedが4のまま、修得概要・区分・卒業側で重複しない。
+3. 公式4+source-linked自動earnedが4のまま。1公式行から複数Offeringを生成する場合は全てplannedで、CourseProgressの修得は公式aggregateのみ。修得概要・区分・卒業側で重複しない。
 4. 別Offeringの追加・編集・削除・undo・再読込と既存進捗/評価の保持。
 5. 同名別Courseの区分、曖昧Offering警告、Course exact / Offering不明の公式行。
 6. 完成後も他Offeringが選択可能、repeatableに汎用警告なし、Media助言の電話確認表記。

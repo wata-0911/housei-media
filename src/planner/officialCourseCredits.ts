@@ -8,7 +8,9 @@ export function exactImportedCurriculumId(row: ImportedCourseAchievement, catalo
     && validImportedCurriculumIdentity(row, catalog) ? row.curriculumCourseId : null;
 }
 
-/** Remove only earned duplicates from calculation inputs, never from saved/UI items.
+/** Conservative official-priority policy for graduation and related calculations,
+ * separate from CourseProgress's source-linked attempt deduplication.
+ * Remove only earned duplicates from calculation inputs, never from saved/UI items.
  * An exact official Course aggregate owns all earned credit for that Course.
  * The source link also protects auto-created items whose institutional identity is unresolved.
  * Plans remain independent additional enrollments, including waiting items.

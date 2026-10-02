@@ -1,6 +1,6 @@
 import type { ImportedCourseAchievement } from './gradeImportApply';
 import type { CurriculumCourse, Offering, PlannerCatalog, PlannerItem } from './plannerCatalog';
-import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
+import { exactImportedCurriculumId } from './officialCourseCredits';
 import { isMediaSchooling } from './mediaSchooling';
 import { repeatableRule } from './repeatableRules';
 
@@ -34,6 +34,13 @@ export type CurriculumProgressResult = { courses: CurriculumCourseProgress[]; un
 
 export const COMPLETED_COURSE_ADVISORY = '科目構成単位を満たしています。原則として完成後の再履修はできませんが、科目・履修方法によって例外があります。';
 export const MEDIA_REPEAT_ADVISORY = '大学への電話確認ではメディアの再履修は不可との案内。詳細は教務へ確認してください';
+
+/** CourseProgress deduplicates proven imported attempts only. Unlinked earned
+ * attempts remain additive, unlike the conservative official graduation policy. */
+function plannerItemsWithoutImportedAttemptDuplicates(items: PlannerItem[], rows: ImportedCourseAchievement[]): PlannerItem[] {
+  const sourceIds = new Set(rows.map(row => row.id));
+  return items.filter(item => item.status !== 'earned' || !sourceIds.has(item.importedSourceCourseId ?? ''));
+}
 
 /** Rule names only classify repeatability after identity is established. They never group courses. */
 function isRepeatableCourse(course: CurriculumCourse, catalog: PlannerCatalog, scopeId: string | null): boolean {
@@ -71,7 +78,7 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
     if (id && courses.has(id)) groupFor(id).official.push(row);
     else unassigned.push({ offeringId: null, sourceCourseId: row.id, name: row.rawName, reason: '成績表行の制度科目を一意に判定できません。公式情報は保持しています。' });
   }
-  const retainedEarned = new Set(plannerItemsWithoutOfficialEarned(items, offerings, rows, catalog));
+  const retainedEarned = new Set(plannerItemsWithoutImportedAttemptDuplicates(items, rows));
   const result: CurriculumCourseProgress[] = [];
   for (const [id, group] of assigned) {
     const course = courses.get(id)!;
@@ -81,7 +88,7 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
     let unknownProjected = unknownEarned;
     const attempts = group.attempts.map(({ item, offering }): CurriculumCourseAttempt => {
       const officialEarnedPreferred = item.status === 'earned' && !retainedEarned.has(item);
-      if (officialEarnedPreferred && group.official.length === 0) {
+      if (officialEarnedPreferred && !group.official.some(row => row.id === item.importedSourceCourseId)) {
         unknownEarned = true; unknownProjected = true;
         if (!warnings.includes('取込元の制度科目が未確定または異なるため、履修項目の単位を推測して加算していません。')) warnings.push('取込元の制度科目が未確定または異なるため、履修項目の単位を推測して加算していません。');
       }
@@ -103,7 +110,8 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
     const excess = (credits: number) => repeatable || target === null ? 0 : Math.max(0, credits - target);
     if (excess(projectedCredits) > 0) warnings.push('科目構成単位を超える単位は超過候補です。卒業所要単位への算入可否は別途確認してください。');
     if (attempts.filter(attempt => isMediaSchooling(attempt.offering) && attempt.item.status !== 'dropped').length > 1) warnings.push(MEDIA_REPEAT_ADVISORY);
-    if (attempts.some(attempt => attempt.officialEarnedPreferred)) warnings.push('修得単位は成績表の公式集計を優先し、同じ科目の修得済み履修項目を加算していません。');
+    if (attempts.some(attempt => attempt.officialEarnedPreferred)) warnings.push('修得単位は成績表の公式集計を優先し、取込元が一致する修得済み履修項目を重複加算していません。');
+    if (group.official.length > 0 && attempts.some(attempt => attempt.item.status === 'earned' && !attempt.officialEarnedPreferred)) warnings.push('成績表とは別に修得済みとして記録された履修があります。卒業要件への正式反映には成績表の再取込を推奨します。');
     result.push({ curriculumCourseId: id, canonicalName: course.canonicalName, curriculumCredits: target,
       earnedCredits, projectedCredits, remainingCredits: target === null || unknownEarned ? null : Math.max(0, target - earnedCredits),
       completion: earnedCompletion, projectedCompletion: completion(projectedCredits, unknownProjected || unknownEarned),

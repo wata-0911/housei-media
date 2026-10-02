@@ -43,6 +43,24 @@ test('course progress A: official exact earned2 with unknown opening plus planne
   assert.deepEqual([p.earnedCredits, p.projectedCredits, p.remainingCredits, p.completion, p.projectedCompletion], [2, 4, 2, 'incomplete', 'complete']);
   assert.equal(p.officialAchievements[0].selectedOfferingId, null);
 });
+test('CourseProgress retains separate earned attempts after planned2 becomes earned2; graduation keeps official priority', () => {
+  const f = fixture(); const row = official(f, 2, { selectedOfferingId: f.offerings[0].id, offeringMatch: 'exact_unique', candidateOfferingIds: [f.offerings[0].id] });
+  const items = [item(f.offerings[1])];
+  const planned = progress(f, items, [row]);
+  assert.deepEqual([planned.earnedCredits, planned.projectedCredits], [2, 4]);
+  const changed = updatePlannerItem(items, items[0].offeringId, { status: 'earned' });
+  const earned = progress(f, changed, [row]);
+  assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.projectedCompletion], [4, 4, 'complete', 'complete']);
+  assert.equal(earned.attempts[0].earnedContribution, 2);
+  assert.equal(earned.attempts[0].officialEarnedPreferred, false);
+  assert.ok(earned.warnings.some(warning => warning.includes('成績表の再取込')));
+  assert.deepEqual(plannerItemsWithoutOfficialEarned(changed, new Map(f.offerings.map(o => [o.id, o])), [row], f), []);
+  for (const program of catalog.programs.filter(program => !program.isCommon)) {
+    const run = items => calculateGraduationProgress(items, f, program.scopeId, [], 'undecided', [], [row]);
+    assert.deepEqual(run(changed), run([]), program.department);
+    assert.equal(run(changed).graduationCheckComplete, false);
+  }
+});
 test('course progress B: two different earned2 offerings complete a four-credit course', () => {
   const f = fixture(); const items = f.offerings.slice(0, 2).map(o => item(o, 'earned')); const p = progress(f, items);
   assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion, p.attempts.length], [4, 4, 'complete', 2]);
@@ -56,8 +74,9 @@ test('course progress D: only schooling earned2 remains incomplete', () => {
   const f = fixture(); const p = progress(f, [item(f.offerings[0], 'earned')]);
   assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion, p.projectedCompletion], [2, 2, 'incomplete', 'incomplete']);
 });
-test('official aggregate supersedes all same-Course earned items, including unassociated learner items', () => {
-  const f = fixture(); const p = progress(f, [item(f.offerings[2], 'earned'), item(f.offerings[0], 'earned')], [official(f, 4)]);
+test('official4 plus source-linked earned4 remains4 without a duplicate attempt contribution', () => {
+  const f = fixture(); const row = official(f, 4);
+  const p = progress(f, [{ ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id }], [row]);
   assert.equal(p.earnedCredits, 4); assert.equal(p.projectedCredits, 4);
   assert.ok(p.attempts.every(attempt => attempt.officialEarnedPreferred && attempt.earnedContribution === 0));
 });
@@ -65,6 +84,7 @@ test('partial official aggregate2 never turns a four-credit earned auto item int
   const f = fixture(); const row = official(f); const auto = { ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id };
   const p = progress(f, [auto, item(f.offerings[0])], [row]);
   assert.deepEqual([p.earnedCredits, p.projectedCredits], [2, 4]);
+  assert.deepEqual([progress(f, [auto], [row]).earnedCredits, progress(f, [auto], [row]).projectedCredits], [2, 2]);
   const derived = deriveImportedAchievements([], new Map(f.offerings.map(o => [o.id, o])), [auto], [row], f);
   assert.equal(derived.plannerItems.length, 0);
   assert.equal(derived.offerings[0].credits, 2);
@@ -97,7 +117,8 @@ test('different Offering identities remain editable, removable and restorable; s
 test('search retains both additional offerings after partial or full completion, with advisory only', () => {
   const f = fixture();
   for (const credits of [2, 4]) {
-    const result = deriveCurriculumCourseProgress([item(f.offerings[0], 'earned')], f, [official(f, credits)]);
+    const row = official(f, credits);
+    const result = deriveCurriculumCourseProgress([{ ...item(f.offerings[0], 'earned'), importedSourceCourseId: row.id }], f, [row]);
     const html = renderToStaticMarkup(createElement(CourseSearch, { catalog: f, classify: createCreditClassifier(f, null), selectedScopeId: null,
       offerings: f.offerings, addedIds: new Set([f.offerings[0].id]), disabled: false, curriculumProgress: result, onAdd: () => {}, onAddPublicCourse: () => {} }));
     assert.equal((html.match(/>計画に追加<\/button>/g) ?? []).length, 2, 'two other offerings remain selectable');
@@ -188,6 +209,51 @@ function importData(name, earned) {
     reports: Array.from({ length: 4 }, () => ({ raw: '合格', status: 'passed', date: '2026-06-01' })),
     creditExam: { rawDate: '2026/07/01', rawCredits: '4', rawGrade: 'S', date: '2026-07-01', credits: 4, grade: 'S', pendingMarker: false }, schoolings: [empty, empty] }] };
 }
+function withPassingSchoolings(data) {
+  const schooling = { rawYear: '26', rawTerm: '前期', rawDate: '2026/07/01', rawCredits: '2', rawGrade: 'A',
+    year: '26', term: '前期', date: '2026-07-01', credits: 2, grade: 'A' };
+  data.courses[0].schoolings = [schooling, { ...schooling, rawDate: '2026/08/01', date: '2026-08-01' }];
+  data.courses[0].schoolingCredits = { raw: '2', value: 2 };
+  return data;
+}
+test('one official row with correspondence and schooling Offerings generates planned items without source markers', () => {
+  const f = fixture(); const offerings = [f.offerings[2], f.offerings[0]];
+  const context = { curriculum: f.curriculum, mappings: f.mappings };
+  for (const credits of [null, 0, 2, 4]) {
+    const data = withPassingSchoolings(importData(f.course.canonicalName, credits));
+    const next = applyImport(initialState(), importPreview(data, offerings, [], [], context), offerings);
+    assert.equal(next.importedCourseAchievements.length, 1);
+    assert.equal(next.items.length, 2);
+    assert.ok(next.items.every(item => item.status === 'planned' && item.importedSourceCourseId === undefined));
+    assert.equal(progress(f, next.items, next.importedCourseAchievements).earnedCredits, credits ?? 0);
+    assert.equal(validateState(next, f), true);
+    assert.equal(applyImport(next, importPreview(data, offerings, next.importedStudyRecords, next.importedCourseAchievements, context), offerings), next);
+  }
+});
+test('a missing component of a multi-Offering source remains planned on backfill even if the other item already exists', () => {
+  const f = fixture(); const offerings = [f.offerings[2], f.offerings[0]];
+  const context = { curriculum: f.curriculum, mappings: f.mappings };
+  const data = withPassingSchoolings(importData(f.course.canonicalName, 2));
+  const imported = applyImport(initialState(), importPreview(data, offerings, [], [], context), offerings);
+  for (const kept of imported.items) {
+    const state = { ...imported, items: [kept] };
+    const restored = applyImport(state, importPreview(data, offerings, state.importedStudyRecords, state.importedCourseAchievements, context), offerings);
+    assert.equal(restored.items.length, 2);
+    assert.equal(restored.items[0], kept);
+    assert.equal(restored.items[1].status, 'planned');
+    assert.equal(restored.items[1].importedSourceCourseId, undefined);
+    assert.equal(progress(f, restored.items, restored.importedCourseAchievements).earnedCredits, 2);
+  }
+});
+test('two component slots matching one distinct Offering can still create one source-linked earned item', () => {
+  const f = fixture(); const offerings = [f.offerings[0]];
+  const context = { curriculum: f.curriculum, mappings: f.mappings };
+  const next = applyImport(initialState(), importPreview(withPassingSchoolings(importData(f.course.canonicalName, 2)), offerings, [], [], context), offerings);
+  assert.equal(next.items.length, 1);
+  assert.equal(next.items[0].status, 'earned');
+  assert.equal(next.items[0].importedSourceCourseId, next.importedCourseAchievements[0].id);
+  assert.equal(progress(f, next.items, next.importedCourseAchievements).earnedCredits, 2);
+});
 test('auto import earned status depends only on a positive official aggregate, never passing grades/reports', () => {
   const f = fixture(); const offerings = [f.offerings[2]];
   const context = { curriculum: f.curriculum, mappings: f.mappings };
@@ -219,6 +285,27 @@ test('v22 saves and reloads optional source association losslessly and retains p
   assert.equal(validateState({ ...state, items: [{ ...i, importedSourceCourseId: 'missing-source' }] }, f), false);
   const unlinked = { ...state, items: state.items.map(({ importedSourceCourseId: _source, ...item }) => item) };
   assert.equal(validateState(unlinked, f), true, 'existing v22 records require no new metadata');
+});
+test('v22 reload and delete undo preserve source-linked and separate user-earned contributions', () => {
+  const f = fixture(); const row = official(f, 2);
+  const auto = { ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id };
+  const items = updatePlannerItem([auto, item(f.offerings[0])], f.offerings[0].id, { status: 'earned' });
+  const state = { ...initialState(), items, importedCourseAchievements: [row] };
+  const values = new Map(); const store = { getItem: k => values.get(k) ?? null, setItem: (k, v) => values.set(k, v) };
+  assert.equal(validateState(state, f), true);
+  const raw = saveState(store, state, null, f);
+  const loaded = loadState(store, f);
+  assert.equal(loaded.error, null); assert.deepEqual(loaded.state, state);
+  assert.deepEqual([progress(f, loaded.state.items, loaded.state.importedCourseAchievements).earnedCredits,
+    progress(f, loaded.state.items, loaded.state.importedCourseAchievements).projectedCredits], [4, 4]);
+  const removed = removePlannerItem(loaded.state.items, f.offerings[0].id);
+  const deleted = { ...loaded.state, items: [auto] };
+  const deletedRaw = saveState(store, deleted, raw, f);
+  assert.equal(progress(f, loadState(store, f).state.items, [row]).earnedCredits, 2);
+  const restored = { ...deleted, items: restorePlannerItem(deleted.items, removed) };
+  saveState(store, restored, deletedRaw, f);
+  assert.deepEqual(loadState(store, f).state, state);
+  assert.equal(progress(f, restored.items, [row]).earnedCredits, 4);
 });
 test('all eight graduation programs retain official-only output after positive2/4 auto import; annual limits remain Offering based', () => {
   const base = catalog.offerings.find(o => o.method === 'correspondence' && o.credits === 4 && o.curriculumCourseId && o.resolutionStatus === 'matched');
