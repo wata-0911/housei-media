@@ -10,7 +10,7 @@ import FuturePlanNotice from './FuturePlanNotice';
 import SavedAttemptProgress from './SavedAttemptProgress';
 import { CompletionOrderInput, GradeSelect, StatusSelect, StudyYearSelect, TermSelect, YearInput } from './PlannerRowControls';
 
-type Contributions = { earnedContribution: number; projectedContribution: number; officialEarnedPreferred: boolean };
+type Contributions = { earnedContribution: number; projectedContribution: number; officialEarnedPreferred: boolean; officialEarnedPreferenceReason: 'aggregate_source_link' | 'component_source_match' | null };
 export default function PlannerAttemptChild({ attempt, editor, contributions }: { attempt: PlannerAttemptView; editor: AttemptEditorProps; contributions?: Contributions }) {
   const { plannerItem: item, offering, progress } = attempt;
   const evaluation = attempt.evaluation ?? { offeringId: item.offeringId, finalGrade: null, reportGrade: null, schoolingGrade: null };
@@ -21,7 +21,10 @@ export default function PlannerAttemptChild({ attempt, editor, contributions }: 
     <p className="mt-2 text-sm">{statusLabels[item.status]} / 計画 {item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {item.studyYear === null ? '学年未設定' : `${item.studyYear}年`} / {item.plannedTerm ?? '時期未設定'}</p>
     <p className="mt-1 text-sm">開講 {offering?.credits ?? '未確認'}単位</p>
     {item.courseCreditContribution !== undefined && <p className="mt-1 text-sm">保存済み寄与設定 {item.courseCreditContribution}単位{!(offering?.method === 'correspondence' && offering.credits === 4 && [2, 4].includes(item.courseCreditContribution)) && '（要確認）'}</p>}
-    {contributions && <p className="mt-1 text-xs text-gray-600">{contributions.officialEarnedPreferred ? '修得単位は取込元の公式集計を優先（重複加算なし）' : `修得に加算 ${contributions.earnedContribution}単位 / 予定込みに加算 ${contributions.projectedContribution}単位`}</p>}
+    {contributions && <p className="mt-1 text-xs text-gray-600">{contributions.officialEarnedPreferenceReason === 'component_source_match'
+      ? '公式成績表の履修内訳に対応するため、公式集計を優先し重複加算しない'
+      : contributions.officialEarnedPreferred ? '修得単位は取込元の公式集計を優先（重複加算なし）'
+        : `修得に加算 ${contributions.earnedContribution}単位 / 予定込みに加算 ${contributions.projectedContribution}単位`}</p>}
     {offering && <p className="mt-2 text-sm">{progressSummaryForOffering(item, offering, progress.correspondence ? { [item.offeringId]: progress.correspondence } : {}, progress.mediaSchooling ? { [item.offeringId]: progress.mediaSchooling } : {})}</p>}
     <label className="mt-3 block max-w-xs text-sm">最終評価<GradeSelect label={`${offering?.name ?? item.offeringId}の最終評価`} value={evaluation.finalGrade} disabled={editor.disabled} onChange={finalGrade => editor.onChangeEvaluation(item.offeringId, { ...evaluation, finalGrade })} /></label>
     <details className="mt-3">
