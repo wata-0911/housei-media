@@ -20,4 +20,3 @@ export function CompletionOrderInput({ item, offering, disabled, onChange }: { i
   const family = isHistorySeminar(offering) ? '史学演習' : isHistoricalSources(offering) ? '歴史資料学' : '';
   return <label className="text-xs">{family}の修得順<input aria-label={`${family}の修得順`} inputMode="numeric" min="1" value={draft} disabled={disabled} onChange={event => { setDraft(event.target.value); setInvalid(false); }} onBlur={save} className={control} />{invalid && <span className="mt-1 block text-xs text-red-700">1以上の整数で入力してください。系列内で重複・欠番は保存できません。</span>}<span className="mt-1 block text-xs text-gray-500">修得済みだけに入力します。変更・削除できます。</span></label>;
 }
-
