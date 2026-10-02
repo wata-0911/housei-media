@@ -216,6 +216,55 @@ function withPassingSchoolings(data) {
   data.courses[0].schoolingCredits = { raw: '2', value: 2 };
   return data;
 }
+function competingSourceData(name) {
+  const data = importData(name, 2);
+  data.courses = ['source A', 'source B'].map(categoryRaw => ({ ...structuredClone(data.courses[0]), categoryRaw }));
+  return data;
+}
+for (const deselectedSource of [null, 'source A', 'source B']) test(`two official sources for one Offering stay planned when deselected source is ${deselectedSource}`, () => {
+  const f = fixture(); const offerings = [f.offerings[2]];
+  const context = { curriculum: f.curriculum, mappings: f.mappings };
+  const preview = importPreview(competingSourceData(f.course.canonicalName), offerings, [], [], context);
+  assert.equal(preview.length, 2);
+  assert.equal(new Set(preview.map(unit => unit.sourceCourse.id)).size, 2);
+  assert.ok(preview.every(unit => unit.selected && unit.match === 'exact_unique' && unit.offeringId === offerings[0].id));
+  const units = preview.map(unit => ({ ...unit, selected: unit.sourceCourse.categoryRaw !== deselectedSource }));
+  const next = applyImport(initialState(), units, offerings);
+  assert.equal(next.items.length, 1); assert.equal(next.items[0].status, 'planned');
+  assert.equal('importedSourceCourseId' in next.items[0], false);
+  const selectedSources = deselectedSource === null ? ['source A', 'source B'] : ['source A', 'source B'].filter(source => source !== deselectedSource);
+  assert.deepEqual(next.importedCourseAchievements.map(row => row.categoryRaw), selectedSources);
+  assert.equal(next.importedStudyRecords.length, selectedSources.length);
+  assert.equal(validateState(next, f), true); assert.equal(next.schemaVersion, 22);
+});
+for (const savedSource of ['source A', 'source B', 'both']) {
+  for (const selectNewSource of savedSource === 'both' ? [false] : [false, true]) test(`competing-source backfill stays planned with ${savedSource} saved and new source selected=${selectNewSource}`, () => {
+    const f = fixture(); const offerings = [f.offerings[2]];
+    const context = { curriculum: f.curriculum, mappings: f.mappings };
+    const data = competingSourceData(f.course.canonicalName);
+    const savedData = { ...data, courses: data.courses.filter(course => savedSource === 'both' || course.categoryRaw === savedSource) };
+    const imported = applyImport(initialState(), importPreview(savedData, offerings, [], [], context), offerings);
+    const before = { ...imported, items: [] }; const snapshot = structuredClone(before);
+    const preview = importPreview(data, offerings, before.importedStudyRecords, before.importedCourseAchievements, context);
+    assert.equal(preview.length, 2);
+    assert.equal(new Set(preview.map(unit => unit.sourceExistingId ?? unit.sourceCourse.id)).size, 2);
+    const duplicates = preview.filter(unit => unit.sourceDuplicate);
+    assert.equal(duplicates.length, savedData.courses.length);
+    assert.ok(duplicates.every(unit => !unit.selected && unit.sourceExistingId !== null && unit.sourceExistingId !== unit.sourceCourse.id));
+    const units = preview.map(unit => ({ ...unit, selected: !unit.sourceDuplicate && selectNewSource }));
+    const next = applyImport(before, units, offerings);
+    assert.equal(next.items.length, 1); assert.equal(next.items[0].status, 'planned');
+    assert.equal('importedSourceCourseId' in next.items[0], false);
+    assert.deepEqual(before, snapshot);
+    assert.equal(next.importedCourseAchievements.length, selectNewSource ? 2 : savedData.courses.length);
+    if (!selectNewSource) {
+      assert.equal(next.importedCourseAchievements, before.importedCourseAchievements);
+      assert.equal(next.importedStudyRecords, before.importedStudyRecords);
+    }
+    assert.equal(validateState(next, f), true); assert.equal(next.schemaVersion, 22);
+    assert.equal(applyImport(next, units, offerings).items[0], next.items[0]);
+  });
+}
 test('one official row with correspondence and schooling Offerings generates planned items without source markers', () => {
   const f = fixture(); const offerings = [f.offerings[2], f.offerings[0]];
   const context = { curriculum: f.curriculum, mappings: f.mappings };

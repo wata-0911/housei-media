@@ -129,7 +129,8 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
   const existingIds = new Set(existing.map(item => item.offeringId));
   const unitsByOffering = new Map<string, ImportPreviewUnit[]>();
   const offeringsBySource = new Map<string, Set<string>>();
-  // Pass 1: source evidence includes every safe component, even deselected or
+  const sourcesByOffering = new Map<string, Set<string>>();
+  // Pass 1: bidirectional evidence includes every safe component, even deselected or
   // already planned ones. Checkboxes cannot attribute a row aggregate to an opening.
   for (const unit of units) {
     const id = autoPlannerOfferingIdForImport(unit, offerings);
@@ -138,6 +139,9 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
     const sourceOfferings = offeringsBySource.get(sourceId) ?? new Set<string>();
     sourceOfferings.add(id);
     offeringsBySource.set(sourceId, sourceOfferings);
+    const offeringSources = sourcesByOffering.get(id) ?? new Set<string>();
+    offeringSources.add(sourceId);
+    sourcesByOffering.set(id, offeringSources);
   }
   // Pass 2: selection/backfill controls additions only; existing items are preserved.
   for (const unit of units.filter(unit => unit.selected || unit.sourceDuplicate)) {
@@ -148,10 +152,11 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
     // Conflicting occurrences and inferred dates must not become certain plans.
     const years = new Set(units.map(unit => unit.yearSource === 'source' || unit.yearSource === 'manual' ? unit.academicYear : null));
     const terms = new Set(units.map(unit => unit.term === unit.rawTerm && isStandardTerm(unit.term) ? unit.term : null));
-    // Only a single source with one distinct safe Offering can establish earned.
+    // Only a one-to-one source/Offering relation in the full preview establishes earned.
     // Detail grades, exams, reports and their credit fields never decide it.
     const sourceIds = new Set(units.map(unit => unit.sourceExistingId ?? unit.sourceCourse.id));
     const earned = sourceIds.size === 1 && offeringsBySource.get([...sourceIds][0])?.size === 1
+      && sourcesByOffering.get(id)?.size === 1
       && units.every(unit => unit.sourceCourse.earnedCreditsTotal !== null && unit.sourceCourse.earnedCreditsTotal > 0);
     return { ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
       plannedTerm: terms.size === 1 ? [...terms][0] : null };
