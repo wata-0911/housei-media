@@ -1,4 +1,4 @@
-import { correspondenceCreditResult, progressForCorrespondence } from './correspondenceProgress';
+import { correspondenceCreditResult, effectiveCorrespondenceProgress, progressForCorrespondence } from './correspondenceProgress';
 import { gradeLabel } from './courseEvaluations';
 import { isMediaSchooling, mediaProgressSummary, progressFor } from './mediaSchooling';
 import type { CorrespondenceCourseProgress, MediaCourseProgress, Offering, PlannerItem } from './plannerCatalog';
@@ -31,7 +31,7 @@ export function mediaProgressText(course: MediaCourseProgress): string {
 }
 
 export function progressSummaryForOffering(item: PlannerItem, offering: Offering, correspondence: Record<string, CorrespondenceCourseProgress>, media: Record<string, MediaCourseProgress>): string {
-  if (offering.method === 'correspondence') return correspondenceProgressSummary(progressForCorrespondence(offering, correspondence));
+  if (offering.method === 'correspondence') return correspondenceProgressSummary(effectiveCorrespondenceProgress(item, offering, progressForCorrespondence(offering, correspondence)));
   if (isMediaSchooling(offering)) return mediaProgressText(progressFor(offering.id, media));
   return statusLabels[item.status];
 }

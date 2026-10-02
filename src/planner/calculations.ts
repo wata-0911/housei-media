@@ -1,13 +1,15 @@
 import type { Offering, PlannerItem, PublicCourse } from './plannerCatalog';
+import { plannerItemCreditContribution } from './plannerItemCredits';
 
 export function summarizeCredits(items: PlannerItem[], offerings: Map<string, Offering>, publicCourses: PublicCourse[] = []) {
   const summary = { earned: 0, in_progress: 0, planned: 0, unknownCreditItems: 0 };
   for (const item of items) {
     const offering = offerings.get(item.offeringId);
     if (!offering) throw new Error(`Unknown offering: ${item.offeringId}`);
-    if (offering.credits === null) summary.unknownCreditItems += 1;
+    const credits = plannerItemCreditContribution(item, offering);
+    if (credits === null) summary.unknownCreditItems += 1;
     else if (item.status === 'earned' || item.status === 'in_progress' || item.status === 'planned') {
-      summary[item.status] += offering.credits;
+      summary[item.status] += credits;
     }
   }
   for (const course of publicCourses) {

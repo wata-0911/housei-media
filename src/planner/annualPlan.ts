@@ -1,6 +1,8 @@
 import type { Mapping, Offering, PlannerCatalog, PlannerItem, PublicCourse } from './plannerCatalog';
 import { createMappingResolver } from './plannerHelpers';
 import { summarizeCredits } from './calculations';
+import { plannerItemCreditContribution } from './plannerItemCredits';
+import type { ImportedCourseAchievement } from './gradeImportApply';
 
 export const creditCategories = ['一般教育：人文', '一般教育：社会', '一般教育：自然', '一般教育：その他', '外国語', '保健体育', '専門教育'] as const;
 export const classificationStates = ['選択した所属のカリキュラム対象外', '教職等・通常カリキュラム対象外', '対応情報を確認中', '所属を選択すると区分を表示'] as const;
@@ -49,21 +51,37 @@ export function groupAnnualPlan(items: PlannerItem[], offerings: Map<string, Off
 export type AnnualCreditLimitReference = {
   year: number;
   correspondenceCredits: number;
+  /** Correspondence credits are a known subtotal when this count is nonzero. */
+  unknownCorrespondenceItems: number;
   schoolingRegistrationCredits: number;
   knownTotalCredits: number;
+  /** True when the known subtotal alone exceeds 49; false does not resolve unknowns. */
   exceedsOfficial49: boolean;
 };
 
 /** Advisory only: does not infer teacher-training/qualification courses or thesis year. */
-export function annualCreditLimitReferences(items: PlannerItem[], offerings: Map<string, Offering>): AnnualCreditLimitReference[] {
+export function annualCreditLimitReferences(items: PlannerItem[], offerings: Map<string, Offering>, officialAchievements: ImportedCourseAchievement[] = []): AnnualCreditLimitReference[] {
   const rows = new Map<number, AnnualCreditLimitReference>();
+  const sources = new Map(officialAchievements.map(row => [row.id, row]));
   for (const item of items) {
     if (item.plannedYear === null) continue;
     const offering = offerings.get(item.offeringId);
-    if (!offering || offering.credits === null) continue;
-    const row = rows.get(item.plannedYear) ?? { year: item.plannedYear, correspondenceCredits: 0, schoolingRegistrationCredits: 0, knownTotalCredits: 0, exceedsOfficial49: false };
-    if (offering.method === 'correspondence') row.correspondenceCredits += offering.credits;
-    else row.schoolingRegistrationCredits += offering.credits;
+    if (!offering) continue;
+    // Correspondence counts the enrollment's intended earned credits; schooling
+    // counts registration credits even when its Course contribution is smaller.
+    const source = offering.method === 'correspondence' && item.status === 'earned' && item.importedSourceCourseId
+      ? sources.get(item.importedSourceCourseId) : undefined;
+    // A linked earned source owns the official value, including zero and null.
+    // Do not write it into learner-explicit metadata or fall back from null.
+    const credits = offering.method === 'correspondence'
+      ? source ? source.earnedCreditsTotal : plannerItemCreditContribution(item, offering)
+      : offering.credits;
+    const row = rows.get(item.plannedYear) ?? { year: item.plannedYear, correspondenceCredits: 0, unknownCorrespondenceItems: 0, schoolingRegistrationCredits: 0, knownTotalCredits: 0, exceedsOfficial49: false };
+    if (credits === null) {
+      if (offering.method !== 'correspondence') continue;
+      row.unknownCorrespondenceItems += 1;
+    } else if (offering.method === 'correspondence') row.correspondenceCredits += credits;
+    else row.schoolingRegistrationCredits += credits;
     row.knownTotalCredits = row.correspondenceCredits + row.schoolingRegistrationCredits;
     row.exceedsOfficial49 = row.knownTotalCredits > 49 || row.schoolingRegistrationCredits > 49;
     rows.set(item.plannedYear, row);

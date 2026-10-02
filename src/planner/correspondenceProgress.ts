@@ -1,5 +1,5 @@
 import type { CorrespondenceCourseProgress, CourseGrade, Offering, PlannerItem, ReportPassingGrade, ReportProgress, ReportProgressStatus } from './plannerCatalog';
-import { correspondenceRequirementFor } from './correspondenceRequirements';
+import { correspondenceRequirementFor, effectiveRequiredReportsFor } from './correspondenceRequirements';
 
 export const REPORT_PASSING_GRADES: ReportPassingGrade[] = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'];
 export const CREDIT_EXAM_GRADES: CourseGrade[] = [...REPORT_PASSING_GRADES, 'D'];
@@ -16,12 +16,17 @@ export function setReportStatus(course: CorrespondenceCourseProgress, reportNumb
   const reports = course.reports.map(report => report.reportNumber === reportNumber ? { ...report, status, grade: status === 'passed' ? report.grade : null } : report);
   return { ...course, reports };
 }
+/** Derived view only. Edit/persist the original full progress, including extra reports. */
+export function effectiveCorrespondenceProgress(item: PlannerItem, offering: Offering, saved: CorrespondenceCourseProgress): CorrespondenceCourseProgress {
+  if (offering.method !== 'correspondence' || offering.credits !== 4 || item.courseCreditContribution !== 2) return saved;
+  return { ...saved, requiredReports: effectiveRequiredReportsFor(item, offering) };
+}
 export function setReportGrade(course: CorrespondenceCourseProgress, reportNumber: number, grade: ReportPassingGrade | null): CorrespondenceCourseProgress {
   return { ...course, reports: course.reports.map(report => report.reportNumber === reportNumber ? { ...report, status: grade === null ? report.status : 'passed', grade } : report) };
 }
 export type CorrespondenceCreditResult = { examEligible: boolean | null; reportsPassed: boolean | null; examPassed: boolean | null; creditEarned: boolean | null; reason: string };
 export function correspondenceCreditResult(course: CorrespondenceCourseProgress): CorrespondenceCreditResult {
-  if (course.requiredReports === null) return { examEligible: null, reportsPassed: null, examPassed: course.examGrade === null ? null : course.examGrade !== 'D', creditEarned: null, reason: '設題総覧との安全な対応付けが未確認のため、必要リポート数を自動判定しません。' };
+  if (course.requiredReports === null) return { examEligible: null, reportsPassed: null, examPassed: course.examGrade === null ? null : course.examGrade !== 'D', creditEarned: null, reason: '必要リポート数を安全に確認できないため、通信学習分の修得条件を自動判定しません。' };
   const requiredReports = course.requiredReports;
   const reports = course.reports.filter(report => report.reportNumber <= requiredReports);
   if (reports.length !== requiredReports) return { examEligible: null, reportsPassed: null, examPassed: course.examGrade === null ? null : course.examGrade !== 'D', creditEarned: null, reason: '必要リポートの記録が不足しています。' };

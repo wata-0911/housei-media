@@ -1,3 +1,5 @@
+import CurriculumCourseProgress from '../components/planner/CurriculumCourseProgress';
+import { deriveCurriculumCourseProgress } from '../planner/curriculumCourseProgress';
 import { useCallback, useEffect, useState } from 'react';
 import CourseSearch from '../components/planner/CourseSearch';
 import PlannedCourseList from '../components/planner/PlannedCourseList';
@@ -59,10 +61,11 @@ export default function PlannerPage() {
   const thesisGuidance = guidanceForScope(state, state.selectedScopeId);
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, thesisProgress.selection, state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile, thesisProgress);
   const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, state.selectedScopeId);
-  const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta);
+  const curriculumProgress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId);
+  const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta, state.importedStudyRecords);
   const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
   const exportPresentation = plannerExportPresentation(state, catalog);
-  const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById);
+  const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById, state.importedCourseAchievements);
   const profileNeedsAttention = state.selectedScopeId === null || missingGraduationProfilePrerequisites(state.graduationProfile).length > 0;
 
   useEffect(() => {
@@ -184,7 +187,11 @@ export default function PlannerPage() {
     const addedItems = next.items.length - state.items.length;
     const addedCourses = next.importedCourseAchievements.length - state.importedCourseAchievements.length;
     const addedRecords = next.importedStudyRecords.length - state.importedStudyRecords.length;
-    if (commit(next, `${addedCourses}件の成績表行と${addedRecords}件の履修実績を保存し、${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
+    const oldCourses = new Map(state.importedCourseAchievements.map(row => [row.id, row]));
+    const oldRecords = new Map(state.importedStudyRecords.map(record => [record.id, record]));
+    const updatedCourses = next.importedCourseAchievements.filter(row => oldCourses.has(row.id) && oldCourses.get(row.id) !== row).length;
+    const updatedRecords = next.importedStudyRecords.filter(record => oldRecords.has(record.id) && oldRecords.get(record.id) !== record).length;
+    if (commit(next, `成績表行を追加${addedCourses}件・更新${updatedCourses}件、履修内訳を追加${addedRecords}件・更新${updatedRecords}件保存しました。${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
     return false;
   }
   function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
@@ -206,7 +213,7 @@ export default function PlannerPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <div className="border-l-4 border-[#E65C00] bg-orange-50 p-4 text-sm leading-relaxed">
         {!catalog.metadata.graduationCheckComplete && <p>一部要件のみ自動判定しています。卒業可否を保証しません。</p>}
-        <p className="mt-1">2026年の収録データを使用しています。計画はこのブラウザに保存されます。結果待ち・不合格・取りやめの単位は合計に含めません。単位数不明の件数は全状態を対象に表示します。</p>
+        <p className="mt-1">2026年の収録データを使用しています。計画はこのブラウザに保存されます。修得単位は公式成績の集計を優先します。制度科目の「予定込み」には計画中・履修中・結果待ちを含めます。単位数不明の件数は全状態を対象に表示します。</p>
       </div>
       {loaded.error && <div role="alert" className="bg-amber-50 border border-amber-300 p-4 space-y-3">
         <p>{loaded.error}</p>
@@ -220,7 +227,7 @@ export default function PlannerPage() {
         </div>
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
-      <CreditSummary summary={summarizeCredits(state.items, offeringsById, state.publicCourses)} importedEarnedCredits={importedEarnedCreditsTotal(state.importedCourseAchievements)} />
+      <CreditSummary summary={summarizeCredits(importedDerived.plannerItems, offeringsById, state.publicCourses)} importedEarnedCredits={importedEarnedCreditsTotal(state.importedCourseAchievements)} />
       <div className="min-h-5 text-sm text-[#002255]">
         <p role="status" className="inline">{notice}</p>
         {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
@@ -241,10 +248,11 @@ export default function PlannerPage() {
         <BrowserExtensionEntrySection />
         <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} warnings={importedDerived.warnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
-        <CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
+        <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
         <PlannedCourseList classify={classify} unifiedRows={unifiedCourseRows} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} importedUserMeta={state.importedCourseUserMeta} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
+        <CurriculumCourseProgress progress={curriculumProgress} catalog={catalog} disabled={loaded.error !== null} onChange={changeItem} />
         <PlannerExportActions presentation={exportPresentation} />
-        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(state.items, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
+        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} /><ThesisGuidance catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} /></>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab">

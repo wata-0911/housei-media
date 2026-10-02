@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { economicsGradeCells } from '../../../tests/fixtures/economics-grade-row.mjs';
 import { test } from 'node:test';
 import '../parser/extractor.js';
 
@@ -25,6 +26,17 @@ const extractTables = tables => {
   };
   return api.extractCurrentDocument();
 };
+
+test('Economics correspondence and winter schooling2 survive extraction in either schooling slot', () => {
+  for (const slot of [0, 1]) {
+    const outcome = extractTables([table([economicsGradeCells(slot)])]);
+    assert.equal(outcome.ok, true);
+    const course = outcome.value.courses[0];
+    assert.equal(course.reports[0].status, 'passed'); assert.equal(course.creditExam.credits, 2);
+    assert.equal(course.schoolings.length, 2);
+    assert.deepEqual(course.schoolings[slot], { rawYear: '2026', rawTerm: '冬期', rawDate: '2027/02/01', rawCredits: '2', rawGrade: 'A', year: '2026', term: '冬期', date: '2027-02-01', credits: 2, grade: 'A' });
+  }
+});
 
 test('extracts 24-cell logic and mixed correspondence/schooling courses without finalGrade', () => {
   const logic = cells('論理学', { 2: '4', 5: '4', 7: '○26/06/01', 8: '×26/06/15', 9: '*確認中', 10: '保留', 11: '2026/07/01', 12: '*4', 13: 'D' });

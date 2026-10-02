@@ -7,7 +7,10 @@ export function plannerItemFromCourseSearch(offeringId: string): PlannerItem {
 
 /** Apply the same lifecycle rule used by the editable Planner row. */
 export function updatePlannerItem(items: PlannerItem[], offeringId: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>): PlannerItem[] {
-  return items.map(item => item.offeringId === offeringId
-    ? { ...item, ...patch, ...(patch.status && patch.status !== 'earned' ? { earnedOrder: null } : {}) }
-    : item);
+  return items.map(item => {
+    if (item.offeringId !== offeringId) return item;
+    const updated = { ...item, ...patch, ...(patch.status && patch.status !== 'earned' ? { earnedOrder: null } : {}) };
+    if ('courseCreditContribution' in patch && patch.courseCreditContribution === undefined) delete updated.courseCreditContribution;
+    return updated;
+  });
 }

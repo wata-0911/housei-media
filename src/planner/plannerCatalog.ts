@@ -192,8 +192,15 @@ export type PlannerCatalog = {
   metadata: Metadata;
 };
 
+/** One learner enrollment in a concrete offering; v22 allows one item per offering. */
 export type PlannerItem = {
   offeringId: string;
+  /** Optional v22 source association for an auto-imported item. Official credits stay on the source row. */
+  importedSourceCourseId?: string;
+  /** Explicit enrollment credits for CourseProgress, summaries and annual correspondence.
+   * Absence uses Offering.credits. Does not override official aggregates,
+   * schooling registration credits or graduation allocation. */
+  courseCreditContribution?: number;
   status: "planned" | "in_progress" | "waiting" | "earned" | "failed" | "dropped";
   plannedYear: number | null;
   plannedTerm: string | null;

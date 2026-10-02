@@ -162,7 +162,8 @@ test('import: exact course and opening retain safe auto-registration and no fina
   assert.equal(units[0].sourceCourse.offeringMatch, 'exact_unique');
   assert.equal(units[0].sourceCourse.selectedOfferingId, offerings[0].id);
   assert.equal(next.items.length, 1);
-  assert.equal(next.items[0].status, 'planned');
+  assert.equal(next.items[0].status, 'earned');
+  assert.equal(next.items[0].importedSourceCourseId, next.importedCourseAchievements[0].id);
   assert.equal(next.items[0].plannedYear, 2026);
   assert.equal(next.items[0].plannedTerm, '前期');
   assert.deepEqual(next.courseEvaluations, {});
