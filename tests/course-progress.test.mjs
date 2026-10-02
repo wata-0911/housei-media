@@ -230,6 +230,47 @@ test('one official row with correspondence and schooling Offerings generates pla
     assert.equal(applyImport(next, importPreview(data, offerings, next.importedStudyRecords, next.importedCourseAchievements, context), offerings), next);
   }
 });
+for (const deselectedMethod of ['schooling', 'correspondence']) test(`deselecting ${deselectedMethod} does not attribute a multi-Offering source aggregate to the remaining item`, () => {
+  const f = fixture(); const offerings = [f.offerings[2], f.offerings[0]];
+  const context = { curriculum: f.curriculum, mappings: f.mappings };
+  const data = importData(f.course.canonicalName, 2); const emptySlot = data.courses[0].schoolings[1];
+  withPassingSchoolings(data); data.courses[0].schoolings[1] = emptySlot;
+  const preview = importPreview(data, offerings, [], [], context);
+  assert.equal(preview.length, 2); assert.ok(preview.every(unit => unit.selected && unit.match === 'exact_unique'));
+  assert.equal(new Set(preview.map(unit => unit.sourceCourse.id)).size, 1);
+  const units = preview.map(unit => ({ ...unit, selected: unit.method !== deselectedMethod }));
+  const next = applyImport(initialState(), units, offerings);
+  assert.equal(next.items.length, 1);
+  assert.equal(next.items[0].offeringId, offerings.find(offering => offering.method !== deselectedMethod).id);
+  assert.equal(next.items[0].status, 'planned');
+  assert.equal(next.items[0].importedSourceCourseId, undefined);
+  assert.equal(next.importedStudyRecords.length, 1);
+  assert.equal(next.importedCourseAchievements.length, 1);
+  assert.equal(progress(f, next.items, next.importedCourseAchievements).earnedCredits, 2);
+  assert.equal(validateState(next, f), true);
+});
+test('deselecting every component adds neither PlannerItems nor a new official source', () => {
+  const f = fixture(); const offerings = [f.offerings[2], f.offerings[0]];
+  const context = { curriculum: f.curriculum, mappings: f.mappings };
+  const preview = importPreview(withPassingSchoolings(importData(f.course.canonicalName, 2)), offerings, [], [], context);
+  const state = initialState();
+  const next = applyImport(state, preview.map(unit => ({ ...unit, selected: false })), offerings);
+  assert.equal(next, state);
+  assert.deepEqual(next.items, []); assert.deepEqual(next.importedCourseAchievements, []); assert.deepEqual(next.importedStudyRecords, []);
+});
+test('deselecting one of two slots for the same Offering still permits a single source-linked earned item', () => {
+  const f = fixture(); const offerings = [f.offerings[0]];
+  const context = { curriculum: f.curriculum, mappings: f.mappings };
+  const preview = importPreview(withPassingSchoolings(importData(f.course.canonicalName, 2)), offerings, [], [], context);
+  const schoolings = preview.filter(unit => unit.method === 'schooling');
+  assert.equal(schoolings.length, 2); assert.ok(schoolings.every(unit => unit.match === 'exact_unique' && unit.offeringId === offerings[0].id));
+  const units = preview.map(unit => ({ ...unit, selected: unit.id === schoolings[0].id }));
+  const next = applyImport(initialState(), units, offerings);
+  assert.equal(next.items.length, 1); assert.equal(next.items[0].status, 'earned');
+  assert.equal(next.items[0].importedSourceCourseId, next.importedCourseAchievements[0].id);
+  assert.equal(next.importedStudyRecords.length, 1);
+  assert.equal(progress(f, next.items, next.importedCourseAchievements).earnedCredits, 2);
+});
 test('a missing component of a multi-Offering source remains planned on backfill even if the other item already exists', () => {
   const f = fixture(); const offerings = [f.offerings[2], f.offerings[0]];
   const context = { curriculum: f.curriculum, mappings: f.mappings };

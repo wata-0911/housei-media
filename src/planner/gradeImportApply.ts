@@ -129,16 +129,20 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
   const existingIds = new Set(existing.map(item => item.offeringId));
   const unitsByOffering = new Map<string, ImportPreviewUnit[]>();
   const offeringsBySource = new Map<string, Set<string>>();
-  for (const unit of units.filter(unit => unit.selected || unit.sourceDuplicate)) {
+  // Pass 1: source evidence includes every safe component, even deselected or
+  // already planned ones. Checkboxes cannot attribute a row aggregate to an opening.
+  for (const unit of units) {
     const id = autoPlannerOfferingIdForImport(unit, offerings);
     if (!id) continue;
     const sourceId = unit.sourceExistingId ?? unit.sourceCourse.id;
     const sourceOfferings = offeringsBySource.get(sourceId) ?? new Set<string>();
     sourceOfferings.add(id);
     offeringsBySource.set(sourceId, sourceOfferings);
-    // Count existing components too: filling only one missing item does not prove
-    // that the row aggregate belongs to that component.
-    if (!existingIds.has(id)) unitsByOffering.set(id, [...(unitsByOffering.get(id) ?? []), unit]);
+  }
+  // Pass 2: selection/backfill controls additions only; existing items are preserved.
+  for (const unit of units.filter(unit => unit.selected || unit.sourceDuplicate)) {
+    const id = autoPlannerOfferingIdForImport(unit, offerings);
+    if (id && !existingIds.has(id)) unitsByOffering.set(id, [...(unitsByOffering.get(id) ?? []), unit]);
   }
   return [...unitsByOffering].map(([id, units]) => {
     // Conflicting occurrences and inferred dates must not become certain plans.
