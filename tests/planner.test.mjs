@@ -3441,7 +3441,7 @@ const autoImportBaseOffering = catalog.offerings.find(offering => offering.resol
   && offering.credits === 4 && catalog.curriculum.courses.some(course => course.id === offering.curriculumCourseId && course.curriculumCredits === 4));
 function autoImportCourse(rawName, patch = {}) {
   const emptySchooling = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
-  return { rawName, categoryRaw: null, compositionCredits: { raw: '4', value: 4 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2025/07/01', rawCredits: '4', rawGrade: 'S', date: '2025-07-01', credits: 4, grade: 'S', pendingMarker: false }, schoolings: [emptySchooling, emptySchooling], ...patch };
+  return { rawName, categoryRaw: null, compositionCredits: { raw: '4', value: 4 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2026/07/01', rawCredits: '4', rawGrade: 'S', date: '2026-07-01', credits: 4, grade: 'S', pendingMarker: false }, schoolings: [emptySchooling, emptySchooling], ...patch };
 }
 const autoImportData = courses => ({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-02T00:00:00.000Z', courses });
 const autoImportOfferings = [{ ...autoImportBaseOffering, id: 'auto-exact', name: '自動仮登録の一意科目' }];
@@ -3477,12 +3477,12 @@ test('auto import: existing items, final grades, and all progress remain untouch
 
 test('auto import: repeated source rows and components produce one item per offering', () => {
   const schoolingOfferings = [{ ...autoImportOfferings[0], method: 'schooling' }];
-  const slot = { rawYear: '25', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '前期', date: null, credits: 2, grade: 'A' };
+  const slot = { rawYear: '26', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '前期', date: null, credits: 2, grade: 'A' };
   const course = autoImportCourse(schoolingOfferings[0].name, { schoolings: [slot, slot] });
   const next = applyImport(initialState(), importPreview(autoImportData([course, course]), schoolingOfferings), schoolingOfferings);
   assert.equal(next.importedCourseAchievements.length, 2);
   assert.equal(next.importedStudyRecords.length, 6, 'unmatched correspondence details are also preserved');
-  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: 2025, plannedTerm: '前期' }]);
+  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: 2026, plannedTerm: '前期' }]);
 });
 
 test('auto import: reimport neither multiplies items nor replaces learner edits', () => {
@@ -3561,12 +3561,12 @@ test('auto import: unresolved catalog mapping and inconsistent preview selection
 
 test('auto import: year and term prefill require explicit compatible and consistent evidence', () => {
   const offerings = [{ ...autoImportOfferings[0], method: 'schooling' }];
-  const slot = { rawYear: '25', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '前期', date: null, credits: 2, grade: 'A' };
+  const slot = { rawYear: '26', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '前期', date: null, credits: 2, grade: 'A' };
   const data = slots => autoImportData([autoImportCourse(offerings[0].name, { schoolings: slots })]);
   const run = slots => applyImport(initialState(), importPreview(data(slots), offerings), offerings).items[0];
-  assert.deepEqual([run([slot, slot]).plannedYear, run([slot, slot]).plannedTerm], [2025, '前期']);
+  assert.deepEqual([run([slot, slot]).plannedYear, run([slot, slot]).plannedTerm], [2026, '前期']);
   const conflicting = run([slot, { ...slot, rawYear: '26', year: '26', rawTerm: '後期', term: '後期' }]);
-  assert.deepEqual([conflicting.plannedYear, conflicting.plannedTerm], [null, null]);
+  assert.deepEqual([conflicting.plannedYear, conflicting.plannedTerm], [2026, null]);
   const inferred = run([{ ...slot, rawYear: '', year: null, rawTerm: '夏', term: '夏' }, { ...slot, rawYear: '', year: null, rawTerm: '夏', term: '夏' }]);
   assert.deepEqual([inferred.plannedYear, inferred.plannedTerm], [null, null]);
   const preview = importPreview(data([slot, slot]), offerings).map(unit => ({ ...unit, academicYear: 2027, yearSource: 'manual', term: '後期' }));
@@ -3659,7 +3659,7 @@ test('auto import: desktop and mobile keep planner controls beside official impo
 
 test('auto import: multiple safe component offerings keep the unified view uncoalesced', () => {
   const offerings = [autoImportOfferings[0], { ...autoImportOfferings[0], id: 'auto-schooling', method: 'schooling' }];
-  const slot = { rawYear: '25', rawTerm: '夏', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '夏', date: null, credits: 2, grade: 'A' };
+  const slot = { rawYear: '26', rawTerm: '夏', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '夏', date: null, credits: 2, grade: 'A' };
   const data = autoImportData([autoImportCourse(offerings[0].name, { schoolings: [slot, { ...slot, rawTerm: '冬', term: '冬' }] })]);
   const next = applyImport(initialState(), importPreview(data, offerings), offerings);
   assert.deepEqual(next.items.map(current => current.offeringId), ['auto-exact', 'auto-schooling']);
@@ -3757,7 +3757,7 @@ test('backfill: source duplicates enable the real UI action only while a safe pl
 });
 
 test('backfill: duplicate components and course-only sources each create only one planner item', () => {
-  const slot = { rawYear: '25', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '25', term: '前期', date: null, credits: 2, grade: 'A' };
+  const slot = { rawYear: '26', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '前期', date: null, credits: 2, grade: 'A' };
   const offerings = [{ ...autoImportOfferings[0], method: 'schooling' }];
   const schoolingCourse = autoImportCourse(offerings[0].name, { schoolings: [slot, slot] });
   const courseOnly = autoImportCourse(offerings[0].name, { creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false } });
@@ -3769,7 +3769,7 @@ test('backfill: duplicate components and course-only sources each create only on
     assert.equal(next.items.length, 1);
     assert.equal(next.items[0].status, courses.length === 1 ? 'earned' : 'planned');
     if (courses.length === 1) assert.equal(next.items[0].importedSourceCourseId, legacy.importedCourseAchievements[0].id);
-    assert.equal(next.items[0].plannedYear, courses[0] === schoolingCourse ? 2025 : null);
+    assert.equal(next.items[0].plannedYear, courses[0] === schoolingCourse ? 2026 : null);
     assert.equal(next.items[0].plannedTerm, courses[0] === schoolingCourse ? '前期' : null);
     assert.equal(next.importedCourseAchievements, legacy.importedCourseAchievements);
     assert.equal(next.importedStudyRecords, legacy.importedStudyRecords);

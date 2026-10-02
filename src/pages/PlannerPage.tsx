@@ -62,7 +62,7 @@ export default function PlannerPage() {
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, thesisProgress.selection, state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile, thesisProgress);
   const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, state.selectedScopeId);
   const curriculumProgress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId);
-  const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta);
+  const unifiedCourseRows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, offeringsById, state.importedCourseUserMeta, state.importedStudyRecords);
   const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
   const exportPresentation = plannerExportPresentation(state, catalog);
   const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById, state.importedCourseAchievements);
@@ -187,7 +187,11 @@ export default function PlannerPage() {
     const addedItems = next.items.length - state.items.length;
     const addedCourses = next.importedCourseAchievements.length - state.importedCourseAchievements.length;
     const addedRecords = next.importedStudyRecords.length - state.importedStudyRecords.length;
-    if (commit(next, `${addedCourses}件の成績表行と${addedRecords}件の履修実績を保存し、${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
+    const oldCourses = new Map(state.importedCourseAchievements.map(row => [row.id, row]));
+    const oldRecords = new Map(state.importedStudyRecords.map(record => [record.id, record]));
+    const updatedCourses = next.importedCourseAchievements.filter(row => oldCourses.has(row.id) && oldCourses.get(row.id) !== row).length;
+    const updatedRecords = next.importedStudyRecords.filter(record => oldRecords.has(record.id) && oldRecords.get(record.id) !== record).length;
+    if (commit(next, `成績表行を追加${addedCourses}件・更新${updatedCourses}件、履修内訳を追加${addedRecords}件・更新${updatedRecords}件保存しました。${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
     return false;
   }
   function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }

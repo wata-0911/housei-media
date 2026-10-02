@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { economicsGradeCells } from './fixtures/economics-grade-row.mjs';
 import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
 import ImportedAchievements from '../src/components/planner/ImportedAchievements.tsx';
+import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { catalog, offeringsById } from '../src/planner/catalog.ts';
@@ -65,6 +66,145 @@ function economicsOfferings() {
   const winter = catalog.offerings.find(o => o.name === '経済学（冬期スクーリング）' && o.method === 'schooling' && o.credits === 2);
   assert.ok(correspondence); assert.ok(winter); return [correspondence, winter];
 }
+function unifiedImportHtml(state, offerings = catalog.offerings) {
+  const map = new Map(offerings.map(o => [o.id, o])); const noop = () => {};
+  return renderToStaticMarkup(createElement(PlannedCourseList, {
+    classify: createCreditClassifier(catalog, null), unifiedRows: createUnifiedCourseRows(state.items, state.importedCourseAchievements, map, state.importedCourseUserMeta, state.importedStudyRecords),
+    publicCourses: [], offerings: map, correspondenceProgress: {}, mediaProgress: {}, evaluations: {}, importedUserMeta: {}, disabled: false,
+    onChange: noop, onRemove: noop, onChangePublicCourse: noop, onRemovePublicCourse: noop, onChangeEvaluation: noop, onChangeCorrespondence: noop, onChangeImportedMeta: noop, onOpenMedia: noop,
+  }));
+}
+for (const unresolved of ['unmatched', 'ambiguous']) for (const deselect of [false, true]) test(`P2 import: ${unresolved} schooling blocks source-linked earned even when deselected=${deselect}`, () => {
+  const [corr, winter] = economicsOfferings(); const school = { ...winter, name: corr.name };
+  const offerings = unresolved === 'unmatched' ? [corr, winter] : [corr, school, { ...school, id: 'another-school' }];
+  const data = extractedEconomics(); const preview = importPreview(data, offerings);
+  assert.equal(preview[1].match, unresolved);
+  const next = applyImport(initialState(), preview.map(u => ({ ...u, selected: !deselect || u.method !== 'schooling' })), offerings);
+  assert.equal(next.items.length, 1); assert.equal(next.items[0].status, 'planned');
+  assert.equal('importedSourceCourseId' in next.items[0], false);
+  assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), 4);
+  assert.equal(next.importedCourseAchievements[0].curriculumMatch, 'exact_unique');
+  assert.equal(deriveCurriculumCourseProgress(next.items, catalog, next.importedCourseAchievements).courses.find(c => c.curriculumCourseId === corr.curriculumCourseId).earnedCredits, 4);
+});
+test('P2 import: unresolved source evidence also blocks earned on sourceDuplicate backfill', () => {
+  const offerings = economicsOfferings(); const data = extractedEconomics();
+  const imported = applyImport(initialState(), importPreview(data, offerings), offerings);
+  const before = { ...imported, items: [] }; const preview = importPreview(data, offerings, before.importedStudyRecords, before.importedCourseAchievements);
+  assert.ok(preview.every(u => u.sourceDuplicate && !u.selected));
+  const after = applyImport(before, preview, offerings);
+  assert.equal(after.items[0].status, 'planned'); assert.equal(after.items[0].importedSourceCourseId, undefined);
+  assert.equal(after.importedStudyRecords, before.importedStudyRecords); assert.equal(after.importedCourseAchievements, before.importedCourseAchievements);
+});
+test('P2 import: a truly single safe correspondence component still permits earned', () => {
+  const [corr] = economicsOfferings(); const data = extractedEconomics();
+  data.courses[0].schoolings[0] = data.courses[0].schoolings[1];
+  const next = applyImport(initialState(), importPreview(data, [corr]), [corr]);
+  assert.equal(next.items[0].status, 'earned'); assert.equal(next.items[0].importedSourceCourseId, next.importedCourseAchievements[0].id);
+});
+for (const coalesced of [false, true]) test(`P2 import: Unified plan includes unmatched winter detail with the official row (coalesced=${coalesced})`, () => {
+  const offerings = economicsOfferings(); const map = new Map(offerings.map(o => [o.id, o]));
+  const saved = applyImport(initialState(), importPreview(extractedEconomics(), offerings), offerings);
+  const state = { ...saved, items: coalesced ? saved.items : [] }; const snapshot = structuredClone(state);
+  const rows = createUnifiedCourseRows(state.items, state.importedCourseAchievements, map, {}, state.importedStudyRecords);
+  assert.equal(rows.length, 1); assert.deepEqual(rows[0].importedStudyRecords, state.importedStudyRecords);
+  const html = unifiedImportHtml(state, offerings);
+  assert.ok((html.match(/成績表の履修内訳/g) ?? []).length >= 2, 'desktop and mobile retain source details');
+  assert.match(html, /通信/); assert.match(html, /スクーリング/); assert.match(html, /2026年度/); assert.match(html, /冬期/); assert.match(html, /2単位/); assert.match(html, /評価: A/); assert.match(html, /照合先: 未特定/);
+  assert.match(html, /リポート/); assert.match(html, /単位修得試験/); assert.match(html, /修得済み（成績表）/);
+  assert.deepEqual(state, snapshot);
+});
+test('P2 import: multiple planner Offerings group components only with the separate official row', () => {
+  const [corr, winter] = economicsOfferings(); const school = { ...winter, name: corr.name }; const offerings = [corr, school];
+  const next = applyImport(initialState(), importPreview(extractedEconomics(), offerings), offerings);
+  const rows = createUnifiedCourseRows(next.items, next.importedCourseAchievements, new Map(offerings.map(o => [o.id, o])), {}, next.importedStudyRecords);
+  assert.equal(rows.length, 3); assert.ok(rows.filter(r => r.plannerItem).every(r => r.importedStudyRecords.length === 0));
+  assert.equal(rows.find(r => r.source === 'imported').importedStudyRecords.length, 2);
+  assert.match(unifiedImportHtml(next, offerings), /2026開講と照合済み/);
+  assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), 4);
+  for (const p of catalog.programs.filter(p => p.department)) {
+    const baseline = calculateGraduationProgress([], catalog, p.scopeId, [], 'undecided', [], next.importedCourseAchievements);
+    const actual = calculateGraduationProgress(next.items, { ...catalog, offerings }, p.scopeId, [], 'undecided', next.importedStudyRecords, next.importedCourseAchievements);
+    assert.deepEqual(actual.cards.map(c => c.earned), baseline.cards.map(c => c.earned)); assert.equal(actual.graduationCheckComplete, false);
+  }
+});
+test('P2 import: historical schooling is retained in Unified plan without a 2026 PlannerItem or verified association', () => {
+  const [, winter] = economicsOfferings(); const offerings = [{ ...winter, name: '経済学' }]; const data = extractedEconomics();
+  data.courses[0].reports = data.courses[0].reports.map(() => ({ raw: '', status: 'none', date: null }));
+  data.courses[0].creditExam = { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false };
+  Object.assign(data.courses[0].schoolings[0], { rawYear: '2025', year: '2025', rawDate: '2026/02/01', date: '2026-02-01' });
+  const next = applyImport(initialState(), importPreview(data, offerings), offerings);
+  assert.deepEqual(next.items, []); assert.equal(next.importedStudyRecords.length, 1); assert.equal(next.importedStudyRecords[0].academicYear, 2025);
+  assert.equal(next.importedCourseAchievements[0].selectedOfferingId, null);
+  const html = unifiedImportHtml(next, offerings); assert.match(html, /2025年度/); assert.match(html, /冬期/); assert.doesNotMatch(html, /2026開講と照合済み/);
+  const legacy = { ...next, importedStudyRecords: next.importedStudyRecords.map(r => ({ ...r, offeringId: winter.id, match: 'exact_unique' })) };
+  assert.doesNotMatch(unifiedImportHtml(legacy, offerings), /2026開講と照合済み/);
+});
+test('P2 import: a historical correspondence exam never becomes a current catalog attempt', () => {
+  const [corr] = economicsOfferings(); const data = extractedEconomics();
+  data.courses[0].schoolings[0] = data.courses[0].schoolings[1];
+  data.courses[0].reports = data.courses[0].reports.map(r => ({ ...r, date: r.date ? '2025-06-01' : null }));
+  Object.assign(data.courses[0].creditExam, { rawDate: '2025/07/01', date: '2025-07-01' });
+  const next = applyImport(initialState(), importPreview(data, [corr]), [corr]);
+  assert.deepEqual(next.items, []); assert.equal(next.importedStudyRecords[0].offeringId, null);
+  assert.equal(next.importedCourseAchievements[0].selectedOfferingId, null);
+  assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), 4);
+  assert.match(unifiedImportHtml(next, [corr]), /2025年度/);
+});
+test('P2 import: unresolved correspondence also blocks a safe schooling component from earned', () => {
+  const [corr, winter] = economicsOfferings(); const offerings = [{ ...winter, name: corr.name }];
+  const next = applyImport(initialState(), importPreview(extractedEconomics(), offerings), offerings);
+  assert.equal(next.items.length, 1); assert.equal(next.items[0].status, 'planned'); assert.equal(next.items[0].importedSourceCourseId, undefined);
+  assert.equal(next.importedStudyRecords.length, 2); assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), 4);
+});
+test('P2 import: legacy or orphan source details are shown without inferring an official aggregate', () => {
+  const offerings = economicsOfferings(); const saved = applyImport(initialState(), importPreview(extractedEconomics(), offerings), offerings);
+  const state = { ...initialState(), importedStudyRecords: saved.importedStudyRecords.map(({ sourceCourseId, ...r }) => r) };
+  const rows = createUnifiedCourseRows([], [], new Map(offerings.map(o => [o.id, o])), {}, state.importedStudyRecords);
+  assert.equal(rows.length, 2); assert.equal(rows.flatMap(r => r.importedStudyRecords).length, 2);
+  assert.match(unifiedImportHtml(state, offerings), /公式科目行との対応未確認/); assert.match(unifiedImportHtml(state, offerings), /冬期/);
+});
+test('P2 import: reimport same source and schooling slot updates grade losslessly instead of appending', () => {
+  for (const slot of [0, 1]) {
+    const offerings = economicsOfferings(); const data = extractedEconomics(slot);
+    const before = applyImport(initialState(), importPreview(data, offerings), offerings); const snapshot = structuredClone(before);
+    const changed = structuredClone(data); Object.assign(changed.courses[0].schoolings[slot], { rawGrade: 'A+', grade: 'A+' });
+    const preview = importPreview(changed, offerings, before.importedStudyRecords, before.importedCourseAchievements);
+    assert.equal(applyImport(before, preview.map(u => ({ ...u, selected: false })), offerings), before);
+    const next = applyImport(before, preview, offerings);
+    assert.equal(next.importedStudyRecords.length, 2);
+    assert.equal(next.importedStudyRecords[0], before.importedStudyRecords[0]);
+    assert.equal(next.importedStudyRecords[1].id, before.importedStudyRecords[1].id);
+    assert.equal(next.importedStudyRecords[1].grade, 'A+'); assert.equal(next.importedStudyRecords[1].sourceCourseId, before.importedCourseAchievements[0].id);
+    assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), 4); assert.deepEqual(before, snapshot);
+    assert.equal(applyImport(next, importPreview(changed, offerings, next.importedStudyRecords, next.importedCourseAchievements), offerings), next);
+    const removed = { ...next, importedStudyRecords: [next.importedStudyRecords[0]] };
+    assert.equal(applyImport(removed, importPreview(changed, offerings, removed.importedStudyRecords, removed.importedCourseAchievements), offerings), removed);
+    const values = new Map(); const store = { getItem: k => values.get(k) ?? null, setItem: (k, v) => values.set(k, v) };
+    const raw = saveState(store, next, null, catalog); assert.deepEqual(loadState(store, catalog).state, next);
+    saveState(store, before, raw, catalog); assert.deepEqual(loadState(store, catalog).state, snapshot); assert.equal(next.schemaVersion, 22);
+  }
+});
+test('P2 import: uncertain or competing component identity never overwrites an old record', () => {
+  const offerings = economicsOfferings(); const data = extractedEconomics(); const saved = applyImport(initialState(), importPreview(data, offerings), offerings);
+  const changed = structuredClone(data); Object.assign(changed.courses[0].schoolings[0], { rawGrade: 'A+', grade: 'A+' });
+  for (const records of [saved.importedStudyRecords.map(r => r.method === 'schooling' ? { ...r, fingerprint: 'legacy-unknown-slot' } : r), [...saved.importedStudyRecords, { ...saved.importedStudyRecords[1], id: 'competing-detail' }]]) {
+    const before = { ...saved, importedStudyRecords: records };
+    const next = applyImport(before, importPreview(changed, offerings, records, before.importedCourseAchievements), offerings);
+    assert.ok(next.importedStudyRecords.some(r => r.id === records[1].id && r.grade === 'A'));
+    assert.equal(next.importedStudyRecords.length, records.length + 1);
+  }
+});
+test('P2 import: grade refresh preserves component association and other native slots', () => {
+  const [corr, winter] = economicsOfferings(); const offerings = [corr, { ...winter, name: corr.name }]; const data = extractedEconomics();
+  data.courses[0].schoolings[1] = { ...data.courses[0].schoolings[0] };
+  const saved = applyImport(initialState(), importPreview(data, offerings), offerings);
+  const before = { ...saved, importedStudyRecords: saved.importedStudyRecords.map(r => r.method === 'schooling' ? { ...r, yearSource: 'manual', term: '確認済みの冬期' } : r) };
+  const changed = structuredClone(data); Object.assign(changed.courses[0].schoolings[1], { rawGrade: 'A+', grade: 'A+' });
+  const next = applyImport(before, importPreview(changed, offerings, before.importedStudyRecords, before.importedCourseAchievements), offerings);
+  assert.equal(next.importedStudyRecords.length, 3); assert.equal(next.importedStudyRecords[1], before.importedStudyRecords[1]);
+  assert.equal(next.importedStudyRecords[2].id, before.importedStudyRecords[2].id); assert.equal(next.importedStudyRecords[2].grade, 'A+');
+  assert.deepEqual([next.importedStudyRecords[2].offeringId, next.importedStudyRecords[2].term, next.importedStudyRecords[2].yearSource], [winter.id, '確認済みの冬期', 'manual']);
+});
 for (const ambiguous of [false, true]) test(`winter import: extractor through contract/preview/apply/display retains both components (ambiguous=${ambiguous})`, () => {
   const [correspondence, winter] = economicsOfferings();
   // Controlled fixture names test matching separately from the actual decorated catalog name.
@@ -810,7 +950,10 @@ test('deselecting every component adds neither PlannerItems nor a new official s
 test('deselecting one of two slots for the same Offering still permits a single source-linked earned item', () => {
   const f = fixture(); const offerings = [f.offerings[0]];
   const context = { curriculum: f.curriculum, mappings: f.mappings };
-  const preview = importPreview(withPassingSchoolings(importData(f.course.canonicalName, 2)), offerings, [], [], context);
+  const data = withPassingSchoolings(importData(f.course.canonicalName, 2));
+  data.courses[0].reports = data.courses[0].reports.map(() => ({ raw: '', status: 'none', date: null }));
+  data.courses[0].creditExam = { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false };
+  const preview = importPreview(data, offerings, [], [], context);
   const schoolings = preview.filter(unit => unit.method === 'schooling');
   assert.equal(schoolings.length, 2); assert.ok(schoolings.every(unit => unit.match === 'exact_unique' && unit.offeringId === offerings[0].id));
   const units = preview.map(unit => ({ ...unit, selected: unit.id === schoolings[0].id }));
@@ -838,7 +981,10 @@ test('a missing component of a multi-Offering source remains planned on backfill
 test('two component slots matching one distinct Offering can still create one source-linked earned item', () => {
   const f = fixture(); const offerings = [f.offerings[0]];
   const context = { curriculum: f.curriculum, mappings: f.mappings };
-  const next = applyImport(initialState(), importPreview(withPassingSchoolings(importData(f.course.canonicalName, 2)), offerings, [], [], context), offerings);
+  const data = withPassingSchoolings(importData(f.course.canonicalName, 2));
+  data.courses[0].reports = data.courses[0].reports.map(() => ({ raw: '', status: 'none', date: null }));
+  data.courses[0].creditExam = { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false };
+  const next = applyImport(initialState(), importPreview(data, offerings, [], [], context), offerings);
   assert.equal(next.items.length, 1);
   assert.equal(next.items[0].status, 'earned');
   assert.equal(next.items[0].importedSourceCourseId, next.importedCourseAchievements[0].id);
