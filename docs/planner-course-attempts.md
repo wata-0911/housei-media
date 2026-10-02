@@ -50,10 +50,10 @@ same Offeringの複数回履修について、今回提示された資料・利�
 | PlannerItem / identity | 1 Offeringに1 Itemを履修回として再利用。任意の `courseCreditContribution?: number` を追加。Attempt ID、Enrollment、v23は不要。 |
 | CourseProgress / CreditSummary / CategorySummary | pure helper `plannerItemCreditContribution(item, offering)` が明示値、未設定ならOffering.creditsを返す。CourseProgressは修得済みおよびplanned/in_progress/waitingの予定込みに使用し、failed/droppedは0。Summaryは既存のearned/in_progress/planned対象を維持。合計はuncapped。 |
 | validation / storage | JSON Schemaで非負number、意味validationで有限かつ既知Offering.credits以下。不明単位の開講にoverrideは保存しない。Course targetを超える合計や寄与は別判断なので禁止しない。既存v22はfieldなしで従来どおり読み書きできる。 |
-| progress / grades | Offering IDの評価・通信・Media進捗ownerを変更せず、合否や設題数から寄与単位を設定しない。 |
+| progress / grades | Offering IDの評価・通信・Media進捗ownerを変更せず、合否や設題数から寄与単位を設定しない。4単位通信の明示寄与2は、確認済みfull requirementが2/4件の場合だけ表示・判定用requiredReportsを1/2件へ導出する。保存済みのfull requirementと全リポート記録は保持する。 |
 | official / graduation | 公式aggregateが正本。source-linked earnedの重複排除と卒業official-priorityを継続。metadataで公式aggregateや卒業配分の入力単位を置換しない。Summaryへは既存の重複除外済みPlanner入力と公式aggregateを渡す。Course completionと卒業配分は別。 |
 | annual plan / limit | source-linked通信earnedは対応する公式行のearnedCreditsTotalを優先する。それ以外の通信は共通helperの明示寄与（未設定ならOffering.credits）を使用する。スクーリングは登録単位なので公式aggregate・metadataに関係なくOffering.creditsを使用。年度・状態の既存対象を維持し、49単位参考判定は既知小計を使用。通信nullは未確定件数を別表示する。 |
-| UI / unified view | exactな4単位Course・4単位通信Offeringの進捗詳細に2/4単位の明示選択を出す。未設定の4単位を自動で2にしない。公式集計優先のearned項目は編集対象から除き、read-onlyで表示。曖昧identityで選択を出さない。Unified rowは元Itemを保持。 |
+| UI / unified view | 4単位通信Offeringの履修計画行「開く」に修得方法を表示。Course進捗詳細でもexactな4単位Course・4単位通信に同じ選択を表示し、公式集計優先earnedはread-onlyとする。未設定の4単位を自動で2にしない。曖昧Courseを自動統合しないが、Offeringの通信方式自体は行で設定できる。Unified rowは元Itemを保持。 |
 | share / export | CSV・画像へ明示した科目進捗寄与を別項目で出す。開講単位はそのまま。Media共有は既存のOffering進捗表示。 |
 | edit / delete / undo | 行編集は元Itemをspread、削除undoは元Itemを保持、取込undoは全state snapshot。metadataをlossless保持する。設定解除は任意fieldを削除し、従来の開講単位へ戻す。 |
 | repeatable / advisory | 個別Requirement、repeatableRules、Media電話確認advisoryを継続し、完成を理由とした禁止やhard blockを追加しない。 |
@@ -63,6 +63,16 @@ same Offeringの複数回履修について、今回提示された資料・利�
 単位集計のP2 follow-upでは、同じしおりp.28の本文を確認した。年間履修単位数は通信学習の修得単位数とスクーリングの登録単位数等の合計である。p.31のスクーリング2+通信2に対応する明示入力を、通信の年間参考値にも使う。helperは状態・評価・公式実績を解釈せず、寄与値の選択だけを行う。スクーリング登録と卒業計算にはこのhelperを適用しない。保存metadataの追加・変更は不要なのでschemaVersion22を維持する。
 
 公式partial aggregateのP2 follow-upでは、`annualCreditLimitReferences` の第3引数に公式行の配列を追加し、PlannerPageから保存済み公式行を渡す。通信・earned・source ID一致の3条件を満たす場合だけ公式aggregateを参照する。公式0は0、公式nullは明示metadataやOffering単位へfallbackしない。`correspondenceCredits` と `knownTotalCredits` は既知小計、derived型の `unknownCorrespondenceItems` は通信の未確定件数を示す。未確定だけの年度も表示し、既知小計が49以下でも上限内とは断定しない。既知小計だけで49を超える場合は超過表示を維持する。公式行が存在しない、source markerがない、earned以外の場合は従来の明示値/Offering単位を使用し、名前や同一Courseから公式sourceを推測しない。公式aggregateをlearner明示metadataへ自動保存せず、UI/exportの明示設定、卒業official-priority、schemaVersion22を維持する。
+
+## 冬期実績・通信修得方法のP2監査
+
+extensionの固定24セル抽出（schooling枠14–18/19–23）からcontract、preview、apply、保存、表示まで、経済学の通信 evidence + 冬期スクーリング2単位/Aの共通synthetic fixtureで両枠を確認した。初回取込は両componentを保持する。schoolingのOfferingがambiguous/unmatchedでもImportedStudyRecordは残り、成績実績の詳細に表示される。実catalogは通信名が「経済学」、冬期開講名が「経済学（冬期スクーリング）」であり、現行の厳密な名称・方式照合では後者のPlannerItemを自動生成しない。これはsource recordの消失とは別の照合保留であり、名前の接尾辞を削って推測associationする変更は行わない。実データの原因確定には、実際の拡張JSONの経済学schoolings（rawYear/rawTerm/rawDate/rawCredits/rawGrade）の確認が必要。parserは変更していない。
+
+既存コードで再現できた欠落経路は、公式aggregateが同じ再取込でpayloadに新componentが加わってもsourceDuplicateとして詳細の保存を抑止することだった。payload fingerprintが変わり、非重複componentがある場合だけ確認・選択可能なsource更新にする。既存source IDと公式aggregateは保持し、全件非選択はno-op。同じJSONの重複/backfill、ユーザーが意図して削除したcomponentを同じJSONから復活させない挙動は維持する。
+
+通信方式は新fieldを追加せず `courseCreditContribution` をexplicit source of truthとして再利用する。「この通信学習の修得方法」のfull4は4、split2は2、未設定はfield削除。数値の設定UIを同じ共有componentへ置き換え、履修計画のdesktop/mobile行からも編集できる。しおりp.31の設題2つ/4つに基づき、source-backed full requirementが2/4件の場合だけsplit2で1/2件にする。unknown・odd・それ以外の件数は判定保留。`effectiveCorrespondenceProgress` は表示用のderived viewで、編集時は元のfull progressへ書き込む。対象外のリポートも保存し、full4へ戻すと復元表示する。修得条件、行の進捗summary、CSV/画像出力もeffective requirementを使用する。
+
+リポート/試験/スクーリング評価から方式やofficial aggregateの配分、Planner earnedを推測しない。スクーリング修得前でもsplit2の保存を許可し、2単位試験にはスクーリング2単位の修得が先に必要であることをadvisoryとして表示する。component条件達成とPlannerの修得状態は引き続き別操作。公式4を通信2+スク2へ自動配分するassociationや卒業計算の変更は行わない。保存型・schema・migrationの変更が不要なのでschemaVersion22、graduationCheckComplete=falseを維持する。
 
 ## derived CourseProgress
 
@@ -123,6 +133,8 @@ foundation後の変更前planner 247件、初期実装後272件PASS。最初のf
 単位集計のP2 follow-upでは12件追加してplanner 316件 / extension 18件PASS。修正前に集計・年間参考値の8ケースで失敗を確認した。schooling earned2+通信明示2のCourseProgress・CreditSummary・CategorySummaryが4で一致し、planned/in_progressも明示2を使用すること、waiting/failed/droppedのSummary対象が従来どおりであることを確認。年間通信2/4、スクーリングmetadataに依存しない登録2、明示0、未設定時の従来6、49単位参考値の50/48判定、明示独立6をcapしないこと、source-linked公式4と8所属の卒業official-priorityを検証。既存304件は年間通信の期待値1件を今回の仕様へ更新して維持。typecheck/lint/test:planner/test:extension/build/diff-checkが成功し、既存のselection-independent evidence、backfill、曖昧identity、同名History、Law partial2、repeatable/Media、unified view、v22保存/再読込/削除/undoもPASS。schemaVersion22とgraduationCheckComplete=falseを維持。
 
 年間通信の公式aggregate対応では9件追加し、planner 325件 / extension 18件PASS。修正前は追加9件のうち8件が失敗した。source-linked通信Offering4/公式2の4表示一致、公式4/0/null、明示metadataより公式値が優先されること、nullのみの年度の未確定表示、earned以外・source不一致時の従来値、スクーリング登録の独立性、49/51/47単位判定、既知50+未確定でも超過表示が残ることを確認。既存316件を維持し、derived型の未確定件数0を期待値へ追加した。typecheck/lint/test:planner/test:extension/build/diff-checkが成功。source-linked重複排除・8所属の卒業official-priority・v22保存/再読込/undoを継続し、schemaVersion22とgraduationCheckComplete=falseを維持した。公式値やlearner明示metadataを変更する保存処理は追加していない。
+
+冬期実績・通信方式のP2修正はplanner11件/extension1件を追加して336件/19件PASS。修正前に再取込の新component抑止とsplit2のUI/summary不整合を再現した。extractor→contract→preview→apply→表示の両schooling枠保持、ambiguous/unmatched、公式aggregate非二重加算、再取込更新/非選択/重複/意図した削除を確認。full4/未設定の従来requirement、split2のverified2→1/4→2、unknown/odd保留、評価だけで方式を変更しないこと、extra reportの編集/再読込/削除undo/設定解除、CourseProgress4・超過0と独立6・超過2、Summary/Category/年間通信2、effective出力を検証した。既存325件/18件のsource-linked dedup、official-priority、selection-independent evidence、Law/History、repeatable/Media、保存・undo回帰を維持。typecheck/lint/test:planner/test:extension/build/diff-checkもPASS。独立したPreviewの経済学で行の「開く」から方式を変更し、report1/A+examSの1/1・条件達成、schooling earned2+通信earned2の4/4・超過なし、full4時の超過2、再読込後の方式・extra report2/B保持、console errorなしを確認した。
 
 ローカルPreviewでは日本文芸学概論の公式2 + 夏期planned2が修得2/4・予定込み4/4になること、春期Offeringが引き続き追加可能なこと、自動earned通信4が二重加算されないこと、再読込で保持されること、console errorなしを確認した。
 

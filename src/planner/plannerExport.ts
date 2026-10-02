@@ -1,6 +1,6 @@
 import { futurePlanNote } from './futurePlanning';
 import { createCreditClassifier } from './annualPlan';
-import { correspondenceCreditResult, progressForCorrespondence } from './correspondenceProgress';
+import { correspondenceCreditResult, effectiveCorrespondenceProgress, progressForCorrespondence } from './correspondenceProgress';
 import { evaluationFor, gradeLabel } from './courseEvaluations';
 import { assessmentDateLabel, assessmentLabel, mediaProgressSummary, progressFor } from './mediaSchooling';
 import { offeringFormLabel, progressSummaryForOffering, statusLabels } from './planTable';
@@ -79,7 +79,7 @@ export function plannerExportPresentation(state: PlannerState, catalog: PlannerC
       assessmentSummary: null,
     };
     if (offering.method === 'correspondence') {
-      const course = progressForCorrespondence(offering, state.correspondenceProgress);
+      const course = effectiveCorrespondenceProgress(item, offering, progressForCorrespondence(offering, state.correspondenceProgress));
       const result = correspondenceCreditResult(course);
       return [{ ...base, requiredReports: course.requiredReports, passedReports: course.requiredReports === null ? null : course.reports.filter(report => report.reportNumber <= course.requiredReports! && report.status === 'passed' && report.grade !== null).length, examGrade: course.examGrade, correspondenceResult: correspondenceResult(result.creditEarned) }];
     }

@@ -74,6 +74,7 @@ export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], e
   const rows: ImportPreviewUnit[] = [];
   const occurrences = new Map<string, number>();
   for (const course of data.courses) {
+    const firstUnit = rows.length;
     const baseFingerprint = sourceFingerprint(course, 0);
     const occurrence = occurrences.get(baseFingerprint) ?? 0;
     occurrences.set(baseFingerprint, occurrence + 1);
@@ -104,6 +105,14 @@ export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], e
       const result = match(course.rawName, 'correspondence', offerings);
       const record = { id: crypto.randomUUID(), fingerprint: `course-only:${sourceCourse.fingerprint}`, source: 'hosei_import' as const, rawName: course.rawName, offeringId: null, match: result.match, method: 'correspondence' as const, academicYear: sourceCourse.academicYear, yearSource: sourceCourse.yearSource, rawYear: null, term: null, rawTerm: null, date: null, credits: null, grade: null, ...aggregate };
       rows.push({ ...record, candidates: result.candidates, duplicate: false, sourceCourse, sourceDuplicate, sourceExistingId: existingCourse?.id ?? null, selected: !sourceDuplicate, courseOnly: true });
+    }
+    // A changed source payload can add a component while its aggregates stay
+    // identical. Make that update reviewable instead of suppressing its details.
+    // An unchanged payload stays a duplicate, including intentionally removed records.
+    const components = rows.slice(firstUnit);
+    if (sourceDuplicate && existingCourse?.fingerprint !== sourceCourse.fingerprint
+      && components.some(unit => !unit.duplicate && !unit.courseOnly)) {
+      for (const unit of components) { unit.sourceDuplicate = false; unit.selected = true; }
     }
   }
   return rows;

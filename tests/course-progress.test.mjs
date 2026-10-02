@@ -1,5 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import { economicsGradeCells } from './fixtures/economics-grade-row.mjs';
+import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
+import ImportedAchievements from '../src/components/planner/ImportedAchievements.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { catalog, offeringsById } from '../src/planner/catalog.ts';
@@ -18,6 +23,10 @@ import { searchOfferings, summarizeCredits } from '../src/planner/calculations.t
 import CreditSummary from '../src/components/planner/CreditSummary.tsx';
 import CategorySummary from '../src/components/planner/CategorySummary.tsx';
 import AnnualCreditLimitNotice from '../src/components/planner/AnnualCreditLimitNotice.tsx';
+import { CorrespondenceDetails } from '../src/components/planner/CorrespondenceProgress.tsx';
+import { correspondenceCreditResult, effectiveCorrespondenceProgress, progressForCorrespondence, setReportGrade, setReportStatus } from '../src/planner/correspondenceProgress.ts';
+import { effectiveRequiredReportsFor, requirementsByOfferingId } from '../src/planner/correspondenceRequirements.ts';
+import { progressSummaryForOffering } from '../src/planner/planTable.ts';
 import CourseSearch from '../src/components/planner/CourseSearch.tsx';
 import CourseProgress from '../src/components/planner/CurriculumCourseProgress.tsx';
 import { plannerExportCsv, plannerExportPresentation } from '../src/planner/plannerExport.ts';
@@ -42,6 +51,173 @@ function official(f, credits = 2, patch = {}) {
     candidateOfferingIds: [], ...patch };
 }
 const progress = (f, items, rows = []) => deriveCurriculumCourseProgress(items, f, rows).courses[0];
+
+function extractedEconomics(slot = 0) {
+  const cells = economicsGradeCells(slot);
+  const row = { querySelectorAll: () => cells.map(textContent => ({ textContent, classList: { contains: () => false } })) };
+  const table = { querySelectorAll: () => [row] };
+  const context = { document: { querySelectorAll: () => [table] } };
+  runInNewContext(readFileSync(new URL('../extension/hosei-planner-import/parser/extractor.js', import.meta.url), 'utf8'), context);
+  return JSON.parse(JSON.stringify(context.HoseiPlannerGradeExtractor.extractCurrentDocument().value));
+}
+function economicsOfferings() {
+  const correspondence = catalog.offerings.find(o => o.name === '経済学' && o.method === 'correspondence' && o.credits === 4);
+  const winter = catalog.offerings.find(o => o.name === '経済学（冬期スクーリング）' && o.method === 'schooling' && o.credits === 2);
+  assert.ok(correspondence); assert.ok(winter); return [correspondence, winter];
+}
+for (const ambiguous of [false, true]) test(`winter import: extractor through contract/preview/apply/display retains both components (ambiguous=${ambiguous})`, () => {
+  const [correspondence, winter] = economicsOfferings();
+  // Controlled fixture names test matching separately from the actual decorated catalog name.
+  const school = { ...winter, name: '経済学' };
+  const offerings = ambiguous ? [correspondence, school, { ...school, id: 'fixture-other-schooling' }] : [correspondence, school];
+  for (const slot of [0, 1]) {
+    const data = extractedEconomics(slot); const snapshot = structuredClone(data);
+    assert.equal(isHoseiGradeImportV1(data), true); assert.deepEqual(data, snapshot);
+    const preview = importPreview(data, offerings);
+    assert.deepEqual(preview.map(u => u.method), ['correspondence', 'schooling']);
+    const schooling = preview[1]; assert.equal(schooling.term, '冬期'); assert.equal(schooling.credits, 2); assert.equal(schooling.grade, 'A');
+    assert.equal(schooling.match, ambiguous ? 'ambiguous' : 'exact_unique');
+    const state = applyImport(initialState(), preview, offerings);
+    assert.deepEqual(state.importedStudyRecords.map(r => r.method), ['correspondence', 'schooling']);
+    assert.equal(state.importedStudyRecords[1].term, '冬期'); assert.equal(state.importedStudyRecords[1].credits, 2);
+    assert.equal(state.importedStudyRecords[1].offeringId, ambiguous ? null : winter.id);
+    assert.equal(state.importedCourseAchievements.length, 1); assert.equal(state.importedCourseAchievements[0].earnedCreditsTotal, 4);
+    assert.equal(state.items.some(i => i.offeringId === winter.id), !ambiguous);
+    if (!ambiguous) assert.ok(state.items.every(i => i.status === 'planned'), 'multiple safe Offerings do not allocate the official aggregate');
+    assert.equal(deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements).courses.find(c => c.curriculumCourseId === correspondence.curriculumCourseId).earnedCredits, 4);
+    const map = new Map(offerings.map(o => [o.id, o]));
+    assert.ok(createUnifiedCourseRows(state.items, state.importedCourseAchievements, map).some(r => r.importedAchievements.length));
+    const html = renderToStaticMarkup(createElement(ImportedAchievements, { records: state.importedStudyRecords, courseRows: state.importedCourseAchievements, offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
+    assert.match(html, /— 通信/); assert.match(html, /— スクーリング/); assert.match(html, /value="冬期"/);
+    const values = new Map(); const store = { getItem: k => values.get(k) ?? null, setItem: (k, v) => values.set(k, v) };
+    const fixtureCatalog = { ...catalog, offerings };
+    saveState(store, state, null, fixtureCatalog); assert.deepEqual(loadState(store, fixtureCatalog).state, state);
+  }
+});
+test('winter reimport: new schooling details are selectable even when an existing source aggregate is unchanged', () => {
+  const offerings = economicsOfferings(); const data = extractedEconomics();
+  const incomplete = structuredClone(data);
+  incomplete.courses[0].schoolings = [incomplete.courses[0].schoolings[1], incomplete.courses[0].schoolings[1]];
+  const before = applyImport(initialState(), importPreview(incomplete, offerings), offerings); const snapshot = structuredClone(before);
+  assert.equal(before.importedStudyRecords.length, 1);
+  const preview = importPreview(data, offerings, before.importedStudyRecords, before.importedCourseAchievements);
+  assert.equal(preview[1].duplicate, false); assert.equal(preview[1].sourceExistingId, before.importedCourseAchievements[0].id);
+  assert.equal(preview[1].sourceDuplicate, false); assert.equal(preview[1].selected, true);
+  assert.equal(applyImport(before, preview.map(u => ({ ...u, selected: false })), offerings), before);
+  const next = applyImport(before, preview, offerings);
+  assert.equal(next.importedStudyRecords.length, 2); assert.equal(next.importedStudyRecords[1].method, 'schooling');
+  assert.equal(next.importedStudyRecords[1].sourceCourseId, before.importedCourseAchievements[0].id);
+  assert.equal(next.importedCourseAchievements.length, 1); assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), 4);
+  assert.deepEqual(before, snapshot);
+  const again = importPreview(data, offerings, next.importedStudyRecords, next.importedCourseAchievements);
+  assert.equal(applyImport(next, again, offerings), next);
+  const intentionallyRemoved = { ...next, importedStudyRecords: next.importedStudyRecords.slice(0, 1) };
+  assert.equal(applyImport(intentionallyRemoved, importPreview(data, offerings, intentionallyRemoved.importedStudyRecords, intentionallyRemoved.importedCourseAchievements), offerings), intentionallyRemoved);
+});
+test('winter actual catalog: the decorated Offering is unmatched, but the source schooling record remains visible', () => {
+  const data = extractedEconomics(); const preview = importPreview(data, catalog.offerings);
+  assert.equal(preview[1].match, 'unmatched'); assert.equal(preview[1].offeringId, null);
+  const state = applyImport(initialState(), preview, catalog.offerings);
+  assert.equal(state.importedStudyRecords.length, 2);
+  assert.equal(state.importedStudyRecords[1].method, 'schooling'); assert.equal(state.importedStudyRecords[1].term, '冬期');
+  const html = renderToStaticMarkup(createElement(ImportedAchievements, { records: state.importedStudyRecords, courseRows: state.importedCourseAchievements, offerings: catalog.offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
+  assert.match(html, /— スクーリング/); assert.match(html, /value="冬期"/);
+});
+test('communication split2: Economics report1 passed and exam S use an effective 1-report requirement', () => {
+  const [o] = economicsOfferings(); const i = { ...item(o), courseCreditContribution: 2 };
+  const saved = { ...setReportGrade(progressForCorrespondence(o, {}), 1, 'A'), examGrade: 'S' };
+  assert.equal(progressSummaryForOffering(i, o, { [o.id]: saved }, {}), 'リポート 1/1・試験 S');
+  const html = renderToStaticMarkup(createElement(CorrespondenceDetails, { item: i, offering: o, saved, disabled: false, onChange: () => {}, onChangeItem: () => {} }));
+  assert.match(html, /必要リポート: 1件/); assert.match(html, /通信学習分: 単位修得条件達成/);
+  assert.doesNotMatch(html, /リポート 2<select/);
+});
+test('communication method UI: four-credit correspondence offers methods and a schooling advisory without a hard block', () => {
+  const [o] = economicsOfferings(); const i = { ...item(o), courseCreditContribution: 2 };
+  const html = renderToStaticMarkup(createElement(CorrespondenceDetails, { item: i, offering: o, saved: progressForCorrespondence(o, {}), disabled: false, onChange: () => {}, onChangeItem: () => {} }));
+  assert.match(html, /この通信学習の修得方法/); assert.match(html, /通信学習で4単位修得/); assert.match(html, /スクーリング2単位 \+ 通信学習2単位/);
+  assert.match(html, /スクーリング2単位修得後に2単位試験を受験する方式です/);
+  assert.doesNotMatch(html, /<select[^>]*disabled=""/);
+});
+test('communication full4: explicit4 retains the full two-report requirement without inferring split2 from grades', () => {
+  const [o] = economicsOfferings(); const full = { ...item(o), courseCreditContribution: 4 }; const unset = item(o);
+  const saved = { ...setReportGrade(progressForCorrespondence(o, {}), 1, 'A'), examGrade: 'S' }; const snapshot = structuredClone(saved);
+  for (const i of [full, unset]) {
+    const effective = effectiveCorrespondenceProgress(i, o, saved);
+    assert.equal(effective.requiredReports, 2); assert.equal(correspondenceCreditResult(effective).creditEarned, false);
+    assert.equal(progressSummaryForOffering(i, o, { [o.id]: saved }, {}), 'リポート 1/2・試験 S');
+  }
+  assert.equal(full.courseCreditContribution, 4); assert.equal('courseCreditContribution' in unset, false);
+  assert.equal(full.status, 'planned'); assert.deepEqual(saved, snapshot);
+});
+test('communication verified full4 reports: split2 requires the first two and retains the other records', () => {
+  const [base] = economicsOfferings(); const o = { ...base, id: 'verified-four-report-fixture' };
+  requirementsByOfferingId[o.id] = { requiredReports: 4, sourcePage: 31, sourceLabel: 'synthetic verified four-topic requirement' };
+  try {
+    const i = { ...item(o), courseCreditContribution: 2 };
+    const saved = { ...setReportGrade(setReportGrade(progressForCorrespondence(o, {}), 1, 'A'), 2, 'S'), examGrade: 'S' };
+    const effective = effectiveCorrespondenceProgress(i, o, saved);
+    assert.equal(effective.requiredReports, 2); assert.equal(correspondenceCreditResult(effective).creditEarned, true);
+    assert.equal(effective.reports, saved.reports); assert.equal(saved.requiredReports, 4); assert.equal(saved.reports.length, 4);
+    const full = effectiveCorrespondenceProgress({ ...i, courseCreditContribution: 4 }, o, saved);
+    assert.equal(full.requiredReports, 4); assert.equal(correspondenceCreditResult(full).creditEarned, false);
+    const html = renderToStaticMarkup(createElement(CorrespondenceDetails, { item: i, offering: o, saved, disabled: false, onChange: () => {}, onChangeItem: () => {} }));
+    assert.match(html, /必要リポート: 2件/); assert.doesNotMatch(html, /リポート [34]<select/);
+  } finally { delete requirementsByOfferingId[o.id]; }
+});
+test('communication split2: unknown, odd and unsupported full requirements remain pending', () => {
+  const [base] = economicsOfferings(); const i = { ...item(base), courseCreditContribution: 2 };
+  for (const count of [null, 1, 3, 5, 6]) {
+    const source = count === null ? null : { requiredReports: count, sourcePage: 31, sourceLabel: 'synthetic source' };
+    assert.equal(effectiveRequiredReportsFor(i, base, source), null);
+  }
+  assert.equal(effectiveRequiredReportsFor(i, base, { requiredReports: 2, sourcePage: 31, sourceLabel: 'verified2' }), 1);
+  assert.equal(effectiveRequiredReportsFor(i, base, { requiredReports: 4, sourcePage: 31, sourceLabel: 'verified4' }), 2);
+  const unknown = { ...base, id: 'unverified-communication-fixture' };
+  const saved = { ...progressForCorrespondence(base, {}), offeringId: unknown.id, examGrade: 'S' };
+  const effective = effectiveCorrespondenceProgress({ ...i, offeringId: unknown.id }, unknown, saved);
+  assert.equal(effective.requiredReports, null); assert.equal(correspondenceCreditResult(effective).creditEarned, null);
+  assert.equal(effective.reports, saved.reports, 'a saved number does not prove a source-backed split requirement');
+});
+test('communication method transitions retain extra reports through edit, reload, delete/undo and clearing', () => {
+  const [o] = economicsOfferings();
+  const saved = { ...setReportStatus(setReportGrade(progressForCorrespondence(o, {}), 2, 'B'), 1, 'submitted'), examGrade: 'A' };
+  let state = { ...initialState(), items: [{ ...item(o), courseCreditContribution: 2 }], correspondenceProgress: { [o.id]: saved } };
+  const extra = structuredClone(saved.reports[1]); const storeValues = new Map(); const store = { getItem: k => storeValues.get(k) ?? null, setItem: (k, v) => storeValues.set(k, v) };
+  let raw = null;
+  for (const credits of [2, 4, 2]) {
+    state = { ...state, items: updatePlannerItem(state.items, o.id, { courseCreditContribution: credits }) };
+    const edited = setReportGrade(state.correspondenceProgress[o.id], 1, 'S');
+    state = { ...state, correspondenceProgress: { [o.id]: edited } };
+    assert.equal(edited.requiredReports, 2); assert.deepEqual(edited.reports[1], extra);
+    assert.equal(effectiveCorrespondenceProgress(state.items[0], o, edited).requiredReports, credits === 2 ? 1 : 2);
+    raw = saveState(store, state, raw, catalog); assert.deepEqual(loadState(store, catalog).state, state);
+    const html = renderToStaticMarkup(createElement(CorrespondenceDetails, { item: state.items[0], offering: o, saved: edited, disabled: false, onChange: () => {}, onChangeItem: () => {} }));
+    if (credits === 4) assert.match(html, /リポート 2<select/); else assert.doesNotMatch(html, /リポート 2<select/);
+  }
+  const beforeDelete = structuredClone(state); const removed = removePlannerItem(state.items, o.id);
+  const deleted = { ...state, items: [] }; raw = saveState(store, deleted, raw, catalog);
+  const restored = { ...deleted, items: restorePlannerItem(deleted.items, removed) }; saveState(store, restored, raw, catalog);
+  assert.deepEqual(loadState(store, catalog).state, beforeDelete); assert.equal(restored.schemaVersion, 22);
+  const cleared = updatePlannerItem(restored.items, o.id, { courseCreditContribution: undefined });
+  assert.equal('courseCreditContribution' in cleared[0], false);
+  assert.equal(effectiveCorrespondenceProgress(cleared[0], o, saved).requiredReports, 2);
+});
+test('communication Economics: split2 + earned schooling2 completes4, full4 retains excess2 and summaries/export agree', () => {
+  const [o, schooling] = economicsOfferings(); const map = new Map(catalog.offerings.map(o => [o.id, o]));
+  const split = { ...item(o, 'earned'), courseCreditContribution: 2 }; const items = [item(schooling, 'earned'), split];
+  const course = deriveCurriculumCourseProgress(items, catalog).courses.find(c => c.curriculumCourseId === o.curriculumCourseId);
+  assert.deepEqual([course.earnedCredits, course.projectedCredits, course.earnedExcessCredits], [4, 4, 0]);
+  assert.equal(summarizeCredits(items, map).earned, 4);
+  assert.equal(summarizeCategories(items, catalog, null).reduce((sum, r) => sum + r.earned, 0), 4);
+  assert.equal(annualCreditLimitReferences(items, map)[0].correspondenceCredits, 2);
+  const full = deriveCurriculumCourseProgress([items[0], { ...split, courseCreditContribution: 4 }], catalog).courses.find(c => c.curriculumCourseId === o.curriculumCourseId);
+  assert.deepEqual([full.earnedCredits, full.earnedExcessCredits], [6, 2]);
+  const saved = { ...setReportGrade(progressForCorrespondence(o, {}), 1, 'A'), examGrade: 'S' };
+  const state = { ...initialState(), items, correspondenceProgress: { [o.id]: saved } };
+  const exported = plannerExportPresentation(state, catalog).rows.find(row => row.title === o.name);
+  assert.deepEqual([exported.requiredReports, exported.passedReports, exported.correspondenceResult], [1, 1, '単位修得条件達成']);
+  assert.deepEqual(exported.courseCreditContribution, 2); assert.equal(saved.requiredReports, 2);
+});
 
 test('annual official: linked correspondence Offering4 and official2 agree across all four credit views', () => {
   const f = fixture(); const map = new Map(f.offerings.map(o => [o.id, o]));
@@ -333,10 +509,10 @@ test('2+2 UI: only exact four-credit correspondence exposes a manual 2/4 selecto
   const html = render(f, items);
   assert.equal((html.match(/<select /g) ?? []).length, 1);
   assert.match(html, /value="" selected="">未設定（開講の4単位を使用）/);
-  assert.match(html, /value="2">2単位/); assert.match(html, /value="4">4単位/);
-  assert.match(html, /先にスクーリング2単位の修得確定が必要/);
+  assert.match(html, /value="split2">スクーリング2単位 \+ 通信学習2単位/); assert.match(html, /value="full4">通信学習で4単位修得/);
+  assert.match(html, /この通信学習の修得方法/);
   const chosen = render(f, [items[0], { ...items[1], courseCreditContribution: 2 }]);
-  assert.match(chosen, /value="2" selected=""/); assert.match(chosen, /予定込み 4 \/ 4/); assert.doesNotMatch(chosen, /超過候補/);
+  assert.match(chosen, /value="split2" selected=""/); assert.match(chosen, /予定込み 4 \/ 4/); assert.doesNotMatch(chosen, /超過候補/);
   assert.match(render(f, items, [], { disabled: true }), /<select[^>]*disabled=""/);
   assert.doesNotMatch(render(f, items, [], { onChange: undefined }), /<select /);
   assert.doesNotMatch(render(f, [items[0]]), /<select /);

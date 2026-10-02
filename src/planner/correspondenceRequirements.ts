@@ -1,4 +1,4 @@
-import type { Offering } from './plannerCatalog';
+import type { Offering, PlannerItem } from './plannerCatalog';
 
 export type CorrespondenceRequirement = { requiredReports: number; sourcePage: number; sourceLabel: string };
 
@@ -24,6 +24,13 @@ export const requirementsByOfferingId: Record<string, CorrespondenceRequirement>
 export function correspondenceRequirementFor(offering: Offering | undefined): CorrespondenceRequirement | null {
   if (offering?.method !== 'correspondence') return null;
   return requirementsByOfferingId[offering.id] ?? null;
+}
+
+/** Only the verified 2/4-topic patterns in shiori p.31 justify halving. */
+export function effectiveRequiredReportsFor(item: PlannerItem, offering: Offering, fullRequirement = correspondenceRequirementFor(offering)): number | null {
+  const full = fullRequirement?.requiredReports ?? null;
+  if (offering.method !== 'correspondence' || offering.credits !== 4 || item.courseCreditContribution !== 2) return full;
+  return full === 2 || full === 4 ? full / 2 : null;
 }
 
 export const structuredRequirementCount = Object.keys(requirementsByOfferingId).length;
