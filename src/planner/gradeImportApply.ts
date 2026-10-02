@@ -1,5 +1,7 @@
 import type { HoseiGradeImportCourse, HoseiGradeImportV1 } from './gradeImportContract';
-import type { Offering, PlannerState } from './plannerCatalog';
+import type { Offering, PlannerItem, PlannerState } from './plannerCatalog';
+import { plannerItemFromCourseSearch } from './plannerItemState';
+import { isStandardTerm } from './planTable';
 
 export type ImportMethod = 'correspondence' | 'schooling';
 export type ImportMatch = 'exact_unique' | 'ambiguous' | 'unmatched';
@@ -94,8 +96,47 @@ export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], e
   }
   return rows;
 }
-export function applyImport(state: PlannerState, units: ImportPreviewUnit[]): PlannerState {
+/** Source-course exact_unique means course identity only: selectedOfferingId
+ * may be a representative. Recheck the existing exact matcher at offering
+ * granularity, never trust that representative or the first candidate. */
+export function autoPlannerOfferingIdForImport(unit: ImportPreviewUnit, offerings: Offering[]): string | null {
+  const candidates = unit.courseOnly
+    ? offerings.filter(offering => normalizeImportName(offering.name) === normalizeImportName(unit.rawName))
+    : match(unit.rawName, unit.method, offerings).candidates;
+  if (candidates.length !== 1) return null;
+  const offering = candidates[0];
+  if (!unit.courseOnly && (unit.match !== 'exact_unique' || unit.offeringId !== offering.id
+    || unit.candidates.length !== 1 || unit.candidates[0].id !== offering.id)) return null;
+  if (unit.courseOnly && (unit.sourceCourse.match !== 'exact_unique'
+    || unit.sourceCourse.candidateOfferingIds.length !== 1
+    || unit.sourceCourse.candidateOfferingIds[0] !== offering.id)) return null;
+  return offering.resolutionStatus === 'matched' && offering.courseId !== null ? offering.id : null;
+}
+
+/** Official source duplicates may still fill a missing planner item. Their
+ * unchecked preview selection only excludes official-data writes. */
+export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: PlannerItem[], offerings: Offering[]): PlannerItem[] {
+  const existingIds = new Set(existing.map(item => item.offeringId));
+  const unitsByOffering = new Map<string, ImportPreviewUnit[]>();
+  for (const unit of units.filter(unit => unit.selected || unit.sourceDuplicate)) {
+    const id = autoPlannerOfferingIdForImport(unit, offerings);
+    if (id && !existingIds.has(id)) unitsByOffering.set(id, [...(unitsByOffering.get(id) ?? []), unit]);
+  }
+  return [...unitsByOffering].map(([id, units]) => {
+    // Conflicting occurrences and inferred dates must not become certain plans.
+    const years = new Set(units.map(unit => unit.yearSource === 'source' || unit.yearSource === 'manual' ? unit.academicYear : null));
+    const terms = new Set(units.map(unit => unit.term === unit.rawTerm && isStandardTerm(unit.term) ? unit.term : null));
+    return { ...plannerItemFromCourseSearch(id), plannedYear: years.size === 1 ? [...years][0] : null,
+      plannedTerm: terms.size === 1 ? [...terms][0] : null };
+  });
+}
+
+export function applyImport(state: PlannerState, units: ImportPreviewUnit[], offerings: Offering[]): PlannerState {
   const selected = units.filter(unit => unit.selected && !unit.sourceDuplicate);
+  const plannerAdditions = autoPlannerItemsForImport(units, state.items, offerings);
+  // Preserve the official arrays (and the whole state for a complete no-op).
+  if (selected.length === 0) return plannerAdditions.length > 0
+    ? { ...state, items: [...state.items, ...plannerAdditions] } : state;
   const selectedSources = [...new Map(selected.map(unit => [unit.sourceCourse.fingerprint, unit])).values()];
   const sourceIdFor = new Map(selectedSources.map(unit => [unit.sourceCourse.id, unit.sourceExistingId ?? unit.sourceCourse.id]));
   const sourceAdditions = selectedSources.filter(unit => unit.sourceExistingId === null).map(unit => unit.sourceCourse);
@@ -107,7 +148,7 @@ export function applyImport(state: PlannerState, units: ImportPreviewUnit[]): Pl
     sourceCourseId: sourceIdFor.get(unit.sourceCourseId!) ?? unit.sourceCourseId, earnedCreditsTotal: unit.earnedCreditsTotal, schoolingCreditsTotal: unit.schoolingCreditsTotal, compositionCredits: unit.compositionCredits, recognizedExemption: unit.recognizedExemption, additionalEnrollment: unit.additionalEnrollment, capturedAt: unit.capturedAt,
   }));
   const rows = state.importedCourseAchievements.map(existing => { const update = sourceUpdates.get(existing.id); if (!update) return existing; return { ...existing, ...update, id: existing.id, selectedOfferingId: existing.selectionSource === 'manual' ? existing.selectedOfferingId : update.selectedOfferingId, selectionSource: existing.selectionSource === 'manual' ? 'manual' : update.selectionSource }; });
-  return { ...state, importedStudyRecords: [...state.importedStudyRecords, ...additions], importedCourseAchievements: [...rows, ...sourceAdditions] };
+  return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: [...state.importedStudyRecords, ...additions], importedCourseAchievements: [...rows, ...sourceAdditions] };
 }
 
 export function importedEarnedCreditsTotal(rows: ImportedCourseAchievement[]): number { return rows.reduce((sum, row) => sum + (row.earnedCreditsTotal && row.earnedCreditsTotal > 0 ? row.earnedCreditsTotal : 0), 0); }

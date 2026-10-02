@@ -180,8 +180,11 @@ export default function PlannerPage() {
     }
   }
   function applyGradeImport(units: ImportPreviewUnit[]) {
-    const next = applyImport(state, units);
-    if (commit(next, `${next.importedStudyRecords.length - state.importedStudyRecords.length}件の履修実績を保存しました。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
+    const next = applyImport(state, units, catalog.offerings);
+    const addedItems = next.items.length - state.items.length;
+    const addedCourses = next.importedCourseAchievements.length - state.importedCourseAchievements.length;
+    const addedRecords = next.importedStudyRecords.length - state.importedStudyRecords.length;
+    if (commit(next, `${addedCourses}件の成績表行と${addedRecords}件の履修実績を保存し、${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
     return false;
   }
   function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
@@ -236,7 +239,7 @@ export default function PlannerPage() {
         {profileNeedsAttention && <p className="border-l-4 border-sky-600 bg-sky-50 p-3 text-sm text-sky-900">卒業判定に必要なプロフィール設定があります。プロフィールタブで確認してください。</p>}
         <AnnualCreditLimitNotice rows={annualLimitRows} />
         <BrowserExtensionEntrySection />
-        <GradeImportPanel offerings={catalog.offerings} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
+        <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} warnings={importedDerived.warnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         <CourseSearch classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
         <PlannedCourseList classify={classify} unifiedRows={unifiedCourseRows} publicCourses={state.publicCourses} offerings={offeringsById} correspondenceProgress={state.correspondenceProgress} mediaProgress={state.mediaSchoolingProgress} evaluations={state.courseEvaluations} importedUserMeta={state.importedCourseUserMeta} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
