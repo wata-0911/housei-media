@@ -41,6 +41,25 @@ same Offeringの複数回履修について、今回提示された資料・利�
 
 最小限の任意metadata `PlannerItem.importedSourceCourseId?: string` をv22の型/JSON Schemaへ追加した。自動作成earned項目が参照する公式行IDであり、Attempt identityではない。参照先存在をvalidationで確認する。既存v22項目はこのfieldなしで読み書きでき、過去stateを推測して関連づけたり状態を変更したりしない。保存、編集、削除undo、全state取込undoはmetadataもlosslessに保持する。旧アプリのstrict validatorはこの新しい任意fieldを知らないため、新しい保存データを旧実装へ戻して利用することは保証しない。
 
+## 2+2 completionの設計監査と制度根拠
+
+2026年度[学習のしおり（公式PDF）](https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026.pdf)の印刷ページp.30–32を画像で確認した。依頼の `/mnt/data/shiori202629-34.pdf` はこのMacには存在しないため、既存の2026年度全体PDFの同じページを使用した。p.30は通信2/4単位とスクーリング原則2単位を区別し、p.31は4単位Courseの通信4、スクーリング2後の通信2、別日程スクーリング2+2を示す。通信2単位試験には先にスクーリング2単位の修得確定が必要で、同一内容の再受講ができない科目もある。p.32の変更条件には4単位試験合格済みの組合せ制限、受講中に通信4単位を修得した場合のスクーリング単位のみの計上もある。今回の入力は組合せの履修可否や試験条件を確定するvalidatorではない。評価・リポート状態だけでは2/4単位の履修回を識別しない。
+
+| 対象 | 監査結果と今回の扱い |
+| --- | --- |
+| PlannerItem / identity | 1 Offeringに1 Itemを履修回として再利用。任意の `courseCreditContribution?: number` を追加。Attempt ID、Enrollment、v23は不要。 |
+| CourseProgress | 明示値がある場合だけOffering.creditsの代わりに使う。修得済みおよびplanned/in_progress/waitingの予定込みに共通、failed/droppedは0。合計はuncapped。 |
+| validation / storage | JSON Schemaで非負number、意味validationで有限かつ既知Offering.credits以下。不明単位の開講にoverrideは保存しない。Course targetを超える合計や寄与は別判断なので禁止しない。既存v22はfieldなしで従来どおり読み書きできる。 |
+| progress / grades | Offering IDの評価・通信・Media進捗ownerを変更せず、合否や設題数から寄与単位を設定しない。 |
+| official / graduation | 公式aggregateが正本。source-linked earnedの重複排除と卒業official-priorityを継続。metadataはCourseProgress専用で、既存卒業配分・修得概要・区分集計への入力単位を置換しない。Course completionと卒業配分は別。 |
+| annual plan / limit | 登録の参考単位はOffering.creditsのまま。Courseへの寄与2を開講登録4と混同しない。 |
+| UI / unified view | exactな4単位Course・4単位通信Offeringの進捗詳細に2/4単位の明示選択を出す。未設定の4単位を自動で2にしない。公式集計優先のearned項目は編集対象から除き、read-onlyで表示。曖昧identityで選択を出さない。Unified rowは元Itemを保持。 |
+| share / export | CSV・画像へ明示した科目進捗寄与を別項目で出す。開講単位はそのまま。Media共有は既存のOffering進捗表示。 |
+| edit / delete / undo | 行編集は元Itemをspread、削除undoは元Itemを保持、取込undoは全state snapshot。metadataをlossless保持する。設定解除は任意fieldを削除し、従来の開講単位へ戻す。 |
+| repeatable / advisory | 個別Requirement、repeatableRules、Media電話確認advisoryを継続し、完成を理由とした禁止やhard blockを追加しない。 |
+
+単純capを採用しない。例えばschooling2 + correspondenceの明示寄与2は4になるが、schooling2 + correspondenceの明示寄与4なら6と超過候補2を維持する。v22への任意field追加なので、既存migrationや保存キーを変更しない。旧実装のstrict validatorへの新field入りstateの戻し互換性は保証しない。
+
 ## derived CourseProgress
 
 `deriveCurriculumCourseProgress` は、exactなOffering.curriculumCourseIdと独立exactなImportedCourseAchievement.curriculumCourseIdを使う。名前、旧Course ID、候補の先頭では結合しない。Offering未特定の公式行も制度科目exactなら利用する。
@@ -55,9 +74,9 @@ same Offeringの複数回履修について、今回提示された資料・利�
 - attempts（元Item、Offering、各寄与、officialEarnedPreferred）
 - officialAchievements / warnings
 
-earnedはsafeに紐づくPlanner earnedのOffering単位と、公式行のearnedCreditsTotalを合計する。CourseProgress専用の `plannerItemsWithoutImportedAttemptDuplicates` は、`importedSourceCourseId` が保存済み公式行IDと一致するearned Itemだけを重複除外する。同じCurriculumCourseという理由だけでは手入力のearnedを除外しない。公式nullは推測せずknown subtotalとunknownを表示、0は0。source-linked Itemは制度科目照合が未解決・異なる場合もOffering単位を公式実績に見立てず、unknownの警告を残す。
+earnedはsafeに紐づくPlanner earnedの明示courseCreditContribution（未設定ならOffering.credits）と、公式行のearnedCreditsTotalを合計する。CourseProgress専用の `plannerItemsWithoutImportedAttemptDuplicates` は、`importedSourceCourseId` が保存済み公式行IDと一致するearned Itemだけを重複除外する。同じCurriculumCourseという理由だけでは手入力のearnedを除外しない。公式nullは推測せずknown subtotalとunknownを表示、0は0。source-linked Itemは制度科目照合が未解決・異なる場合もOffering単位を公式実績に見立てず、unknownの警告を残す。
 
-projectedはearnedにplanned/in_progress/waitingのOffering.creditsを加えた値。failed/droppedは0。構成単位4と開講単位2を混同しない。公式2 + 別Offering planned2をearnedへ変更しても、CourseProgressは修得4/予定込み4を維持する。公式行と重複する証拠のない手入力earnedはCourseProgressに加算するが、卒業計算は公式aggregateを優先するため、正式反映には成績表の再取込を推奨する警告を表示する。旧自動planned項目を含む既存planned項目は、元sourceを推測して除外せず予定として保持する。
+projectedはearnedにplanned/in_progress/waitingの明示courseCreditContribution（未設定ならOffering.credits）を加えた値。failed/droppedは0。構成単位4と開講単位2を混同しない。公式2 + 別Offering planned2をearnedへ変更しても、CourseProgressは修得4/予定込み4を維持する。公式行と重複する証拠のない手入力earnedはCourseProgressに加算するが、卒業計算は公式aggregateを優先するため、正式反映には成績表の再取込を推奨する警告を表示する。旧自動planned項目を含む既存planned項目は、元sourceを推測して除外せず予定として保持する。
 
 | 4単位科目 | earned | projected | 修得完成 / 予定込み完成 |
 | --- | --- | --- | --- |
@@ -94,6 +113,8 @@ Pass 1ではpreviewの全safe unitsを走査し、source ID（`unit.sourceExisti
 foundation後の変更前planner 247件、初期実装後272件PASS。最初のfollow-upで5件追加しplanner 277件PASS。checkbox対応のfollow-upでさらに4件追加しplanner 281件PASS、extension18件PASS。通信またはスクーリングの非選択、全件非選択のno-op、同じOfferingへ一致する2 componentの片方非選択を検証した。planned→earnedで進捗が逆戻りしないこと、公式source単位の複数Offering判定、backfill、distinct slot、手入力earnedとsource-linked earnedの保存・削除undoを追加検証した。既存8所属回帰、法律partial、史学順序/概説、正の公式2/4に新規earnedが共存する8所属のofficial-only一致、検索・状態別予定加算・曖昧identity・反復判定・source/保存/undoを確認。typecheck/lint/build/diff-checkもPASS。graduationCheckComplete=falseを型・catalog・卒業結果で維持。
 
 逆方向evidenceのP2修正で8件追加し、planner 289件 / extension 18件PASS。2 source→同一Offeringの両方選択・A非選択・B非選択、片方または両方保存済みのsourceDuplicate/backfillでplanned / source markerなしを確認した。修正前は非選択とbackfillの4ケースでearnedへの誤昇格を再現した。既存の1 source→複数Offeringの非選択、同一sourceの複数component→同一Offeringのearned、公式2+planned2→earned2/projected4、planned2→earned2のCourseProgress4/4、source-linked重複排除、卒業official-priority、保存/再読込/削除/undoの回帰もPASS。`npm run typecheck` / `npm run lint` / `npm run test:planner` / `npm run test:extension` / `npm run build` とdiff-checkが成功。schemaVersion22とgraduationCheckComplete=falseを維持。
+
+2+2 completion修正では15件を追加し、planner 304件 / extension 18件PASS。旧コードに先に追加した13件のうち9件で失敗を再現後、修正した。schooling2+通信寄与2、通信寄与4、独立6の超過候補、planned/in_progress/waitingからearnedへの移行、failed/dropped、明示0、非負・有限・Offering上限、Course target非cap、公式source-linked重複排除、8所属の卒業official-priority、v22保存/再読込/削除undo/全取込undo/設定解除、年間登録単位維持、unified row、CSV/画像と限定UIを検証。既存289件をすべて維持し、typecheck/lint/test:planner/test:extension/build/diff-checkもPASS。経済学の実Previewではスクーリングearned2+通信planned寄与2の修得2/予定込み4、通信earned後の修得4/予定込み4・超過なし、再読込後の2単位設定保持、通信を明示4へ変えたときの超過候補2を確認。console errorなし。schemaVersion22とgraduationCheckComplete=falseを維持。
 
 ローカルPreviewでは日本文芸学概論の公式2 + 夏期planned2が修得2/4・予定込み4/4になること、春期Offeringが引き続き追加可能なこと、自動earned通信4が二重加算されないこと、再読込で保持されること、console errorなしを確認した。
 

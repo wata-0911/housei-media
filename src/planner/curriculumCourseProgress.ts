@@ -94,9 +94,12 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
       }
       const earned = item.status === 'earned' && !officialEarnedPreferred;
       const planned = ['planned', 'in_progress', 'waiting'].includes(item.status);
-      if (earned && offering.credits === null) unknownEarned = true;
-      if ((earned || planned) && offering.credits === null) unknownProjected = true;
-      return { item, offering, officialEarnedPreferred, earnedContribution: earned ? offering.credits ?? 0 : 0, projectedContribution: earned || planned ? offering.credits ?? 0 : 0 };
+      // Only explicit learner metadata overrides an opening's credit information.
+      // Neither grades, other attempts nor remaining Course credits infer a value.
+      const credits = item.courseCreditContribution ?? offering.credits;
+      if (earned && credits === null) unknownEarned = true;
+      if ((earned || planned) && credits === null) unknownProjected = true;
+      return { item, offering, officialEarnedPreferred, earnedContribution: earned ? credits ?? 0 : 0, projectedContribution: earned || planned ? credits ?? 0 : 0 };
     });
     const officialEarned = group.official.reduce((total, row) => total + (row.earnedCreditsTotal ?? 0), 0);
     const earnedCredits = officialEarned + attempts.reduce((total, attempt) => total + attempt.earnedContribution, 0);

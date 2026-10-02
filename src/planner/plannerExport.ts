@@ -13,6 +13,8 @@ export type PlannerExportRow = {
   plannedTerm: string | null;
   title: string;
   credits: number | null;
+  /** Explicit CourseProgress setting, kept separate from opening credits. */
+  courseCreditContribution?: number;
   formLabel: string;
   statusLabel: string;
   progressSummary: string;
@@ -61,6 +63,7 @@ export function plannerExportPresentation(state: PlannerState, catalog: PlannerC
       plannedTerm: item.plannedTerm,
       title: offering.name,
       credits: offering.credits,
+      ...(item.courseCreditContribution !== undefined ? { courseCreditContribution: item.courseCreditContribution } : {}),
       formLabel: offeringFormLabel(offering),
       statusLabel: statusLabels[item.status],
       progressSummary: progressSummaryForOffering(item, offering, state.correspondenceProgress, state.mediaSchoolingProgress),
@@ -107,13 +110,16 @@ function csvEscape(value: string | number | null): string {
 
 /** RFC4180-compatible cells with a UTF-8 BOM for Japanese Excel imports. */
 export function plannerExportCsv(presentation: PlannerExportPresentation): string {
+  const hasContribution = presentation.rows.some(row => row.courseCreditContribution !== undefined);
   const rows = presentation.rows.map(row => [
     presentation.affiliation, row.plannedYear, row.studyYear === null ? null : `${row.studyYear}年`, row.plannedTerm, row.title, row.credits,
     row.formLabel, row.statusLabel, row.progressSummary, row.finalGrade === null ? null : gradeLabel(row.finalGrade), row.classificationLabel,
     row.sourceType === 'catalog' ? 'catalog' : '公開科目', row.requiredReports, row.passedReports, row.examGrade === null ? null : gradeLabel(row.examGrade), row.correspondenceResult,
     row.totalLessons, row.completedVideos, row.completedTests, row.assessmentSummary,
+    ...(hasContribution ? [row.courseCreditContribution ?? null] : []),
   ].map(csvEscape).join(','));
-  return `\uFEFF${csvHeaders.map(csvEscape).join(',')}\r\n${rows.join('\r\n')}`;
+  const headers = [...csvHeaders, ...(hasContribution ? ['科目進捗への寄与単位（明示）'] : [])];
+  return `\uFEFF${headers.map(csvEscape).join(',')}\r\n${rows.join('\r\n')}`;
 }
 
 export function plannerExportFileName(date: Date): string {

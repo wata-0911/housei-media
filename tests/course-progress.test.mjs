@@ -17,6 +17,8 @@ import { createUnifiedCourseRows } from '../src/planner/unifiedCourseView.ts';
 import { searchOfferings } from '../src/planner/calculations.ts';
 import CourseSearch from '../src/components/planner/CourseSearch.tsx';
 import CourseProgress from '../src/components/planner/CurriculumCourseProgress.tsx';
+import { plannerExportCsv, plannerExportPresentation } from '../src/planner/plannerExport.ts';
+import PlannerExportActions from '../src/components/planner/PlannerExportActions.tsx';
 
 function fixture() {
   const base = catalog.offerings.find(offering => offering.method === 'correspondence' && offering.credits === 4 && offering.curriculumCourseId
@@ -37,6 +39,147 @@ function official(f, credits = 2, patch = {}) {
     candidateOfferingIds: [], ...patch };
 }
 const progress = (f, items, rows = []) => deriveCurriculumCourseProgress(items, f, rows).courses[0];
+
+test('2+2: schooling earned2 plus correspondence explicit2 completes4 without excess', () => {
+  const f = fixture(); const p = progress(f, [item(f.offerings[0], 'earned'), { ...item(f.offerings[2], 'earned'), courseCreditContribution: 2 }]);
+  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion, p.projectedCompletion, p.earnedExcessCredits, p.projectedExcessCredits], [4, 4, 'complete', 'complete', 0, 0]);
+  assert.deepEqual(p.attempts.map(attempt => attempt.earnedContribution), [2, 2]);
+});
+test('2+2: correspondence explicit4 alone completes4; explicit independent6 retains excess2', () => {
+  const f = fixture(); const correspondence = { ...item(f.offerings[2], 'earned'), courseCreditContribution: 4 };
+  const alone = progress(f, [correspondence]);
+  assert.deepEqual([alone.earnedCredits, alone.completion, alone.earnedExcessCredits], [4, 'complete', 0]);
+  const p = progress(f, [item(f.offerings[0], 'earned'), correspondence]);
+  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.earnedExcessCredits, p.projectedExcessCredits], [6, 6, 2, 2]);
+});
+for (const status of ['planned', 'in_progress', 'waiting']) test(`2+2: ${status} explicit2 projects4 then earned explicit2 remains4`, () => {
+  const f = fixture(); const correspondence = { ...item(f.offerings[2], status), courseCreditContribution: 2 };
+  for (const officialSource of [false, true]) {
+    const rows = officialSource ? [official(f)] : [];
+    const items = officialSource ? [correspondence] : [item(f.offerings[0], 'earned'), correspondence];
+    const p = progress(f, items, rows);
+    assert.deepEqual([p.earnedCredits, p.projectedCredits, p.projectedCompletion, p.projectedExcessCredits], [2, 4, 'complete', 0]);
+    const changed = updatePlannerItem(items, correspondence.offeringId, { status: 'earned' });
+    assert.equal(changed.at(-1).courseCreditContribution, 2);
+    const earned = progress(f, changed, rows);
+    assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.earnedExcessCredits], [4, 4, 'complete', 0]);
+  }
+});
+for (const status of ['failed', 'dropped']) test(`2+2: ${status} explicit contribution remains0`, () => {
+  const f = fixture(); const p = progress(f, [item(f.offerings[0], 'earned'), { ...item(f.offerings[2], status), courseCreditContribution: 2 }]);
+  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion], [2, 2, 'incomplete']);
+  assert.deepEqual([p.attempts[1].earnedContribution, p.attempts[1].projectedContribution], [0, 0]);
+});
+test('2+2: official aggregate owns source-linked earned even with explicit override', () => {
+  const f = fixture();
+  for (const credits of [null, 0, 2, 4]) {
+    const row = official(f, credits);
+    const p = progress(f, [{ ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id, courseCreditContribution: 2 }], [row]);
+    assert.deepEqual([p.earnedCredits, p.projectedCredits], [credits ?? 0, credits ?? 0]);
+    assert.equal(p.attempts[0].earnedContribution, 0);
+  }
+});
+test('2+2: separate explicit earned2 adds to official2 in CourseProgress while graduation retains official priority', () => {
+  const f = fixture(); const row = official(f); const items = [{ ...item(f.offerings[2], 'earned'), courseCreditContribution: 2 }];
+  assert.equal(progress(f, items, [row]).earnedCredits, 4);
+  for (const program of catalog.programs.filter(program => !program.isCommon)) {
+    const run = items => calculateGraduationProgress(items, f, program.scopeId, [], 'undecided', [], [row]);
+    assert.deepEqual(run(items), run([])); assert.equal(run(items).graduationCheckComplete, false);
+  }
+});
+test('2+2: contribution validation rejects invalid bounds without imposing a CurriculumCourse cap', () => {
+  const f = fixture(); const o = f.offerings[2]; const state = credits => ({ ...initialState(), items: [{ ...item(o), courseCreditContribution: credits }] });
+  for (const credits of [-1, 5, NaN, Infinity, -Infinity, null, '2']) assert.equal(validateState(state(credits), f), false, String(credits));
+  for (const credits of [0, 2, 4]) assert.equal(validateState(state(credits), f), true, String(credits));
+  f.course.curriculumCredits = 2;
+  assert.equal(validateState(state(4), f), true, 'course target is not a per-attempt input bound');
+  const unknown = { ...f, offerings: f.offerings.map(offering => offering.id === o.id ? { ...offering, credits: null } : offering) };
+  assert.equal(validateState(state(2), unknown), false, 'an unknown Offering cannot supply a safe upper bound');
+  assert.equal(validateState({ ...initialState(), items: [item(o)] }, unknown), true);
+});
+test('2+2: explicit zero overrides Offering credits without affecting repeatable policy', () => {
+  const f = fixture(); const p = progress(f, [{ ...item(f.offerings[2], 'earned'), courseCreditContribution: 0 }]);
+  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion], [0, 0, 'incomplete']);
+  const course = catalog.curriculum.courses.find(course => course.canonicalName === '基礎特講');
+  const offering = catalog.offerings.find(offering => offering.curriculumCourseId === course.id && offering.credits > 0);
+  const repeatable = deriveCurriculumCourseProgress([{ ...item(offering, 'earned'), courseCreditContribution: offering.credits }], catalog).courses[0];
+  assert.equal(repeatable.completion, 'repeatable'); assert.equal(repeatable.warnings.includes(COMPLETED_COURSE_ADVISORY), false);
+});
+test('2+2: v22 metadata survives edit, save/reload, delete/undo and full import undo; clearing restores the legacy default', () => {
+  const f = fixture(); const o = f.offerings[2];
+  const state = { ...initialState(), items: [item(f.offerings[0], 'earned'), { ...item(o), courseCreditContribution: 2 }] };
+  const snapshot = structuredClone(state); const values = new Map();
+  const store = { getItem: k => values.get(k) ?? null, setItem: (k, v) => values.set(k, v) };
+  const raw = saveState(store, state, null, f);
+  assert.deepEqual(loadState(store, f).state, state); assert.equal(state.schemaVersion, 22);
+  const removed = removePlannerItem(state.items, o.id);
+  const deleted = { ...state, items: state.items.slice(0, 1) };
+  const deletedRaw = saveState(store, deleted, raw, f);
+  const restored = { ...deleted, items: restorePlannerItem(deleted.items, removed) };
+  const restoredRaw = saveState(store, restored, deletedRaw, f);
+  assert.deepEqual(loadState(store, f).state, state);
+  const imported = applyImport(restored, importPreview(importData(f.course.canonicalName, 2), [o], [], [], { curriculum: f.curriculum, mappings: f.mappings }), [o]);
+  assert.equal(imported.items[1].courseCreditContribution, 2);
+  const importedRaw = saveState(store, imported, restoredRaw, f);
+  saveState(store, snapshot, importedRaw, f);
+  assert.deepEqual(loadState(store, f).state, snapshot);
+  const cleared = updatePlannerItem(state.items, o.id, { courseCreditContribution: undefined });
+  assert.equal('courseCreditContribution' in cleared[1], false);
+  assert.equal(progress(f, cleared).projectedCredits, 6);
+  const legacy = { ...state, items: cleared };
+  saveState(store, legacy, values.get(STORAGE_KEY), f);
+  assert.equal(loadState(store, f).error, null); assert.deepEqual(loadState(store, f).state, legacy);
+  assert.deepEqual(state, snapshot, 'no lifecycle path mutates the undo snapshot');
+});
+test('2+2: annual registration stays Offering based, unified rows retain metadata, exports distinguish explicit contribution', () => {
+  const f = fixture(); const i = { ...item(f.offerings[2]), courseCreditContribution: 2 }; const state = { ...initialState(), items: [i] };
+  const map = new Map(f.offerings.map(offering => [offering.id, offering]));
+  assert.equal(annualCreditLimitReferences(state.items, map)[0].knownTotalCredits, 4);
+  assert.equal(groupAnnualPlan(state.items, map)[0].groups[0].items[0], i);
+  assert.equal(createUnifiedCourseRows(state.items, [], map)[0].plannerItem.courseCreditContribution, 2);
+  const exported = plannerExportPresentation(state, f);
+  assert.equal(exported.rows[0].credits, 4); assert.equal(exported.rows[0].courseCreditContribution, 2);
+  const csv = plannerExportCsv(exported);
+  assert.match(csv, /科目進捗への寄与単位（明示）/); assert.ok(csv.endsWith(',2'));
+  const html = renderToStaticMarkup(createElement(PlannerExportActions, { presentation: exported }));
+  assert.match(html, /科目進捗への寄与: 2単位/);
+});
+test('2+2 UI: only exact four-credit correspondence exposes a manual 2/4 selector without guessing', () => {
+  const f = fixture(); const items = [item(f.offerings[0], 'earned'), item(f.offerings[2])];
+  const render = (f, items, rows = [], props = {}) => renderToStaticMarkup(createElement(CourseProgress, {
+    progress: deriveCurriculumCourseProgress(items, f, rows), catalog: f, onChange: () => {}, ...props,
+  }));
+  const html = render(f, items);
+  assert.equal((html.match(/<select /g) ?? []).length, 1);
+  assert.match(html, /value="" selected="">未設定（開講の4単位を使用）/);
+  assert.match(html, /value="2">2単位/); assert.match(html, /value="4">4単位/);
+  assert.match(html, /先にスクーリング2単位の修得確定が必要/);
+  const chosen = render(f, [items[0], { ...items[1], courseCreditContribution: 2 }]);
+  assert.match(chosen, /value="2" selected=""/); assert.match(chosen, /予定込み 4 \/ 4/); assert.doesNotMatch(chosen, /超過候補/);
+  assert.match(render(f, items, [], { disabled: true }), /<select[^>]*disabled=""/);
+  assert.doesNotMatch(render(f, items, [], { onChange: undefined }), /<select /);
+  assert.doesNotMatch(render(f, [items[0]]), /<select /);
+  const twoCredit = { ...f, curriculum: { ...f.curriculum, courses: [{ ...f.course, curriculumCredits: 2 }] } };
+  assert.doesNotMatch(render(twoCredit, items), /<select /);
+  const ambiguous = { ...f, offerings: f.offerings.map(offering => ({ ...offering, curriculumCourseId: null })) };
+  assert.doesNotMatch(render(ambiguous, items), /<select /);
+  const row = official(f, 4);
+  const linked = { ...item(f.offerings[2], 'earned'), importedSourceCourseId: row.id, courseCreditContribution: 2 };
+  const linkedHtml = render(f, [linked], [row]);
+  assert.doesNotMatch(linkedHtml, /<select /); assert.match(linkedHtml, /修得単位は公式集計を優先/);
+});
+test('2+2 UI: actual Economics schooling2 and correspondence explicit2 display completed4 with no excess', () => {
+  const course = catalog.curriculum.courses.find(course => course.canonicalName === '経済学' && course.curriculumCredits === 4
+    && catalog.offerings.some(offering => offering.curriculumCourseId === course.id && offering.method === 'schooling' && offering.credits === 2)
+    && catalog.offerings.some(offering => offering.curriculumCourseId === course.id && offering.method === 'correspondence' && offering.credits === 4));
+  assert.ok(course);
+  const schooling = catalog.offerings.find(offering => offering.curriculumCourseId === course.id && offering.method === 'schooling' && offering.credits === 2);
+  const correspondence = catalog.offerings.find(offering => offering.curriculumCourseId === course.id && offering.method === 'correspondence' && offering.credits === 4);
+  const result = deriveCurriculumCourseProgress([item(schooling, 'earned'), { ...item(correspondence, 'earned'), courseCreditContribution: 2 }], catalog);
+  assert.equal(result.courses[0].earnedCredits, 4); assert.equal(result.courses[0].earnedExcessCredits, 0);
+  const html = renderToStaticMarkup(createElement(CourseProgress, { progress: result, catalog, onChange: () => {} }));
+  assert.match(html, /修得済み 4 \/ 4/); assert.match(html, /予定込み 4 \/ 4/); assert.doesNotMatch(html, /超過候補/);
+});
 
 test('course progress A: official exact earned2 with unknown opening plus planned2 gives earned2/projected4', () => {
   const f = fixture(); const row = official(f); const p = progress(f, [item(f.offerings[0])], [row]);

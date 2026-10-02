@@ -886,6 +886,7 @@
       "type": "object",
       "properties": {
         "importedSourceCourseId": { "type": "string", "minLength": 1 },
+        "courseCreditContribution": { "type": "number", "minimum": 0 },
         "offeringId": {
           "type": "string",
           "format": "uuid",

@@ -22,6 +22,7 @@ function ExportRow({ row }: { row: PlannerExportRow }) {
   return <article className="border-t border-slate-200 py-4 first:border-t-0">
     <div className="flex items-start justify-between gap-5"><h4 className="min-w-0 break-words text-lg font-semibold text-[#002255]">{row.title}</h4><span className="shrink-0 text-sm">{exportValue(row.credits)}単位</span></div>
     <p className="mt-1 text-sm text-slate-600">{row.plannedYear === null ? '年度未設定' : `${row.plannedYear}年`} / {row.formLabel} / {exportTermLabel(row.plannedTerm)} / {row.statusLabel}</p>
+    {row.courseCreditContribution !== undefined && <p className="mt-1 text-sm text-slate-600">科目進捗への寄与: {row.courseCreditContribution}単位（明示設定・開講 {exportValue(row.credits)}単位）</p>}
     {row.classificationLabel && <p className="mt-1 text-xs text-slate-500">{row.classificationLabel}・{row.sourceType === 'catalog' ? 'catalog' : '公開科目'}</p>}
     <div className="mt-3 grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm"><span className="text-slate-500">進捗</span><span className="break-words">{row.progressSummary}</span><span className="text-slate-500">最終評価</span><span>{exportGradeLabel(row.finalGrade)}</span>{row.assessmentSummary && <><span className="text-slate-500">試験・評価予定</span><span className="break-words">{row.assessmentSummary}</span></>}</div>
   </article>;
