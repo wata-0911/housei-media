@@ -59,14 +59,27 @@ function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, occ
   const candidates = offerings.filter(o => normalizeImportName(o.name) === normalizeImportName(course.rawName));
   const courseIds = new Set(candidates.filter(o => o.resolutionStatus === 'matched' && o.courseId !== null).map(o => o.courseId!));
   const courseId = courseIds.size === 1 ? [...courseIds][0] : null;
-  const correspondenceEvidence = hasCorrespondenceEvidence(course);
-  const schoolingEvidence = course.schoolings.some(slot => slot.rawYear || slot.rawTerm || slot.rawDate || slot.rawCredits || slot.rawGrade);
-  const correspondenceYear = inferredCorrespondenceYear(course, capturedAt).academicYear;
-  const schoolingYears = new Set(course.schoolings.filter(slot => slot.rawYear || slot.rawTerm || slot.rawDate || slot.rawCredits || slot.rawGrade)
-    .map(slot => schoolingAcademicYear(slot.year) ?? schoolingAcademicYear(slot.rawYear) ?? academicYearFromDate(slot.date ?? capturedAt.slice(0, 10))));
-  const openingCandidates = candidates.filter(offering => (!correspondenceEvidence && !schoolingEvidence)
-    || (offering.method === 'correspondence' ? correspondenceEvidence && correspondenceYear === offering.academicYear : schoolingYears.has(offering.academicYear)));
-  const selectedOffering = openingCandidates.length === 1 && openingCandidates[0].resolutionStatus === 'matched' ? openingCandidates[0] : null;
+  // Stage B resolves every substantive component independently. A missing
+  // opening must not disappear from the evidence for the whole source row.
+  const resolveComponent = (method: ImportMethod, academicYear: number | null) => {
+    const resolution = match(course.rawName, method, offerings, academicYear);
+    const offering = resolution.candidates[0];
+    return { candidates: resolution.candidates, safeOffering: academicYear !== null && resolution.match === 'exact_unique'
+      && offering.resolutionStatus === 'matched' && offering.courseId !== null ? offering : null };
+  };
+  const components = [];
+  if (hasCorrespondenceEvidence(course)) components.push(resolveComponent('correspondence', inferredCorrespondenceYear(course, capturedAt).academicYear));
+  for (const slot of course.schoolings) {
+    if (!slot.rawYear && !slot.rawTerm && !slot.rawDate && !slot.rawCredits && !slot.rawGrade) continue;
+    const year = schoolingAcademicYear(slot.year) ?? schoolingAcademicYear(slot.rawYear) ?? academicYearFromDate(slot.date ?? capturedAt.slice(0, 10));
+    components.push(resolveComponent('schooling', year));
+  }
+  // Preserve the existing course-only fallback when no component is present.
+  const openingCandidates = components.length ? components.flatMap(component => component.candidates) : candidates;
+  const safeOpenings = new Map(components.flatMap(component => component.safeOffering ? [[component.safeOffering.id, component.safeOffering] as const] : []));
+  const selectedOffering = components.length
+    ? components.every(component => component.safeOffering !== null) && safeOpenings.size === 1 ? [...safeOpenings.values()][0] : null
+    : candidates.length === 1 && candidates[0].resolutionStatus === 'matched' && candidates[0].courseId !== null ? candidates[0] : null;
   const curriculumMatch = matchImportedCurriculumCourse(course, offerings, context.curriculum, context.mappings);
   const schooling = course.schoolings.find(slot => slot.rawYear || slot.rawTerm || slot.rawDate || slot.rawCredits || slot.rawGrade);
   const sourceYear = schooling ? schoolingAcademicYear(schooling.year) ?? schoolingAcademicYear(schooling.rawYear) : null;

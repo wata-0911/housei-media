@@ -88,6 +88,14 @@ extensionの固定24セル抽出（schooling枠14–18/19–23）からcontract�
 
 planner16件を追加し352件 / extension19件PASS。修正前に最初の新規13件中11件の失敗を確認した。未照合/曖昧componentの非選択・sourceDuplicate backfill、逆方向の通信未照合、真に単一safe Offering、coalesced/独立公式行/複数Planner行/legacy-orphanのdesktop・mobile内訳表示、年度の異なる通信・schooling、slot0/1のA→A+更新、不確定・競合時の非上書き、ユーザー照合/期の保持、再読込/全state undoを追加検証。既存336件は削除せず、今年度の自動登録を検証するfixture年度を2026に合わせ、同じOfferingの複数schooling componentを検証するfixtureから無関係な未照合通信evidenceを除いた。過去年度の非登録と未照合通信のearned抑止を別途テストした。typecheck/lint/test:planner/test:extension/build/diff-checkが成功。独立Previewで公式4+未照合冬期2/Aのsource内訳、Planner planned・公式修得4、A+再取込後の内訳2件維持、追加0/更新1の通知、再読込・取込undo、console errorなしを確認した。
 
+## 公式科目行のStage B Offering identityのP2 follow-up
+
+`sourceCourseFor` は、通信evidenceと実データのある各schooling slotを、名称・方式・年度で個別に照合する。全componentが一意かつmatchedでCourse IDを持つsafe Offeringへ解決され、distinct Offering IDが1つの場合だけ公式科目行をauto / exact_uniqueにする。同じ開講に一致する2つのschooling slotは1 Offeringとして数える。safeな通信だけが残っても、未照合・曖昧・年度不一致・unsafeなcomponentがあればselectedOfferingIdはnull、selectionSourceはnoneとし、候補があればambiguous、全て候補なしならunmatchedにする。checkboxでcomponentを非選択にしても、この全source判定は変わらない。componentなしのcourse-only fallbackは従来どおり維持する。
+
+実catalogの経済学（通信exact + 冬期スクunmatched）は、Course / CurriculumCourseのexact identityと公式4単位を維持し、2026開講は未特定／要確認になる。componentの評価や単位からaggregateを分配せず、manual選択を再取込時に保持する既存処理も変更しない。PlannerItemのsource-linked earned判定、Unified内訳、通信full4/split2、卒業official-priorityは変更しない。保存field・migrationの追加がないためschemaVersion22を維持し、graduationCheckComplete=falseを継続する。
+
+planner10件を追加し362件 / extension19件PASS。修正前は新規10件中4件で失敗を再現した。経済学のImportedAchievements HTML、単一通信、同一開講の2 slot、複数開講、曖昧・未照合、年度混在・過去年度、unsafe mapping、非選択、manual選択の再取込・v22再読込を検証した。既存352件を変更せず維持し、typecheck/lint/test:planner/test:extension/build/diff-checkが成功。
+
 ## derived CourseProgress
 
 `deriveCurriculumCourseProgress` は、exactなOffering.curriculumCourseIdと独立exactなImportedCourseAchievement.curriculumCourseIdを使う。名前、旧Course ID、候補の先頭では結合しない。Offering未特定の公式行も制度科目exactなら利用する。

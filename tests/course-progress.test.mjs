@@ -66,6 +66,75 @@ function economicsOfferings() {
   const winter = catalog.offerings.find(o => o.name === '経済学（冬期スクーリング）' && o.method === 'schooling' && o.credits === 2);
   assert.ok(correspondence); assert.ok(winter); return [correspondence, winter];
 }
+function withoutCorrespondence(data) {
+  data.courses[0].reports = data.courses[0].reports.map(() => ({ raw: '', status: 'none', date: null }));
+  data.courses[0].creditExam = { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false };
+  return data;
+}
+test('Stage B source: actual Economics retains Course exact and official4 without auto-selecting the correspondence opening', () => {
+  const offerings = economicsOfferings(); const preview = importPreview(extractedEconomics(), offerings);
+  const row = preview[0].sourceCourse;
+  assert.deepEqual([row.selectedOfferingId, row.selectionSource, row.offeringMatch], [null, 'none', 'ambiguous']);
+  assert.equal(row.courseId, offerings[0].courseId); assert.equal(row.curriculumCourseId, offerings[0].curriculumCourseId);
+  assert.equal(row.curriculumMatch, 'exact_unique'); assert.equal(row.earnedCreditsTotal, 4);
+  const next = applyImport(initialState(), preview, offerings);
+  assert.equal(next.importedCourseAchievements[0].selectedOfferingId, null);
+  assert.equal(next.items[0].status, 'planned'); assert.equal(next.items[0].importedSourceCourseId, undefined);
+  const html = renderToStaticMarkup(createElement(ImportedAchievements, { records: next.importedStudyRecords, courseRows: next.importedCourseAchievements, offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
+  assert.match(html, /2026開講: 未特定/); assert.match(html, /開講照合: 要確認/);
+  assert.doesNotMatch(html, /2026開講: 経済学/); assert.doesNotMatch(html, /自動照合/);
+});
+test('Stage B source: a truly single safe correspondence opening can be auto-selected', () => {
+  const offerings = economicsOfferings(); const data = extractedEconomics();
+  data.courses[0].schoolings[0] = data.courses[0].schoolings[1];
+  const row = importPreview(data, offerings)[0].sourceCourse;
+  assert.deepEqual([row.selectedOfferingId, row.selectionSource, row.offeringMatch], [offerings[0].id, 'auto', 'exact_unique']);
+});
+test('Stage B source: two schooling slots resolving to the same safe opening can be auto-selected', () => {
+  const [, winter] = economicsOfferings(); const offerings = [{ ...winter, name: '経済学' }];
+  const data = withoutCorrespondence(extractedEconomics()); data.courses[0].schoolings[1] = { ...data.courses[0].schoolings[0] };
+  const row = importPreview(data, offerings)[0].sourceCourse;
+  assert.deepEqual([row.selectedOfferingId, row.selectionSource, row.offeringMatch], [winter.id, 'auto', 'exact_unique']);
+});
+for (const scenario of ['two-safe', 'ambiguous', 'historical-current', 'unsafe-resolution', 'unsafe-course-id']) test(`Stage B source: ${scenario} component evidence prevents automatic opening identity`, () => {
+  const [corr, winter] = economicsOfferings(); const school = { ...winter, name: corr.name }; let offerings = [corr, school];
+  let data = extractedEconomics();
+  if (scenario === 'ambiguous') offerings.push({ ...school, id: 'another-school' });
+  if (scenario === 'historical-current') {
+    data = withoutCorrespondence(data); data.courses[0].schoolings[1] = { ...data.courses[0].schoolings[0], rawYear: '2025', year: '2025', rawDate: '2026/02/01', date: '2026-02-01' }; offerings = [school];
+  }
+  if (scenario === 'unsafe-resolution' || scenario === 'unsafe-course-id') {
+    data = withoutCorrespondence(data); offerings = [{ ...school, ...(scenario === 'unsafe-resolution' ? { resolutionStatus: 'manual_review' } : { courseId: null }) }];
+  }
+  const units = importPreview(data, offerings); const row = units[0].sourceCourse;
+  assert.deepEqual([row.selectedOfferingId, row.selectionSource, row.offeringMatch], [null, 'none', 'ambiguous']);
+  assert.equal(row.earnedCreditsTotal, 4);
+  const deselected = applyImport(initialState(), units.map(u => ({ ...u, selected: u.id === units[0].id })), offerings);
+  assert.equal(deselected.importedCourseAchievements[0].selectedOfferingId, null);
+});
+test('Stage B source: entirely historical or absent candidates remain unmatched with no automatic opening', () => {
+  const [, winter] = economicsOfferings(); const data = withoutCorrespondence(extractedEconomics());
+  Object.assign(data.courses[0].schoolings[0], { rawYear: '2025', year: '2025', rawDate: '2026/02/01', date: '2026-02-01' });
+  for (const offerings of [[], [{ ...winter, name: '経済学' }]]) {
+    const row = importPreview(data, offerings)[0].sourceCourse;
+    assert.deepEqual([row.selectedOfferingId, row.selectionSource, row.offeringMatch], [null, 'none', 'unmatched']);
+  }
+});
+test('Stage B source: reimport preserves a manual opening selection independently of the new automatic evidence', () => {
+  const offerings = economicsOfferings(); const data = extractedEconomics(); const saved = applyImport(initialState(), importPreview(data, offerings), offerings);
+  const manual = { ...saved.importedCourseAchievements[0], selectedOfferingId: offerings[1].id, selectionSource: 'manual', offeringMatch: 'exact_unique' };
+  const before = { ...saved, importedCourseAchievements: [manual] };
+  const changed = structuredClone(data); Object.assign(changed.courses[0].schoolings[0], { rawGrade: 'A+', grade: 'A+' });
+  const units = importPreview(changed, offerings, before.importedStudyRecords, before.importedCourseAchievements);
+  assert.equal(units[0].sourceCourse.selectedOfferingId, null);
+  const next = applyImport(before, units, offerings); const row = next.importedCourseAchievements[0];
+  assert.deepEqual([row.selectedOfferingId, row.selectionSource, row.offeringMatch], [offerings[1].id, 'manual', 'exact_unique']);
+  assert.equal(row.id, manual.id); assert.equal(row.earnedCreditsTotal, 4); assert.equal(row.curriculumCourseId, manual.curriculumCourseId);
+  assert.equal(next.importedStudyRecords.length, 2); assert.equal(next.importedStudyRecords[1].grade, 'A+');
+  assert.equal(next.schemaVersion, 22); assert.equal(validateState(next, catalog), true);
+  const values = new Map(); const store = { getItem: k => values.get(k) ?? null, setItem: (k, v) => values.set(k, v) };
+  saveState(store, next, null, catalog); assert.deepEqual(loadState(store, catalog).state, next);
+});
 function unifiedImportHtml(state, offerings = catalog.offerings) {
   const map = new Map(offerings.map(o => [o.id, o])); const noop = () => {};
   return renderToStaticMarkup(createElement(PlannedCourseList, {
