@@ -7,6 +7,7 @@ import { generateCurriculumCatalog } from '../src/planner/curriculumGeneration.t
 import { matchImportedCurriculumCourse, curriculumMatchForOfferingSelection } from '../src/planner/curriculumImportMatch.ts';
 import { importPreview, applyImport } from '../src/planner/gradeImportApply.ts';
 import { migrateCurriculumState } from '../src/planner/curriculumMigration.ts';
+import { validImportedCurriculumIdentity } from '../src/planner/curriculumIdentityValidation.ts';
 import { initialState, loadState, saveState, saveRecoveredState, STORAGE_KEY } from '../src/planner/storage.ts';
 import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
@@ -238,6 +239,10 @@ test('migration: unsafe old course crosswalk is held without using its automatic
   assert.equal(result.importedCourseAchievements[0].rawName, old.rawName);
   assert.equal(result.importedCourseAchievements[0].earnedCreditsTotal, 2);
   assert.equal(result.importedCourseAchievements[0].offeringMatch, 'ambiguous');
+  assert.equal(validateState(result, f), true);
+  const memory = store(null);
+  saveState(memory, result, null, f);
+  assert.deepEqual(loadState(memory, f).state, result);
 });
 
 test('migration: unknown old course ID does not acquire identity from a similar name', () => {
@@ -270,6 +275,84 @@ test('persistence: partial or contradictory new match fields are rejected with r
     const raw = JSON.stringify(value); const memory = store(raw);
     assert.ok(loadState(memory, f).error);
     assert.equal(memory.getItem(STORAGE_KEY), raw);
+  }
+});
+
+test('identity validation: exact opening requires an existing selected opening', () => {
+  const f = fixture(); const row = preview(f)[0].sourceCourse;
+  for (const selectedOfferingId of [null, 'nonexistent-offering']) {
+    const bad = { ...row, selectedOfferingId, offeringMatch: 'exact_unique' };
+    assert.equal(validImportedCurriculumIdentity(bad, f), false);
+    const state = { ...initialState(), importedCourseAchievements: [bad] };
+    assert.equal(validateState(state, f), false);
+    const raw = JSON.stringify(state); const memory = store(raw);
+    assert.throws(() => saveState(memory, state, raw, f));
+    assert.ok(loadState(memory, f).error);
+    assert.equal(memory.getItem(STORAGE_KEY), raw);
+  }
+});
+
+test('identity validation: Course A cannot be saved with an exact opening of Course B', () => {
+  const f = fixture({ distinct: true }); const row = preview(f)[0].sourceCourse;
+  const courseA = f.offerings[0].curriculumCourseId;
+  const bad = { ...row, selectedOfferingId: f.offerings[1].id, offeringMatch: 'exact_unique', curriculumMatch: 'exact_unique', curriculumCourseId: courseA, candidateCurriculumCourseIds: [courseA] };
+  assert.notEqual(courseA, f.offerings[1].curriculumCourseId);
+  assert.equal(validImportedCurriculumIdentity(bad, f), false);
+  assert.equal(validateState({ ...initialState(), importedCourseAchievements: [bad] }, f), false);
+});
+
+test('identity validation: exact opening with its matching curriculum singleton survives persistence', () => {
+  const f = fixture(); const row = preview(f)[0].sourceCourse;
+  const matched = { ...row, ...curriculumMatchForOfferingSelection(row, f.offerings[0], f.curriculum), selectedOfferingId: f.offerings[0].id, selectionSource: 'manual' };
+  assert.equal(validImportedCurriculumIdentity(matched, f), true);
+  for (const patch of [
+    { curriculumCourseId: null, curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] },
+    { curriculumCourseId: null, curriculumMatch: 'ambiguous' },
+    { candidateCurriculumCourseIds: [] },
+    { candidateCurriculumCourseIds: [matched.curriculumCourseId, matched.curriculumCourseId] },
+  ]) assert.equal(validImportedCurriculumIdentity({ ...matched, ...patch }, f), false);
+  const state = { ...initialState(), importedCourseAchievements: [matched] }; const memory = store(null);
+  assert.equal(validateState(state, f), true);
+  saveState(memory, state, null, f);
+  assert.deepEqual(loadState(memory, f).state, state);
+});
+
+test('identity validation: manual ambiguous curriculum relation requires the complete generated candidate set', () => {
+  const f = fixture({ distinct: true });
+  const input = { ...f, offerings: f.offerings.map(offering => ({ ...offering, mappingIds: f.mappings.map(mapping => mapping.mappingId) })) };
+  const curriculum = generateCurriculumCatalog(input, f.rows, []);
+  const ambiguous = attachCurriculumCatalog(input, curriculum);
+  const offering = ambiguous.offerings[0]; const row = preview(f)[0].sourceCourse;
+  const matched = { ...row, ...curriculumMatchForOfferingSelection(row, offering, curriculum), selectedOfferingId: offering.id, selectionSource: 'manual' };
+  const ids = matched.candidateCurriculumCourseIds;
+  assert.equal(ids.length, 2);
+  assert.equal(offering.curriculumCourseId, null);
+  for (const candidateCurriculumCourseIds of [ids, [...ids].reverse()]) {
+    const state = { ...initialState(), importedCourseAchievements: [{ ...matched, candidateCurriculumCourseIds }] };
+    assert.equal(validateState(state, ambiguous), true);
+    const memory = store(null); saveState(memory, state, null, ambiguous);
+    assert.deepEqual(loadState(memory, ambiguous).state, state);
+  }
+  for (const patch of [
+    { curriculumCourseId: ids[0], curriculumMatch: 'exact_unique', candidateCurriculumCourseIds: [ids[0]] },
+    { candidateCurriculumCourseIds: [ids[0]] },
+    { candidateCurriculumCourseIds: [ids[0], ids[0]] },
+    { candidateCurriculumCourseIds: [...ids, 'nonexistent-course'] },
+    { curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] },
+  ]) assert.equal(validImportedCurriculumIdentity({ ...matched, ...patch }, ambiguous), false);
+});
+
+test('identity validation: exact unresolved/outside openings cannot invent a curriculum identity', () => {
+  const row = preview(fixture())[0].sourceCourse;
+  for (const status of ['manual_review', 'outside_mapping_scope']) {
+    const offering = catalog.offerings.find(candidate => candidate.resolutionStatus === status);
+    assert.ok(offering);
+    assert.equal(offering.curriculumCourseId, null);
+    const matched = { ...row, ...curriculumMatchForOfferingSelection(row, offering, catalog.curriculum), selectedOfferingId: offering.id, selectionSource: 'manual' };
+    assert.equal(validImportedCurriculumIdentity(matched, catalog), true);
+    const id = catalog.curriculum.courses[0].id;
+    assert.equal(validImportedCurriculumIdentity({ ...matched, curriculumCourseId: id, curriculumMatch: 'exact_unique', candidateCurriculumCourseIds: [id] }, catalog), false);
+    assert.equal(validImportedCurriculumIdentity({ ...matched, curriculumMatch: 'ambiguous', candidateCurriculumCourseIds: [id] }, catalog), false);
   }
 });
 

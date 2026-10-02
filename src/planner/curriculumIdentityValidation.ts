@@ -13,6 +13,18 @@ export function validImportedCurriculumIdentity(row: ImportedCourseAchievement, 
     if (!row.curriculumCourseId || ids.length !== 1 || ids[0] !== row.curriculumCourseId) return false;
   } else if (row.curriculumCourseId !== null || (row.curriculumMatch === 'unmatched' ? ids.length !== 0 : ids.length === 0)) return false;
   // A legacy automatic representative can remain stored after migration, but its offeringMatch is not exact.
-  if (row.offeringMatch === 'exact_unique' && !row.selectedOfferingId) return false;
-  return true;
+  if (row.offeringMatch !== 'exact_unique') return true;
+  const offering = catalog.offerings.find(candidate => candidate.id === row.selectedOfferingId);
+  if (!row.selectedOfferingId || !offering) return false;
+  if (offering.curriculumCourseId) {
+    return row.curriculumMatch === 'exact_unique'
+      && row.curriculumCourseId === offering.curriculumCourseId
+      && ids.length === 1 && ids[0] === offering.curriculumCourseId;
+  }
+  // A manual opening selection does not resolve an ambiguous official curriculum relation.
+  const candidates = catalog.curriculum?.offeringRelations.find(relation => relation.offeringId === offering.id)?.candidateCurriculumCourseIds ?? [];
+  return row.curriculumCourseId === null
+    && row.curriculumMatch === (candidates.length > 0 ? 'ambiguous' : 'unmatched')
+    && ids.length === candidates.length && new Set(ids).size === ids.length
+    && ids.every(id => candidates.includes(id));
 }

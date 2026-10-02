@@ -3435,7 +3435,9 @@ test('profile edits persist through the existing planner state and feed graduati
 });
 
 // Auto-registration uses the real import preview and application paths.
-const autoImportBaseOffering = catalog.offerings.find(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null && offering.method === 'correspondence');
+// The grade fixture below describes a four-credit curriculum course and correspondence opening.
+const autoImportBaseOffering = catalog.offerings.find(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null && offering.method === 'correspondence'
+  && offering.credits === 4 && catalog.curriculum.courses.some(course => course.id === offering.curriculumCourseId && course.curriculumCredits === 4));
 function autoImportCourse(rawName, patch = {}) {
   const emptySchooling = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
   return { rawName, categoryRaw: null, compositionCredits: { raw: '4', value: 4 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2025/07/01', rawCredits: '4', rawGrade: 'S', date: '2025-07-01', credits: 4, grade: 'S', pendingMarker: false }, schoolings: [emptySchooling, emptySchooling], ...patch };
