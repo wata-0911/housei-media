@@ -93,13 +93,22 @@ test('UI: repeatable official16 plus independent earned2 retains18 without norma
   assert.match(markup, /修得: 18単位 · 反復履修可能科目/); assert.doesNotMatch(markup, /修得: 18 \/|完成後の再履修/); assert.match(markup, /履修attemptの詳細・編集/);
 });
 test('UI callbacks: status/year/studyYear/term/order and grades route by offeringId, not Course id', () => {
-  const input = state({ items: [item(correspondence)] }); const calls = []; const grades = [];
-  const tree = PlannerAttemptChild({ attempt: attemptFor(input), editor: props(input, { onChange: (...args) => calls.push(args), onChangeEvaluation: (...args) => grades.push(args) }) });
-  for (const [type, value, field] of [[StatusSelect, 'waiting', 'status'], [YearInput, 2028, 'plannedYear'], [StudyYearSelect, 3, 'studyYear'], [TermSelect, '冬期', 'plannedTerm'], [CompletionOrderInput, 2, 'earnedOrder']]) {
-    find(tree, type).props.onChange(value); assert.deepEqual(calls.at(-1), [correspondence.id, { [field]: value }]);
+  const calls = []; const grades = [];
+  for (const opening of [correspondence, winter]) {
+    const input = state({ items: [item(opening)] });
+    const tree = PlannerAttemptChild({ attempt: attemptFor(input), editor: props(input, { onChange: (...args) => calls.push(args), onChangeEvaluation: (...args) => grades.push(args) }) });
+    for (const [type, value, field] of [[StatusSelect, 'waiting', 'status'], [YearInput, 2028, 'plannedYear'], [StudyYearSelect, 3, 'studyYear'], [TermSelect, '冬期', 'plannedTerm'], [CompletionOrderInput, 2, 'earnedOrder']]) {
+      find(tree, type).props.onChange(value); assert.deepEqual(calls.at(-1), [opening.id, { [field]: value }]);
+    }
+    const selects = elements(tree).filter(node => node.type === GradeSelect);
+    assert.equal(selects.length, opening.method === 'schooling' ? 3 : 1);
+    selects.forEach(node => {
+      node.props.onChange('A');
+      assert.equal(grades.at(-1)[0], opening.id); assert.equal(grades.at(-1)[1].offeringId, opening.id);
+    });
   }
-  elements(tree).filter(node => node.type === GradeSelect).forEach(node => node.props.onChange('A'));
-  assert.ok(grades.length >= 2); assert.ok(grades.every(([id, grade]) => id === correspondence.id && grade.offeringId === id));
+  assert.ok(grades.length >= 2); assert.equal(grades.length, 4);
+  assert.ok(grades.every(([id, grade]) => [correspondence.id, winter.id].includes(id) && grade.offeringId === id));
 });
 test('UI callbacks: official year/studyYear/term/lifecycle metadata use achievement.id', () => {
   const input = state({ importedCourseAchievements: [official({ earnedCreditsTotal: 0 })] }); const calls = [];
@@ -170,4 +179,118 @@ test('UI: rendering deeply frozen source state/catalog/view cannot mutate or per
   const markup = renderToStaticMarkup(createElement(CurriculumCourseList, props(input, { catalog: sourceCatalog, view })));
   assert.equal(count(markup, 'data-official-id'), 1); assert.equal(count(markup, 'data-attempt-id'), 1);
   assert.equal(JSON.stringify(input), before); assert.equal(input.schemaVersion, 22);
+});
+
+const twoCreditCorrespondence = catalog.offerings.find(o => o.method === 'correspondence' && o.credits === 2);
+const mediaOffering = catalog.offerings.find(o => ['前期メディア', '後期メディア'].includes(o.deliveryCategory));
+const ambiguousOffering = catalog.offerings.find(o => catalog.curriculum.offeringRelations.some(r => r.offeringId === o.id && r.candidateCurriculumCourseIds.length > 1));
+const anyAttempt = input => {
+  const view = deriveCurriculumCourseView(input, catalog);
+  return view.courses.flatMap(course => course.attempts)[0] ?? view.unresolved.find(entry => entry.kind === 'attempt').attempt;
+};
+const attemptMarkup = input => renderToStaticMarkup(createElement(PlannerAttemptChild, { attempt: anyAttempt(input), editor: props(input) }));
+const noContributionInput = markup => assert.doesNotMatch(markup, /aria-label="科目進捗への寄与単位"|通信学習の修得方法|value="full4"|value="split2"/);
+
+test('P2-A: schooling2 has no arbitrary contribution editor or study-method selector', () => {
+  assert.equal(winter.credits, 2);
+  noContributionInput(attemptMarkup(state({ items: [item(winter)] })));
+});
+test('P2-A: correspondence2 has no arbitrary contribution editor or study-method selector', () => {
+  assert.ok(twoCreditCorrespondence);
+  noContributionInput(attemptMarkup(state({ items: [item(twoCreditCorrespondence)] })));
+});
+test('P2-A: missing Offering has no contribution editor and preserves a saved setting read-only', () => {
+  const input = state({ items: [item({ id: 'missing-contribution' }, 'planned', { courseCreditContribution: 1 })] });
+  const before = structuredClone(input);
+  const markup = attemptMarkup(input);
+  noContributionInput(markup);
+  assert.match(markup, /保存済み寄与設定 1単位（要確認）/);
+  assert.deepEqual(input, before);
+});
+test('P2-A: correspondence4 retains only unset/full4/split2 with offeringId callbacks', () => {
+  const input = state({ items: [item(correspondence)] }); const calls = [];
+  const editor = props(input, { onChange: (...args) => calls.push(args) });
+  const child = PlannerAttemptChild({ attempt: anyAttempt(input), editor });
+  const details = find(child, CorrespondenceDetails);
+  const method = CorrespondenceStudyMethod({ item: details.props.item, offering: details.props.offering, onChange: details.props.onChangeItem });
+  const choices = elements(method).filter(node => node.type === 'option').map(node => node.props.value);
+  assert.deepEqual(choices, ['', 'full4', 'split2']);
+  for (const [value, credits] of [['split2', 2], ['full4', 4], ['', undefined]]) {
+    find(method, 'select').props.onChange({ target: { value } });
+    assert.deepEqual(calls.at(-1), [correspondence.id, { courseCreditContribution: credits }]);
+  }
+  const markup = attemptMarkup(input);
+  assert.doesNotMatch(markup, /aria-label="科目進捗への寄与単位"/);
+  assert.match(markup, /value="full4"/); assert.match(markup, /value="split2"/);
+});
+test('P2-A: existing non-standard contributions remain read-only and survive render/save/reload', () => {
+  for (const [opening, credits] of [[winter, 1], [twoCreditCorrespondence, 1], [correspondence, 3], [mediaOffering, 1]]) {
+    assert.ok(opening);
+    const input = state({ items: [item(opening, 'planned', { courseCreditContribution: credits })] });
+    const before = structuredClone(input);
+    Object.freeze(input.items[0]);
+    const markup = attemptMarkup(input);
+    assert.doesNotMatch(markup, /aria-label="科目進捗への寄与単位"/);
+    assert.ok(markup.includes(`保存済み寄与設定 ${credits}単位（要確認）`));
+    assert.deepEqual(input, before);
+    const data = new Map(); const store = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
+    saveState(store, input, null, catalog);
+    const loaded = loadState(store, catalog); assert.equal(loaded.error, null);
+    assert.equal(loaded.state.items[0].courseCreditContribution, credits);
+    assert.deepEqual(loaded.state, before);
+  }
+});
+test('P2-B: correspondence never exposes schoolingGrade editing, even with a saved value', () => {
+  const input = state({ items: [item(correspondence)], courseEvaluations: { [correspondence.id]: { offeringId: correspondence.id, finalGrade: 'B', reportGrade: null, schoolingGrade: 'A' } } });
+  const before = structuredClone(input);
+  const markup = attemptMarkup(input);
+  assert.doesNotMatch(markup, /aria-label="スクーリング評価"/);
+  assert.match(markup, /保存済みスクーリング評価: A/);
+  assert.deepEqual(input, before);
+});
+test('P2-B: schooling keeps schoolingGrade and reportGrade editors with offeringId ownership', () => {
+  const input = state({ items: [item(winter)], courseEvaluations: { [winter.id]: { offeringId: winter.id, finalGrade: 'B', reportGrade: 'A', schoolingGrade: 'S' } } });
+  const calls = [];
+  const child = PlannerAttemptChild({ attempt: anyAttempt(input), editor: props(input, { onChangeEvaluation: (...args) => calls.push(args) }) });
+  const select = elements(child).find(node => node.type === GradeSelect && node.props.label === 'スクーリング評価');
+  assert.ok(select); select.props.onChange('A');
+  assert.deepEqual(calls.at(-1), [winter.id, { ...input.courseEvaluations[winter.id], schoolingGrade: 'A' }]);
+  const markup = attemptMarkup(input);
+  assert.match(markup, /aria-label="スクーリング評価"/);
+  assert.match(markup, /aria-label="リポート評価（従来記録）"/);
+});
+test('P2-B: missing and ambiguous saved evaluations survive rendering and finalGrade edits', () => {
+  for (const opening of [{ id: 'missing-evaluation' }, ambiguousOffering]) {
+    assert.ok(opening);
+    let input = state({ items: [item(opening)], courseEvaluations: { [opening.id]: { offeringId: opening.id, finalGrade: 'B', reportGrade: 'A', schoolingGrade: 'S' } } });
+    const before = structuredClone(input);
+    const markup = attemptMarkup(input);
+    assert.deepEqual(input, before);
+    const child = PlannerAttemptChild({ attempt: anyAttempt(input), editor: props(input, { onChangeEvaluation: (id, evaluation) => { assert.equal(id, opening.id); input = { ...input, courseEvaluations: { ...input.courseEvaluations, [id]: evaluation } }; } }) });
+    const final = elements(child).find(node => node.type === GradeSelect && node.props.label.endsWith('の最終評価'));
+    final.props.onChange('A');
+    assert.deepEqual(input.courseEvaluations[opening.id], { ...before.courseEvaluations[opening.id], finalGrade: 'A' });
+    if (opening.id === 'missing-evaluation') {
+      assert.doesNotMatch(markup, /aria-label="スクーリング評価"|aria-label="リポート評価（従来記録）"/);
+      assert.match(markup, /保存済みリポート評価: A/); assert.match(markup, /保存済みスクーリング評価: S/);
+    } else {
+      assert.equal(markup.includes('aria-label="スクーリング評価"'), opening.method === 'schooling');
+      assert.equal(markup.includes('aria-label="リポート評価（従来記録）"'), opening.method !== 'correspondence');
+      const data = new Map(); const store = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
+      saveState(store, input, null, catalog); assert.deepEqual(loadState(store, catalog).state, input);
+    }
+  }
+});
+test('P2-A: media schooling has no arbitrary contribution editor', () => {
+  assert.ok(mediaOffering);
+  noContributionInput(attemptMarkup(state({ items: [item(mediaOffering)] })));
+});
+test('P2-B: legacy reportGrade follows method policy; correspondence and missing values are read-only', () => {
+  for (const opening of [correspondence, twoCreditCorrespondence, { id: 'missing-report' }]) {
+    const input = state({ items: [item(opening)], courseEvaluations: { [opening.id]: { offeringId: opening.id, finalGrade: null, reportGrade: 'A+', schoolingGrade: null } } });
+    const markup = attemptMarkup(input);
+    assert.doesNotMatch(markup, /aria-label="リポート評価（従来記録）"/);
+    assert.match(markup, /保存済みリポート評価: A＋/);
+    assert.equal(input.courseEvaluations[opening.id].reportGrade, 'A+');
+  }
 });
