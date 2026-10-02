@@ -1,4 +1,5 @@
 import data from '../data/planner_catalog_2026.json';
+import { attachCurriculumCatalog } from './curriculumCatalog';
 import { validateCatalog } from './validation';
 import { createMappingResolver } from './plannerHelpers';
 import { applyManualMappingOverrides } from './manualMappingOverrides';
@@ -20,7 +21,9 @@ function loadCatalog() {
       throw new Error('カタログの科目参照が不正です。');
     }
   }
-  return catalog;
+  const enriched = attachCurriculumCatalog(catalog);
+  if (!validateCatalog(enriched)) throw new Error('Curriculum catalog適用後の形式が不正です。');
+  return enriched;
 }
 
 export const catalog = loadCatalog();

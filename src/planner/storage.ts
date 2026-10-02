@@ -2,11 +2,12 @@ import type { GraduationProfile, PlannerCatalog, PlannerState } from './plannerC
 import { validateState } from './validation';
 import { repairImportedAchievements } from './importedAchievementRepair';
 import { graduationProfileValidationError, initialGraduationProfile, MAX_GENERAL_RECOGNIZED_CREDITS_2026, MAX_OPEN_UNIVERSITY_RECOGNIZED_CREDITS_2026, MAX_RECOGNIZED_CREDITS_2026, recognizedCreditBreakdownTotal, schoolingRecognitionCap } from './graduationProfile';
+import { migrateCurriculumState } from './curriculumMigration';
 import { normalizeThesisProgressState } from './thesisSelection';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
-export const initialState = (): PlannerState => ({ schemaVersion: 21, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
+export const initialState = (): PlannerState => ({ schemaVersion: 22, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null; invalidRecognitionPaths?: string[] };
 
@@ -87,15 +88,16 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)
       || !Number.isInteger((parsed as Record<string, unknown>).schemaVersion)
       || (parsed as Record<string, unknown>).schemaVersion as number < 1
-      || (parsed as Record<string, unknown>).schemaVersion as number > 21) throw new Error('Unsupported schema');
+      || (parsed as Record<string, unknown>).schemaVersion as number > 22) throw new Error('Unsupported schema');
     const migrated = migrateState(parsed, catalog) as Record<string, unknown>;
     // v21 adds explicit Open University recognition while preserving every
     // preceding state field and recognition-recovery shadow.
-    // wrap every earlier migration result so no recognition/import shadow is lost.
-    const state = normalizeThesisProgressState((migrated.schemaVersion === 21 ? migrated : {
+    // Wrap every earlier result before the additive v22 curriculum migration,
+    // so no recognition/import shadow is lost.
+    const state = migrateCurriculumState(normalizeThesisProgressState((migrated.schemaVersion === 21 || migrated.schemaVersion === 22 ? migrated : {
       ...migrated, schemaVersion: 21, thesisGuidanceByScope: {},
       graduationProfile: { ...initialGraduationProfile(), ...(migrated.graduationProfile as object), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...((migrated.graduationProfile as Record<string, unknown> | undefined)?.recognizedCredits as object) } },
-    }) as PlannerState, catalog);
+    }) as PlannerState, catalog), catalog);
     const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
     if (!profile) throw new Error('Invalid recognition structure');
     if (!validateState(state, catalog)) {
@@ -116,6 +118,7 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
 function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
   const state = value as Record<string, unknown>;
+  if (state.schemaVersion === 22) return state;
   if (!Array.isArray(state.items)) return value;
   const v2 = state.schemaVersion === 1 ? {
     ...state,
