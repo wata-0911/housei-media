@@ -31,6 +31,7 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
     && isValidGraduationProfile(value.graduationProfile)
     && value.importedCourseAchievements.every(row => validImportedCurriculumIdentity(row, catalog))
     && Object.entries(value.thesisProgressByScope).every(([scopeId, progress]) => thesisPolicyForScope(catalog, scopeId) !== 'required' || progress.selection === 'selected')
+    && value.items.every(item => item.importedSourceCourseId === undefined || importedIds.has(item.importedSourceCourseId))
     && ids.every(id => offerings.has(id)) && new Set(ids).size === ids.length
     && new Set(todoIds).size === todoIds.length
     && new Set(publicCourseIds).size === publicCourseIds.length

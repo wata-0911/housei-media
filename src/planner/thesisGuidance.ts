@@ -1,3 +1,4 @@
+import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
 import type { GraduationProfile, PlannerCatalog, PlannerState, ThesisGuidanceProgress, ThesisGuidanceStep } from './plannerCatalog';
 import { publicCourseLimitFor, evaluatePublicCourseLimit } from './publicCourseRules';
 import { resolveSafeImportedCourseId } from './importedAchievementIdentity';
@@ -39,7 +40,7 @@ export function guidanceEligibilityCreditResult(state: GuidanceState, catalog: P
     creditsByIdentity.set(identity, previous);
     return true;
   };
-  for (const item of state.items) if (item.status === 'earned') {
+  for (const item of plannerItemsWithoutOfficialEarned(state.items, offerings, state.importedCourseAchievements, catalog)) if (item.status === 'earned') {
     const resolved = relevantMappings(item.offeringId);
     if (!resolved || resolved.offering.credits === null) return { credits: null, status: 'unknown', reason: '修得済みの計画科目を資格単位へ安全に分類できません。' };
     const ceiling = uniqueCredits(resolved.mappings.map(mapping => mapping.curriculumCredits));

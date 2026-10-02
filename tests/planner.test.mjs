@@ -1,3 +1,4 @@
+import { plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
 import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
 import { GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
 import MediaSchoolingProgress from '../src/components/planner/MediaSchoolingProgress.tsx';
@@ -3446,7 +3447,7 @@ const autoImportData = courses => ({ schemaVersion: 1, source: 'hosei_web_learni
 const autoImportOfferings = [{ ...autoImportBaseOffering, id: 'auto-exact', name: '自動仮登録の一意科目' }];
 const autoImportFixture = () => autoImportData([autoImportCourse(autoImportOfferings[0].name)]);
 
-test('auto import: exact offering retains official facts and creates an ordinary planned item', () => {
+test('auto import: exact offering retains official facts and creates an earned item associated with its official source', () => {
   const units = importPreview(autoImportFixture(), autoImportOfferings);
   const before = initialState(); const snapshot = structuredClone(before);
   const next = applyImport(before, units, autoImportOfferings);
@@ -3455,8 +3456,8 @@ test('auto import: exact offering retains official facts and creates an ordinary
   assert.deepEqual(next.importedCourseAchievements[0], units[0].sourceCourse);
   assert.equal(next.importedStudyRecords[0].grade, 'S');
   assert.equal(next.importedStudyRecords[0].sourceCourseId, next.importedCourseAchievements[0].id);
-  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: null }]);
-  assert.notEqual(next.items[0].status, 'earned');
+  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), status: 'earned', importedSourceCourseId: next.importedCourseAchievements[0].id, plannedYear: null }]);
+  assert.equal(next.items[0].status, 'earned');
   assert.equal('finalGrade' in next.items[0], false);
   assert.deepEqual(next.courseEvaluations, {});
   assert.deepEqual(before, snapshot);
@@ -3580,7 +3581,7 @@ test('auto import: official earned credits enter totals, categories, graduation 
   const data = autoImportData([autoImportCourse(offering.name, { earnedCredits: { raw: String(offering.credits), value: offering.credits } })]);
   const applied = applyImport(initialState(), importPreview(data, catalog.offerings), catalog.offerings);
   assert.equal(applied.items.length, 1);
-  assert.equal(summarizeCredits(applied.items, offeringsById).earned, 0);
+  assert.equal(summarizeCredits(plannerItemsWithoutOfficialEarned(applied.items, offeringsById, applied.importedCourseAchievements, catalog), offeringsById).earned, 0);
   assert.equal(importedEarnedCreditsTotal(applied.importedCourseAchievements), offering.credits);
   for (const program of selectablePrograms(catalog)) {
     const state = { ...applied, selectedScopeId: program.scopeId };
@@ -3589,8 +3590,8 @@ test('auto import: official earned credits enter totals, categories, graduation 
     const derived = derive(state);
     assert.deepEqual(derived, derive(baseline));
     const merged = new Map([...offeringsById, ...derived.offerings.map(current => [current.id, current])]);
-    assert.equal(summarizeCredits([...state.items, ...derived.items], merged).earned, offering.credits);
-    const categories = current => summarizeCategories(current.items, catalog, program.scopeId, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides).map(row => [row.category, row.earned]);
+    assert.equal(summarizeCredits([...derived.plannerItems, ...derived.items], merged).earned, offering.credits);
+    const categories = current => summarizeCategories(derive(current).plannerItems, catalog, program.scopeId, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides).map(row => [row.category, row.earned]);
     assert.deepEqual(categories(state), categories(baseline));
     const graduation = current => calculateGraduationProgress(current.items, catalog, program.scopeId, [], 'undecided', current.importedStudyRecords, current.importedCourseAchievements, current.graduationProfile);
     const progress = graduation(state); const before = graduation(baseline);
@@ -3605,7 +3606,7 @@ test('auto import: official earned credits enter totals, categories, graduation 
   assert.deepEqual(annualCreditLimitReferences(applied.items, offeringsById), [], 'inferred year does not manufacture an annual registration');
   const rows = createUnifiedCourseRows(applied.items, applied.importedCourseAchievements, offeringsById);
   assert.equal(rows.length, 1); assert.equal(rows[0].source, 'planner_imported');
-  assert.equal(rows[0].plannerItem.status, 'planned');
+  assert.equal(rows[0].plannerItem.status, 'earned');
   assert.equal(importedAchievementStatusLabel(rows[0].importedAchievements[0]), '修得済み（成績表）');
 });
 
@@ -3631,7 +3632,8 @@ test('auto import: direct handoff and manual JSON use the same application behav
   assert.ok(direct);
   const manual = applyImport(initialState(), importPreview(data, autoImportOfferings), autoImportOfferings);
   const fromDirect = applyImport(initialState(), direct.units, autoImportOfferings);
-  assert.deepEqual(fromDirect.items, manual.items);
+  const withoutSourceId = value => value.items.map(({ importedSourceCourseId, ...record }) => { assert.ok(value.importedCourseAchievements.some(row => row.id === importedSourceCourseId)); return record; });
+  assert.deepEqual(withoutSourceId(fromDirect), withoutSourceId(manual));
   assert.equal(fromDirect.importedStudyRecords.length, manual.importedStudyRecords.length);
   assert.equal(fromDirect.importedCourseAchievements.length, manual.importedCourseAchievements.length);
   const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
@@ -3649,7 +3651,7 @@ test('auto import: desktop and mobile keep planner controls beside official impo
   const noop = () => {};
   const html = renderToStaticMarkup(createElement(PlannedCourseList, { classify: createCreditClassifier(catalog, null), unifiedRows: createUnifiedCourseRows(next.items, next.importedCourseAchievements, offeringsById), publicCourses: [], offerings: offeringsById, correspondenceProgress: {}, mediaProgress: {}, evaluations: {}, importedUserMeta: {}, disabled: false, onChange: noop, onRemove: noop, onChangePublicCourse: noop, onRemovePublicCourse: noop, onChangeEvaluation: noop, onChangeCorrespondence: noop, onChangeImportedMeta: noop, onOpenMedia: noop }));
   assert.ok((html.match(/修得済み（成績表）/g) ?? []).length >= 2, 'official status appears on desktop and mobile');
-  assert.ok((html.match(/>計画中</g) ?? []).length >= 2, 'planner status stays visible on desktop and mobile');
+  assert.ok((html.match(/>修得済み</g) ?? []).length >= 2, 'planner status stays visible on desktop and mobile');
   assert.match(html, />開く<\/button>/);
   assert.match(html, />詳細を開く<\/button>/);
   assert.ok((html.match(/未評価/g) ?? []).length >= 2);
@@ -3678,7 +3680,7 @@ function renderImportActions(units, plannedItems, offerings, disabled = false) {
   return renderToStaticMarkup(createElement(GradeImportApplyActions, { units, plannedItems, offerings, disabled, onApply: () => {} }));
 }
 
-test('backfill: saved source and detail records are unchanged while one missing planned item is added', () => {
+test('backfill: saved source and detail records are unchanged while one missing earned item is added', () => {
   const data = autoImportFixture(); const before = legacyAutoImportState();
   const snapshot = structuredClone(before);
   assert.equal(before.importedCourseAchievements.length, 1);
@@ -3687,8 +3689,8 @@ test('backfill: saved source and detail records are unchanged while one missing 
   assert.ok(preview.every(unit => unit.sourceDuplicate && unit.duplicate && !unit.selected));
   const next = applyImport(before, preview, autoImportOfferings);
   assert.equal(next.items.length, 1);
-  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: null }]);
-  assert.equal(next.items[0].status, 'planned');
+  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), status: 'earned', importedSourceCourseId: next.importedCourseAchievements[0].id, plannedYear: null }]);
+  assert.equal(next.items[0].status, 'earned');
   assert.equal('finalGrade' in next.items[0], false);
   assert.deepEqual(next.courseEvaluations, {});
   assert.equal(next.importedCourseAchievements, before.importedCourseAchievements);
@@ -3765,7 +3767,8 @@ test('backfill: duplicate components and course-only sources each create only on
     assert.ok(preview.every(unit => unit.sourceDuplicate));
     const next = applyImport(legacy, preview, offerings);
     assert.equal(next.items.length, 1);
-    assert.equal(next.items[0].status, 'planned');
+    assert.equal(next.items[0].status, courses.length === 1 ? 'earned' : 'planned');
+    if (courses.length === 1) assert.equal(next.items[0].importedSourceCourseId, legacy.importedCourseAchievements[0].id);
     assert.equal(next.items[0].plannedYear, courses[0] === schoolingCourse ? 2025 : null);
     assert.equal(next.items[0].plannedTerm, courses[0] === schoolingCourse ? '前期' : null);
     assert.equal(next.importedCourseAchievements, legacy.importedCourseAchievements);
@@ -3781,15 +3784,15 @@ test('backfill: official earned totals, category progress, graduation and guidan
   const legacy = legacyAutoImportState(data, catalog.offerings);
   const next = applyImport(legacy, reimportPreview(data, catalog.offerings, legacy), catalog.offerings);
   assert.equal(next.items.length, 1);
-  assert.equal(summarizeCredits(next.items, offeringsById).earned, 0);
+  assert.equal(summarizeCredits(plannerItemsWithoutOfficialEarned(next.items, offeringsById, next.importedCourseAchievements, catalog), offeringsById).earned, 0);
   assert.equal(importedEarnedCreditsTotal(next.importedCourseAchievements), offering.credits);
   for (const { scopeId } of selectablePrograms(catalog)) {
     const derive = state => deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, scopeId);
     const derived = derive(next);
     assert.deepEqual(derived, derive(legacy));
     const merged = new Map([...offeringsById, ...derived.offerings.map(current => [current.id, current])]);
-    assert.equal(summarizeCredits([...next.items, ...derived.items], merged).earned, offering.credits);
-    const categories = state => summarizeCategories(state.items, catalog, scopeId, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides).map(row => [row.category, row.earned]);
+    assert.equal(summarizeCredits([...derived.plannerItems, ...derived.items], merged).earned, offering.credits);
+    const categories = state => summarizeCategories(derive(state).plannerItems, catalog, scopeId, [], derived.categoryItems, derived.categoryOfferings, derived.categoryOverrides).map(row => [row.category, row.earned]);
     assert.deepEqual(categories(next), categories(legacy));
     const graduation = state => calculateGraduationProgress(state.items, catalog, scopeId, [], 'undecided', state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile);
     const beforeProgress = graduation(legacy); const nextProgress = graduation(next);

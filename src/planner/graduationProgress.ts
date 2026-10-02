@@ -1214,7 +1214,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     existingCourseIds.add(key);
     return [{ offeringId: offering.id, status: 'earned' as const, plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null }];
   });
-  const calculationItems = [...items, ...imported.items, ...recognizedItems];
+  const calculationItems = [...imported.plannerItems, ...imported.items, ...recognizedItems];
   const offerings = new Map([...catalog.offerings, ...imported.offerings].map(offering => [offering.id, offering]));
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));

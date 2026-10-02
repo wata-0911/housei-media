@@ -1,3 +1,4 @@
+import { curriculumOfferingAdvisories, type CurriculumProgressResult } from '../../planner/curriculumCourseProgress';
 import ClassificationLabel from './ClassificationLabel';
 import type { createCreditClassifier } from '../../planner/annualPlan';
 import { useState } from 'react';
@@ -7,8 +8,8 @@ import { matchesPublicCourseSearch } from '../../planner/publicCourses';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility, type AcademicYearLevel } from '../../planner/yearEligibility';
 import type { PlannerCatalog } from '../../planner/plannerCatalog';
 
-type Props = { classify: ReturnType<typeof createCreditClassifier>; catalog: PlannerCatalog; selectedScopeId: string | null; offerings: Offering[]; addedIds: Set<string>; disabled: boolean; onAdd: (id: string) => void; onAddPublicCourse: () => void };
-export default function CourseSearch({ classify, catalog, selectedScopeId, offerings, addedIds, disabled, onAdd, onAddPublicCourse }: Props) {
+type Props = { curriculumProgress?: CurriculumProgressResult; classify: ReturnType<typeof createCreditClassifier>; catalog: PlannerCatalog; selectedScopeId: string | null; offerings: Offering[]; addedIds: Set<string>; disabled: boolean; onAdd: (id: string) => void; onAddPublicCourse: () => void };
+export default function CourseSearch({ curriculumProgress, classify, catalog, selectedScopeId, offerings, addedIds, disabled, onAdd, onAddPublicCourse }: Props) {
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(30);
   const [targetYear, setTargetYear] = useState<AcademicYearLevel | null>(null);
@@ -54,6 +55,7 @@ export default function CourseSearch({ classify, catalog, selectedScopeId, offer
           <p className="text-sm text-gray-600 mt-1">{[o.deliveryCategory ?? (o.method === 'correspondence' ? '通信学習' : 'スクーリング'), o.period, o.credits === null ? '単位数不明' : `${o.credits}単位`].filter(Boolean).join(' / ')}</p>
           <p className="text-xs text-gray-500 mt-1">科目コード：{o.subjectCode ?? '—'} / クラス：{o.classCode ?? '—'}</p>
           <p className="text-xs text-gray-500 mt-1">{eligibilityYearsLabel(o, selectedScopeId, catalog)}</p>
+          {curriculumProgress && curriculumOfferingAdvisories(o, curriculumProgress).map(warning => <p key={warning} className="mt-2 text-xs text-amber-900">{warning}</p>)}
         </div>
         <button type="button" disabled={disabled || addedIds.has(o.id)} onClick={() => onAdd(o.id)} aria-label={`${o.name}（${o.classCode ?? o.deliveryCategory ?? o.method}）を履修計画に追加`}
           className="shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm hover:bg-[#003377] disabled:bg-gray-200 disabled:text-gray-600">{addedIds.has(o.id) ? '追加済み' : '計画に追加'}</button>

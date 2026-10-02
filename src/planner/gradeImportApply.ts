@@ -136,7 +136,11 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
     // Conflicting occurrences and inferred dates must not become certain plans.
     const years = new Set(units.map(unit => unit.yearSource === 'source' || unit.yearSource === 'manual' ? unit.academicYear : null));
     const terms = new Set(units.map(unit => unit.term === unit.rawTerm && isStandardTerm(unit.term) ? unit.term : null));
-    return { ...plannerItemFromCourseSearch(id), plannedYear: years.size === 1 ? [...years][0] : null,
+    // Only a single official source aggregate can establish the initial earned state.
+    // Detail grades, exams, reports and their credit fields never decide it.
+    const sourceIds = new Set(units.map(unit => unit.sourceExistingId ?? unit.sourceCourse.id));
+    const earned = sourceIds.size === 1 && units.every(unit => unit.sourceCourse.earnedCreditsTotal !== null && unit.sourceCourse.earnedCreditsTotal > 0);
+    return { ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
       plannedTerm: terms.size === 1 ? [...terms][0] : null };
   });
 }

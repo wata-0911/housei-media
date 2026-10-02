@@ -885,6 +885,7 @@
     "PlannerItem": {
       "type": "object",
       "properties": {
+        "importedSourceCourseId": { "type": "string", "minLength": 1 },
         "offeringId": {
           "type": "string",
           "format": "uuid",

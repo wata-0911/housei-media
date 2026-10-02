@@ -1,3 +1,4 @@
+import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { isMediaSchooling } from './mediaSchooling';
 import { categoryFromImportRaw, type CreditCategory } from './annualPlan';
@@ -11,7 +12,7 @@ export type ImportedMediaAchievement = { sourceCourseId: string; rawName: string
 export type ImportedMediaPending = { sourceCourseId: string; rawName: string; candidates: Offering[] };
 /** An unresolved grade-table row that has a safe Media offering and learner lifecycle context. */
 export type ImportedManagedMedia = { sourceCourseId: string; rawName: string; meta: ImportedCourseUserMeta; offering: Offering };
-export type DerivedImportedAchievements = { items: PlannerItem[]; offerings: Offering[]; categoryItems: PlannerItem[]; categoryOfferings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[]; mediaPending: ImportedMediaPending[]; unclassified: ImportedCourseAchievement[]; classifiedCredits: number; categoryOverrides: Map<string, CreditCategory> };
+export type DerivedImportedAchievements = { plannerItems: PlannerItem[]; items: PlannerItem[]; offerings: Offering[]; categoryItems: PlannerItem[]; categoryOfferings: Offering[]; warnings: ImportedAchievementWarning[]; media: ImportedMediaAchievement[]; mediaPending: ImportedMediaPending[]; unclassified: ImportedCourseAchievement[]; classifiedCredits: number; categoryOverrides: Map<string, CreditCategory> };
 
 function mediaOfferingFor(group: ImportedStudyRecord[], manuallyLinked: Offering | undefined, courseId: string, offerings: Map<string, Offering>): Offering | undefined {
   // An explicit choice always wins.  In particular, a learner's explicit
@@ -117,6 +118,7 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
   const rows: ImportedCourseAchievement[] = sourceRows.length ? sourceRows : [...groups.entries()].map(([id, group]) => {
     const first = group[0]; return { id, fingerprint: `legacy:${id}`, source: 'hosei_import' as const, rawName: first.rawName, categoryRaw: null, capturedAt: first.capturedAt ?? '', earnedCreditsTotal: first.earnedCreditsTotal ?? null, schoolingCreditsTotal: first.schoolingCreditsTotal ?? null, compositionCredits: first.compositionCredits ?? null, recognizedExemption: first.recognizedExemption ?? null, additionalEnrollment: first.additionalEnrollment ?? null, academicYear: first.academicYear, yearSource: first.yearSource, courseId: null, selectedOfferingId: null, selectionSource: 'none' as const, match: first.match, candidateOfferingIds: [] };
   });
+  const plannerItems = plannerItemsWithoutOfficialEarned(plannedItems, offerings, rows, catalog);
   const items: PlannerItem[] = [], derivedOfferings: Offering[] = [], categoryItems: PlannerItem[] = [], categoryOfferings: Offering[] = [], media: ImportedMediaAchievement[] = [], mediaPending: ImportedMediaPending[] = [], unclassified: ImportedCourseAchievement[] = [], categoryOverrides = new Map<string, CreditCategory>();
   for (const row of rows) {
     const selectionSource = row.selectionSource ?? (row.selectedOfferingId ? 'manual' : 'none');
@@ -150,7 +152,10 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
       continue;
     }
     const courseId = [...courseIds][0];
-    const sameCourseEarned = plannedItems.some(item => item.status === 'earned' && offerings.get(item.offeringId)?.courseId === courseId);
+    const curriculumId = catalog ? exactImportedCurriculumId(row, catalog) : null;
+    const sameCourseEarned = plannerItems.some(item => item.status === 'earned' && (curriculumId
+      ? offerings.get(item.offeringId)?.curriculumCourseId === curriculumId
+      : offerings.get(item.offeringId)?.courseId === courseId));
     if (sameCourseEarned) { warnings.push({ rawName: row.rawName, reason: '履修計画の修得済み科目と同一identityのため、二重計上を避けて算入しません' }); continue; }
     const template = mappingCandidates.find(offering => offering.courseId === courseId && offering.resolutionStatus === 'matched');
     if (!template || template.credits === null) { warnings.push({ rawName: row.rawName, reason: '照合先の単位数またはカリキュラム対応が不明です' }); if (!category) unclassified.push(row); continue; }
@@ -177,5 +182,5 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
       if (candidates.length) mediaPending.push({ sourceCourseId: row.id, rawName: row.rawName, candidates });
     }
   }
-  return { items, offerings: derivedOfferings, categoryItems, categoryOfferings, warnings, media, mediaPending, unclassified, classifiedCredits: items.reduce((sum, item) => sum + (derivedOfferings.find(offering => offering.id === item.offeringId)?.credits ?? 0), 0), categoryOverrides };
+  return { plannerItems, items, offerings: derivedOfferings, categoryItems, categoryOfferings, warnings, media, mediaPending, unclassified, classifiedCredits: items.reduce((sum, item) => sum + (derivedOfferings.find(offering => offering.id === item.offeringId)?.credits ?? 0), 0), categoryOverrides };
 }
