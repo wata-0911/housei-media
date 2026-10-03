@@ -4,7 +4,7 @@ import { catalog } from '../src/planner/catalog.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { deriveImportedAchievements } from '../src/planner/importedAchievementCalculations.ts';
 import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
-import { importedEarnedCreditsTotal } from '../src/planner/gradeImportApply.ts';
+import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { initialState } from '../src/planner/storage.ts';
 
@@ -567,4 +567,264 @@ test('credit semantics: matched schooling requirement ignores zero-credit null e
     if (earnedCreditsTotal === 0) assert.equal(requirement.earned, 0);
     else assert.match(requirement.reason, /スクーリング算入条件が未確認/);
   }
+});
+
+// Media method evidence uses the official row budget, independently of annual openings.
+function mediaFixture(credits = 2) {
+  const x = fixture();
+  x.mapping.mediaOnly = true;
+  x.mapping.curriculumCredits = x.course.curriculumCredits = x.row.compositionCredits = x.row.earnedCreditsTotal = credits;
+  x.row.schoolingCreditsTotal = null;
+  return x;
+}
+const mediaRecord = (x, patch = {}) => ({
+  id: 'media-source', fingerprint: 'media-source', source: 'hosei_import', sourceCourseId: x.row.id,
+  rawName: x.row.rawName, method: 'schooling', rawTerm: 'メ', term: '編集後の学期', rawYear: '20',
+  academicYear: 2020, yearSource: 'source', date: null, credits: null, grade: null,
+  offeringId: null, match: 'unmatched', ...patch,
+});
+const mediaFacts = (x, records = [mediaRecord(x)], rows = [x.row]) => deriveOfficialGraduationFacts(rows, records, x.f, x.scope, x.profile);
+const schoolingReference = progress => creditReference(progress, 'schooling-reference-progress').earned;
+
+for (const schooling of [2, null]) test(`media evidence: official earned2 / schooling ${schooling} allocates ordinary2 and schooling2 immutably`, () => {
+  const x = mediaFixture(); x.row.schoolingCreditsTotal = schooling;
+  const records = [mediaRecord(x)]; const rows = [x.row];
+  const before = structuredClone({ x, rows, records }); deepFreeze({ x, rows, records });
+  const result = mediaFacts(x, records, rows), progress = run(x, [], records);
+  assert.equal(result.allocations.length, 1);
+  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, 2);
+  assert.equal(result.facts[0].methodEvidence.media, 'confirmed');
+  assert.equal(result.facts[0].methodEvidence.allEarnedCreditsAreMedia, true);
+  assert.equal(result.facts[0].schoolingEvidence.source, schooling === null ? 'media_earned' : 'official_row');
+  assert.equal(result.facts[0].sourceRows[0].schoolingCreditsTotal, schooling);
+  assert.equal(overall(progress), 2); assert.equal(schoolingReference(progress), 2);
+  assert.deepEqual(progress.importedWarnings, []);
+  assert.equal(progress.graduationCheckComplete, false);
+  assert.deepEqual({ x, rows, records }, before);
+});
+
+test('media evidence: earned0 remains zero without hold or warning despite positive component credits', () => {
+  const x = mediaFixture(); x.row.earnedCreditsTotal = 0;
+  const records = [mediaRecord(x, { credits: 2 })];
+  const result = mediaFacts(x, records), progress = run(x, [], records);
+  assert.equal(result.allocations[0].credits, 0); assert.equal(result.allocations[0].schoolingCredits, 0);
+  assert.equal(result.facts[0].methodEvidence.media, 'confirmed');
+  assert.equal(result.facts[0].methodEvidence.allEarnedCreditsAreMedia, false);
+  assert.deepEqual(result.facts[0].diagnostics, []);
+  assert.equal(overall(progress), 0); assert.equal(schoolingReference(progress), 0);
+  assert.deepEqual(progress.importedWarnings, []);
+});
+
+test('media evidence: earned null cannot become credits from marker or component', () => {
+  const x = mediaFixture(); x.row.earnedCreditsTotal = null;
+  const records = [mediaRecord(x, { credits: 2 })];
+  const result = mediaFacts(x, records), progress = run(x, [], records);
+  assert.equal(result.allocations.length, 0); assert.equal(result.facts[0].schoolingEvidence.credits, null);
+  assert.equal(result.facts[0].methodEvidence.allEarnedCreditsAreMedia, false);
+  assert.equal(overall(progress), null); assert.equal(schoolingReference(progress), null);
+  assert.deepEqual(progress.importedWarnings.map(n => n.kind), ['credits_unknown']);
+});
+
+for (const rawTerm of [null, '夏', 'メディア', 'MEDIA', 'media', '前期メディア', '後期メディア', 'メ 夏']) {
+  test(`media evidence: editable term and unverified marker ${rawTerm} cannot resolve method`, () => {
+    const x = mediaFixture(); x.row.selectedOfferingId = x.offering.id;
+    x.offering.method = 'schooling'; x.offering.deliveryCategory = '前期メディア';
+    const records = [mediaRecord(x, { rawTerm, term: 'メ', offeringId: x.offering.id })];
+    const result = mediaFacts(x, records);
+    assert.equal(result.allocations.length, 0);
+    assert.ok(result.facts[0].diagnostics.includes('method_evidence_required'));
+    assert.deepEqual(run(x, [], records).importedWarnings.map(n => n.kind), ['allocation_held']);
+  });
+}
+for (const rawTerm of [' メ ', '　ﾒ　']) test(`media evidence: only trim and NFKC normalize ${rawTerm}`, () => {
+  const x = mediaFixture(); const result = mediaFacts(x, [mediaRecord(x, { rawTerm })]);
+  assert.equal(result.allocations[0].schoolingCredits, 2);
+  assert.deepEqual(result.facts[0].methodEvidence.rawTerms, [rawTerm]);
+});
+
+for (const patch of [
+  { rawTerm: '夏', credits: 2 },
+  { rawTerm: null, credits: 2 },
+  { method: 'correspondence', rawTerm: null, credits: 2, grade: 'A' },
+  { method: 'correspondence', rawTerm: null, rawYear: null, reports: [{ raw: '＊', status: 'pending', date: null }] },
+]) test(`media evidence: substantive mixed evidence holds method (${JSON.stringify(patch)})`, () => {
+  const x = mediaFixture(4);
+  const records = [mediaRecord(x, { credits: 2 }), mediaRecord(x, { ...patch, id: 'non-media' })];
+  const result = mediaFacts(x, records);
+  assert.equal(result.allocations.length, 0);
+  assert.equal(result.facts[0].methodEvidence.media, 'conflict');
+  assert.equal(result.facts[0].methodEvidence.allEarnedCreditsAreMedia, false);
+  assert.ok(result.facts[0].diagnostics.includes('method_evidence_conflict'));
+  assert.equal(result.facts[0].schoolingEvidence.credits, null);
+  assert.equal(schoolingReference(run(x, [], records)), null);
+  assert.deepEqual(run(x, [], records).importedWarnings.map(n => n.kind), ['allocation_held']);
+  assert.deepEqual(mediaFacts(x, records.toReversed()), result);
+});
+
+test('media evidence: source-owned record and direct row link are required, without orphan/name leakage', () => {
+  const x = mediaFixture();
+  for (const patch of [{ sourceCourseId: 'wrong-row' }, { sourceCourseId: undefined }, { source: 'manual' }, { method: 'correspondence' }]) {
+    const result = mediaFacts(x, [mediaRecord(x, patch)]);
+    assert.equal(result.allocations.length, 0);
+    assert.equal(result.facts[0].methodEvidence.media, 'unknown');
+  }
+  const other = { ...x.row, id: 'unrelated-row', curriculumCourseId: null, candidateCurriculumCourseIds: [], curriculumMatch: 'unmatched' };
+  const result = mediaFacts(x, [mediaRecord(x, { sourceCourseId: other.id })], [x.row, other]);
+  assert.ok(result.facts.every(f => f.allocation.kind === 'unknown'));
+  assert.equal(result.allocations.length, 0);
+});
+
+test('media evidence: ambiguous identity and duplicate rows remain unresolved with null duplicate aggregate', () => {
+  const x = mediaFixture();
+  x.row.curriculumMatch = 'ambiguous';
+  assert.equal(mediaFacts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
+  x.row.curriculumMatch = 'exact_unique';
+  const second = { ...x.row, id: 'duplicate', capturedAt: '2099-01-01' };
+  const records = [mediaRecord(x), mediaRecord(x, { id: 'second-media', sourceCourseId: second.id })];
+  const result = mediaFacts(x, records, [x.row, second]);
+  assert.equal(result.allocations.length, 0);
+  assert.equal(result.facts[0].allocation.reason, 'duplicate_official_rows');
+  assert.equal(result.facts[0].earnedCreditsTotal, null);
+  assert.equal(result.facts[0].schoolingEvidence.credits, null);
+  assert.equal(result.facts[0].methodEvidence.allEarnedCreditsAreMedia, false);
+});
+
+for (const schooling of [0, 1, 3, -1]) test(`media evidence: explicit schooling ${schooling} is retained and conflicting contribution held`, () => {
+  const x = mediaFixture(); x.row.schoolingCreditsTotal = schooling;
+  const records = [mediaRecord(x)], result = mediaFacts(x, records), progress = run(x, [], records);
+  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, null);
+  assert.equal(result.facts[0].schoolingEvidence.credits, schooling);
+  assert.equal(result.facts[0].schoolingEvidence.source, 'official_row');
+  assert.equal(x.row.schoolingCreditsTotal, schooling);
+  assert.ok(result.facts[0].diagnostics.includes('media_schooling_credits_conflict'));
+  assert.equal(overall(progress), 2); assert.equal(schoolingReference(progress), null);
+  assert.deepEqual(progress.importedWarnings.map(n => n.kind), ['schooling_confirmation']);
+});
+
+for (const components of [[null], [2, 2], [4, 4]]) test(`media evidence: pure media official4 uses one budget, never component sum (${components})`, () => {
+  const x = mediaFixture(4);
+  const records = components.map((credits, index) => mediaRecord(x, { id: `media-${index}`, credits }));
+  const result = mediaFacts(x, records);
+  assert.equal(result.allocations.length, 1);
+  assert.equal(result.allocations[0].credits, 4); assert.equal(result.allocations[0].schoolingCredits, 4);
+  assert.equal(overall(run(x, [], records)), 4); assert.equal(schoolingReference(run(x, [], records)), 4);
+});
+
+test('media evidence: ordinary mapping uses the same schooling projection without requiring media method', () => {
+  const x = mediaFixture(); x.mapping.mediaOnly = false;
+  const media = [mediaRecord(x)];
+  assert.equal(mediaFacts(x, media).allocations[0].schoolingCredits, 2);
+  const ordinary = [mediaRecord(x, { rawTerm: '夏' })];
+  assert.equal(mediaFacts(x, ordinary).allocations[0].credits, 2);
+  assert.equal(mediaFacts(x, ordinary).allocations[0].schoolingCredits, null);
+  assert.deepEqual(run(x, [], ordinary).importedWarnings.map(n => n.kind), ['schooling_confirmation']);
+  x.row.schoolingCreditsTotal = 1;
+  assert.equal(mediaFacts(x, ordinary).allocations[0].schoolingCredits, 1);
+});
+
+test('media evidence: equivalent mappings count once and conflicting mappings never resolve', () => {
+  const x = mediaFixture(); x.f.mappings.push({ ...x.mapping, mappingId: 'media-equivalent' });
+  x.course.mappingIds.push('media-equivalent');
+  assert.equal(mediaFacts(x).facts[0].allocation.kind, 'equivalent');
+  assert.equal(mediaFacts(x).allocations.length, 1);
+  x.f.mappings[1].mediaOnly = false;
+  assert.equal(mediaFacts(x).facts[0].allocation.reason, 'mapping_conflict');
+  assert.equal(mediaFacts(x).allocations.length, 0);
+});
+
+test('media evidence: annual Offering order/removal and editable term cannot affect historical method', () => {
+  const x = mediaFixture();
+  x.f.offerings.push({ ...x.offering, id: 'annual-media', method: 'schooling', deliveryCategory: '前期メディア' });
+  const records = [mediaRecord(x)], result = mediaFacts(x, records), progress = run(x, [], records);
+  x.f.offerings.reverse();
+  assert.deepEqual(mediaFacts(x, records), result); assert.deepEqual(run(x, [], records), progress);
+  x.f.offerings = []; records[0].term = '夏';
+  assert.deepEqual(mediaFacts(x, records), result); assert.deepEqual(run(x, [], records), progress);
+});
+
+for (const guard of ['legacy', 'special', 'repeatable', 'recognition', 'additional', 'recognized_overlap', 'out_of_scope', 'schooling_exclusion', 'schooling_recognition']) {
+  test(`media evidence: existing ${guard} policy remains authoritative`, () => {
+    const x = mediaFixture();
+    if (guard === 'legacy') x.profile.curriculumApplicability = 'legacy_or_transition';
+    if (guard === 'special') x.course.canonicalName = '卒業論文';
+    if (guard === 'repeatable') x.course.canonicalName = '総合特講';
+    if (guard === 'recognition') x.row.recognizedExemption = 2;
+    if (guard === 'additional') x.row.additionalEnrollment = 2;
+    if (guard === 'recognized_overlap') x.profile.recognizedCredits.professionalCourses = [{ id: 'r', offeringId: x.offering.id, credits: 2 }];
+    if (guard === 'out_of_scope') x.mapping.scopeId = 'other-scope';
+    if (guard === 'schooling_exclusion') x.course.canonicalName = '情報学入門';
+    if (guard === 'schooling_recognition') { x.profile.admissionType = 'transfer_third_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 15; }
+    const result = mediaFacts(x);
+    if (guard.startsWith('schooling_')) {
+      assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, null);
+      assert.ok(result.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'));
+    } else assert.equal(result.allocations.length, 0);
+  });
+}
+
+for (const name of ['データサイエンス入門A', 'データサイエンス応用基礎B', '生物学2']) {
+  test(`media evidence real catalog: ${name} resolves method while retaining existing schooling exclusions`, () => {
+    const x = mediaFixture(); x.f = structuredClone(catalog);
+    const course = x.f.curriculum.courses.find(c => c.canonicalName === name);
+    assert.ok(course); assert.equal(course.curriculumCredits, 2);
+    const mappings = x.f.mappings.filter(m => course.mappingIds.includes(m.mappingId));
+    assert.ok(mappings.every(m => m.mediaOnly && !m.schoolingOnly && m.curriculumCredits === 2));
+    assert.ok(mappings.every(m => m.category === (name === '生物学2' ? '一般教育' : '専門教育')));
+    assert.ok(mappings.every(m => m.field === (name === '生物学2' ? '自然' : null)));
+    assert.ok(mappings.every(m => m.requirementType === (name === '生物学2' ? '選択必修' : '選択')));
+    x.row = { ...x.row, rawName: name, curriculumCourseId: course.id, candidateCurriculumCourseIds: [course.id], courseId: null };
+    for (const program of x.f.programs.filter(p => !p.isCommon)) {
+      x.scope = program.scopeId;
+      assert.equal(mediaFacts(x, []).allocations.length, 0);
+      assert.equal(overall(run(x)), null); assert.equal(schoolingReference(run(x)), null);
+      const records = [mediaRecord(x)], result = mediaFacts(x, records), progress = run(x, [], records);
+      assert.equal(result.allocations.length, 1); assert.equal(result.allocations[0].credits, 2);
+      const lawExclusion = program.department === '法律学科' && name !== '生物学2';
+      assert.equal(result.allocations[0].schoolingCredits, lawExclusion ? null : 2);
+      assert.equal(overall(progress), 2); assert.equal(schoolingReference(progress), lawExclusion ? null : 2);
+      assert.deepEqual(progress.importedWarnings.map(n => n.kind), lawExclusion ? ['schooling_confirmation'] : []);
+    }
+  });
+}
+
+test('media evidence: actual import course-only fallback is not correspondence evidence; substantive imports are', () => {
+  const x = mediaFixture();
+  const emptySlot = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
+  const course = { rawName: x.row.rawName, categoryRaw: null, compositionCredits: { raw: '2', value: 2 },
+    additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null },
+    earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null },
+    reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })),
+    creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false },
+    schoolings: [emptySlot, emptySlot] };
+  const preview = () => importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-04T00:00:00Z', courses: [course] }, [], [], [], { curriculum: x.f.curriculum, mappings: x.f.mappings });
+  const fallback = preview()[0];
+  assert.equal(fallback.courseOnly, true); assert.equal(fallback.method, 'correspondence');
+  x.row = { ...x.row, id: fallback.sourceCourse.id, fingerprint: fallback.sourceCourse.fingerprint };
+  // A source refresh can retain the older compatibility record alongside a new detail.
+  const records = [{ ...fallback, term: 'メ', academicYear: 2026 }, mediaRecord(x)];
+  x.row.fingerprint = 'refreshed-source-payload';
+  assert.equal(mediaFacts(x, records).allocations[0].schoolingCredits, 2);
+  assert.deepEqual(mediaFacts(x, records).facts[0].methodEvidence.recordIds, ['media-source']);
+  // The same-looking fallback is not ignored once substantive source details exist.
+  records[0].credits = 2;
+  assert.equal(mediaFacts(x, records).facts[0].methodEvidence.media, 'conflict');
+  // A pending exam alone triggers hasCorrespondenceEvidence in the real pipeline.
+  course.creditExam.pendingMarker = true;
+  const pending = preview()[0];
+  assert.equal(pending.courseOnly, undefined);
+  assert.equal(mediaFacts(x, [mediaRecord(x), { ...pending, sourceCourseId: x.row.id }]).facts[0].methodEvidence.media, 'conflict');
+  // The source schooling marker survives import even with no annual opening.
+  course.creditExam.pendingMarker = false;
+  course.schoolings = [{ ...emptySlot, rawTerm: 'メ', term: 'メ' }, emptySlot];
+  const media = preview()[0];
+  const result = mediaFacts(x, [{ ...media, sourceCourseId: x.row.id }]);
+  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, 2);
+});
+
+test('media evidence: schooling-only mapping accepts proven media but explicit zero still holds schooling', () => {
+  const x = mediaFixture(); x.mapping.schoolingOnly = true;
+  assert.equal(mediaFacts(x).allocations[0].schoolingCredits, 2);
+  x.row.schoolingCreditsTotal = 0;
+  assert.equal(mediaFacts(x).allocations[0].credits, 2);
+  assert.equal(mediaFacts(x).allocations[0].schoolingCredits, null);
 });

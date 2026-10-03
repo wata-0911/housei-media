@@ -6,6 +6,13 @@ import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources
 
 export type OfficialUnknownReason = 'curriculum_identity_unresolved' | 'mapping_not_found' | 'mapping_conflict'
   | 'duplicate_official_rows' | 'metadata_unknown' | 'special_rule_evidence_required' | 'out_of_scope';
+/** Calculation-only projection; never persisted or inferred from annual Offerings. */
+export type OfficialMethodEvidence = {
+  media: 'confirmed' | 'unknown' | 'conflict';
+  allEarnedCreditsAreMedia: boolean;
+  recordIds: string[];
+  rawTerms: string[];
+};
 export type OfficialGraduationFact = {
   sourceRowIds: string[];
   curriculumCourseId: string | null;
@@ -14,7 +21,8 @@ export type OfficialGraduationFact = {
   sourceRows: Array<{ id: string; earnedCreditsTotal: number | null; compositionCredits: number | null; schoolingCreditsTotal: number | null }>;
   earnedCreditsTotal: number | null;
   compositionCredits: number | null;
-  schoolingEvidence: { credits: number | null; source: 'official_row' | 'unknown'; recordIds: string[] };
+  schoolingEvidence: { credits: number | null; source: 'official_row' | 'media_earned' | 'unknown'; recordIds: string[] };
+  methodEvidence: OfficialMethodEvidence;
   candidateMappingIds: string[];
   allocation: { kind: 'unique' | 'equivalent'; mappingIds: string[] }
     | { kind: 'unknown' | 'out_of_scope'; reason: OfficialUnknownReason };
@@ -46,6 +54,29 @@ export function officialFactCreditState(fact: Pick<OfficialGraduationFact, 'sour
 
 const validCredits = (value: number | null): value is number => value !== null && Number.isFinite(value) && value >= 0;
 const baseName = (name: string) => name.normalize('NFKC').replace(/[（(［[].*$/, '');
+
+function deriveMethodEvidence(row: ImportedCourseAchievement, records: ImportedStudyRecord[]): OfficialMethodEvidence {
+  // importPreview creates correspondence records only with source evidence, except
+  // its explicitly fingerprinted course-only compatibility row. Inferred years,
+  // editable terms and annual matches do not turn that fallback into evidence.
+  const linked = records.filter(r => r.source === 'hosei_import' && r.sourceCourseId === row.id);
+  const substantive = linked.filter(r => !(r.method === 'correspondence'
+    && r.fingerprint.startsWith('course-only:')
+    && !r.rawYear && !r.rawTerm && !r.date && r.credits == null && !r.grade && !r.examGrade
+    && !r.reports?.some(report => report.raw.trim() !== '' || report.status !== 'none' || report.date !== null)));
+  // 2026 shiori, printed p.133 / PDF p.135: メ＝メディア. No synonyms.
+  const isMedia = (r: ImportedStudyRecord) => r.method === 'schooling' && r.rawTerm?.normalize('NFKC').trim() === 'メ';
+  const media = substantive.some(isMedia)
+    ? substantive.every(isMedia) ? 'confirmed' : 'conflict'
+    : 'unknown';
+  return {
+    media,
+    // The official aggregate is the only credit budget. Components are never summed.
+    allEarnedCreditsAreMedia: media === 'confirmed' && validCredits(row.earnedCreditsTotal) && row.earnedCreditsTotal > 0,
+    recordIds: [...new Set(substantive.map(r => r.id))].sort(),
+    rawTerms: [...new Set(substantive.flatMap(r => r.rawTerm == null ? [] : [r.rawTerm]))].sort(),
+  };
+}
 
 function specialCourse(name: string, department: string | null, mapping: Mapping): boolean {
   const base = baseName(name);
@@ -87,6 +118,7 @@ export function deriveOfficialGraduationFacts(
       schoolingEvidence: { credits: group.length === 1 ? row.schoolingCreditsTotal : null,
         source: group.length === 1 && row.schoolingCreditsTotal !== null ? 'official_row' : 'unknown',
         recordIds: [...new Set(records.filter(r => sourceRowIds.includes(r.sourceCourseId ?? '') && r.method === 'schooling').map(r => r.id))].sort() },
+      methodEvidence: { media: 'unknown', allEarnedCreditsAreMedia: false, recordIds: [], rawTerms: [] },
       candidateMappingIds: candidates.map(m => m.mappingId),
       allocation: { kind: 'unknown', reason: 'curriculum_identity_unresolved' }, diagnostics: [],
     };
@@ -121,16 +153,28 @@ export function deriveOfficialGraduationFacts(
       || (professionalBucket && ['法律学科', '日本文学科', '史学科', '地理学科'].includes(department ?? '') && row.earnedCreditsTotal > 0 && row.earnedCreditsTotal < composition)) {
       hold('special_rule_evidence_required'); continue;
     }
-    if (mapping.mediaOnly || (mapping.schoolingOnly && row.schoolingCreditsTotal !== row.earnedCreditsTotal)) {
-      hold('special_rule_evidence_required', 'method_evidence_required'); continue;
-    }
     // Keep recognition architecture intact; uncertain overlap is not a new dedup/merge policy.
     if (professionalBucket && (profile?.recognizedCredits.professionalCourses?.length ?? 0) > 0) {
       hold('special_rule_evidence_required', 'recognized_overlap'); continue;
     }
+    fact.methodEvidence = deriveMethodEvidence(row, records);
+    const mediaEarned = fact.methodEvidence.allEarnedCreditsAreMedia;
+    if (row.earnedCreditsTotal > 0 && ((mapping.mediaOnly && !mediaEarned)
+      || (mapping.schoolingOnly && row.schoolingCreditsTotal !== row.earnedCreditsTotal && !mediaEarned))) {
+      hold('special_rule_evidence_required', fact.methodEvidence.media === 'conflict' ? 'method_evidence_conflict' : 'method_evidence_required'); continue;
+    }
     fact.allocation = { kind: candidates.length === 1 ? 'unique' : 'equivalent', mappingIds: fact.candidateMappingIds.slice() };
     let schooling: number | null = row.schoolingCreditsTotal;
-    if (!validCredits(schooling) || schooling > row.earnedCreditsTotal || schooling > composition
+    if (schooling === null && mediaEarned) {
+      schooling = row.earnedCreditsTotal;
+      fact.schoolingEvidence = { credits: schooling, source: 'media_earned', recordIds: fact.methodEvidence.recordIds.slice() };
+    }
+    // Explicit 0 is a source value, not a missing value. Preserve it in the fact;
+    // any disagreement with all-media earned attribution holds schooling only.
+    const schoolingConflict = mediaEarned && row.schoolingCreditsTotal !== null && row.schoolingCreditsTotal !== row.earnedCreditsTotal;
+    if (schoolingConflict) fact.diagnostics.push('media_schooling_credits_conflict');
+    if (row.earnedCreditsTotal === 0) schooling = 0;
+    else if (schoolingConflict || !validCredits(schooling) || schooling > row.earnedCreditsTotal || schooling > composition
       || (department === '法律学科' && LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(course.canonicalName))
       || (profile && profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown'
         && profile.recognizedCredits.schoolingEquivalentCredits !== 0)) {
