@@ -9,6 +9,13 @@ const statusLabel = (status: Progress['requirements'][number]['status'], earned:
 
 const coverageLabel: Record<'supported' | 'partial' | 'unknown', string> = { supported: '判定済み', partial: '部分対応', unknown: '未判定' };
 
+const importNoticeGroups = [
+  { kind: 'allocation_held', label: '卒業単位の算入を保留', info: false },
+  { kind: 'credits_unknown', label: '修得単位の確認が必要', info: false },
+  { kind: 'schooling_confirmation', label: 'スクーリング算入の確認が必要', info: false },
+  { kind: 'out_of_scope', label: '卒業算入対象外（自動除外）', info: true },
+] as const;
+
 export default function GraduationProgress({ progress }: { progress: Progress }) {
   const evaluated = progress.cards;
   const unknown = progress.requirements.filter(row => row.status === 'unknown');
@@ -17,7 +24,10 @@ export default function GraduationProgress({ progress }: { progress: Progress })
     <p className="mt-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed">一部要件のみ自動判定しています。卒業可否を保証しません。</p>
     <p className="my-3 text-sm text-gray-600">修得済みだけを達成判定に使います。履修中・計画中は参考値です。全体判定には合成しません。</p>
     {progress.importedContributionCount > 0 && <p className="mb-3 border-l-4 border-emerald-600 bg-emerald-50 p-3 text-sm">成績取込から安全に照合できた修得実績 {progress.importedContributionCount}件を含みます。成績表の科目行ごとの修得単位を一度だけ算入しています。</p>}
-    {progress.importedWarnings.length > 0 && <details className="mb-3 border border-amber-200 bg-amber-50 p-3 text-sm"><summary className="cursor-pointer font-medium">成績取込から自動算入しなかった実績：{progress.importedWarnings.length}件</summary><ul className="mt-2 space-y-1 text-xs">{progress.importedWarnings.map((warning, index) => <li key={`${warning.rawName}-${index}`}>{warning.rawName}：{warning.reason}</li>)}</ul></details>}
+    {importNoticeGroups.map(group => {
+      const notices = progress.importedWarnings.filter(notice => notice.kind === group.kind);
+      return notices.length > 0 && <details key={group.kind} data-import-notice-kind={group.kind} className={`mb-3 border p-3 text-sm ${group.info ? 'border-gray-200 bg-slate-50 text-gray-700' : 'border-amber-200 bg-amber-50'}`}><summary className="cursor-pointer font-medium">{group.label}：{notices.length}件</summary><ul className="mt-2 space-y-1 text-xs">{notices.map((notice, index) => <li key={`${notice.rawName}-${index}`}>{notice.rawName}：{notice.reason}</li>)}</ul></details>;
+    })}
     {progress.referenceProgress.length > 0 && <div className="mb-3 grid gap-3 sm:grid-cols-2">
       {progress.referenceProgress.map(row => <article key={row.id} className="border border-sky-200 bg-sky-50 p-4">
         <h3 className="font-medium text-[#002255]">{row.label}</h3>

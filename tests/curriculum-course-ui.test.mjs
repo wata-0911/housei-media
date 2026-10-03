@@ -14,6 +14,17 @@ import { removePlannerItem, restorePlannerItem } from '../src/planner/removeUndo
 import CurriculumCourseList from '../src/components/planner/CurriculumCourseList.tsx';
 import PlannerAttemptChild from '../src/components/planner/PlannerAttemptChild.tsx';
 import OfficialAchievementChild from '../src/components/planner/OfficialAchievementChild.tsx';
+import ImportedAchievements, { ImportedManagementPanel } from '../src/components/planner/ImportedAchievements.tsx';
+import { ImportedCourseRepairControls } from '../src/components/planner/ImportedCourseRepair.tsx';
+import ImportedCourseRepair from '../src/components/planner/ImportedCourseRepair.tsx';
+import ImportedStudyRecordEditor from '../src/components/planner/ImportedStudyRecordEditor.tsx';
+import UnresolvedCurriculumSection from '../src/components/planner/UnresolvedCurriculumSection.tsx';
+import GradeImportPanel from '../src/components/planner/GradeImportPanel.tsx';
+import GraduationProgress from '../src/components/planner/GraduationProgress.tsx';
+import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
+import { importedAchievementManagement } from '../src/planner/importedAchievementManagement.ts';
+import { focusImportedCourseList, IMPORT_RESULT_TARGET } from '../src/planner/importNavigation.ts';
+
 import CorrespondenceStudyMethod from '../src/components/planner/CorrespondenceStudyMethod.tsx';
 import { CorrespondenceDetails } from '../src/components/planner/CorrespondenceProgress.tsx';
 import { GradeSelect, StatusSelect, StudyYearSelect, YearInput, TermSelect, CompletionOrderInput } from '../src/components/planner/PlannerRowControls.tsx';
@@ -23,7 +34,7 @@ import { economicsGradeCells } from './fixtures/economics-grade-row.mjs';
 const noop = () => {};
 const props = (input, overrides = {}) => ({
   catalog, view: deriveCurriculumCourseView(input, catalog), offerings: offeringsById, classify: createCreditClassifier(catalog, input.selectedScopeId),
-  publicCourses: input.publicCourses, disabled: false, onChange: noop, onRemove: noop, onChangeImportedMeta: noop,
+  publicCourses: input.publicCourses, disabled: false, onChange: noop, onRemove: noop, onChangeImportedMeta: noop, onChangeImportedCourse: noop,
   onChangePublicCourse: noop, onRemovePublicCourse: noop, onChangeEvaluation: noop, onChangeCorrespondence: noop, onOpenMedia: noop, ...overrides,
 });
 const html = input => renderToStaticMarkup(createElement(CurriculumCourseList, props(input)));
@@ -293,4 +304,131 @@ test('P2-B: legacy reportGrade follows method policy; correspondence and missing
     assert.match(markup, /保存済みリポート評価: A＋/);
     assert.equal(input.courseEvaluations[opening.id].reportGrade, 'A+');
   }
+});
+
+// Imported achievement UX cleanup: source facts, repair ownership, maintenance and navigation.
+test('import UX: earned official lifecycle is fixed; all context edits preserve stored lifecycle and source facts', () => {
+  for (const lifecycleStatus of [null, 'waiting', 'in_progress']) {
+    let input = state({ importedCourseAchievements: [official()], importedCourseUserMeta: { 'official-economics': { lifecycleStatus, plannedYear: 2027, studyYear: 2, plannedTerm: '前期' } } });
+    const before = structuredClone(input);
+    const editor = props(input, { onChangeImportedMeta: (id, patch) => { input = { ...input, importedCourseUserMeta: { ...input.importedCourseUserMeta, [id]: { ...input.importedCourseUserMeta[id], ...patch } } }; } });
+    const child = OfficialAchievementChild({ official: editor.view.courses[0].officialAchievements[0], editor });
+    assert.equal(find(child, 'select'), undefined);
+    const markup = renderToStaticMarkup(child);
+    assert.match(markup, /履修状態: 修得済み（成績表）/); assert.doesNotMatch(markup, /判定保留/);
+    for (const [type, value, field] of [[YearInput, 2028, 'plannedYear'], [StudyYearSelect, 3, 'studyYear'], [TermSelect, '冬期', 'plannedTerm']]) {
+      const control = find(child, type); assert.equal(control.props.disabled, false); control.props.onChange(value);
+      assert.equal(input.importedCourseUserMeta['official-economics'][field], value);
+      assert.equal(input.importedCourseUserMeta['official-economics'].lifecycleStatus, lifecycleStatus);
+    }
+    assert.deepEqual(input.importedCourseAchievements, before.importedCourseAchievements);
+    const data = new Map(); const store = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
+    saveState(store, input, null, catalog); assert.deepEqual(loadState(store, catalog).state, input);
+    assert.equal(input.schemaVersion, 22); assert.deepEqual(Object.keys(input).sort(), Object.keys(before).sort());
+  }
+});
+for (const earnedCreditsTotal of [0, null]) test(`import UX: ${earnedCreditsTotal} lifecycle supports pending/in-progress/waiting and preserves official credit semantics`, () => {
+  const input = state({ importedCourseAchievements: [official({ earnedCreditsTotal })] }); const calls = [];
+  const before = structuredClone(input); const editor = props(input, { onChangeImportedMeta: (...args) => calls.push(args) });
+  const child = OfficialAchievementChild({ official: editor.view.courses[0].officialAchievements[0], editor });
+  const select = find(child, 'select'); assert.equal(select.props.disabled, false);
+  for (const value of ['', 'in_progress', 'waiting']) {
+    select.props.onChange({ target: { value } }); assert.deepEqual(calls.at(-1), ['official-economics', { lifecycleStatus: value || null }]);
+  }
+  const markup = renderToStaticMarkup(child);
+  assert.match(markup, earnedCreditsTotal === 0 ? /成績表では未修得（0単位）/ : /成績表の修得単位は不明/);
+  assert.deepEqual(input, before);
+});
+test('import UX: successful official and linked detail appear once in course list; normal management has no duplicate', () => {
+  const input = state({ importedCourseAchievements: [official()], importedStudyRecords: [detail()] });
+  const markup = html(input); assert.equal(count(markup, 'data-official-id'), 1); assert.match(markup, /成績表の履修内訳（1件）/);
+  const manage = renderToStaticMarkup(createElement(ImportedAchievements, { records: input.importedStudyRecords, courseRows: input.importedCourseAchievements, offerings: catalog.offerings, disabled: false, onChange: noop, onChangeCourse: noop, onDelete: noop }));
+  assert.match(manage, /成績取込の管理/); assert.match(manage, /確認対象はありません/);
+  assert.equal(count(manage, 'data-import-management-id'), 0); assert.equal(count(manage, 'data-import-study-id'), 0);
+  assert.doesNotMatch(manage, /<details open/);
+});
+test('import UX: explicit full maintenance restores source editing; filter switch is reversible', () => {
+  const input = state({ importedCourseAchievements: [official()], importedStudyRecords: [detail()] });
+  let showAll = false;
+  const panelProps = () => ({ records: input.importedStudyRecords, courseRows: input.importedCourseAchievements, offerings: catalog.offerings, disabled: false, onChange: noop, onChangeCourse: noop, onDelete: noop, showAll, onShowAll: value => { showAll = value; } });
+  let panel = ImportedManagementPanel(panelProps()); find(panel, 'button').props.onClick(); assert.equal(showAll, true);
+  panel = ImportedManagementPanel(panelProps()); let markup = renderToStaticMarkup(panel);
+  assert.equal(count(markup, 'data-import-management-id'), 1); assert.equal(count(markup, 'data-import-study-id'), 1); assert.match(markup, /削除/); assert.match(markup, /value="冬期"/);
+  find(panel, 'button').props.onClick(); assert.equal(showAll, false);
+  markup = renderToStaticMarkup(ImportedManagementPanel(panelProps())); assert.equal(count(markup, 'data-import-management-id'), 0);
+});
+test('import UX: unresolved official repairs from course list using the shared safe selection callback', () => {
+  const row = official({ curriculumCourseId: null, curriculumMatch: 'ambiguous', candidateCurriculumCourseIds: [economics.id], candidateOfferingIds: [correspondence.id] });
+  const input = state({ importedCourseAchievements: [row] }); const calls = [];
+  const editor = props(input, { onChangeImportedCourse: (...args) => calls.push(args) });
+  const unresolved = UnresolvedCurriculumSection({ editor }); const repair = find(unresolved, ImportedCourseRepair);
+  assert.ok(repair); assert.equal(repair.props.onChangeCourse, editor.onChangeImportedCourse);
+  assert.match(html(input), /data-import-repair-id="official-economics"/);
+  const controls = ImportedCourseRepairControls({ ...repair.props, query: '', onSearch: noop });
+  find(controls, 'select').props.onChange({ target: { value: correspondence.id } });
+  const [id, patch] = calls.at(-1); assert.equal(id, row.id); assert.equal(patch.curriculumCourseId, economics.id); assert.equal(patch.curriculumMatch, 'exact_unique');
+  assert.equal(patch.selectionSource, 'manual'); assert.equal(patch.selectedOfferingId, correspondence.id);
+  assert.equal(row.curriculumMatch, 'ambiguous'); assert.equal(row.curriculumCourseId, null);
+  const resolved = { ...input, importedCourseAchievements: [{ ...row, ...patch }] };
+  assert.equal(deriveCurriculumCourseView(resolved, catalog).unresolved.length, 0);
+  const data = new Map(); const store = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
+  saveState(store, resolved, null, catalog); assert.deepEqual(loadState(store, catalog).state, resolved);
+});
+test('import UX: search alone does not resolve identity; ambiguous Offering remains ambiguous and clearing retains known Course', () => {
+  const ambiguous = catalog.offerings.find(o => !o.curriculumCourseId && catalog.curriculum.offeringRelations.some(r => r.offeringId === o.id && r.candidateCurriculumCourseIds.length > 1)); assert.ok(ambiguous);
+  const calls = [], searches = []; const row = official({ curriculumCourseId: null, curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] });
+  const commonProps = { row, offerings: catalog.offerings, curriculum: catalog.curriculum, disabled: false, onChangeCourse: (...args) => calls.push(args), query: ambiguous.name, onSearch: value => searches.push(value) };
+  const controls = ImportedCourseRepairControls(commonProps);
+  find(controls, 'input').props.onChange({ target: { value: '経済学' } }); assert.deepEqual(searches, ['経済学']); assert.deepEqual(calls, []);
+  find(controls, 'select').props.onChange({ target: { value: ambiguous.id } }); assert.equal(calls.at(-1)[1].curriculumMatch, 'ambiguous'); assert.equal(calls.at(-1)[1].curriculumCourseId, null);
+  const clear = ImportedCourseRepairControls({ ...commonProps, row: official({ selectedOfferingId: correspondence.id, selectionSource: 'manual' }) });
+  find(clear, 'select').props.onChange({ target: { value: '' } }); const patch = calls.at(-1)[1];
+  assert.equal(patch.curriculumCourseId, economics.id); assert.equal(patch.curriculumMatch, 'exact_unique'); assert.equal(patch.selectedOfferingId, null);
+});
+test('import UX: orphan/duplicate/unknown/held/schooling confirmation remain visible while confirmed exclusions need no action', () => {
+  const rows = [official(), official({ id: 'duplicate' }), official({ id: 'unknown', earnedCreditsTotal: null }), official({ id: 'unresolved', curriculumCourseId: null, curriculumMatch: 'unmatched' })];
+  const orphan = detail({ id: 'orphan', sourceCourseId: 'absent' });
+  const projection = importedAchievementManagement(rows, [orphan], catalog);
+  assert.deepEqual(projection.issueRows, rows); assert.deepEqual(projection.issueRecords, [orphan]);
+  const input = state({ importedCourseAchievements: [official()], importedStudyRecords: [orphan] });
+  assert.match(html(input), /data-orphan-study-id="orphan"/); assert.match(html(input), /成績取込の管理で/);
+  const manageProps = { records: [orphan], courseRows: [official()], offerings: catalog.offerings, disabled: false, onChange: noop, onChangeCourse: noop, onDelete: noop };
+  assert.match(renderToStaticMarkup(createElement(ImportedAchievements, manageProps)), /data-import-study-id="orphan"/);
+  for (const kind of ['allocation_held', 'schooling_confirmation']) {
+    const notices = [{ kind, sourceRowIds: ['official-economics'], rawName: '経済学', reason: '確認' }];
+    assert.equal(importedAchievementManagement([official()], [], catalog, notices).issueRows.length, 1);
+  }
+  assert.equal(importedAchievementManagement([official()], [], catalog, [{ kind: 'out_of_scope', sourceRowIds: ['official-economics'] }]).issueRows.length, 0);
+});
+test('import UX: record maintenance preserves year/term/matching/delete callbacks, source aggregates and read-only disable', () => {
+  const record = detail({ method: 'correspondence' }); const calls = [], deleted = [];
+  const child = ImportedStudyRecordEditor({ record, offerings: [{ ...correspondence, name: record.rawName }], disabled: false, onChange: (...args) => calls.push(args), onDelete: id => deleted.push(id) });
+  const inputs = elements(child).filter(n => n.type === 'input');
+  inputs[0].props.onChange({ target: { value: '2028' } }); assert.deepEqual(calls.at(-1), [record.id, { academicYear: 2028, yearSource: 'manual' }]);
+  inputs[0].props.onChange({ target: { value: '' } }); assert.deepEqual(calls.at(-1), [record.id, { academicYear: null, yearSource: 'manual' }]);
+  inputs[1].props.onChange({ target: { value: '後期' } }); assert.deepEqual(calls.at(-1), [record.id, { term: '後期' }]);
+  find(child, 'select').props.onChange({ target: { value: correspondence.id } }); assert.deepEqual(calls.at(-1), [record.id, { offeringId: correspondence.id }]);
+  const oldWindow = globalThis.window; globalThis.window = { confirm: () => true };
+  try { find(child, 'button').props.onClick(); assert.deepEqual(deleted, [record.id]); } finally { globalThis.window = oldWindow; }
+  const locked = ImportedStudyRecordEditor({ record, offerings: [], disabled: true, onChange: noop, onDelete: noop });
+  assert.ok(elements(locked).filter(n => ['input', 'select', 'button'].includes(n.type)).every(n => n.props.disabled === true));
+  assert.ok(calls.every(([, patch]) => !Object.hasOwn(patch, 'earnedCreditsTotal')));
+});
+test('import UX: successful apply navigates after commit to existing focusable course-list target', () => {
+  const markup = html(state()); assert.match(markup, new RegExp(`id="${IMPORT_RESULT_TARGET}" tabindex="-1"`));
+  const doc = globalThis.document, raf = globalThis.requestAnimationFrame; const calls = []; let frame;
+  globalThis.requestAnimationFrame = callback => { frame = callback; };
+  globalThis.document = { getElementById: id => { assert.equal(id, IMPORT_RESULT_TARGET); return { focus: options => calls.push(['focus', options]), scrollIntoView: options => calls.push(['scroll', options]) }; } };
+  try { focusImportedCourseList(); assert.deepEqual(calls, []); frame(); assert.deepEqual(calls, [['focus', { preventScroll: true }], ['scroll', { behavior: 'smooth', block: 'start' }]]); } finally { globalThis.document = doc; globalThis.requestAnimationFrame = raf; }
+  const source = readFileSync(new URL('../src/components/planner/GradeImportPanel.tsx', import.meta.url), 'utf8');
+  assert.match(source, /if \(onApply\(units\)\).*focusImportedCourseList\(\)/);
+  assert.match(renderToStaticMarkup(createElement(GradeImportPanel, { offerings: [], plannedItems: [], existing: [], disabled: false, onApply: noop })), /id="grade-import-panel"/);
+});
+test('import UX: graduation notices render distinct counts, schooling explanation and neutral excluded information', () => {
+  const progress = calculateGraduationProgress([], catalog, catalog.programs.find(p => !p.isCommon).scopeId);
+  const notices = ['allocation_held', 'credits_unknown', 'schooling_confirmation', 'out_of_scope'].map(kind => ({ kind, sourceRowIds: [], rawName: kind, reason: kind === 'schooling_confirmation' ? '通常の卒業単位は算入済みです。' : kind }));
+  const markup = renderToStaticMarkup(createElement(GraduationProgress, { progress: { ...progress, importedWarnings: notices } }));
+  for (const label of ['卒業単位の算入を保留：1件', '修得単位の確認が必要：1件', 'スクーリング算入の確認が必要：1件', '卒業算入対象外（自動除外）：1件', '通常の卒業単位は算入済み']) assert.ok(markup.includes(label), label);
+  assert.match(markup, /data-import-notice-kind="out_of_scope" class="[^"]*bg-slate-50/);
+  assert.doesNotMatch(markup, /成績取込から自動算入しなかった実績/);
 });

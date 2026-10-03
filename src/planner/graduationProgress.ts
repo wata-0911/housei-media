@@ -19,7 +19,7 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgr
 import { thesisPolicyForScope } from './thesisSelection';
 import { classifyUnknownReason, coverageForCard, LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
-import type { ImportedAchievementWarning } from './importedAchievementCalculations';
+import { importedGraduationNotices, type ImportedGraduationNotice } from './importedGraduationNotices';
 import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
 import { deriveOfficialGraduationFacts, type OfficialAllocationInput } from './officialGraduationFacts';
 
@@ -50,7 +50,7 @@ export type GraduationProgress = {
   /** One summary row per reason keeps procedure/mapping warnings from becoming a wall of cards. */
   unknownReasons: Array<{ reason: string; count: number; labels: string[] }>;
   coverageSummary: Record<CoverageStatus, number>;
-  importedWarnings: ImportedAchievementWarning[];
+  importedWarnings: ImportedGraduationNotice[];
   importedContributionCount: number;
   referenceProgress: ReferenceProgress[];
   /** Present only for the History program, for internal diagnostic use. */
@@ -1243,12 +1243,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const plannerItems = plannerItemsWithoutOfficialEarned(items, catalogOfferings, importedCourseAchievements, catalog);
   const heldFacts = official.facts.filter(f => f.allocation.kind === 'unknown'
     && (f.earnedCreditsTotal !== 0 || f.sourceRows.length > 1));
-  const importedWarnings: ImportedAchievementWarning[] = official.facts.filter(f => f.allocation.kind === 'unknown' || f.allocation.kind === 'out_of_scope' || f.diagnostics.includes('schooling_evidence_requires_confirmation'))
-    .map(f => ({ rawName: f.canonicalName ?? importedCourseAchievements.find(r => r.id === f.sourceRowIds[0])?.rawName ?? '',
-      reason: `公式実績の算入条件を確認してください: ${f.diagnostics.join(' / ')}` }));
-  for (const record of importedStudyRecords) {
-    if (!importedCourseAchievements.some(row => row.id === record.sourceCourseId)) importedWarnings.push({ rawName: record.rawName, reason: 'curriculum_identity_unresolved: 公式科目行がない旧形式の実績です' });
-  }
+  const importedWarnings = importedGraduationNotices(official, importedCourseAchievements, importedStudyRecords);
   const officialUnknown = heldFacts.length > 0 || importedStudyRecords.some(record => !importedCourseAchievements.some(row => row.id === record.sourceCourseId));
   const identity = (offering: Offering | undefined) => offering?.courseId ? `course:${offering.courseId}` : offering ? `offering:${offering.id}` : null;
   const existingCourseIds = new Set(items.map(item => identity(catalogOfferings.get(item.offeringId))).filter((id): id is string => id !== null));
