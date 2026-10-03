@@ -19,7 +19,7 @@ import { ImportedCourseRepairControls } from '../src/components/planner/Imported
 import ImportedCourseRepair from '../src/components/planner/ImportedCourseRepair.tsx';
 import ImportedStudyRecordEditor from '../src/components/planner/ImportedStudyRecordEditor.tsx';
 import UnresolvedCurriculumSection from '../src/components/planner/UnresolvedCurriculumSection.tsx';
-import GradeImportPanel from '../src/components/planner/GradeImportPanel.tsx';
+import GradeImportPanel, { GradeImportPreviewUnit, GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
 import GraduationProgress from '../src/components/planner/GraduationProgress.tsx';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { importedAchievementManagement } from '../src/planner/importedAchievementManagement.ts';
@@ -431,4 +431,56 @@ test('import UX: graduation notices render distinct counts, schooling explanatio
   for (const label of ['卒業単位の算入を保留：1件', '修得単位の確認が必要：1件', 'スクーリング算入の確認が必要：1件', '卒業算入対象外（自動除外）：1件', '通常の卒業単位は算入済み']) assert.ok(markup.includes(label), label);
   assert.match(markup, /data-import-notice-kind="out_of_scope" class="[^"]*bg-slate-50/);
   assert.doesNotMatch(markup, /成績取込から自動算入しなかった実績/);
+});
+
+const accessibilityPreviewUnit = (patch = {}) => ({
+  id: 'a11y-unit', rawName: '経済学', sourceCourse: official(), method: 'correspondence', courseOnly: false,
+  selected: true, sourceDuplicate: false, duplicate: false, academicYear: 2025, yearSource: 'source', rawYear: '25',
+  term: null, credits: 2, grade: 'A', offeringId: null, candidates: [], match: 'exact_unique', ...patch,
+});
+test('import accessibility: every preview variant keeps its named checkbox outside a control-free summary', () => {
+  for (const variant of [{ method: 'correspondence', label: '通信' }, { method: 'schooling', label: 'スクーリング' }, { courseOnly: true, label: '成績表行のみ' }]) {
+    for (const match of ['exact_unique', 'unmatched', 'ambiguous']) for (const selected of [false, true]) for (const sourceDuplicate of [false, true]) {
+      const unit = accessibilityPreviewUnit({ ...variant, match, selected, sourceDuplicate });
+      const child = GradeImportPreviewUnit({ unit, onChange: noop });
+      const summary = find(child, 'summary'), details = find(child, 'details');
+      const checkbox = elements(child).find(node => node.type === 'input' && node.props.type === 'checkbox');
+      assert.ok(summary); assert.ok(checkbox);
+      assert.equal(elements(summary).some(node => node === checkbox), false);
+      assert.ok(elements(summary).every(node => !['input', 'button', 'select', 'textarea', 'a'].includes(node.type) && node.props.tabIndex === undefined && !node.props.contentEditable));
+      assert.equal(checkbox.props['aria-label'], '経済学を取り込む');
+      assert.equal(checkbox.props.checked, selected); assert.equal(checkbox.props.disabled, sourceDuplicate);
+      assert.equal(checkbox.props.onClick, undefined, 'no propagation workaround needed outside summary');
+      assert.equal(details.props.open, match !== 'exact_unique');
+      const summaryMarkup = renderToStaticMarkup(summary);
+      assert.ok(summaryMarkup.includes('経済学')); assert.ok(summaryMarkup.includes(variant.label));
+      assert.equal(summaryMarkup.includes('成績表行は保存済み'), sourceDuplicate);
+      assert.doesNotMatch(summaryMarkup, /<(input|button|select|textarea|a)(\s|>)/);
+      const markup = renderToStaticMarkup(child);
+      assert.ok(markup.indexOf('type="checkbox"') < markup.indexOf('<details'));
+      assert.ok(markup.includes('aria-label="経済学を取り込む"'));
+    }
+  }
+});
+test('import accessibility: checkbox changes only the selected unit and does not change disclosure behavior or source facts', () => {
+  let units = [accessibilityPreviewUnit(), accessibilityPreviewUnit({ id: 'other-preview', rawName: '他科目', selected: false })];
+  const original = structuredClone(units); const calls = [];
+  const render = () => GradeImportPreviewUnit({ unit: units[0], onChange: patch => { calls.push(patch); units = units.map((unit, index) => index === 0 ? { ...unit, ...patch } : unit); } });
+  for (const selected of [false, true]) {
+    const child = render();
+    elements(child).find(node => node.type === 'input' && node.props.type === 'checkbox').props.onChange({ target: { checked: selected } });
+    assert.deepEqual(calls.at(-1), { selected }); assert.equal(units[0].selected, selected);
+    const rerender = render(); assert.equal(find(rerender, 'details').props.open, false);
+    assert.equal(find(rerender, 'summary').props.onClick, undefined, 'disclosure uses native summary behavior');
+    assert.deepEqual(units[0], { ...original[0], selected }); assert.deepEqual(units[1], original[1]);
+  }
+});
+test('import accessibility: preview selection still controls apply availability and preserves the apply callback', () => {
+  const calls = [];
+  for (const selected of [false, true]) {
+    const units = [accessibilityPreviewUnit({ selected })];
+    const actions = GradeImportApplyActions({ units, plannedItems: [], offerings: [], disabled: false, onApply: () => calls.push(units) });
+    const button = find(actions, 'button'); assert.equal(button.props.disabled, !selected);
+    if (selected) { button.props.onClick(); assert.deepEqual(calls.at(-1), units); }
+  }
 });
