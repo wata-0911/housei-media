@@ -593,3 +593,64 @@ UUIDとruleIdは現catalog値を省略せず掲載。official rule欄はcatalog�
 |永続契約|`initialState().schemaVersion === 22`。production engine・catalog・storage・import contractの変更なし、migrationなし|
 
 意味単位の限定supported（annual49との分離、明示ThesisProgressの選択・単位表示）を、official achievementから卒業要件全体までのsupportedに拡張しない。発見した欠陥の修正は第7節の次slice以降で扱う。
+
+## 12. Implementation note — official Course facts slice（2026-10-03）
+
+本節は `0277edba0eed3df0d0dccfbd4783825cb9f11e98`（PR #64 merge）を基点とする後続実装。第1〜11節とG1〜G14の記述は**監査時点の事実**として変更しない。卒業要件エンジン全体の完成ではない。
+
+### Calculation-only API と入力境界
+
+`src/planner/officialGraduationFacts.ts`:
+
+```ts
+deriveOfficialGraduationFacts(
+  rows: ImportedCourseAchievement[],
+  records: ImportedStudyRecord[],
+  catalog: PlannerCatalog,
+  selectedScopeId: string,
+  profile?: GraduationProfile,
+): DerivedOfficialGraduationFacts // { facts, allocations }
+```
+
+- `OfficialGraduationFact`: `sourceRowIds`, nullable `curriculumCourseId` / `canonicalName`, 個別aggregateを保持する `sourceRows`, nullable `earnedCreditsTotal` / `compositionCredits`, `schoolingEvidence { credits, source, recordIds }`, `candidateMappingIds`, `allocation`, `diagnostics`。
+- `OfficialAllocationInput`: `fact`, 同値性確認後の `mapping` descriptor, `credits`, `completedCredits`, nullable `schoolingCredits`。この中間入力をgeneric/common/professionalの集計へ直接合成する。fake Offering / PlannerItemは作らない。
+- 入り口は既存 `exactImportedCurriculumId(row, catalog)`（`exact_unique` かつ `validImportedCurriculumIdentity`）。legacy courseId / rawName / categoryRaw / annual candidateで格上げしない。保存identity validationの契約は変更しない。矛盾するannual selectionを含む無効な保存identityも保留する。
+- `CurriculumCourse.mappingIds` 全edgeを解決してselected/commonに限定。`scopeIds`は診断だけ。他scopeのみなら `out_of_scope`、欠落edgeは `mapping_not_found`。
+- signatureはcommon/selectedのscope class・category・field・requirementType・curriculumCredits・schoolingOnly・mediaOnly。全一致だけ `equivalent`、1edgeは `unique`、差があれば `mapping_conflict`。descriptorのID sortは同値性を証明した**後**の安定した表現にのみ使用する。
+- 同じexact Courseの**異なるsource row id**は、fingerprint・日時・値が同じでも `duplicate_official_rows` / `conflicting_source_rows`。merged totalはnull、全idと個別aggregateを返す。sum/max/latestを行わない。同じsource row idの再入力のみ1回にする。
+- totalは公式rowの値だけ。nullはunknown、0はconfirmed zero。component creditsを加算しない。CourseとMappingの構成単位が一致し、rowに値があればそれも一致した場合のみ完成判定する。row構成単位がnullのときは一致したCourse/Mapping値を使用し、原値nullはsourceRowsに残す。
+- 1factは最大1 allocation。完成単位はsource aggregate以下。共通と専門の両方には配分しない。複数cardでの参照とoverall集計を分離し、既存の排他的bucket totalを利用する。
+- exact official Courseがある場合のPlanner earned除外は既存policyを維持。planned / in_progressは投影に残し、waitingは残すが加算しない。未解決official identityは無関係なPlanner earnedのownerにならない。
+- `deriveImportedAchievements`の実行consumerはPlannerPageの表示・区分・Media互換として維持。卒業計算からの呼出しを除去。source rowがなくcomponentしかないlegacy入力はgraduationへ昇格せず警告する。
+
+### Schooling と保留範囲
+
+公式rowの `schoolingCreditsTotal` はearnedと別量として保持し、linked schooling record idsを補助証拠として残す。通常の一意allocationで値・上限・除外・認定重複が確認できる範囲だけschooling参考値へ合成する。mixed4/2はearned4・schooling2、all-schooling4はcorrespondence Offeringが先でも4。component合計では再構成しない。
+
+null、earned/compositionを超えるschooling、法律の＊印除外、認定schoolingとの重複未確認はevidenceを残して算入保留。professional recognitionの保存契約はannual Offeringベースなので、専門認定行が存在する場合はofficial専門factとの重複をこのsliceで断定せず保留する。認定自体の既存計算・永続形状は変更しない。
+
+repeat、旧課程、公開科目、史学演習/概説/5科目移動/歴史資料学、地理段階配分、書道実技、partial例外、公式卒論とmanual thesisの統合はunknown。通常aggregateから回数や順序を推測しない。既存Planner special allocator / manual thesis / annual49は変更しない。
+
+保留reasonは `curriculum_identity_unresolved`, `mapping_not_found`, `mapping_conflict`, `duplicate_official_rows`, `metadata_unknown`, `special_rule_evidence_required`, `out_of_scope`。unresolved earnedがある場合、cardとoverallにunknown理由を伝播する。安全に算入済みの値はpartial下限として保持し、保留分しかないreferenceを確定0にしない。out_of_scopeは確認済みの対象外として別扱い。
+
+### GAP の変更と残件
+
+|GAP|このsliceの結果|
+|---|---|
+|G1 / G2|validな独立exact Course identityについて、Offeringなし・legacy courseIdなし・template creditsなしでも通常算入可能|
+|G3 / G4|officialはCourse全Mappingのsignatureを比較。Offering配列順・first templateで配分しない。Plannerの複数edge問題は別途|
+|G5|official common/professional衝突を保留、同値edgeは1回。Planner/認定を含む全面ledger完成ではない|
+|G6|通常範囲でmixed/all-schoolingを保持・反映。repeat/exclusion/認定重複/追加履修は保留（partial）|
+|G7 / G8|categoryRawがあってもidentity警告を維持。unresolved aggregateをunknownとして伝播|
+|G9 / G10|official優先dedupとplanned/in_progress/waitingの既存意味を維持|
+|G11 / G12|認定architectureと特殊sequence/transferは未解決。公式aggregateはspecial allocatorへ投入しない|
+|G13|複数公式rowを衝突として保持。別修得かsnapshot重複かの解決は未実装|
+|G14|ambiguous CurriculumCourseのlegacy bypassを遮断|
+
+元のauditテスト18件は削除・skipせず正しい期待値へ更新。Offeringなし0→4、混合schooling0→2、順序による4→0変化→完全不変、common/professional8→unknown、同値edge8→4、ambiguous legacy4→unknown、categoryRawによる警告消失→警告維持、nullと0の区別をassert。Plannerテスト中のlegacy-only/構成単位矛盾fixtureもunknownをassertし、卒論dedup fixtureには独立Course identityを付与して76単位の元assertionを維持した。
+
+検証: `test:planner` **523/523**（既存469 + 新規54）、`test:extension` **19/19**。typecheck/lint成功。build成功、内包catalog:check成功（321 Course / 686 Offering）。既存の500kB超chunk警告あり。実catalogの全8 program scopeをOfferingゼロcloneでも検証。凍結したrow/record/item/catalog/profileに対する不変性も確認。
+
+Preview: ローカルVite起動は成功したが、in-app browserのタブ作成がtimeoutし、再確認では接続browserが0件。実ユーザーstate、UI表示、consoleの検証は未完了。API/回帰テストの結果と区別する。
+
+`graduationCheckComplete=false` / `sourceLinksReverified=false` / schema22を維持。PlannerState・JSON Schema・migration・persistent shapeの変更なし。

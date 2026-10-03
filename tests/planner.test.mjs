@@ -1768,6 +1768,10 @@ test('economics ignores offering/import thesis rows so dedicated progress remain
   assert.equal(total([item('required-course', 'earned'), { ...item('elective-course', 'earned'), offeringId: 'elective-course' }, item('thesis-course', 'earned')]).earned, 76);
 
   const imported = { id: 'economics-import', fingerprint: 'economics-import', source: 'hosei_import', rawName: 'elective-course', categoryRaw: null, capturedAt: '', earnedCreditsTotal: 52, schoolingCreditsTotal: 0, compositionCredits: 52, recognizedExemption: null, additionalEnrollment: null, academicYear: 2026, yearSource: 'source', courseId: 'elective-course', selectedOfferingId: 'elective-course', selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: ['elective-course'] };
+  fixture.catalog.mappings.forEach(mapping => { mapping.mediaOnly = false; mapping.schoolingOnly = false; });
+  fixture.catalog.curriculum = { ...catalog.curriculum, courses: [{ id: 'official-elective', canonicalName: 'elective-course', curriculumCredits: 52, mappingIds: ['elective'], scopeIds: [fixture.scope] }] };
+  fixture.catalog.offerings.find(o => o.id === 'elective-course').curriculumCourseId = 'official-elective';
+  Object.assign(imported, { curriculumCourseId: 'official-elective', curriculumMatch: 'exact_unique', candidateCurriculumCourseIds: ['official-elective'], offeringMatch: 'unmatched' });
   const importedOnly = total([item('required-course', 'earned'), item('thesis-course', 'earned')], [imported]);
   const duplicatePlanner = total([item('required-course', 'earned'), item('elective-course', 'earned'), item('thesis-course', 'earned')], [imported]);
   assert.equal(importedOnly.earned, 76);
@@ -2365,8 +2369,9 @@ test('safe imported achievements feed credit and category summaries without chan
   assert.equal(deriveImportedAchievements([{ ...record, id: 'unsafe', sourceCourseId: 'unsafe-row', offeringId: null, match: 'unmatched' }], offeringsById, []).items.length, 0);
   assert.equal(deriveImportedAchievements([record], offeringsById, [item(offering.id, 'earned')]).items.length, 0, 'planner-earned identity remains deduplicated');
   const graduation = calculateGraduationProgress(stateItems, catalog, scope, [], 'undecided', [record]);
-  assert.equal(graduation.importedContributionCount, 1);
-  assert.ok(graduation.cards.some(card => card.earned >= 4 && card.coverageStatus && card.sourceRefs?.length), 'the imported contribution remains visible in a covered, sourced graduation card');
+  assert.equal(graduation.importedContributionCount, 0);
+  assert.ok(graduation.importedWarnings.some(row => row.reason.includes('curriculum_identity_unresolved')), 'component-only legacy input has no exact institutional identity');
+  assert.ok(graduation.cards.some(card => card.status === 'unknown' && card.coverageStatus === 'unknown' && card.sourceRefs?.length));
   assert.equal(graduation.graduationCheckComplete, false);
 });
 
@@ -2987,9 +2992,11 @@ test('reference totals accept official transfer recognition including zero, neve
   const importedOnly = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [imported], profile).referenceProgress;
   const duplicated = calculateGraduationProgress([item(first.id, 'earned')], catalog, scope, [], 'undecided', [], [imported], profile).referenceProgress;
   const plannerOnly = calculateGraduationProgress([item(first.id, 'earned')], catalog, scope, [], 'undecided', [], [], profile).referenceProgress;
-  assert.ok(importedOnly[0].earned >= 0);
+  assert.equal(importedOnly[0].earned, null);
+  assert.equal(importedOnly[0].status, 'unknown');
   assert.equal(duplicated[0].earned, plannerOnly[0].earned);
-  assert.equal(importedOnly[1].earned, 0, 'a mixed imported aggregate must not become wholly schooling credit');
+  assert.equal(importedOnly[1].earned, null, 'legacy identity cannot prove a schooling allocation');
+  assert.equal(importedOnly[1].status, 'unknown');
   const missingSchooling = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], { ...profile, recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: null } }).referenceProgress[1];
   assert.equal(missingSchooling.earned, null);
   assert.match(missingSchooling.reason, /認定スクーリング相当/);
@@ -3598,7 +3605,8 @@ test('auto import: official earned credits enter totals, categories, graduation 
     const graduation = current => calculateGraduationProgress(current.items, catalog, program.scopeId, [], 'undecided', current.importedStudyRecords, current.importedCourseAchievements, current.graduationProfile);
     const progress = graduation(state); const before = graduation(baseline);
     assert.equal(progress.graduationCheckComplete, false);
-    assert.equal(progress.importedContributionCount, 1);
+    assert.equal(progress.importedContributionCount, 0);
+    assert.ok(progress.importedWarnings.some(row => row.reason.includes('curriculum_identity_unresolved')));
     const earned = value => [...value.cards, ...value.requirements, ...value.referenceProgress].map(row => [row.requirementId, row.earned]);
     assert.deepEqual(earned(progress), earned(before));
     const eligibility = guidanceEligibilityCreditResult(state, catalog);
@@ -3808,7 +3816,8 @@ test('backfill: official earned totals, category progress, graduation and guidan
     const beforeProgress = graduation(legacy); const nextProgress = graduation(next);
     const earned = progress => [...progress.cards, ...progress.requirements, ...progress.referenceProgress].map(row => [row.requirementId, row.earned]);
     assert.deepEqual(earned(nextProgress), earned(beforeProgress));
-    assert.equal(nextProgress.importedContributionCount, 1);
+    assert.equal(nextProgress.importedContributionCount, 0);
+    assert.ok(nextProgress.importedWarnings.some(row => row.reason.includes('curriculum_identity_unresolved')));
     assert.equal(nextProgress.graduationCheckComplete, false);
     assert.deepEqual(guidanceEligibilityCreditResult({ ...next, selectedScopeId: scopeId }, catalog), guidanceEligibilityCreditResult({ ...legacy, selectedScopeId: scopeId }, catalog));
   }

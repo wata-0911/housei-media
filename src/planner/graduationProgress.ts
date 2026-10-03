@@ -19,7 +19,9 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgr
 import { thesisPolicyForScope } from './thesisSelection';
 import { classifyUnknownReason, coverageForCard, LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
-import { deriveImportedAchievements, type ImportedAchievementWarning } from './importedAchievementCalculations';
+import type { ImportedAchievementWarning } from './importedAchievementCalculations';
+import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
+import { deriveOfficialGraduationFacts, type OfficialAllocationInput } from './officialGraduationFacts';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -188,6 +190,7 @@ function evaluateStructured(
   offerings: Map<string, Offering>,
   eligibleMappings: (offering: Offering) => Mapping[],
   hasUnresolvedEarned: boolean,
+  official: OfficialAllocationInput[],
 ): RequirementProgress {
   if (!conditionIsSafe(requirement)) return unknown(requirement, '条件または例外を安全に自動評価できません');
   if (!targetIsClear(requirement)) return unknown(requirement, '対象集合を一意に特定できません');
@@ -204,7 +207,9 @@ function evaluateStructured(
       .filter(mapping => mappingMatches(mapping, requirement))
       .map(mapping => mapping.mappingId),
   );
-  if (targetMappingIds !== null && targetMappingIds.size === 0) return unknown(requirement, '対象科目のmappingを一意に特定できません');
+  const officialMatched = official.filter(a => mappingMatches(a.mapping, requirement)
+    && (names === null || names.includes(a.fact.canonicalName ?? '')));
+  if (targetMappingIds !== null && targetMappingIds.size === 0 && officialMatched.length === 0) return unknown(requirement, '対象科目のmappingを一意に特定できません');
 
   const matched = items.flatMap(item => {
     const offering = offerings.get(item.offeringId);
@@ -247,11 +252,16 @@ function evaluateStructured(
     if (unit === 'courses') return new Set(rows.map(row => row.offering.id)).size;
     return rows.reduce((sum, row) => sum + row.offering.credits!, 0);
   };
-  const earned = total('earned');
+  const officialEarned = officialMatched.reduce((sum, a) => sum + (unit === 'courses' ? (a.completedCredits > 0 ? 1 : 0)
+    : requirement.ruleType === 'min_schooling_credits' ? (a.schoolingCredits ?? 0)
+      : requirement.conditions?.full_course_credits_required ? a.completedCredits : a.credits), 0);
+  if (requirement.ruleType === 'min_schooling_credits' && officialMatched.some(a => a.schoolingCredits === null)) return unknown(requirement, '公式実績のスクーリング算入条件が未確認です');
+  const earned = total('earned') + officialEarned;
   const inProgress = total('in_progress');
   const planned = total('planned');
   const completedCourseCount = [...completedMappings.values()].filter(entry =>
-    entry.earned >= (entry.mapping.curriculumCredits ?? Number.POSITIVE_INFINITY)).length;
+    entry.earned >= (entry.mapping.curriculumCredits ?? Number.POSITIVE_INFINITY)).length
+    + officialMatched.filter(a => a.completedCredits > 0).length;
   const minimumCourses = requirement.conditions?.min_courses;
   const maximumEnrollments = requirement.conditions?.max_enrollments;
   // A credit requirement with a course-count condition must meet both parts.
@@ -286,6 +296,7 @@ function withoutThesisCondition(requirement: StructuredRequirement): StructuredR
 function groupedCards(
   items: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[],
   hasUnresolvedEarned: boolean,
+  official: OfficialAllocationInput[],
 ): ProgressCard[] {
   type Totals = { earned: number; inProgress: number; planned: number; schooling: number };
   const empty = (): Totals => ({ earned: 0, inProgress: 0, planned: 0, schooling: 0 });
@@ -293,7 +304,7 @@ function groupedCards(
   const fields = new Map(['人文', '社会', '自然'].map(field => [field, empty()]));
   const physical = empty();
   const basicLecture = empty();
-  type CommonEntry = { mapping: Mapping; totals: Totals };
+  type CommonEntry = { mapping: Mapping; totals: Totals; canonicalName?: string };
   const commonEntries = new Map<string, CommonEntry>();
   const physicalEarned = new Set<string>();
   const languages = new Map(['英語', '独語', '仏語'].map(language => [language, empty()]));
@@ -336,6 +347,21 @@ function groupedCards(
       if (mappings.some(mapping => mapping.category === '外国語' && mapping.field === language)) add(totals);
     }
   }
+  // Course facts join the allocation totals directly, never the annual attempt loop.
+  for (const a of official) {
+    const { mapping, fact } = a;
+    if (mapping.category === '一般教育') commonEntries.set(`official:${fact.curriculumCourseId}`, {
+      mapping, canonicalName: fact.canonicalName!, totals: { ...empty(), earned: a.credits, schooling: a.schoolingCredits ?? 0 },
+    });
+    if (mapping.category === '外国語') {
+      const totals = languages.get(mapping.field ?? '');
+      if (totals) { totals.earned += a.credits; totals.schooling += a.schoolingCredits ?? 0; }
+    }
+    if (mapping.category === '保健体育') {
+      physical.earned += a.completedCredits;
+      if (a.completedCredits >= 2) physicalEarned.add(fact.curriculumCourseId!);
+    }
+  }
   for (const { mapping, totals } of commonEntries.values()) {
     const completed = totals.earned >= mapping.curriculumCredits! ? mapping.curriculumCredits! : 0;
     general.earned += completed;
@@ -358,14 +384,14 @@ function groupedCards(
   // The 36-credit common-education total deliberately remains uncapped.
   const familyEarned = new Map<string, number>();
   const naturalFamily = (name: string) => /^(数学|生物学|化学|物理学)(?:[１２３123])?$/.test(name.normalize('NFKC')) ? name.normalize('NFKC').replace(/[１２３123]$/, '') : null;
-  for (const { mapping, totals } of commonEntries.values()) {
+  for (const { mapping, totals, canonicalName } of commonEntries.values()) {
     if (mapping.field !== '自然' || totals.earned < mapping.curriculumCredits!) continue;
-    const name = [...offerings.values()].find(offering => offering.mappingIds.includes(mapping.mappingId))?.name ?? '';
+    const name = canonicalName ?? [...offerings.values()].find(offering => offering.mappingIds.includes(mapping.mappingId))?.name ?? '';
     const family = naturalFamily(name);
     if (family) familyEarned.set(family, (familyEarned.get(family) ?? 0) + mapping.curriculumCredits!);
   }
   const naturalCapped = [...familyEarned.values()].reduce((sum, credits) => sum + Math.min(6, credits), 0)
-    + [...commonEntries.values()].filter(({ mapping, totals }) => mapping.field === '自然' && totals.earned >= mapping.curriculumCredits! && !naturalFamily([...offerings.values()].find(o => o.mappingIds.includes(mapping.mappingId))?.name ?? '')).reduce((sum, entry) => sum + entry.mapping.curriculumCredits!, 0);
+    + [...commonEntries.values()].filter(({ mapping, totals, canonicalName }) => mapping.field === '自然' && totals.earned >= mapping.curriculumCredits! && !naturalFamily(canonicalName ?? [...offerings.values()].find(o => o.mappingIds.includes(mapping.mappingId))?.name ?? '')).reduce((sum, entry) => sum + entry.mapping.curriculumCredits!, 0);
   const generalDetails = [...fields].map(([field, totals]) => detail(field, field === '自然' ? { ...totals, earned: naturalCapped } : totals, 8));
   const generalCard = make('group-general', '一般教育', general, 36,
     general.earned >= 36 && fields.get('人文')!.earned >= 8 && fields.get('社会')!.earned >= 8 && naturalCapped >= 8, generalDetails,
@@ -538,6 +564,8 @@ function addOfferingTotals(totals: Totals, item: PlannerItem, offering: Offering
 
 type CurriculumEntry = {
   mapping: Mapping;
+  /** Official completion belongs to the Course, even when it has equivalent edges. */
+  completionId?: string;
   label: string;
   earned: number;
   inProgress: number;
@@ -573,7 +601,7 @@ function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
   const completed = completedCurriculumCredits(entry);
   if (completed > 0) {
     totals.earned += completed;
-    totals.courses.add(entry.mapping.mappingId);
+    totals.courses.add(entry.completionId ?? entry.mapping.mappingId);
   }
 }
 
@@ -584,6 +612,7 @@ function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
 function professionalCards(
   items: PlannerItem[], catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>,
   eligibleMappings: (offering: Offering) => Mapping[], hasUnresolvedEarned: boolean, publicCourseCredits: number, thesisSelection: ThesisSelection, thesisStatus: ThesisProgress['status'],
+  official: OfficialAllocationInput[],
 ): ProgressCard[] {
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId);
   if (!program || !['日本文学科', '史学科', '地理学科', '法律学科', '経済学科', '商業学科'].includes(program.department ?? '')) return [];
@@ -756,6 +785,12 @@ function professionalCards(
     }
   }
 
+  for (const a of official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育')) {
+    entries.set(`official:${a.fact.curriculumCourseId}`, {
+      mapping: a.mapping, completionId: a.fact.curriculumCourseId!, label: a.fact.canonicalName!,
+      earned: a.credits, inProgress: 0, planned: 0, earnedSchooling: a.schoolingCredits ?? 0,
+    });
+  }
   for (const entry of entries.values()) {
     const type = entry.mapping.requirementType!;
     addCurriculumTotals(bucket(type), entry);
@@ -938,6 +973,7 @@ function professionalCards(
           if (!canonical || LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(canonical) || maps.some(mapping => mapping.requirementType === '公開科目')) continue;
           schooling.earned += offering.credits;
         }
+        schooling.earned += official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育').reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0);
         return make('professional-law-schooling', '専門教育：スクーリング', schooling, 8, schooling.earned >= 8, undefined,
           '選択必修・選択のうち、2026年度正本 p.47 の＊印科目・他学部他学科公開科目を除く実修得スクーリング単位。4単位科目のスクーリング部分修得もここでは実修得分を数えます。');
       })(),
@@ -1064,9 +1100,8 @@ function countedOverallCredits(cards: ProgressCard[], department: string | null)
 }
 
 /**
- * Count only completed, mapped schooling components.  A mixed imported row is
- * represented as correspondence by deriveImportedAchievements, so its aggregate
- * is never accidentally counted as schooling.  This is an actual-attendance
+ * Count mapped Planner/recognition schooling components. Official row evidence
+ * is composed separately below, with no dependence on annual method. This is an actual-attendance
  * reference: unlike graduation buckets, a two-credit partial schooling is kept.
  */
 function countedSchoolingCredits(items: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], department: string | null): { credits: number; uncertain: boolean } {
@@ -1204,9 +1239,19 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const catalogOfferings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const currentThesis = thesisProgress ?? { selection: thesisSelection, status: 'not_started' as const };
   const currentSelection = thesisPolicyForScope(catalog, scopeId) === 'required' ? 'selected' : currentThesis.selection;
-  const imported = deriveImportedAchievements(importedStudyRecords, catalogOfferings, items, importedCourseAchievements, catalog, scopeId);
+  const official = deriveOfficialGraduationFacts(importedCourseAchievements, importedStudyRecords, catalog, scopeId, profile);
+  const plannerItems = plannerItemsWithoutOfficialEarned(items, catalogOfferings, importedCourseAchievements, catalog);
+  const heldFacts = official.facts.filter(f => f.allocation.kind === 'unknown'
+    && (f.earnedCreditsTotal !== 0 || f.sourceRows.length > 1));
+  const importedWarnings: ImportedAchievementWarning[] = official.facts.filter(f => f.allocation.kind === 'unknown' || f.allocation.kind === 'out_of_scope' || f.diagnostics.includes('schooling_evidence_requires_confirmation'))
+    .map(f => ({ rawName: f.canonicalName ?? importedCourseAchievements.find(r => r.id === f.sourceRowIds[0])?.rawName ?? '',
+      reason: `公式実績の算入条件を確認してください: ${f.diagnostics.join(' / ')}` }));
+  for (const record of importedStudyRecords) {
+    if (!importedCourseAchievements.some(row => row.id === record.sourceCourseId)) importedWarnings.push({ rawName: record.rawName, reason: 'curriculum_identity_unresolved: 公式科目行がない旧形式の実績です' });
+  }
+  const officialUnknown = heldFacts.length > 0 || importedStudyRecords.some(record => !importedCourseAchievements.some(row => row.id === record.sourceCourseId));
   const identity = (offering: Offering | undefined) => offering?.courseId ? `course:${offering.courseId}` : offering ? `offering:${offering.id}` : null;
-  const existingCourseIds = new Set([...items, ...imported.items].map(item => identity(catalogOfferings.get(item.offeringId))).filter((id): id is string => id !== null));
+  const existingCourseIds = new Set(items.map(item => identity(catalogOfferings.get(item.offeringId))).filter((id): id is string => id !== null));
   const recognizedItems = (profile.recognizedCredits.professionalCourses ?? []).flatMap(course => {
     const offering = course.offeringId ? catalogOfferings.get(course.offeringId) : undefined;
     const key = identity(offering);
@@ -1214,8 +1259,8 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     existingCourseIds.add(key);
     return [{ offeringId: offering.id, status: 'earned' as const, plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null }];
   });
-  const calculationItems = [...imported.plannerItems, ...imported.items, ...recognizedItems];
-  const offerings = new Map([...catalog.offerings, ...imported.offerings].map(offering => [offering.id, offering]));
+  const calculationItems = [...plannerItems, ...recognizedItems];
+  const offerings = catalogOfferings;
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));
   const eligibleMappings = (offering: Offering) => resolve(offering).filter(mapping => mapping.scopeId === scopeId || commonScopes.has(mapping.scopeId));
@@ -1231,13 +1276,13 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     const condition = thesisCondition(requirement, currentSelection);
     if (condition === 'inactive') return [];
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
-      return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, hasUnresolvedEarned)];
+      return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, hasUnresolvedEarned, official.allocations)];
     });
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
-  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status);
+  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, official.allocations);
   const cards = applyRecognition([
-    ...groupedCards(calculationItems, offerings, eligibleMappings, hasUnresolvedEarned),
+    ...groupedCards(calculationItems, offerings, eligibleMappings, hasUnresolvedEarned, official.allocations),
     ...professional,
     ...thesisCards,
     ...publicCourse.cards,
@@ -1248,10 +1293,33 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   ], profile);
   cards.push(...literaturePartialExceptionCard(calculationItems, catalog, scopeId, offerings, eligibleMappings, cards));
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId)!;
+  // Preserve known allocations as a partial lower bound, and keep unresolved source budgets visible.
+  const officialReason = `公式実績の算入を保留しています: ${[...new Set(heldFacts.flatMap(f => 'reason' in f.allocation ? [f.allocation.reason] : []))].join(' / ') || 'curriculum_identity_unresolved'}`;
+  if (officialUnknown) {
+    for (const row of [...requirements, ...cards]) {
+      if (row.ruleType === 'thesis_progress') continue;
+      row.status = 'unknown'; row.reason = [row.reason, officialReason].filter(Boolean).join('。');
+    }
+  }
+  const schoolingUnknown = officialUnknown || official.allocations.some(a => a.schoolingCredits === null)
+    || official.facts.some(f => f.allocation.kind === 'unknown' && f.schoolingEvidence.credits !== 0);
+  if (schoolingUnknown) for (const row of cards.filter(c => c.requirementId === 'group-foreign' || c.requirementId === 'professional-law-schooling')) {
+    row.status = 'unknown'; row.reason = [row.reason, '公式実績のスクーリング算入条件が未確認です'].filter(Boolean).join('。');
+  }
   const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
   const thesisPage = thesisCreditsForDepartment(program.department) === 8 ? ({ '日本文学科': 49, '史学科': 52, '地理学科': 54 } as Record<string, number>)[program.department ?? ''] : ({ '法律学科': 46, '経済学科': 57, '商業学科': 59 } as Record<string, number>)[program.department ?? ''];
   const coveredCards = cards.map(card => withCoverage(card, card.ruleType === 'thesis_progress' ? thesisPage : catalog.requirements.find(rule => rule.id === card.requirementId)?.sourcePage));
   const reference = referenceProgress(coveredCards, calculationItems, offerings, eligibleMappings, program, profile, currentSelection);
+  for (const row of reference) {
+    if (row.id === 'schooling-reference-progress' && row.earned !== null) row.earned += official.allocations.reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0);
+    const uncertain = row.id === 'overall-reference-progress' ? officialUnknown : schoolingUnknown;
+    if (uncertain) {
+      row.status = 'unknown'; row.coverageStatus = 'unknown';
+      row.reason = [row.reason, row.id === 'overall-reference-progress' ? officialReason : '公式実績のスクーリング証拠に未確認の算入条件があります'].filter(Boolean).join('。');
+      row.unknownReasonCategory = classifyUnknownReason(row.reason);
+      if (row.earned === 0) row.earned = null;
+    }
+  }
   const reasons = new Map<string, { count: number; labels: string[] }>();
   for (const row of coveredRequirements.filter(row => row.status === 'unknown')) {
     const reason = row.reason ?? '自動判定できません';
@@ -1271,8 +1339,8 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       summary[card.coverageStatus ?? 'unknown'] += 1;
       return summary;
     }, { supported: 0, partial: 0, unknown: 0 }),
-    importedWarnings: imported.warnings,
-    importedContributionCount: imported.items.length,
+    importedWarnings,
+    importedContributionCount: official.allocations.filter(a => a.credits > 0).length,
     referenceProgress: reference,
     historySchoolingDiagnostic: scopeId === HISTORY_SCOPE_ID ? historySchoolingDiagnostic(calculationItems, offerings) : null,
   };
