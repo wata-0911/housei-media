@@ -21,7 +21,7 @@ import { classifyUnknownReason, coverageForCard, LAW_SCHOOLING_EXCLUDED_CANONICA
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { importedGraduationNotices, type ImportedGraduationNotice } from './importedGraduationNotices';
 import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
-import { deriveOfficialGraduationFacts, type OfficialAllocationInput } from './officialGraduationFacts';
+import { deriveOfficialGraduationFacts, officialFactCreditState, type OfficialAllocationInput } from './officialGraduationFacts';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -255,7 +255,7 @@ function evaluateStructured(
   const officialEarned = officialMatched.reduce((sum, a) => sum + (unit === 'courses' ? (a.completedCredits > 0 ? 1 : 0)
     : requirement.ruleType === 'min_schooling_credits' ? (a.schoolingCredits ?? 0)
       : requirement.conditions?.full_course_credits_required ? a.completedCredits : a.credits), 0);
-  if (requirement.ruleType === 'min_schooling_credits' && officialMatched.some(a => a.schoolingCredits === null)) return unknown(requirement, '公式実績のスクーリング算入条件が未確認です');
+  if (requirement.ruleType === 'min_schooling_credits' && officialMatched.some(a => !officialFactCreditState(a.fact).allZero && a.schoolingCredits === null)) return unknown(requirement, '公式実績のスクーリング算入条件が未確認です');
   const earned = total('earned') + officialEarned;
   const inProgress = total('in_progress');
   const planned = total('planned');
@@ -1242,7 +1242,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const official = deriveOfficialGraduationFacts(importedCourseAchievements, importedStudyRecords, catalog, scopeId, profile);
   const plannerItems = plannerItemsWithoutOfficialEarned(items, catalogOfferings, importedCourseAchievements, catalog);
   const heldFacts = official.facts.filter(f => f.allocation.kind === 'unknown'
-    && (f.earnedCreditsTotal !== 0 || f.sourceRows.length > 1));
+    && !officialFactCreditState(f).allZero);
   const importedWarnings = importedGraduationNotices(official, importedCourseAchievements, importedStudyRecords);
   const officialUnknown = heldFacts.length > 0 || importedStudyRecords.some(record => !importedCourseAchievements.some(row => row.id === record.sourceCourseId));
   const identity = (offering: Offering | undefined) => offering?.courseId ? `course:${offering.courseId}` : offering ? `offering:${offering.id}` : null;
@@ -1296,8 +1296,8 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       row.status = 'unknown'; row.reason = [row.reason, officialReason].filter(Boolean).join('。');
     }
   }
-  const schoolingUnknown = officialUnknown || official.allocations.some(a => a.schoolingCredits === null)
-    || official.facts.some(f => f.allocation.kind === 'unknown' && f.schoolingEvidence.credits !== 0);
+  const schoolingUnknown = officialUnknown || official.allocations.some(a => !officialFactCreditState(a.fact).allZero && a.schoolingCredits === null)
+    || official.facts.some(f => !officialFactCreditState(f).allZero && f.allocation.kind === 'unknown' && f.schoolingEvidence.credits !== 0);
   if (schoolingUnknown) for (const row of cards.filter(c => c.requirementId === 'group-foreign' || c.requirementId === 'professional-law-schooling')) {
     row.status = 'unknown'; row.reason = [row.reason, '公式実績のスクーリング算入条件が未確認です'].filter(Boolean).join('。');
   }

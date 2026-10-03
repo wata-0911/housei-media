@@ -1,6 +1,6 @@
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import type { ImportedAchievementWarning } from './importedAchievementCalculations';
-import type { DerivedOfficialGraduationFacts } from './officialGraduationFacts';
+import { officialFactCreditState, type DerivedOfficialGraduationFacts } from './officialGraduationFacts';
 
 export type ImportedGraduationNotice = ImportedAchievementWarning & {
   kind: 'allocation_held' | 'credits_unknown' | 'schooling_confirmation' | 'out_of_scope';
@@ -13,14 +13,14 @@ export function importedGraduationNotices(official: DerivedOfficialGraduationFac
   for (const fact of official.facts) {
     // A duplicate group's aggregate is null. Inspect the retained source values,
     // never sum/max them or mistake an all-zero group for earned credit.
-    if (fact.sourceRows.every(row => row.earnedCreditsTotal === 0)) continue;
-    const positive = fact.sourceRows.some(row => row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0);
+    const creditState = officialFactCreditState(fact);
+    if (creditState.allZero) continue;
     const notice = {
       rawName: fact.canonicalName ?? rows.find(row => row.id === fact.sourceRowIds[0])?.rawName ?? '',
       sourceRowIds: fact.sourceRowIds,
       reason: `公式実績の算入条件: ${fact.diagnostics.join(' / ')}`,
     };
-    if (!positive) {
+    if (!creditState.hasPositive) {
       notices.push({ ...notice, kind: 'credits_unknown', reason: `修得単位が不明です。${notice.reason}` });
     } else if (fact.allocation.kind === 'unknown') {
       notices.push({ ...notice, kind: 'allocation_held' });
