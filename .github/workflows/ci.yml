@@ -34,5 +34,11 @@ jobs:
       - name: Planner tests
         run: npm run test:planner
 
+      - name: Extension parser and handoff tests
+        run: npm run test:extension
+
+      - name: Bookmarklet parity and transport tests
+        run: npm run test:bookmarklet
+
       - name: Build
         run: npm run build

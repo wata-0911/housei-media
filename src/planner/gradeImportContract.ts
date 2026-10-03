@@ -1,4 +1,4 @@
-/** Versioned, untrusted hand-off format produced by the optional browser extension. */
+/** Versioned, untrusted hand-off format produced by the browser extension or self-contained bookmarklet. */
 export type HoseiGrade = 'S' | 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'C-' | 'D';
 export type HoseiReportStatus = 'none' | 'passed' | 'resubmit' | 'processing' | 'unknown';
 

@@ -43,3 +43,9 @@ Chrome の「パッケージ化されていない拡張機能を読み込む」�
 10. dev branch domainがVercelで `dev` branchへ紐づいたままであることを確認する。通常はPreview URLを更新する作業は不要である。
 
 Super Tables により同じ `id="seisekiTabele110"` の table が複数生成されることがあります。拡張は全候補の `tr.column_even` / `tr.column_odd` を確認し、24 logical cell の科目行が最も多い実データ table を自動選択します。`td.line_y_label` を除いた logical cell が 24 個の row だけを処理し、category row は科目として出力しません。
+
+## 共通parserとBookmarklet
+
+`parser/extractor.js` は生成物です。唯一のparser sourceは `shared/grade-import/extractor.js` で、処理を変更するときはそちらを編集して `npm run build:grade-import` を実行してください。既存global APIとChromeのisolated-world実行方式は維持しています。生成物もcommitするため、従来どおりこのディレクトリをChromeへ読み込めます。
+
+同じsourceから自己完結Bookmarkletも生成します。利用手順・self-check・再生成とブラウザ制限は [Bookmarklet README](../../bookmarklet/README.md) を参照してください。Bookmarkletが拡張のglobalへアクセスすることはありません。
