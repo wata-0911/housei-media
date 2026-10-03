@@ -1,9 +1,10 @@
-import type { ImportedCourseAchievement } from './gradeImportApply';
+import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import type { CurriculumCourse, Offering, PlannerCatalog, PlannerItem } from './plannerCatalog';
 import { exactImportedCurriculumId } from './officialCourseCredits';
 import { isMediaSchooling } from './mediaSchooling';
 import { repeatableRule } from './repeatableRules';
 import { plannerItemCreditContribution } from './plannerItemCredits';
+import { safeImportedStudyOffering } from './unifiedCourseView';
 
 export type CourseCompletion = 'complete' | 'incomplete' | 'unknown' | 'repeatable';
 export type CurriculumCourseAttempt = {
@@ -11,7 +12,9 @@ export type CurriculumCourseAttempt = {
   offering: Offering;
   earnedContribution: number;
   projectedContribution: number;
+  /** True only when an earned attempt is already represented by an official aggregate. */
   officialEarnedPreferred: boolean;
+  officialEarnedPreferenceReason: 'aggregate_source_link' | 'component_source_match' | null;
 };
 export type CurriculumCourseProgress = {
   curriculumCourseId: string;
@@ -36,11 +39,35 @@ export type CurriculumProgressResult = { courses: CurriculumCourseProgress[]; un
 export const COMPLETED_COURSE_ADVISORY = '科目構成単位を満たしています。原則として完成後の再履修はできませんが、科目・履修方法によって例外があります。';
 export const MEDIA_REPEAT_ADVISORY = '大学への電話確認ではメディアの再履修は不可との案内。詳細は教務へ確認してください';
 
-/** CourseProgress deduplicates proven imported attempts only. Unlinked earned
- * attempts remain additive, unlike the conservative official graduation policy. */
-function plannerItemsWithoutImportedAttemptDuplicates(items: PlannerItem[], rows: ImportedCourseAchievement[]): PlannerItem[] {
-  const sourceIds = new Set(rows.map(row => row.id));
-  return items.filter(item => item.status !== 'earned' || !sourceIds.has(item.importedSourceCourseId ?? ''));
+type ComponentEvidence = { kind: 'matching' | 'contradictory'; sourceCourseId: string };
+
+/** A component match is provenance only. It never attributes the parent aggregate
+ * to an Offering and therefore never supplies annual correspondence credits. */
+function componentEvidenceForAttempt(
+  item: PlannerItem,
+  offering: Offering,
+  studyRecords: ImportedStudyRecord[],
+  officialById: Map<string, ImportedCourseAchievement>,
+  offerings: Map<string, Offering>,
+  catalog: PlannerCatalog,
+): ComponentEvidence | null {
+  // A stored aggregate link keeps its existing stronger semantics. Component
+  // evidence only repairs legacy items that have no such attribution.
+  if (item.importedSourceCourseId !== undefined) return null;
+  for (const record of studyRecords) {
+    if (!record.sourceCourseId) continue;
+    const parent = officialById.get(record.sourceCourseId);
+    if (!parent) continue;
+    const componentOffering = safeImportedStudyOffering(record, offerings);
+    if (componentOffering?.id !== item.offeringId) continue;
+    const officialCourseId = exactImportedCurriculumId(parent, catalog);
+    if (!officialCourseId) continue;
+    return {
+      kind: officialCourseId === offering.curriculumCourseId ? 'matching' : 'contradictory',
+      sourceCourseId: parent.id,
+    };
+  }
+  return null;
 }
 
 /** Rule names only classify repeatability after identity is established. They never group courses. */
@@ -59,9 +86,17 @@ function isRepeatableCourse(course: CurriculumCourse, catalog: PlannerCatalog, s
       && repeatableRule(program.department, offering)));
 }
 
-export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: PlannerCatalog, rows: ImportedCourseAchievement[] = [], scopeId: string | null = null): CurriculumProgressResult {
+export function deriveCurriculumCourseProgress(
+  items: PlannerItem[],
+  catalog: PlannerCatalog,
+  rows: ImportedCourseAchievement[] = [],
+  scopeId: string | null = null,
+  studyRecords: ImportedStudyRecord[] = [],
+): CurriculumProgressResult {
   const offerings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const courses = new Map((catalog.curriculum?.courses ?? []).map(course => [course.id, course]));
+  const officialById = new Map(rows.map(row => [row.id, row]));
+  const officialSourceIds = new Set(officialById.keys());
   const assigned = new Map<string, { attempts: Array<{ item: PlannerItem; offering: Offering }>; official: ImportedCourseAchievement[] }>();
   const unassigned: CurriculumProgressWarning[] = [];
   const groupFor = (id: string) => {
@@ -79,7 +114,6 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
     if (id && courses.has(id)) groupFor(id).official.push(row);
     else unassigned.push({ offeringId: null, sourceCourseId: row.id, name: row.rawName, reason: '成績表行の制度科目を一意に判定できません。公式情報は保持しています。' });
   }
-  const retainedEarned = new Set(plannerItemsWithoutImportedAttemptDuplicates(items, rows));
   const result: CurriculumCourseProgress[] = [];
   for (const [id, group] of assigned) {
     const course = courses.get(id)!;
@@ -88,10 +122,22 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
     let unknownEarned = group.official.some(row => row.earnedCreditsTotal === null);
     let unknownProjected = unknownEarned;
     const attempts = group.attempts.map(({ item, offering }): CurriculumCourseAttempt => {
-      const officialEarnedPreferred = item.status === 'earned' && !retainedEarned.has(item);
-      if (officialEarnedPreferred && !group.official.some(row => row.id === item.importedSourceCourseId)) {
+      const aggregateSourceLink = item.status === 'earned'
+        && officialSourceIds.has(item.importedSourceCourseId ?? '');
+      const componentEvidence = item.status === 'earned'
+        ? componentEvidenceForAttempt(item, offering, studyRecords, officialById, offerings, catalog)
+        : null;
+      const officialEarnedPreferenceReason = aggregateSourceLink
+        ? 'aggregate_source_link' as const
+        : componentEvidence?.kind === 'matching' ? 'component_source_match' as const : null;
+      const officialEarnedPreferred = officialEarnedPreferenceReason !== null;
+      if (aggregateSourceLink && !group.official.some(row => row.id === item.importedSourceCourseId)) {
         unknownEarned = true; unknownProjected = true;
         if (!warnings.includes('取込元の制度科目が未確定または異なるため、履修項目の単位を推測して加算していません。')) warnings.push('取込元の制度科目が未確定または異なるため、履修項目の単位を推測して加算していません。');
+      }
+      if (componentEvidence?.kind === 'contradictory') {
+        const warning = '成績表の履修内訳と履修項目の制度科目が一致しないため、重複とは判定せず修得単位を別に表示しています。';
+        if (!warnings.includes(warning)) warnings.push(warning);
       }
       const earned = item.status === 'earned' && !officialEarnedPreferred;
       const planned = ['planned', 'in_progress', 'waiting'].includes(item.status);
@@ -100,7 +146,7 @@ export function deriveCurriculumCourseProgress(items: PlannerItem[], catalog: Pl
       const credits = plannerItemCreditContribution(item, offering);
       if (earned && credits === null) unknownEarned = true;
       if ((earned || planned) && credits === null) unknownProjected = true;
-      return { item, offering, officialEarnedPreferred, earnedContribution: earned ? credits ?? 0 : 0, projectedContribution: earned || planned ? credits ?? 0 : 0 };
+      return { item, offering, officialEarnedPreferred, officialEarnedPreferenceReason, earnedContribution: earned ? credits ?? 0 : 0, projectedContribution: earned || planned ? credits ?? 0 : 0 };
     });
     const officialEarned = group.official.reduce((total, row) => total + (row.earnedCreditsTotal ?? 0), 0);
     const earnedCredits = officialEarned + attempts.reduce((total, attempt) => total + attempt.earnedContribution, 0);

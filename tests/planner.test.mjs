@@ -3475,14 +3475,14 @@ test('auto import: existing items, final grades, and all progress remain untouch
   }
 });
 
-test('auto import: repeated source rows and components produce one item per offering', () => {
+for (const credits of [2, 4]) test(`auto import: repeated source rows and components respect completion ${credits}/4`, () => {
   const schoolingOfferings = [{ ...autoImportOfferings[0], method: 'schooling' }];
   const slot = { rawYear: '26', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '前期', date: null, credits: 2, grade: 'A' };
-  const course = autoImportCourse(schoolingOfferings[0].name, { schoolings: [slot, slot] });
+  const course = autoImportCourse(schoolingOfferings[0].name, { schoolings: [slot, slot], earnedCredits: { raw: String(credits), value: credits } });
   const next = applyImport(initialState(), importPreview(autoImportData([course, course]), schoolingOfferings), schoolingOfferings);
   assert.equal(next.importedCourseAchievements.length, 2);
   assert.equal(next.importedStudyRecords.length, 6, 'unmatched correspondence details are also preserved');
-  assert.deepEqual(next.items, [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: 2026, plannedTerm: '前期' }]);
+  assert.deepEqual(next.items, credits === 4 ? [] : [{ ...plannerItemFromCourseSearch('auto-exact'), plannedYear: 2026, plannedTerm: '前期' }]);
 });
 
 test('auto import: reimport neither multiplies items nor replaces learner edits', () => {
@@ -3562,7 +3562,7 @@ test('auto import: unresolved catalog mapping and inconsistent preview selection
 test('auto import: year and term prefill require explicit compatible and consistent evidence', () => {
   const offerings = [{ ...autoImportOfferings[0], method: 'schooling' }];
   const slot = { rawYear: '26', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '前期', date: null, credits: 2, grade: 'A' };
-  const data = slots => autoImportData([autoImportCourse(offerings[0].name, { schoolings: slots })]);
+  const data = slots => autoImportData([autoImportCourse(offerings[0].name, { schoolings: slots, earnedCredits: { raw: '2', value: 2 } })]);
   const run = slots => applyImport(initialState(), importPreview(data(slots), offerings), offerings).items[0];
   assert.deepEqual([run([slot, slot]).plannedYear, run([slot, slot]).plannedTerm], [2026, '前期']);
   const conflicting = run([slot, { ...slot, rawYear: '26', year: '26', rawTerm: '後期', term: '後期' }]);
@@ -3573,6 +3573,8 @@ test('auto import: year and term prefill require explicit compatible and consist
   const manual = applyImport(initialState(), preview, offerings).items[0];
   assert.equal(manual.plannedYear, 2027);
   assert.equal(manual.plannedTerm, null, 'changed free text is not treated as source term');
+  const complete = data([slot, slot]); complete.courses[0].earnedCredits = { raw: '4', value: 4 };
+  assert.deepEqual(applyImport(initialState(), importPreview(complete, offerings), offerings).items, [], 'completed source does not manufacture a schedule');
 });
 
 test('auto import: official earned credits enter totals, categories, graduation and eligibility once', () => {
@@ -3661,7 +3663,9 @@ test('auto import: multiple safe component offerings keep the unified view uncoa
   const offerings = [autoImportOfferings[0], { ...autoImportOfferings[0], id: 'auto-schooling', method: 'schooling' }];
   const slot = { rawYear: '26', rawTerm: '夏', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '夏', date: null, credits: 2, grade: 'A' };
   const data = autoImportData([autoImportCourse(offerings[0].name, { schoolings: [slot, { ...slot, rawTerm: '冬', term: '冬' }] })]);
-  const next = applyImport(initialState(), importPreview(data, offerings), offerings);
+  const imported = applyImport(initialState(), importPreview(data, offerings), offerings);
+  assert.deepEqual(imported.items, [], 'completed multi-Offering source retains official facts only');
+  const next = { ...imported, items: offerings.map(offering => plannerItemFromCourseSearch(offering.id)) };
   assert.deepEqual(next.items.map(current => current.offeringId), ['auto-exact', 'auto-schooling']);
   const rows = createUnifiedCourseRows(next.items, next.importedCourseAchievements, new Map(offerings.map(offering => [offering.id, offering])));
   assert.equal(rows.length, 3);
@@ -3756,16 +3760,22 @@ test('backfill: source duplicates enable the real UI action only while a safe pl
   assert.match(page, /<GradeImportPanel offerings=\{catalog\.offerings\} plannedItems=\{state\.items\}/);
 });
 
-test('backfill: duplicate components and course-only sources each create only one planner item', () => {
+for (const credits of [2, 4]) test(`backfill: duplicate components and course-only sources respect completion ${credits}/4`, () => {
   const slot = { rawYear: '26', rawTerm: '前期', rawDate: '', rawCredits: '2', rawGrade: 'A', year: '26', term: '前期', date: null, credits: 2, grade: 'A' };
   const offerings = [{ ...autoImportOfferings[0], method: 'schooling' }];
-  const schoolingCourse = autoImportCourse(offerings[0].name, { schoolings: [slot, slot] });
-  const courseOnly = autoImportCourse(offerings[0].name, { creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false } });
+  const schoolingCourse = autoImportCourse(offerings[0].name, { schoolings: [slot, slot], earnedCredits: { raw: String(credits), value: credits } });
+  const courseOnly = autoImportCourse(offerings[0].name, { earnedCredits: { raw: String(credits), value: credits }, creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false } });
   for (const courses of [[schoolingCourse, schoolingCourse], [courseOnly]]) {
     const data = autoImportData(courses); const legacy = legacyAutoImportState(data, offerings);
     const preview = reimportPreview(data, offerings, legacy);
     assert.ok(preview.every(unit => unit.sourceDuplicate));
     const next = applyImport(legacy, preview, offerings);
+    if (credits === 4 && courses.length > 1) {
+      assert.equal(next, legacy, 'completed competing/unresolved sources do not backfill');
+      assert.deepEqual(next.items, []);
+      assert.match(renderImportActions(preview, legacy.items, offerings), /<button[^>]*disabled=""/);
+      continue;
+    }
     assert.equal(next.items.length, 1);
     assert.equal(next.items[0].status, courses.length === 1 ? 'earned' : 'planned');
     if (courses.length === 1) assert.equal(next.items[0].importedSourceCourseId, legacy.importedCourseAchievements[0].id);

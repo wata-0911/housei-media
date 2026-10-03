@@ -21,7 +21,7 @@ export type PlannerAttemptView = {
 export type CurriculumCourseView = Omit<CurriculumCourseProgress, 'attempts' | 'officialAchievements'> & {
   curriculumCourse: CurriculumCourse;
   officialAchievements: OfficialAchievementView[];
-  attempts: Array<PlannerAttemptView & Pick<CurriculumCourseAttempt, 'earnedContribution' | 'projectedContribution' | 'officialEarnedPreferred'>>;
+  attempts: Array<PlannerAttemptView & Pick<CurriculumCourseAttempt, 'earnedContribution' | 'projectedContribution' | 'officialEarnedPreferred' | 'officialEarnedPreferenceReason'>>;
 };
 
 export type UnresolvedCurriculumEntry =
@@ -41,7 +41,7 @@ export type CurriculumCourseViewInput = Pick<PlannerState, 'items' | 'importedCo
  * Only exact CourseProgress groups are displayed; unresolved facts remain first-class.
  */
 export function deriveCurriculumCourseView(state: CurriculumCourseViewInput, catalog: PlannerCatalog): CurriculumCourseViewResult {
-  const progress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId);
+  const progress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId, state.importedStudyRecords);
   const coursesById = new Map(catalog.curriculum?.courses.map(course => [course.id, course]) ?? []);
   const offeringsById = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const detailsBySource = new Map<string, ImportedStudyRecord[]>();

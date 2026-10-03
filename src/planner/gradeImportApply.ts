@@ -150,8 +150,16 @@ export function autoPlannerOfferingIdForImport(unit: ImportPreviewUnit, offering
   return offering.resolutionStatus === 'matched' && offering.courseId !== null ? offering.id : null;
 }
 
+/** Completion evidence comes from the source aggregate itself, never a catalog
+ * target or component credits. Unknown/zero composition is not completion. */
+function sourceAggregateComplete(source: ImportedCourseAchievement): boolean {
+  return source.compositionCredits !== null && source.compositionCredits > 0
+    && source.earnedCreditsTotal !== null && source.earnedCreditsTotal >= source.compositionCredits;
+}
+
 /** Official source duplicates may still fill a missing planner item. Their
- * unchecked preview selection only excludes official-data writes. */
+ * unchecked preview selection only excludes official-data writes. A completed
+ * source cannot manufacture a planned fallback when aggregate attribution is unsafe. */
 export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: PlannerItem[], offerings: Offering[]): PlannerItem[] {
   const existingIds = new Set(existing.map(item => item.offeringId));
   const unitsByOffering = new Map<string, ImportPreviewUnit[]>();
@@ -174,6 +182,12 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
   // Pass 2: selection/backfill controls additions only; existing items are preserved.
   for (const unit of units.filter(unit => unit.selected || unit.sourceDuplicate)) {
     const id = autoPlannerOfferingIdForImport(unit, offerings);
+    const sourceId = unit.sourceExistingId ?? unit.sourceCourse.id;
+    const aggregateAttributable = id !== null && offeringsBySource.get(sourceId)?.size === 1
+      && !unresolvedSources.has(sourceId) && sourcesByOffering.get(id)?.size === 1;
+    // Keep safe one-to-one earned generation. Otherwise a completed source is
+    // official history only; incomplete sources retain the existing planned fallback.
+    if (sourceAggregateComplete(unit.sourceCourse) && !aggregateAttributable) continue;
     if (id && !existingIds.has(id)) unitsByOffering.set(id, [...(unitsByOffering.get(id) ?? []), unit]);
   }
   return [...unitsByOffering].map(([id, units]) => {
