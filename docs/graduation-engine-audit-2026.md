@@ -654,3 +654,9 @@ repeat、旧課程、公開科目、史学演習/概説/5科目移動/歴史資�
 Preview: ローカルVite起動は成功したが、in-app browserのタブ作成がtimeoutし、再確認では接続browserが0件。実ユーザーstate、UI表示、consoleの検証は未完了。API/回帰テストの結果と区別する。
 
 `graduationCheckComplete=false` / `sourceLinksReverified=false` / schema22を維持。PlannerState・JSON Schema・migration・persistent shapeの変更なし。
+
+### Preview 続行時の追記（2026-10-03）
+
+ブラウザー接続回復後、終了していた開発サーバーを同じ `127.0.0.1:5178` のbuild済みPreviewへ切り替えて再確認。Plannerとプロフィールの描画、既存の計画2件（計6単位）、所属・入学情報の未入力表示、卒業可否を保証しない注意書きを確認した。成績表の修得済みは0単位、所属は未選択のため、実取込成績を使った卒業カード比較・二重加算・確認条件数の前後比較は未検証。プロフィール値や履修データは変更していない。
+
+終了済みdevサーバーに接続していた時点ではHMR切断、遅延import失敗、Homeの外部GAS/X timeout等がconsoleに残っていた。build済みPlannerの再読込後に新たなconsole error/warningは観測されなかった。これは確認した画面・操作範囲に限る。
