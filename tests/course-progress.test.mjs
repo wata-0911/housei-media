@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { economicsGradeCells } from './fixtures/economics-grade-row.mjs';
 import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
-import ImportedAchievements from '../src/components/planner/ImportedAchievements.tsx';
+import { ImportedManagementRows } from '../src/components/planner/ImportedAchievements.tsx';
 import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -80,7 +80,7 @@ test('Stage B source: actual Economics retains Course exact and official4 withou
   const next = applyImport(initialState(), preview, offerings);
   assert.equal(next.importedCourseAchievements[0].selectedOfferingId, null);
   assert.deepEqual(next.items, [], 'completed source with unsafe aggregate attribution adds no planned fallback');
-  const html = renderToStaticMarkup(createElement(ImportedAchievements, { records: next.importedStudyRecords, courseRows: next.importedCourseAchievements, offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
+  const html = renderToStaticMarkup(createElement(ImportedManagementRows, { records: next.importedStudyRecords, courseRows: next.importedCourseAchievements, offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
   assert.match(html, /2026開講: 未特定/); assert.match(html, /開講照合: 要確認/);
   assert.doesNotMatch(html, /2026開講: 経済学/); assert.doesNotMatch(html, /自動照合/);
 });
@@ -301,7 +301,7 @@ for (const ambiguous of [false, true]) test(`winter import: extractor through co
     assert.equal(deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements).courses.find(c => c.curriculumCourseId === correspondence.curriculumCourseId).earnedCredits, 4);
     const map = new Map(offerings.map(o => [o.id, o]));
     assert.ok(createUnifiedCourseRows(state.items, state.importedCourseAchievements, map).some(r => r.importedAchievements.length));
-    const html = renderToStaticMarkup(createElement(ImportedAchievements, { records: state.importedStudyRecords, courseRows: state.importedCourseAchievements, offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
+    const html = renderToStaticMarkup(createElement(ImportedManagementRows, { records: state.importedStudyRecords, courseRows: state.importedCourseAchievements, offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
     assert.match(html, /— 通信/); assert.match(html, /— スクーリング/); assert.match(html, /value="冬期"/);
     const values = new Map(); const store = { getItem: k => values.get(k) ?? null, setItem: (k, v) => values.set(k, v) };
     const fixtureCatalog = { ...catalog, offerings };
@@ -334,7 +334,7 @@ test('winter actual catalog: the decorated Offering is unmatched, but the source
   const state = applyImport(initialState(), preview, catalog.offerings);
   assert.equal(state.importedStudyRecords.length, 2);
   assert.equal(state.importedStudyRecords[1].method, 'schooling'); assert.equal(state.importedStudyRecords[1].term, '冬期');
-  const html = renderToStaticMarkup(createElement(ImportedAchievements, { records: state.importedStudyRecords, courseRows: state.importedCourseAchievements, offerings: catalog.offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
+  const html = renderToStaticMarkup(createElement(ImportedManagementRows, { records: state.importedStudyRecords, courseRows: state.importedCourseAchievements, offerings: catalog.offerings, disabled: false, onChange: () => {}, onChangeCourse: () => {}, onDelete: () => {} }));
   assert.match(html, /— スクーリング/); assert.match(html, /value="冬期"/);
 });
 test('communication split2: Economics report1 passed and exam S use an effective 1-report requirement', () => {

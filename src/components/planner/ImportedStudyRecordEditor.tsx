@@ -1,0 +1,21 @@
+import type { ImportedStudyRecord } from '../../planner/gradeImportApply';
+import type { Offering } from '../../planner/plannerCatalog';
+
+const methodLabel = (method: ImportedStudyRecord['method']) => method === 'correspondence' ? '通信' : 'スクーリング';
+const matchLabel = (match: ImportedStudyRecord['match']) => match === 'exact_unique' ? '一意一致' : match === 'ambiguous' ? '要確認' : '未一致';
+const yearLabel = (source: ImportedStudyRecord['yearSource']) => source === 'source' ? '成績表の年度' : source === 'inferred' ? '推定' : source === 'manual' ? '手動修正' : '未設定';
+
+export default function ImportedStudyRecordEditor({ record, offerings, disabled, onChange, onDelete }: { record: ImportedStudyRecord; offerings: Offering[]; disabled: boolean; onChange: (id: string, patch: Partial<ImportedStudyRecord>) => void; onDelete: (id: string) => void }) {
+  const linked = record.offeringId ? offerings.find(offering => offering.id === record.offeringId) : null;
+  const candidates = offerings.filter(offering => offering.method === record.method && offering.name.trim() === record.rawName.trim());
+  return <article data-import-study-id={record.id} className="border p-3 text-sm space-y-2">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><p className="font-medium">{record.rawName} <span className="font-normal text-gray-600">— {methodLabel(record.method)}</span></p><button type="button" disabled={disabled} onClick={() => { if (window.confirm(`「${record.rawName}」の取り込んだ履修実績を削除しますか？`)) onDelete(record.id); }} className="text-xs underline disabled:opacity-50">削除</button></div>
+    <div className="grid gap-2 sm:grid-cols-2"><label>年度 <input disabled={disabled} type="number" value={record.academicYear ?? ''} onChange={event => onChange(record.id, { academicYear: event.target.value === '' ? null : Number(event.target.value), yearSource: 'manual' })} className="ml-2 w-24 border p-1" /> <span className="text-xs text-gray-600">{yearLabel(record.yearSource)}</span></label><label>期 <input disabled={disabled} value={record.term ?? ''} onChange={event => onChange(record.id, { term: event.target.value || null })} className="ml-2 w-20 border p-1" /></label></div>
+    <p>日付: {record.date ?? '未設定'} / 単位: {record.credits ?? '未設定'} / 評価（成績表の項目）: {record.grade ?? '未設定'}</p>
+    {record.sourceCourseId && <p className="text-xs text-gray-600">成績表の科目行: 修得単位 {record.earnedCreditsTotal ?? '不明'} / S単位 {record.schoolingCreditsTotal ?? '不明'} / 構成単位 {record.compositionCredits ?? '不明'}（この合計は取込元の事実として編集できません）</p>}
+    <label className="block">照合先 <select disabled={disabled} value={record.offeringId ?? ''} onChange={event => onChange(record.id, { offeringId: event.target.value || null })} className="ml-2 max-w-full border p-1"><option value="">選ばない（Imported Course実績として保存）</option>{candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}（{candidate.period ?? '期未設定'}）</option>)}</select></label>
+    <p className="text-xs text-gray-600">{matchLabel(record.match)}{linked ? ` / 紐づけ: ${linked.name}（${linked.period ?? '期未設定'}）` : ' / 新規Imported Course実績'} / 取込元: 法政成績表</p>
+    {record.method === 'correspondence' && <details className="text-xs"><summary className="cursor-pointer">リポート・試験の詳細</summary><p className="mt-1">リポート: {record.reports?.map(report => report.raw || report.status).filter(Boolean).join(' / ') || '記録なし'} / 単位修得試験: {record.examGrade ?? '未設定'}</p></details>}
+    <p className="text-xs text-gray-600">この評価は最終評価ではありません。履修計画・卒業要件・修得状態は変更しません。</p>
+  </article>;
+}

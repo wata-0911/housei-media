@@ -14,7 +14,7 @@ import { calculateGraduationProgress } from '../src/planner/graduationProgress.t
 import { applyManualMappingOverrides } from '../src/planner/manualMappingOverrides.ts';
 import { initialGraduationProfile } from '../src/planner/graduationProfile.ts';
 import { previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
-import ImportedAchievements from '../src/components/planner/ImportedAchievements.tsx';
+import { ImportedManagementRows } from '../src/components/planner/ImportedAchievements.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -539,7 +539,7 @@ test('import: direct handoff keeps institutional matching and UI distinguishes a
   assert.ok(handed);
   assert.ok(handed.units.every(unit => 'curriculumMatch' in unit.sourceCourse));
   const f = fixture(); const row = preview(f)[0].sourceCourse;
-  const html = renderToStaticMarkup(createElement(ImportedAchievements, { records: [], courseRows: [row], offerings: f.offerings, disabled: false, onChange() {}, onChangeCourse() {}, onDelete() {} }));
+  const html = renderToStaticMarkup(createElement(ImportedManagementRows, { records: [], courseRows: [row], offerings: f.offerings, disabled: false, onChange() {}, onChangeCourse() {}, onDelete() {} }));
   assert.match(html, /カリキュラム科目:/);
   assert.match(html, /2026開講: 未特定/);
 });

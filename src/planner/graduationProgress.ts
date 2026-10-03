@@ -19,9 +19,9 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgr
 import { thesisPolicyForScope } from './thesisSelection';
 import { classifyUnknownReason, coverageForCard, LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
-import type { ImportedAchievementWarning } from './importedAchievementCalculations';
+import { importedGraduationNotices, type ImportedGraduationNotice } from './importedGraduationNotices';
 import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
-import { deriveOfficialGraduationFacts, type OfficialAllocationInput } from './officialGraduationFacts';
+import { deriveOfficialGraduationFacts, officialFactCreditState, type OfficialAllocationInput } from './officialGraduationFacts';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -50,7 +50,7 @@ export type GraduationProgress = {
   /** One summary row per reason keeps procedure/mapping warnings from becoming a wall of cards. */
   unknownReasons: Array<{ reason: string; count: number; labels: string[] }>;
   coverageSummary: Record<CoverageStatus, number>;
-  importedWarnings: ImportedAchievementWarning[];
+  importedWarnings: ImportedGraduationNotice[];
   importedContributionCount: number;
   referenceProgress: ReferenceProgress[];
   /** Present only for the History program, for internal diagnostic use. */
@@ -255,7 +255,7 @@ function evaluateStructured(
   const officialEarned = officialMatched.reduce((sum, a) => sum + (unit === 'courses' ? (a.completedCredits > 0 ? 1 : 0)
     : requirement.ruleType === 'min_schooling_credits' ? (a.schoolingCredits ?? 0)
       : requirement.conditions?.full_course_credits_required ? a.completedCredits : a.credits), 0);
-  if (requirement.ruleType === 'min_schooling_credits' && officialMatched.some(a => a.schoolingCredits === null)) return unknown(requirement, '公式実績のスクーリング算入条件が未確認です');
+  if (requirement.ruleType === 'min_schooling_credits' && officialMatched.some(a => !officialFactCreditState(a.fact).allZero && a.schoolingCredits === null)) return unknown(requirement, '公式実績のスクーリング算入条件が未確認です');
   const earned = total('earned') + officialEarned;
   const inProgress = total('in_progress');
   const planned = total('planned');
@@ -1242,13 +1242,8 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const official = deriveOfficialGraduationFacts(importedCourseAchievements, importedStudyRecords, catalog, scopeId, profile);
   const plannerItems = plannerItemsWithoutOfficialEarned(items, catalogOfferings, importedCourseAchievements, catalog);
   const heldFacts = official.facts.filter(f => f.allocation.kind === 'unknown'
-    && (f.earnedCreditsTotal !== 0 || f.sourceRows.length > 1));
-  const importedWarnings: ImportedAchievementWarning[] = official.facts.filter(f => f.allocation.kind === 'unknown' || f.allocation.kind === 'out_of_scope' || f.diagnostics.includes('schooling_evidence_requires_confirmation'))
-    .map(f => ({ rawName: f.canonicalName ?? importedCourseAchievements.find(r => r.id === f.sourceRowIds[0])?.rawName ?? '',
-      reason: `公式実績の算入条件を確認してください: ${f.diagnostics.join(' / ')}` }));
-  for (const record of importedStudyRecords) {
-    if (!importedCourseAchievements.some(row => row.id === record.sourceCourseId)) importedWarnings.push({ rawName: record.rawName, reason: 'curriculum_identity_unresolved: 公式科目行がない旧形式の実績です' });
-  }
+    && !officialFactCreditState(f).allZero);
+  const importedWarnings = importedGraduationNotices(official, importedCourseAchievements, importedStudyRecords);
   const officialUnknown = heldFacts.length > 0 || importedStudyRecords.some(record => !importedCourseAchievements.some(row => row.id === record.sourceCourseId));
   const identity = (offering: Offering | undefined) => offering?.courseId ? `course:${offering.courseId}` : offering ? `offering:${offering.id}` : null;
   const existingCourseIds = new Set(items.map(item => identity(catalogOfferings.get(item.offeringId))).filter((id): id is string => id !== null));
@@ -1301,8 +1296,8 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       row.status = 'unknown'; row.reason = [row.reason, officialReason].filter(Boolean).join('。');
     }
   }
-  const schoolingUnknown = officialUnknown || official.allocations.some(a => a.schoolingCredits === null)
-    || official.facts.some(f => f.allocation.kind === 'unknown' && f.schoolingEvidence.credits !== 0);
+  const schoolingUnknown = officialUnknown || official.allocations.some(a => !officialFactCreditState(a.fact).allZero && a.schoolingCredits === null)
+    || official.facts.some(f => !officialFactCreditState(f).allZero && f.allocation.kind === 'unknown' && f.schoolingEvidence.credits !== 0);
   if (schoolingUnknown) for (const row of cards.filter(c => c.requirementId === 'group-foreign' || c.requirementId === 'professional-law-schooling')) {
     row.status = 'unknown'; row.reason = [row.reason, '公式実績のスクーリング算入条件が未確認です'].filter(Boolean).join('。');
   }

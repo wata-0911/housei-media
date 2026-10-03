@@ -32,6 +32,18 @@ export type DerivedOfficialGraduationFacts = {
   facts: OfficialGraduationFact[];
   allocations: OfficialAllocationInput[];
 };
+
+/** Credit semantics come from retained source rows, never a duplicate group's null aggregate.
+ * This classifies evidence only; it does not resolve or combine official aggregates.
+ */
+export function officialFactCreditState(fact: Pick<OfficialGraduationFact, 'sourceRows'>) {
+  return {
+    allZero: fact.sourceRows.length > 0 && fact.sourceRows.every(row => row.earnedCreditsTotal === 0),
+    hasPositive: fact.sourceRows.some(row => row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0),
+    hasUnknown: fact.sourceRows.some(row => row.earnedCreditsTotal === null),
+  };
+}
+
 const validCredits = (value: number | null): value is number => value !== null && Number.isFinite(value) && value >= 0;
 const baseName = (name: string) => name.normalize('NFKC').replace(/[（(［[].*$/, '');
 

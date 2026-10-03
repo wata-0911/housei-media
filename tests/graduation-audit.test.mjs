@@ -421,3 +421,150 @@ test('official thesis: manual ThesisProgress stays authoritative and official th
   assert.equal(progress.referenceProgress[0].status, 'unknown');
   assert.match(progress.importedWarnings[0].reason, /special_rule_evidence_required/);
 });
+
+for (const reason of ['unresolved', 'out_of_scope', 'schooling_unknown', 'mapping_conflict', 'method_required']) {
+  test(`import UX: zero official credit suppresses graduation notices (${reason}) without deleting facts`, () => {
+    const x = fixture(); x.row.earnedCreditsTotal = 0;
+    if (reason === 'unresolved') { x.row.curriculumCourseId = null; x.row.curriculumMatch = 'unmatched'; }
+    if (reason === 'out_of_scope') x.mapping.scopeId = 'outside';
+    if (reason === 'schooling_unknown') x.row.schoolingCreditsTotal = null;
+    if (reason === 'mapping_conflict') { x.f.mappings.push({ ...x.mapping, mappingId: 'conflict', requirementType: '選択' }); x.course.mappingIds.push('conflict'); }
+    if (reason === 'method_required') x.mapping.mediaOnly = true;
+    const snapshot = structuredClone(x);
+    assert.deepEqual(run(x).importedWarnings, []);
+    assert.equal(facts(x).facts[0].sourceRows[0].earnedCreditsTotal, 0);
+    assert.deepEqual(x, snapshot);
+  });
+}
+test('import UX: null official credit is unknown, never treated as explicit zero', () => {
+  const x = fixture(); x.row.earnedCreditsTotal = null;
+  const notices = run(x).importedWarnings;
+  assert.equal(notices.length, 1); assert.equal(notices[0].kind, 'credits_unknown');
+  assert.match(notices[0].reason, /metadata_unknown/);
+  assert.equal(facts(x).facts[0].earnedCreditsTotal, null);
+  assert.equal(overall(run(x)), null);
+});
+test('import UX: schooling-only confirmation retains official allocation and ordinary credit', () => {
+  const x = fixture(); x.row.schoolingCreditsTotal = null;
+  const snapshot = structuredClone(x.row);
+  assert.equal(facts(x).allocations[0].credits, 4);
+  assert.equal(overall(run(x)), 4);
+  assert.deepEqual(run(x).importedWarnings.map(n => n.kind), ['schooling_confirmation']);
+  assert.match(run(x).importedWarnings[0].reason, /通常の卒業単位は算入済み/);
+  assert.deepEqual(x.row, snapshot);
+});
+test('import UX: positive unresolved allocation is held; null remains a separate confirmation', () => {
+  const x = fixture(); x.row.curriculumCourseId = null; x.row.curriculumMatch = 'ambiguous';
+  assert.deepEqual(run(x).importedWarnings.map(n => n.kind), ['allocation_held']);
+  x.row.earnedCreditsTotal = null;
+  assert.deepEqual(run(x).importedWarnings.map(n => n.kind), ['credits_unknown']);
+});
+test('import UX: safely confirmed out-of-scope positive credit is informational and does not hold totals', () => {
+  const x = fixture(); x.mapping.scopeId = 'outside';
+  assert.equal(facts(x).facts[0].allocation.kind, 'out_of_scope');
+  assert.equal(overall(run(x)), 0);
+  assert.deepEqual(run(x).importedWarnings.map(n => n.kind), ['out_of_scope']);
+  x.row.earnedCreditsTotal = 0; assert.deepEqual(run(x).importedWarnings, []);
+  x.row.earnedCreditsTotal = null; assert.deepEqual(run(x).importedWarnings.map(n => n.kind), ['credits_unknown']);
+});
+test('import UX: duplicate positive source rows stay held without inventing an aggregate; all-zero duplicates stay silent', () => {
+  const x = fixture();
+  const rows = [x.row, { ...x.row, id: 'other-source', earnedCreditsTotal: 2 }];
+  const calc = () => calculateGraduationProgress([], x.f, x.scope, [], 'not_selected', [], rows, x.profile);
+  assert.equal(deriveOfficialGraduationFacts(rows, [], x.f, x.scope).facts[0].earnedCreditsTotal, null);
+  assert.deepEqual(calc().importedWarnings.map(n => n.kind), ['allocation_held']);
+  rows.forEach(row => { row.earnedCreditsTotal = 0; }); assert.deepEqual(calc().importedWarnings, []);
+  rows[0].earnedCreditsTotal = null; assert.deepEqual(calc().importedWarnings.map(n => n.kind), ['credits_unknown']);
+});
+
+const freezeCreditInputs = value => {
+  if (value && typeof value === 'object') { Object.values(value).forEach(freezeCreditInputs); Object.freeze(value); }
+  return value;
+};
+const creditReference = (progress, id) => progress.referenceProgress.find(row => row.id === id);
+const calculateCreditRows = (x, rows, records = []) => calculateGraduationProgress([], x.f, x.scope, [], 'not_selected', records, rows, x.profile);
+
+for (const mode of ['single_unresolved', 'duplicate', 'allocated_schooling_null', 'mapping_conflict']) {
+  test(`credit semantics: all-zero ${mode} preserves baseline requirements/cards/references and retained facts`, () => {
+    const x = fixture(); x.row.earnedCreditsTotal = 0; x.row.schoolingCreditsTotal = null;
+    if (mode === 'single_unresolved') { x.row.curriculumCourseId = null; x.row.curriculumMatch = 'unmatched'; x.row.candidateCurriculumCourseIds = []; }
+    if (mode === 'mapping_conflict') { x.f.mappings.push({ ...x.mapping, mappingId: 'credit-conflict', requirementType: '選択' }); x.course.mappingIds.push('credit-conflict'); }
+    const rows = mode === 'duplicate' ? [x.row, { ...x.row, id: 'zero-second' }] : [x.row];
+    const baseline = calculateCreditRows(x, []);
+    const snapshot = structuredClone({ x, rows }); freezeCreditInputs({ x, rows });
+    const progress = calculateCreditRows(x, rows);
+    const result = deriveOfficialGraduationFacts(rows, [], x.f, x.scope, x.profile);
+    assert.deepEqual(progress.importedWarnings, []);
+    assert.deepEqual(progress.requirements, baseline.requirements, 'no officialUnknown contamination of requirements');
+    assert.deepEqual(progress.cards, baseline.cards, 'no officialUnknown or schoolingUnknown contamination of cards');
+    assert.deepEqual(progress.referenceProgress, baseline.referenceProgress, 'ordinary and schooling reference remain baseline');
+    assert.equal(overall(progress), 0);
+    assert.equal(creditReference(progress, 'schooling-reference-progress').earned, 0);
+    assert.notEqual(professional(progress).status, 'unknown');
+    assert.equal(result.facts[0].sourceRows.length, rows.length);
+    assert.ok(result.facts[0].sourceRows.every(row => row.earnedCreditsTotal === 0));
+    if (mode === 'duplicate') {
+      assert.equal(result.facts[0].earnedCreditsTotal, null);
+      assert.equal(result.facts[0].allocation.reason, 'duplicate_official_rows');
+      assert.ok(result.facts[0].diagnostics.includes('conflicting_source_rows'));
+      assert.equal(result.allocations.length, 0);
+    }
+    assert.deepEqual({ x, rows }, snapshot);
+  });
+}
+for (const values of [[null], [0, null], [null, null], [4], [0, 4], [4, 4], [4, null]]) {
+  test(`credit semantics: unresolved ${JSON.stringify(values)} retains uncertainty without synthesizing duplicate aggregates`, () => {
+    const x = fixture();
+    const rows = values.map((earnedCreditsTotal, index) => ({ ...x.row, id: `credit-${index}`, earnedCreditsTotal, schoolingCreditsTotal: null }));
+    if (rows.length === 1 && values[0] === 4) { rows[0].curriculumCourseId = null; rows[0].curriculumMatch = 'unmatched'; rows[0].candidateCurriculumCourseIds = []; }
+    const snapshot = structuredClone({ x, rows }); freezeCreditInputs({ x, rows });
+    const result = deriveOfficialGraduationFacts(rows, [], x.f, x.scope, x.profile);
+    const progress = calculateCreditRows(x, rows);
+    assert.deepEqual(progress.importedWarnings.map(notice => notice.kind), [values.some(value => value !== null && value > 0) ? 'allocation_held' : 'credits_unknown']);
+    assert.equal(overall(progress), null);
+    assert.equal(professional(progress).status, 'unknown');
+    assert.ok(progress.requirements.filter(row => row.ruleType !== 'thesis_progress').every(row => row.status === 'unknown'));
+    assert.equal(creditReference(progress, 'overall-reference-progress').status, 'unknown');
+    assert.equal(creditReference(progress, 'schooling-reference-progress').status, 'unknown');
+    assert.equal(creditReference(progress, 'schooling-reference-progress').earned, null);
+    assert.equal(result.allocations.length, 0);
+    assert.deepEqual(result.facts[0].sourceRows.map(row => row.earnedCreditsTotal), values);
+    if (rows.length > 1) assert.equal(result.facts[0].earnedCreditsTotal, null, 'neither sum/max/latest nor matching fingerprint resolves distinct official rows');
+    assert.deepEqual({ x, rows }, snapshot);
+  });
+}
+test('credit semantics: positive allocated credit with null schooling holds only schooling, preserving ordinary credit and facts', () => {
+  const x = fixture(); x.row.schoolingCreditsTotal = null;
+  const baseline = run(fixture()); const snapshot = structuredClone(x); freezeCreditInputs(x);
+  const result = facts(x), progress = run(x);
+  assert.equal(result.allocations.length, 1); assert.equal(result.allocations[0].credits, 4); assert.equal(result.allocations[0].schoolingCredits, null);
+  assert.deepEqual(progress.importedWarnings.map(notice => notice.kind), ['schooling_confirmation']);
+  assert.equal(overall(progress), 4); assert.equal(professional(progress).status, professional(baseline).status);
+  assert.deepEqual(progress.requirements.filter(row => row.ruleType !== 'min_schooling_credits'), baseline.requirements.filter(row => row.ruleType !== 'min_schooling_credits'));
+  assert.equal(creditReference(progress, 'overall-reference-progress').status, creditReference(baseline, 'overall-reference-progress').status);
+  assert.equal(creditReference(progress, 'schooling-reference-progress').status, 'unknown');
+  assert.equal(progress.cards.find(row => row.requirementId === 'professional-law-schooling').status, 'unknown');
+  assert.deepEqual(x, snapshot);
+});
+test('credit semantics: all-zero facts cannot mask genuinely unresolved orphan legacy evidence', () => {
+  const x = fixture(); const rows = [{ ...x.row, earnedCreditsTotal: 0 }, { ...x.row, id: 'other-zero', earnedCreditsTotal: 0 }];
+  const records = [{ id: 'legacy-orphan', rawName: '親行不明', sourceCourseId: 'missing', method: 'schooling', credits: 2, schoolingCreditsTotal: null }];
+  const progress = calculateCreditRows(x, rows, records);
+  assert.deepEqual(progress.importedWarnings.map(notice => notice.kind), ['credits_unknown']);
+  assert.equal(overall(progress), null); assert.equal(professional(progress).status, 'unknown');
+  assert.equal(creditReference(progress, 'schooling-reference-progress').status, 'unknown');
+});
+test('credit semantics: matched schooling requirement ignores zero-credit null evidence but holds positive-credit null evidence', () => {
+  for (const earnedCreditsTotal of [0, 4]) {
+    const x = fixture(); x.row.earnedCreditsTotal = earnedCreditsTotal; x.row.schoolingCreditsTotal = null;
+    const template = x.f.requirements.find(row => row.status === 'structured' && row.ruleType === 'min_schooling_credits');
+    assert.ok(template);
+    x.f.requirements = [...x.f.requirements, { ...template, id: 'credit-schooling', ruleId: 'credit_schooling_test', scopeId: x.scope,
+      conditions: null, target: { curriculum_category: '専門教育', requirement_type: '選択必修' }, value: 2, unit: 'credits' }];
+    const requirement = run(x).requirements.find(row => row.requirementId === 'credit-schooling');
+    assert.ok(requirement);
+    assert.equal(requirement.status, earnedCreditsTotal === 0 ? 'unsatisfied' : 'unknown');
+    if (earnedCreditsTotal === 0) assert.equal(requirement.earned, 0);
+    else assert.match(requirement.reason, /スクーリング算入条件が未確認/);
+  }
+});
