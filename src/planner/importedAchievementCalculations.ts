@@ -99,7 +99,8 @@ export function managedImportedMedia(rows: ImportedCourseAchievement[], records:
 }
 
 /**
- * Converts a saved grade-table row into one calculation-only earned item.  A
+ * Presentation/category/Media compatibility only; graduation uses officialGraduationFacts.
+ * Converts a saved grade-table row into one calculation-only earned item. A
  * row's aggregate is the only credit source: component credits are display
  * facts and never added together here.  Missing v9 aggregates stay visible
  * but deliberately do not enter calculations.
@@ -130,8 +131,8 @@ export function deriveImportedAchievements(records: ImportedStudyRecord[], offer
     const category = categoryFromImportRaw(row.categoryRaw);
     const linked = (selectionSource === 'manual' && row.selectedOfferingId ? [row.selectedOfferingId] : row.selectedOfferingId ? [row.selectedOfferingId, ...group.map(record => record.offeringId)] : group.map(record => record.offeringId)).flatMap(id => id ? [offerings.get(id)] : []).filter((offering): offering is Offering => offering !== undefined);
     // A v13 repair may establish a course identity without guessing a single
-    // offering.  It is just as safe as a linked matched offering for category
-    // and graduation mapping.
+    // offering. This legacy path remains for category/Media presentation only;
+    // it is not an institutional identity gate for graduation.
     const rowCandidates = row.courseId ? [...offerings.values()].filter(offering => offering.courseId === row.courseId && offering.resolutionStatus === 'matched') : [];
     const mappingCandidates = [...linked, ...rowCandidates];
     const courseIds = new Set(mappingCandidates.filter(offering => offering.resolutionStatus === 'matched' && offering.courseId !== null).map(offering => offering.courseId!));
