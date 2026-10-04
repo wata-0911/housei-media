@@ -74,11 +74,17 @@ test('H40: orphan with zero components makes unrelated common cards unknown', ()
   assert.ok(progress(x).importedWarnings.some(w => w.kind === 'credits_unknown'));
   assert.equal(ref(progress(x), 'overall').earned, 4);
 });
-test('H38: recognized foreign4/Snull loses ordinary4 in card and reference', () => {
+// H38 is resolved; the full regression matrix lives in tests/graduation-audit.test.mjs.
+test('H38 resolved: recognized foreign4/Snull retains ordinary4 with schooling unknown', () => {
   const x = fixture(); x.rows = []; x.profile.admissionType = 'transfer_second_year';
   x.profile.recognizedCredits.foreignLanguage = { mode: 'recognized', credits: 4, language: 'english', schoolingEquivalentCredits: null };
-  assert.equal(card(progress(x), 'group-foreign').earned, null);
-  assert.equal(ref(progress(x), 'overall').earned, 0);
+  const p = progress(x);
+  assert.equal(card(p, 'group-foreign').earned, 4);
+  assert.equal(card(p, 'group-foreign').status, 'unknown');
+  assert.match(card(p, 'group-foreign').reason, /スクーリング相当認定単位が未確認/);
+  assert.equal(ref(p, 'overall').earned, 4);
+  assert.equal(ref(p, 'schooling').earned, null);
+  assert.equal(ref(p, 'schooling').status, 'unknown');
 });
 test('H36: undecided law thesis hides even known global S amount/target', () => {
   const x = fixture();

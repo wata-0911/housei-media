@@ -1063,7 +1063,8 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && (row.schoolingEquivalentCredits ?? 0) >= 2) return { ...card, earned: 4, status: 'satisfied', note: `${card.note ?? ''} 公式認定の内訳を反映しています。` };
     if (row.mode === 'unknown' && profile.admissionType !== 'unknown' && profile.admissionType !== 'first_year' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 外国語の認定結果を確認してください。` };
     if (row.mode === 'recognized' && row.credits === 4 && row.language === 'unknown') return { ...card, status: 'unknown', earned: null, reason: '同一言語要件未確認です。公式認定結果の言語を確認してください。' };
-    if (row.mode === 'recognized' && row.credits === 4 && row.schoolingEquivalentCredits === null) return { ...card, status: 'unknown', earned: null, reason: 'スクーリング相当認定単位が未確認です。0単位とは扱いません。' };
+    // H38: retain the capped ordinary recognition; missing schooling still holds completion.
+    if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && row.schoolingEquivalentCredits === null) return { ...card, status: 'unknown', earned: 4, reason: 'スクーリング相当認定単位が未確認です。0単位とは扱いません。' };
     if (row.mode === 'recognized' && row.credits === 4 && (row.schoolingEquivalentCredits ?? 0) < 2) return { ...card, status: 'unsatisfied', earned: 4, reason: 'スクーリング相当認定単位が2単位未満です。' };
     return card;
   });
