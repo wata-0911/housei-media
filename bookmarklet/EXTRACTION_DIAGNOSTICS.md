@@ -1,6 +1,16 @@
 # 実ページのextract例外：安全な境界診断
 
-実ページで確認されたコードは **GI_EXTRACT_EXCEPTION**。この時点では抽出中の例外だけが確認でき、toJSONやclipboard cleanupを直接原因とは扱いません。今回の変更は診断境界の追加です。実ページの根本原因は未確定、production blockerは利用者の成功確認まで継続します。
+実ページの最新結果（f8e8f017）は **GI_EXTRACT_CANDIDATE_RESULT / field: selected**。Array.fromがmapper引数を無視する合成環境の結果と一致する、強いroot cause candidateです。下記の互換性修正を追加しましたが、法政ページのArray.from実装は未確認です。実ページの根本原因は未確定、production blockerは利用者の成功確認まで継続します。toJSONやclipboard cleanupを今回の直接原因とは扱いません。
+
+## Array.from mapper互換性修正
+
+shared extractorの2引数Array.fromは、table候補のinspectとrowのlogical-cell変換の2か所だけでした。両方を単一引数Array.fromでのDOM collection変換と、0からlength未満までの明示indexed loopに分離しました。cellsForRow内のtd変換は元から単一引数なので変更していません。共有source内のArray.from呼出は現在すべて1引数です。
+
+table順、row順、categoryやmalformed rowを含む0-based row indexを維持します。query境界内で変換・loopを行い、内側のsafe failureはidentityを保って伝播します。table配列の異常shape/lengthは既存TABLE_RESULT（fieldラベルは既存のcandidates/candidates.length）、row配列の異常shapeは従来のROW_CLASSIFYで拒否します。
+
+実ページコードと一致する旧mapper-ignore試験は、今回のbugfixにより正常32科目・全payload/diagnostics一致へ期待値を変更しました。tableのみ／rowのみ／全Array.fromがmapperを無視する3ケースを両generated artifactで試験します。また全DOM collection変換が正確に1引数で呼ばれる試験を追加しました。他の失敗診断の期待値は変えていません。
+
+これはmapper引数依存だけを除く変更です。map/filterやString/Date/Set等の一括隔離、page prototype変更、selector/抽出rule/contract/validatorの変更はありません。下の診断監査記録の「mapper無視で失敗」は修正前の挙動です。修正後は同じ合成環境で成功し、開始commitの正常出力および741e780固定baselineと一致します。実ページ再実行で成功するまではroot cause confirmed / blocker resolvedとは扱いません。
 
 ## 表示と境界
 

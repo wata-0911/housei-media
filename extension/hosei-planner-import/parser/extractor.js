@@ -102,7 +102,18 @@
   });
   var inspectTable = (table, index) => boundary("GI_EXTRACT_TABLE_INSPECT", { __proto__: null, tableIndex: index }, () => {
     const context = { __proto__: null, tableIndex: index };
-    const logicalRows = boundary("GI_EXTRACT_ROW_QUERY", context, () => Array.from(table.querySelectorAll("tr.column_even, tr.column_odd"), (row, rowIndex) => cellsForRow(row, { __proto__: null, ...context, rowIndex })));
+    const logicalRows = boundary("GI_EXTRACT_ROW_QUERY", context, () => {
+      const rows = Array.from(table.querySelectorAll("tr.column_even, tr.column_odd"));
+      const rowCount = boundary("GI_EXTRACT_ROW_CLASSIFY", context, () => {
+        requireArray(rows);
+        const length = rows.length;
+        if (!isCount(length)) throw null;
+        return length;
+      });
+      const result = [];
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) result.push(cellsForRow(rows[rowIndex], { __proto__: null, ...context, rowIndex }));
+      return result;
+    });
     const validRowIndexes = [];
     const classify = (cells, rowIndex, predicate) => boundary("GI_EXTRACT_ROW_CLASSIFY", { __proto__: null, ...context, rowIndex }, () => predicate(cells));
     const validRows = boundary("GI_EXTRACT_ROW_CLASSIFY", context, () => logicalRows.filter((cells, rowIndex) => {
@@ -191,7 +202,13 @@
   }, "result");
   var extractCurrentDocument = () => boundary("GI_EXTRACT_EXCEPTION", { __proto__: null }, () => {
     checkInitialization();
-    const candidates = boundary("GI_EXTRACT_TABLE_QUERY", { __proto__: null }, () => Array.from(document.querySelectorAll('table[id="seisekiTabele110"]'), inspectTable));
+    const candidates = boundary("GI_EXTRACT_TABLE_QUERY", { __proto__: null }, () => {
+      const tables = Array.from(document.querySelectorAll('table[id="seisekiTabele110"]'));
+      const tableCount = tableResultLength(tables);
+      const result = [];
+      for (let index = 0; index < tableCount; index++) result.push(inspectTable(tables[index], index));
+      return result;
+    });
     if (tableResultLength(candidates) === 0) return finalizeExtraction({ __proto__: null }, () => ({ ok: false, reason: "table_not_found", diagnostics: boundary("GI_EXTRACT_DIAGNOSTICS", { __proto__: null }, () => diagnosticsFor(candidates)) }));
     const selection = boundary("GI_EXTRACT_CANDIDATE_SELECT", { __proto__: null }, () => selectCandidate(candidates));
     const { selected, tieCandidateIndexes } = readCandidateResult(selection);

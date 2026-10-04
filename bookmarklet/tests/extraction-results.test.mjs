@@ -13,7 +13,6 @@ const selectedProxy = field => `const originalFilter=Array.prototype.filter; Arr
 const cases = [
   ['Array.from returns null', 'Array.from=()=>null;', { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates' }],
   ['Array.from returns array-like object', 'Array.from=()=>({length:0});', { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates' }],
-  ['Array.from ignores mapper argument', 'const originalFrom=Array.from; Array.from=value=>originalFrom(value);', { code:'GI_EXTRACT_CANDIDATE_RESULT', field:'selected' }],
   ['candidate array length getter throws', `Array.from=()=>new Proxy([], {get(target,key){if(key==='length'){${bomb}}return Reflect.get(target,key);}});`, { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates.length' }],
   ['candidate array length is invalid', `Array.from=()=>new Proxy([], {get(target,key){return key==='length'?'${secret}':Reflect.get(target,key);}});`, { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates.length' }],
   ['array result check throws', `Array.isArray=()=>{${bomb}};`, { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates' }],
@@ -33,6 +32,36 @@ const cases = [
   ['cell filter returns non-array', `const originalFilter=Array.prototype.filter; Array.prototype.filter=function(...args){return this[0]?.classList?null:Reflect.apply(originalFilter,this,args);};`, {code:'GI_EXTRACT_CELL_TEXT', tableIndex:2, rowIndex:0}],
   ['row query Array.from returns wrong shape', `const original=Array.from; Array.from=function(value,...args){return value?.[0]?.physicalCells?null:original(value,...args);};`, {code:'GI_EXTRACT_ROW_CLASSIFY', tableIndex:2}],
 ];
+// Regression: this same hostile setup previously failed with
+// GI_EXTRACT_CANDIDATE_RESULT / selected. Both mappings must now succeed.
+const baseline = JSON.parse(readFileSync(new URL('./fixtures/extraction-741e780.json', import.meta.url), 'utf8')).outcomes.normal32;
+for (const scope of ['all', 'table', 'row']) test(`Array.from ignores mapper argument: ${scope} mapping succeeds with exact baseline`, async () => {
+  const script = `const originalFrom=Array.from; Array.from=function(value,...args){
+    const ignore='${scope}'==='all' || ('${scope}'==='table' && value?.[0]?.rows) || ('${scope}'==='row' && value?.[0]?.physicalCells);
+    return ignore ? originalFrom(value) : originalFrom(value,...args);
+  };`;
+  const direct=harness(); vm.runInContext(script,direct.context); vm.runInContext(extension,direct.context);
+  const outcome=direct.context.HoseiPlannerGradeExtractor.extractCurrentDocument();
+  assert.deepEqual(structuredClone(outcome),baseline);
+  assert.equal(outcome.value.courses.length,32);
+  const h=harness(); vm.runInContext(script,h.context); vm.runInContext(bookmarklet,h.context);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.copied.length,1); assert.equal(h.alerts.length,1);
+  assert.doesNotMatch(h.alerts[0],/GI_/);
+  const payload=JSON.parse(h.copied[0]); assert.ok(Array.isArray(payload.courses));
+  assert.deepEqual(payload,baseline.value);
+  assert.deepEqual(payload,structuredClone(outcome.value));
+  assert.deepEqual(structuredClone(h.logs),[['Hosei grade import diagnostics',baseline.diagnostics]]);
+});
+test('DOM collection conversions pass exactly one argument to Array.from', async () => {
+  for (const source of [extension,bookmarklet]) {
+    const h=harness();
+    vm.runInContext(`const original=Array.from; Array.from=function(value){if(arguments.length!==1)throw new Error('${secret}');return original(value);};`,h.context);
+    vm.runInContext(source,h.context);
+    if(source===extension) assert.deepEqual(structuredClone(h.context.HoseiPlannerGradeExtractor.extractCurrentDocument()),baseline);
+    else {await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(JSON.parse(h.copied[0]),baseline.value);}
+  }
+});
 for (const [name, script, expected] of cases) test(`result boundary: ${name} (both generated artifacts)`, async () => {
   const direct=harness(); vm.runInContext(script,direct.context); vm.runInContext(extension,direct.context);
   let failure;
