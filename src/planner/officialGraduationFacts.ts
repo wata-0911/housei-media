@@ -1,5 +1,5 @@
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
-import type { GraduationProfile, Mapping, PlannerCatalog } from './plannerCatalog';
+import type { CurriculumCourse, GraduationProfile, Mapping, PlannerCatalog } from './plannerCatalog';
 import { exactImportedCurriculumId } from './officialCourseCredits';
 import { REPEATABLE_CREDIT_RULES } from './repeatableRules';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources';
@@ -88,6 +88,23 @@ function specialCourse(name: string, department: string | null, mapping: Mapping
     || (department === '地理学科' && /^(現地研究|地誌学特講|人文地理学演習|自然地理学演習|人文地理学特講|自然地理学特講)/.test(base));
 }
 
+/** H60 only: exact identity, duplicate and mapping checks precede this exception. */
+function isSafeHistoryIntroductionCompletion(
+  course: CurriculumCourse, mapping: Mapping, row: ImportedCourseAchievement,
+  department: string | null, catalog: PlannerCatalog, profile?: GraduationProfile,
+): boolean {
+  return department === '史学科' && course.canonicalName === '史学概論'
+    && catalog.curriculum?.source === 'official_curriculum_mappings_2026'
+    && profile?.curriculumApplicability === 'current_2026'
+    && mapping.department === '史学科' && mapping.category === '専門教育'
+    && mapping.requirementType === '必修' && mapping.field === null
+    && !mapping.schoolingOnly && !mapping.mediaOnly && mapping.curriculumCredits === 4
+    && course.curriculumCredits === 4 && row.compositionCredits === 4
+    && row.earnedCreditsTotal === 4 && row.schoolingCreditsTotal === 0
+    && (row.recognizedExemption === null || row.recognizedExemption === 0)
+    && (row.additionalEnrollment === null || row.additionalEnrollment === 0);
+}
+
 /** Course.mappingIds is authoritative. scopeIds is diagnostic only. */
 export function deriveOfficialGraduationFacts(
   rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], catalog: PlannerCatalog,
@@ -148,7 +165,9 @@ export function deriveOfficialGraduationFacts(
     const professionalBucket = mapping.scopeId === selectedScopeId && mapping.category === '専門教育'
       && ['必修', '選択必修', '選択'].includes(mapping.requirementType ?? '');
     if (!commonBucket && !professionalBucket) { hold('special_rule_evidence_required', 'unsupported_basic_bucket'); continue; }
-    if (specialCourse(course.canonicalName, department, mapping) || profile?.curriculumApplicability === 'legacy_or_transition'
+    const safeHistoryIntroduction = professionalBucket
+      && isSafeHistoryIntroductionCompletion(course, mapping, row, department, catalog, profile);
+    if ((specialCourse(course.canonicalName, department, mapping) && !safeHistoryIntroduction) || profile?.curriculumApplicability === 'legacy_or_transition'
       || (row.recognizedExemption ?? 0) > 0 || (row.additionalEnrollment ?? 0) > 0 || row.earnedCreditsTotal > composition
       || (professionalBucket && ['法律学科', '日本文学科', '史学科', '地理学科'].includes(department ?? '') && row.earnedCreditsTotal > 0 && row.earnedCreditsTotal < composition)) {
       hold('special_rule_evidence_required'); continue;

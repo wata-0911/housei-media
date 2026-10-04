@@ -145,7 +145,8 @@ test('H51: guidance still needs annual identity where official graduation does n
   assert.equal(guidanceEligibilityCreditResult({ ...initialState(), importedCourseAchievements: x.rows, selectedScopeId: x.scope, graduationProfile: x.profile }, x.c).status, 'unknown');
 });
 for (const [name, department, schooling] of [['書道実技', '日本文学科', 1], ['史学概論', '史学科', 0]]) {
-  test(`H57/H60: real catalog ${name} full official completion is blanket-held`, () => {
+  test(name === '史学概論' ? 'H60 resolved: real catalog history introduction C4/O4/S0 allocates ordinary4'
+    : `H57/H60: real catalog ${name} full official completion is blanket-held`, () => {
     const x = fixture(); x.c = structuredClone(catalog);
     x.scope = x.c.programs.find(p => p.department === department).scopeId;
     const course = x.c.curriculum.courses.find(c => c.canonicalName === name);
@@ -153,8 +154,19 @@ for (const [name, department, schooling] of [['書道実技', '日本文学科',
       compositionCredits: course.curriculumCredits, earnedCreditsTotal: course.curriculumCredits, schoolingCreditsTotal: schooling,
       courseId: null });
     assert.equal(exactImportedCurriculumId(x.row, x.c), course.id);
-    assert.equal(facts(x).facts[0].allocation.reason, 'special_rule_evidence_required');
-    assert.equal(facts(x).allocations.length, 0);
+    if (name === '史学概論') {
+      const result = facts(x);
+      assert.equal(result.allocations.length, 1);
+      assert.equal(result.allocations[0].credits, 4);
+      assert.equal(result.allocations[0].completedCredits, 4);
+      assert.equal(result.allocations[0].schoolingCredits, 0);
+      assert.ok(!result.facts[0].diagnostics.includes('special_rule_evidence_required'));
+      assert.equal(card(progress(x), 'professional-history-required').earned, 4);
+      assert.equal(ref(progress(x), 'overall').earned, 4);
+    } else {
+      assert.equal(facts(x).facts[0].allocation.reason, 'special_rule_evidence_required');
+      assert.equal(facts(x).allocations.length, 0);
+    }
   });
 }
 test('source facts and invariant flags are unchanged by all calculations', () => {
