@@ -165,11 +165,24 @@
       courseRowCount: courseRows.length
     };
   });
-  var diagnosticsFor = (candidates, selectedCandidateIndex = null, tieCandidateIndexes = []) => ({
-    tableCandidates: candidates.map(({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount }) => ({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount })),
-    selectedCandidateIndex,
-    tieCandidateIndexes
+  var ownField = (record, field) => {
+    if (!Object.getOwnPropertyDescriptor(record, field)) throw null;
+    return record[field];
+  };
+  var diagnosticCandidate = (candidate) => ({
+    index: ownField(candidate, "index"),
+    rowCount: ownField(candidate, "rowCount"),
+    valid24RowCount: ownField(candidate, "valid24RowCount"),
+    categoryRowCount: ownField(candidate, "categoryRowCount"),
+    courseRowCount: ownField(candidate, "courseRowCount")
   });
+  var diagnosticsFor = (candidates, selectedCandidateIndex = null, tieCandidateIndexes = []) => {
+    const tableCandidates = [];
+    for (let i = 0; i < candidates.length; i++) tableCandidates[i] = diagnosticCandidate(ownField(candidates, i));
+    const ties = [];
+    for (let i = 0; i < tieCandidateIndexes.length; i++) ties[i] = ownField(tieCandidateIndexes, i);
+    return { tableCandidates, selectedCandidateIndex, tieCandidateIndexes: ties };
+  };
   var selectCandidate = (candidates) => {
     const largestCourseRowCount = Math.max(...candidates.map((candidate) => candidate.courseRowCount));
     const tied = candidates.filter((candidate) => candidate.courseRowCount === largestCourseRowCount);
@@ -214,43 +227,53 @@
   var diagnosticsBoundary = (context, field, action) => boundary("GI_EXTRACT_FINAL_DIAGNOSTICS", context, action, field);
   var checkDiagnosticsShape = (diagnostics, context) => {
     diagnosticsBoundary(context, "diagnostics", () => requireRecord(diagnostics));
-    const tables = diagnosticsBoundary(context, "diagnostics.tableCandidates", () => requireArray(diagnostics.tableCandidates));
-    const ties = diagnosticsBoundary(context, "diagnostics.tieCandidateIndexes", () => requireArray(diagnostics.tieCandidateIndexes));
-    const keysMatch = (value, expected) => {
-      const keys = requireArray(Object.keys(value));
-      if (keys.length !== expected) throw null;
-    };
-    diagnosticsBoundary(context, "diagnostics.keys", () => keysMatch(diagnostics, 3));
-    diagnosticsBoundary(context, "diagnostics.tableCandidates.keys", () => keysMatch(tables, tables.length));
-    diagnosticsBoundary(context, "diagnostics.tieCandidateIndexes.keys", () => keysMatch(ties, ties.length));
-    diagnosticsBoundary(context, "diagnostics.selectedCandidateIndex", () => {
-      const selected = diagnostics.selectedCandidateIndex;
+    const tables = diagnosticsBoundary(context, "diagnostics.tableCandidates", () => requireArray(ownField(diagnostics, "tableCandidates")));
+    const ties = diagnosticsBoundary(context, "diagnostics.tieCandidateIndexes", () => requireArray(ownField(diagnostics, "tieCandidateIndexes")));
+    const selectedCandidateIndex = diagnosticsBoundary(context, "diagnostics.selectedCandidateIndex", () => {
+      const selected = ownField(diagnostics, "selectedCandidateIndex");
       if (selected !== null && !isCount(selected)) throw null;
+      return selected;
     });
-    diagnosticsBoundary(context, "diagnostics.tableCandidates", () => {
-      for (let i = 0; i < tables.length; i++) {
+    const tableCandidates = diagnosticsBoundary(context, "diagnostics.tableCandidates", () => {
+      const length = tables.length;
+      if (!isCount(length)) throw null;
+      const snapshot = [];
+      for (let i = 0; i < length; i++) {
         const candidateContext = { __proto__: null, ...context, tableIndex: i };
-        const table = diagnosticsBoundary(candidateContext, "diagnostics.tableCandidates[]", () => requireRecord(tables[i]));
-        diagnosticsBoundary(candidateContext, "diagnostics.tableCandidates[].keys", () => keysMatch(table, 5));
+        const table = diagnosticsBoundary(candidateContext, "diagnostics.tableCandidates[]", () => requireRecord(ownField(tables, i)));
         const count = (field, read) => diagnosticsBoundary(candidateContext, field, () => {
-          if (!isCount(read())) throw null;
+          const value = read();
+          if (!isCount(value)) throw null;
+          return value;
         });
-        count("diagnostics.tableCandidates[].index", () => table.index);
-        count("diagnostics.tableCandidates[].rowCount", () => table.rowCount);
-        count("diagnostics.tableCandidates[].valid24RowCount", () => table.valid24RowCount);
-        count("diagnostics.tableCandidates[].categoryRowCount", () => table.categoryRowCount);
-        count("diagnostics.tableCandidates[].courseRowCount", () => table.courseRowCount);
+        snapshot[i] = {
+          index: count("diagnostics.tableCandidates[].index", () => ownField(table, "index")),
+          rowCount: count("diagnostics.tableCandidates[].rowCount", () => ownField(table, "rowCount")),
+          valid24RowCount: count("diagnostics.tableCandidates[].valid24RowCount", () => ownField(table, "valid24RowCount")),
+          categoryRowCount: count("diagnostics.tableCandidates[].categoryRowCount", () => ownField(table, "categoryRowCount")),
+          courseRowCount: count("diagnostics.tableCandidates[].courseRowCount", () => ownField(table, "courseRowCount"))
+        };
       }
+      return snapshot;
     });
-    diagnosticsBoundary(context, "diagnostics.tieCandidateIndexes[]", () => {
-      for (let i = 0; i < ties.length; i++) if (!isCount(ties[i])) throw null;
+    const tieCandidateIndexes = diagnosticsBoundary(context, "diagnostics.tieCandidateIndexes[]", () => {
+      const length = ties.length;
+      if (!isCount(length)) throw null;
+      const snapshot = [];
+      for (let i = 0; i < length; i++) {
+        const value = ownField(ties, i);
+        if (!isCount(value)) throw null;
+        snapshot[i] = value;
+      }
+      return snapshot;
     });
+    return { tableCandidates, selectedCandidateIndex, tieCandidateIndexes };
   };
   var finalizeExtraction = (context, assemble) => boundary("GI_EXTRACT_FINALIZE", context, () => {
     const assembled = boundary("GI_EXTRACT_FINAL_ASSEMBLE", context, assemble, "result");
     const result = boundary("GI_EXTRACT_FINAL_RESULT", context, () => requireRecord(assembled), "result");
-    const diagnostics = diagnosticsBoundary(context, "diagnostics", () => result.diagnostics);
-    checkDiagnosticsShape(diagnostics, context);
+    const sourceDiagnostics = diagnosticsBoundary(context, "diagnostics", () => result.diagnostics);
+    const diagnostics = checkDiagnosticsShape(sourceDiagnostics, context);
     const ok = boundary("GI_EXTRACT_FINAL_RESULT", context, () => {
       const value = result.ok;
       if (value !== true && value !== false) throw null;
@@ -268,11 +291,14 @@
       boundary("GI_EXTRACT_FINAL_METADATA", context, () => {
         if (typeof value.capturedAt !== "string") throw null;
       }, "value.capturedAt");
-    } else boundary("GI_EXTRACT_FINAL_FAILURE_RESULT", context, () => {
-      const reason = result.reason;
-      if (reason !== "table_not_found" && reason !== "course_rows_not_found") throw null;
+      return { ok: true, value, diagnostics };
+    }
+    const reason = boundary("GI_EXTRACT_FINAL_FAILURE_RESULT", context, () => {
+      const reason2 = result.reason;
+      if (reason2 !== "table_not_found" && reason2 !== "course_rows_not_found") throw null;
+      return reason2;
     }, "result.reason");
-    return result;
+    return { ok: false, reason, diagnostics };
   }, "result");
   var extractCurrentDocument = () => boundary("GI_EXTRACT_EXCEPTION", { __proto__: null }, () => {
     checkInitialization();

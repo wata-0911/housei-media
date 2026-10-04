@@ -45,12 +45,21 @@ const cases = [
     const query = h.document.querySelectorAll;
     h.document.querySelectorAll = selector => { patch(h, `Array.prototype[Symbol.iterator] = function(){ ${body} };`); return query(selector); };
   }, codeOnly('GI_EXTRACT_CANDIDATE_SELECT')],
-  ['diagnostics map', h => patch(h, `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){ if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) { ${body} } return Reflect.apply(originalMap,this,args); };`), { code: 'GI_EXTRACT_DIAGNOSTICS', tableIndex: 2 }],
+  ['diagnostics map', h => patch(h, `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){ if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) { ${body} } return Reflect.apply(originalMap,this,args); };`), { success: true }],
   ['inspection result access', h => patch(h, `let rowFilters=0; const originalFilter=Array.prototype.filter; Array.prototype.filter=function(...args){ const result=Reflect.apply(originalFilter,this,args); if(Array.isArray(this[0]) && ++rowFilters===2) return new Proxy(result,{get(target,key){if(key==='length'){ ${body} } return Reflect.get(target,key);}}); return result; };`), { code: 'GI_EXTRACT_TABLE_INSPECT', tableIndex: 2 }],
 ];
 
 for (const [name, install, expected] of cases) {
   test(`safe extraction boundary: ${name} (extension and Bookmarklet)`, async () => {
+    if (expected.success) {
+      const direct = harness(); install(direct);
+      assert.deepEqual(structuredClone(extensionResult(direct)), baseline.outcomes.normal32);
+      const h = harness(); install(h); await runBookmarklet(h);
+      assert.deepEqual(JSON.parse(h.copied[0]), baseline.outcomes.normal32.value);
+      assert.deepEqual(structuredClone(h.logs), [['Hosei grade import diagnostics', baseline.outcomes.normal32.diagnostics]]);
+      assert.doesNotMatch(h.alerts[0], /GI_/);
+      return;
+    }
     const direct = harness(); install(direct);
     let failure;
     try { extensionResult(direct); assert.fail('expected extraction failure'); } catch (error) { failure = error; }

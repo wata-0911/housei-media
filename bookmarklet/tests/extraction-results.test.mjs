@@ -26,9 +26,9 @@ const cases = [
     {code:'GI_EXTRACT_SELECTED_RESULT', ...(field==='index'?{}:{tableIndex:2}), field:`selected.${field}`},
   ]),
   ['final courses guard throws', `const original=Array.isArray; Array.isArray=function(value){if(value?.[0]?.rawName){${bomb}}return original(value);};`, {code:'GI_EXTRACT_FINAL_COURSES', tableIndex:2, field:'value.courses'}],
-  ['diagnostics map returns non-array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return {};return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINAL_DIAGNOSTICS', tableIndex:2, field:'diagnostics.tableCandidates'}],
-  ['diagnostics map returns private string array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return ['${secret}'];return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINAL_DIAGNOSTICS', tableIndex:0, field:'diagnostics.tableCandidates[]'}],
-  ['diagnostics map adds private property', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){const r=Reflect.apply(originalMap,this,args);if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) r.privateValue='${secret}';return r;};`, {code:'GI_EXTRACT_FINAL_DIAGNOSTICS', tableIndex:2, field:'diagnostics.tableCandidates.keys'}],
+  ['diagnostics map returns non-array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return {};return Reflect.apply(originalMap,this,args);};`, {success:true}],
+  ['diagnostics map returns private string array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return ['${secret}'];return Reflect.apply(originalMap,this,args);};`, {success:true}],
+  ['diagnostics map adds private property', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){const r=Reflect.apply(originalMap,this,args);if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) r.privateValue='${secret}';return r;};`, {success:true}],
   ['cell filter returns non-array', `const originalFilter=Array.prototype.filter; Array.prototype.filter=function(...args){return this[0]?.classList?null:Reflect.apply(originalFilter,this,args);};`, {code:'GI_EXTRACT_CELL_TEXT', tableIndex:2, rowIndex:0}],
   ['row query Array.from returns wrong shape', `const original=Array.from; Array.from=function(value,...args){return value?.[0]?.physicalCells?null:original(value,...args);};`, {code:'GI_EXTRACT_ROW_CLASSIFY', tableIndex:2}],
 ];
@@ -63,6 +63,15 @@ test('DOM collection conversions pass exactly one argument to Array.from', async
   }
 });
 for (const [name, script, expected] of cases) test(`result boundary: ${name} (both generated artifacts)`, async () => {
+  if (expected.success) {
+    const direct=harness();vm.runInContext(script,direct.context);vm.runInContext(extension,direct.context);
+    assert.deepEqual(structuredClone(direct.context.HoseiPlannerGradeExtractor.extractCurrentDocument()),baseline);
+    const h=harness();vm.runInContext(script,h.context);vm.runInContext(bookmarklet,h.context);await new Promise(resolve=>setImmediate(resolve));
+    assert.deepEqual(JSON.parse(h.copied[0]),baseline.value);
+    assert.deepEqual(structuredClone(h.logs),[['Hosei grade import diagnostics',baseline.diagnostics]]);
+    assert.doesNotMatch(h.alerts[0],/GI_/);
+    return;
+  }
   const direct=harness(); vm.runInContext(script,direct.context); vm.runInContext(extension,direct.context);
   let failure;
   try { direct.context.HoseiPlannerGradeExtractor.extractCurrentDocument(); } catch(error) { failure=error; }

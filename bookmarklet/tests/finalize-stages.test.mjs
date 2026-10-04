@@ -73,19 +73,27 @@ const hostile=[
  ['diagnostics map returns source elements',mapPatch('return this.slice();'),'GI_EXTRACT_FINAL_DIAGNOSTICS','diagnostics.tableCandidates[].keys',0],
  ['diagnostics map returns private string',mapPatch(`return ['${secret}'];`),'GI_EXTRACT_FINAL_DIAGNOSTICS','diagnostics.tableCandidates[]',0],
 ];
-for(const [name,script,code,field,tableIndex] of hostile)test(`finalize hostile builtin: ${name}, both generated artifacts`,async()=>{
+for(const [name,script] of hostile)test(`diagnostics builtin compatibility: ${name}, both generated artifacts`,async()=>{
  const direct=harness();vm.runInContext(script,direct.context);vm.runInContext(extension,direct.context);
- const error=capture(()=>direct.context.HoseiPlannerGradeExtractor.extractCurrentDocument());
- assert.deepEqual({...error},{code,tableIndex,...(field?{field}:{})});
+ const outcome=direct.context.HoseiPlannerGradeExtractor.extractCurrentDocument();
+ assert.deepEqual(structuredClone(outcome),baseline);
  const h=harness();vm.runInContext(script,h.context);vm.runInContext(bookmarklet,h.context);await new Promise(resolve=>setImmediate(resolve));
- assert.equal(h.alerts.length,1);assert.ok(h.alerts[0].startsWith(`[${code}]`));
- if(field)assert.ok(h.alerts[0].includes(`field: ${field}\n`));
- assert.deepEqual(h.copied,[]);assert.deepEqual(h.logs,[]);
- assert.doesNotMatch(JSON.stringify({alerts:h.alerts,logs:h.logs,error}),new RegExp(secret));
+ assert.equal(h.alerts.length,1);
+ if(name.startsWith('Object.keys')) {
+   // Global Object.keys mutations still affect the separate JSON serializer.
+   // Extraction/finalize succeed; this slice does not change serialization.
+   assert.ok(h.alerts[0].startsWith('[GI_SERIALIZE_'));
+   assert.doesNotMatch(h.alerts[0],/GI_EXTRACT/);
+   assert.deepEqual(h.copied,[]);assert.deepEqual(h.logs,[]);
+ } else {
+   assert.doesNotMatch(h.alerts[0],/GI_/);
+   assert.deepEqual(JSON.parse(h.copied[0]),baseline.value);
+   assert.deepEqual(structuredClone(h.logs),[['Hosei grade import diagnostics',baseline.diagnostics]]);
+ }
+ assert.doesNotMatch(JSON.stringify({outcome,alerts:h.alerts,logs:h.logs,copied:h.copied}),new RegExp(secret));
 });
-// The existing policy checks key count, not key names. Document that limitation
-// instead of silently broadening the schema or substituting Object.keys.
-test('same-length replacement key names do not change the existing key-count rule',()=>{
+// Extraction is independent of Object.keys, including key-name replacement.
+test('replacement Object.keys names are unused by extraction',()=>{
  const h=harness();vm.runInContext("const original=Object.keys;Object.keys=value=>original(value).map(()=> 'ignored-key-name');",h.context);
  vm.runInContext(extension,h.context);assert.deepEqual(structuredClone(h.context.HoseiPlannerGradeExtractor.extractCurrentDocument()),baseline);
 });

@@ -152,11 +152,26 @@ const inspectTable = (table, index) => boundary('GI_EXTRACT_TABLE_INSPECT', { __
     courseRowCount: courseRows.length
   };
 });
-const diagnosticsFor = (candidates, selectedCandidateIndex = null, tieCandidateIndexes = []) => ({
-  tableCandidates: candidates.map(({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount }) => ({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount })),
-  selectedCandidateIndex,
-  tieCandidateIndexes
+// Read only own fixed fields. No prototype values or extra properties enter
+// diagnostics, and no page object/array is retained by the returned snapshot.
+const ownField = (record, field) => {
+  if (!Object.getOwnPropertyDescriptor(record, field)) throw null;
+  return record[field];
+};
+const diagnosticCandidate = candidate => ({
+  index: ownField(candidate, 'index'),
+  rowCount: ownField(candidate, 'rowCount'),
+  valid24RowCount: ownField(candidate, 'valid24RowCount'),
+  categoryRowCount: ownField(candidate, 'categoryRowCount'),
+  courseRowCount: ownField(candidate, 'courseRowCount')
 });
+const diagnosticsFor = (candidates, selectedCandidateIndex = null, tieCandidateIndexes = []) => {
+  const tableCandidates = [];
+  for (let i = 0; i < candidates.length; i++) tableCandidates[i] = diagnosticCandidate(ownField(candidates, i));
+  const ties = [];
+  for (let i = 0; i < tieCandidateIndexes.length; i++) ties[i] = ownField(tieCandidateIndexes, i);
+  return { tableCandidates, selectedCandidateIndex, tieCandidateIndexes: ties };
+};
 const selectCandidate = candidates => {
   const largestCourseRowCount = Math.max(...candidates.map(candidate => candidate.courseRowCount));
   const tied = candidates.filter(candidate => candidate.courseRowCount === largestCourseRowCount);
@@ -164,7 +179,7 @@ const selectCandidate = candidates => {
   return { selected: tied[0], tieCandidateIndexes: tied.map(candidate => candidate.index) };
 };
 // Internal result guards diagnose hostile return values; they never repair,
-// coerce or copy parser data. Normal native arrays/records pass unchanged.
+// coerce payload data. Diagnostics alone are copied through a fixed allowlist.
 const isCount = value => typeof value === 'number' && value >= 0 && value % 1 === 0 && value <= 9007199254740991;
 const requireArray = value => { if (!Array.isArray(value)) throw null; return value; };
 const requireRecord = value => { if (typeof value !== 'object' || value === null || Array.isArray(value)) throw null; return value; };
@@ -197,44 +212,53 @@ const selectedRows = (selected, context) => boundary('GI_EXTRACT_SELECTED_RESULT
 const diagnosticsBoundary = (context, field, action) => boundary('GI_EXTRACT_FINAL_DIAGNOSTICS', context, action, field);
 const checkDiagnosticsShape = (diagnostics, context) => {
   diagnosticsBoundary(context, 'diagnostics', () => requireRecord(diagnostics));
-  const tables = diagnosticsBoundary(context, 'diagnostics.tableCandidates', () => requireArray(diagnostics.tableCandidates));
-  const ties = diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes', () => requireArray(diagnostics.tieCandidateIndexes));
-  // Keep the existing key-count rule; only diagnose the operation and reject
-  // non-array Object.keys returns. Do not replace page-world built-ins.
-  const keysMatch = (value, expected) => {
-    const keys = requireArray(Object.keys(value));
-    if (keys.length !== expected) throw null;
-  };
-  diagnosticsBoundary(context, 'diagnostics.keys', () => keysMatch(diagnostics, 3));
-  diagnosticsBoundary(context, 'diagnostics.tableCandidates.keys', () => keysMatch(tables, tables.length));
-  diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes.keys', () => keysMatch(ties, ties.length));
-  diagnosticsBoundary(context, 'diagnostics.selectedCandidateIndex', () => {
-    const selected = diagnostics.selectedCandidateIndex;
+  const tables = diagnosticsBoundary(context, 'diagnostics.tableCandidates', () => requireArray(ownField(diagnostics, 'tableCandidates')));
+  const ties = diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes', () => requireArray(ownField(diagnostics, 'tieCandidateIndexes')));
+  const selectedCandidateIndex = diagnosticsBoundary(context, 'diagnostics.selectedCandidateIndex', () => {
+    const selected = ownField(diagnostics, 'selectedCandidateIndex');
     if (selected !== null && !isCount(selected)) throw null;
+    return selected;
   });
-  diagnosticsBoundary(context, 'diagnostics.tableCandidates', () => {
-    for (let i = 0; i < tables.length; i++) {
-      // tableIndex here identifies the diagnostic candidate being checked.
+  const tableCandidates = diagnosticsBoundary(context, 'diagnostics.tableCandidates', () => {
+    const length = tables.length;
+    if (!isCount(length)) throw null;
+    const snapshot = [];
+    for (let i = 0; i < length; i++) {
       const candidateContext = { __proto__: null, ...context, tableIndex: i };
-      const table = diagnosticsBoundary(candidateContext, 'diagnostics.tableCandidates[]', () => requireRecord(tables[i]));
-      diagnosticsBoundary(candidateContext, 'diagnostics.tableCandidates[].keys', () => keysMatch(table, 5));
-      const count = (field, read) => diagnosticsBoundary(candidateContext, field, () => { if (!isCount(read())) throw null; });
-      count('diagnostics.tableCandidates[].index', () => table.index);
-      count('diagnostics.tableCandidates[].rowCount', () => table.rowCount);
-      count('diagnostics.tableCandidates[].valid24RowCount', () => table.valid24RowCount);
-      count('diagnostics.tableCandidates[].categoryRowCount', () => table.categoryRowCount);
-      count('diagnostics.tableCandidates[].courseRowCount', () => table.courseRowCount);
+      const table = diagnosticsBoundary(candidateContext, 'diagnostics.tableCandidates[]', () => requireRecord(ownField(tables, i)));
+      const count = (field, read) => diagnosticsBoundary(candidateContext, field, () => {
+        const value = read();
+        if (!isCount(value)) throw null;
+        return value;
+      });
+      snapshot[i] = {
+        index: count('diagnostics.tableCandidates[].index', () => ownField(table, 'index')),
+        rowCount: count('diagnostics.tableCandidates[].rowCount', () => ownField(table, 'rowCount')),
+        valid24RowCount: count('diagnostics.tableCandidates[].valid24RowCount', () => ownField(table, 'valid24RowCount')),
+        categoryRowCount: count('diagnostics.tableCandidates[].categoryRowCount', () => ownField(table, 'categoryRowCount')),
+        courseRowCount: count('diagnostics.tableCandidates[].courseRowCount', () => ownField(table, 'courseRowCount'))
+      };
     }
+    return snapshot;
   });
-  diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes[]', () => {
-    for (let i = 0; i < ties.length; i++) if (!isCount(ties[i])) throw null;
+  const tieCandidateIndexes = diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes[]', () => {
+    const length = ties.length;
+    if (!isCount(length)) throw null;
+    const snapshot = [];
+    for (let i = 0; i < length; i++) {
+      const value = ownField(ties, i);
+      if (!isCount(value)) throw null;
+      snapshot[i] = value;
+    }
+    return snapshot;
   });
+  return { tableCandidates, selectedCandidateIndex, tieCandidateIndexes };
 };
 const finalizeExtraction = (context, assemble) => boundary('GI_EXTRACT_FINALIZE', context, () => {
   const assembled = boundary('GI_EXTRACT_FINAL_ASSEMBLE', context, assemble, 'result');
   const result = boundary('GI_EXTRACT_FINAL_RESULT', context, () => requireRecord(assembled), 'result');
-  const diagnostics = diagnosticsBoundary(context, 'diagnostics', () => result.diagnostics);
-  checkDiagnosticsShape(diagnostics, context);
+  const sourceDiagnostics = diagnosticsBoundary(context, 'diagnostics', () => result.diagnostics);
+  const diagnostics = checkDiagnosticsShape(sourceDiagnostics, context);
   const ok = boundary('GI_EXTRACT_FINAL_RESULT', context, () => {
     const value = result.ok;
     if (value !== true && value !== false) throw null;
@@ -246,11 +270,14 @@ const finalizeExtraction = (context, assemble) => boundary('GI_EXTRACT_FINALIZE'
     boundary('GI_EXTRACT_FINAL_METADATA', context, () => { if (value.schemaVersion !== 1) throw null; }, 'value.schemaVersion');
     boundary('GI_EXTRACT_FINAL_METADATA', context, () => { if (value.source !== 'hosei_web_learning_grade_table') throw null; }, 'value.source');
     boundary('GI_EXTRACT_FINAL_METADATA', context, () => { if (typeof value.capturedAt !== 'string') throw null; }, 'value.capturedAt');
-  } else boundary('GI_EXTRACT_FINAL_FAILURE_RESULT', context, () => {
+    return { ok: true, value, diagnostics };
+  }
+  const reason = boundary('GI_EXTRACT_FINAL_FAILURE_RESULT', context, () => {
     const reason = result.reason;
     if (reason !== 'table_not_found' && reason !== 'course_rows_not_found') throw null;
+    return reason;
   }, 'result.reason');
-  return result;
+  return { ok: false, reason, diagnostics };
 }, 'result');
 const extractCurrentDocument = () => boundary('GI_EXTRACT_EXCEPTION', { __proto__: null }, () => {
   checkInitialization();
@@ -275,4 +302,4 @@ const extractCurrentDocument = () => boundary('GI_EXTRACT_EXCEPTION', { __proto_
 
 export { date, report, extractRows, extractCurrentDocument, isSafeExtractionFailure };
 // Internal ESM helpers for identity/result-boundary tests; not extension globals.
-export { boundary, readCandidateResult, finalizeExtraction };
+export { boundary, readCandidateResult, finalizeExtraction, diagnosticsFor };

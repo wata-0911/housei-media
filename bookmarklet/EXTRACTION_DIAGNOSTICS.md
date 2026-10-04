@@ -1,6 +1,20 @@
 # 実ページのextract例外：安全な境界診断
 
-実ページの最新結果（08fd287）は **GI_EXTRACT_FINALIZE / table index: 2 / field: result**。前回のCANDIDATE_RESULT / selectedから失敗位置が進んでいます。Array.from mapper互換性修正は維持しますが、実ページでの全体成功は未確認です。今回はFINALIZE内部の診断強化のみです。根本原因は未確定、production blockerは利用者の成功確認まで継続します。
+実ページの最新結果（5cb8e677）は **GI_EXTRACT_FINAL_DIAGNOSTICS / table index: 2 / field: diagnostics.tableCandidates.keys**。失敗地点はdiagnosticsのexact-key検査です。diagnostics経路のpage-world built-in互換性問題が強いroot cause candidateですが、実ページの具体的なmutationと全体成功は未確認です。production blockerは利用者の成功確認まで継続します。
+
+## diagnosticsの固定allowlist snapshot
+
+diagnosticsForの候補mapをindexed loopへ変更し、固定5 fieldだけの新規plain record、新規table配列、新規tie配列を構築します。順序は維持します。Object.getOwnPropertyDescriptorで必須fieldがown propertyであることを確認し、prototypeだけにあるfieldは拒否します。extra own propertyやそのgetterは読まず、source object/prototype/arrayへの参照を出力に残しません。
+
+checkDiagnosticsShapeのObject.keys exact-key-count検査をすべて廃止しました。record、Array、nullまたはsafe count、各候補の5数値field、tie数値の検査は維持し、検査したallowlistだけをもう一度新規snapshotへコピーします。finalizeExtractionはそのsnapshotだけを返すため、consoleへ渡るdiagnosticsに未検査のextra dataは入りません。正常時のplain record形式も既存extensionと互換です。payload本体やcontract validatorは変更していません。
+
+既存GIコード、固定field検査、safe failure identityは維持します。旧*.keysラベルは許可リストに互換用として残りますが、通常経路では生成しません。下に記録する過去のObject.keys/map診断は修正前の履歴です。
+
+Object.keysのthrow/null/空配列/余分なprivate key、diagnostics用mapのthrow/異常shape/callback無視/source返却/private追加は、同じ合成環境で抽出成功・固定baseline一致の回帰試験に更新しました。source候補・配列のprivate own/inherited propertyやthrowing getterはdiagnostics、console、alert、safe failure、copied JSONへ流れません。必須field欠落や不正数値の失敗試験は維持します。
+
+Object.keys依存はshared extractorには残りません。ただし別moduleのclipboard serializerはObject.keysを使います。global Object.keysを全面的に壊した場合、抽出/finalizeは成功しても、その後のserializationがGI_SERIALIZE_*で停止します。今回の対象外として区別し、無根拠なbuiltin全面隔離は行いません。selectCandidateやcell/course parsingの既存mapも変更していません。
+
+Array.from mapper-ignore成功と32科目fixture、741e780固定baselineとのpayload/diagnostics一致を維持します。Object.keys/mapの互換性修正で合成の実ページ相当症状は解消しますが、法政実ページで同じmutationがあることは未確認です。
 
 ## Array.from mapper互換性修正
 
