@@ -44,3 +44,88 @@ export function isHoseiGradeImportV1(value: unknown): value is HoseiGradeImportV
     return reportsOk && schoolingsOk;
   });
 }
+
+export type HoseiGradeImportValidationIssue = {
+  /** Zero-based contract course index; never a course name or source value. */
+  courseIndex: number | null;
+  fieldPath: string;
+  category: 'type' | 'value' | 'empty' | 'length' | 'date' | 'non_finite' | 'negative' | 'schema';
+};
+
+/**
+ * Explains a rejection only. The unchanged validator above remains authoritative.
+ * Paths come exclusively from schema literals and array indexes; no input keys,
+ * values, exception messages or stacks are included. Return only the first issue.
+ */
+export function diagnoseHoseiGradeImportV1(value: unknown): HoseiGradeImportValidationIssue | null {
+  if (isHoseiGradeImportV1(value)) return null;
+  type Category = HoseiGradeImportValidationIssue['category'];
+  const issue = (fieldPath: string, category: Category, courseIndex: number | null = null): HoseiGradeImportValidationIssue => ({ courseIndex, fieldPath, category });
+  if (!isRecord(value)) return issue('$', 'type');
+  if (value.schemaVersion !== 1) return issue('schemaVersion', 'value');
+  if (value.source !== 'hosei_web_learning_grade_table') return issue('source', 'value');
+  if (typeof value.capturedAt !== 'string') return issue('capturedAt', 'type');
+  if (Number.isNaN(Date.parse(value.capturedAt))) return issue('capturedAt', 'date');
+  if (!Array.isArray(value.courses)) return issue('courses', 'type');
+  const numberCategory = (number: unknown): Category | null => number === null ? null
+    : typeof number !== 'number' ? 'type' : !Number.isFinite(number) ? 'non_finite' : number < 0 ? 'negative' : null;
+  // Match the validator's every semantics (including sparse arrays).
+  let failure: HoseiGradeImportValidationIssue | null = null;
+  value.courses.every((course, index) => {
+    const at = (path: string, category: Category) => issue(`courses[${index}]${path ? `.${path}` : ''}`, category, index);
+    const inspect = (): HoseiGradeImportValidationIssue | null => {
+      if (!isRecord(course)) return at('', 'type');
+      if (typeof course.rawName !== 'string') return at('rawName', 'type');
+      if (course.rawName.trim() === '') return at('rawName', 'empty');
+      if (!isStringOrNull(course.categoryRaw)) return at('categoryRaw', 'type');
+      for (const key of ['compositionCredits', 'additionalEnrollment', 'recognizedExemption', 'earnedCredits', 'schoolingCredits']) {
+        const field = course[key];
+        if (!isRecord(field)) return at(key, 'type');
+        if (typeof field.raw !== 'string') return at(`${key}.raw`, 'type');
+        const category = numberCategory(field.value);
+        if (category) return at(`${key}.value`, category);
+      }
+      if (!Array.isArray(course.reports)) return at('reports', 'type');
+      if (course.reports.length !== 4) return at('reports', 'length');
+      if (!isRecord(course.creditExam)) return at('creditExam', 'type');
+      if (!Array.isArray(course.schoolings)) return at('schoolings', 'type');
+      if (course.schoolings.length !== 2) return at('schoolings', 'length');
+      const exam = course.creditExam;
+      for (const key of ['rawDate', 'rawCredits', 'rawGrade']) if (typeof exam[key] !== 'string') return at(`creditExam.${key}`, 'type');
+      if (!(exam.date === null || isDate(exam.date))) return at('creditExam.date', 'date');
+      const examNumber = numberCategory(exam.credits);
+      if (examNumber) return at('creditExam.credits', examNumber);
+      if (!grade(exam.grade)) return at('creditExam.grade', 'value');
+      if (typeof exam.pendingMarker !== 'boolean') return at('creditExam.pendingMarker', 'type');
+      let nested: HoseiGradeImportValidationIssue | null = null;
+      course.reports.every((report, reportIndex) => {
+        const path = `reports[${reportIndex}]`;
+        nested = !isRecord(report) ? at(path, 'type')
+          : typeof report.raw !== 'string' ? at(`${path}.raw`, 'type')
+          : typeof report.status !== 'string' || !reportStatuses.includes(report.status as HoseiReportStatus) ? at(`${path}.status`, 'value')
+          : !(report.date === null || isDate(report.date)) ? at(`${path}.date`, 'date') : null;
+        return nested === null;
+      });
+      if (nested) return nested;
+      course.schoolings.every((schooling, schoolingIndex) => {
+        const path = `schoolings[${schoolingIndex}]`;
+        if (!isRecord(schooling)) { nested = at(path, 'type'); return false; }
+        for (const key of ['rawYear', 'rawTerm', 'rawDate', 'rawCredits', 'rawGrade']) {
+          if (typeof schooling[key] !== 'string') { nested = at(`${path}.${key}`, 'type'); return false; }
+        }
+        const category = numberCategory(schooling.credits);
+        nested = !isStringOrNull(schooling.year) ? at(`${path}.year`, 'type')
+          : !isStringOrNull(schooling.term) ? at(`${path}.term`, 'type')
+          : !(schooling.date === null || isDate(schooling.date)) ? at(`${path}.date`, 'date')
+          : category ? at(`${path}.credits`, category)
+          : !grade(schooling.grade) ? at(`${path}.grade`, 'value') : null;
+        return nested === null;
+      });
+      return nested;
+    };
+    failure = inspect();
+    return failure === null;
+  });
+  // Fail closed if a future validator rule has no explanatory path yet.
+  return failure ?? issue('$', 'schema');
+}

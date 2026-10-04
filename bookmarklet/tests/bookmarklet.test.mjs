@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { isHoseiGradeImportV1 } from '../../src/planner/gradeImportContract.ts';
+import { isHoseiGradeImportV1, diagnoseHoseiGradeImportV1 } from '../../src/planner/gradeImportContract.ts';
 import { importPreview } from '../../src/planner/gradeImportApply.ts';
 import { serializeGradeImport } from '../serialize.ts';
 import GradeImportPanel from '../../src/components/planner/GradeImportPanel.tsx';
@@ -184,4 +184,206 @@ test('Planner renders generated code as inert text with both methods and the exi
   assert.match(html, /手動コピー用コード/);
   assert.doesNotMatch(html, /href="javascript:|<script/);
   assert.ok(html.includes(artifact.bookmarklet.replaceAll('&', '&amp;').replaceAll("'", '&#x27;')));
+});
+
+const secret = 'PRIVATE_SENTINEL_course_grade_ID_cookie_html';
+const privateError = () => { throw new Error(secret); };
+function assertPrivate(h) {
+  // Inspect all notification/log arguments, not just the visible message.
+  assert.doesNotMatch(JSON.stringify([h.alerts, h.diagnostics]), new RegExp(secret));
+  for (const logged of h.diagnostics) {
+    assert.deepEqual(Object.keys(logged).sort(), ['selectedCandidateIndex', 'tableCandidates', 'tieCandidateIndexes']);
+    for (const candidate of logged.tableCandidates) assert.deepEqual(Object.keys(candidate).sort(), ['categoryRowCount', 'courseRowCount', 'index', 'rowCount', 'valid24RowCount']);
+  }
+}
+
+test('extract exception has a distinct fixed code and never logs exception data', async () => {
+  const h = harness(); h.context.document.querySelectorAll = privateError;
+  await run(h);
+  assert.match(h.alerts[0], /GI_EXTRACT_EXCEPTION/);
+  assert.equal(h.copied.length, 0); assertPrivate(h);
+});
+
+test('contract rejection identifies only course index, static field path and category', async () => {
+  const h = await run(harness([[cells(secret, { 2: '9'.repeat(400) })]]));
+  assert.match(h.alerts[0], /GI_CONTRACT_INVALID/);
+  assert.match(h.alerts[0], /course index: 0 \/ field: courses\[0\]\.compositionCredits.value \/ category: non_finite/);
+  assert.equal(h.copied.length, 0); assertPrivate(h);
+});
+
+test('contract validator exception has a distinct code with no original error', async () => {
+  const h = harness();
+  // Own Date subclass avoids patching the shared test runner Date.parse.
+  vm.runInContext(`Date = class extends Date { static parse() { throw new Error('${secret}'); } };`, h.context);
+  await run(h);
+  assert.match(h.alerts[0], /GI_CONTRACT_EXCEPTION/);
+  assert.equal(h.copied.length, 0); assertPrivate(h);
+});
+
+for (const [setup, expected] of [
+  [`JSON.stringify = () => { throw new Error('${secret}'); };`, 'GI_SERIALIZE_ENCODE'],
+  [`JSON.parse = () => { throw new Error('${secret}'); };`, 'GI_SERIALIZE_PARSE'],
+  [`JSON.stringify = () => '{"schemaVersion":1,"source":"hosei_web_learning_grade_table","capturedAt":"2026-10-04T00:00:00Z","courses":"${secret}"}';`, 'GI_SERIALIZE_FINAL'],
+]) test(`serialization stage identifies ${expected} without leaking page-provided errors or values`, async () => {
+  const h = harness(); vm.runInContext(setup, h.context);
+  await run(h);
+  assert.match(h.alerts[0], new RegExp(expected));
+  assert.equal(h.copied.length, 0); assertPrivate(h);
+  if (expected === 'GI_SERIALIZE_FINAL') assert.match(h.alerts[0], /field: courses \/ category: type/);
+});
+
+test('serializer input rejection exposes fixed code and structural issue only', () => {
+  assert.throws(() => serializeGradeImport({ ...extract(harness()).value, courses: secret }), error => {
+    assert.equal(error.code, 'GI_SERIALIZE_INPUT');
+    assert.deepEqual(error.issue, { courseIndex: null, fieldPath: 'courses', category: 'type' });
+    assert.equal(error.cause, undefined); assert.doesNotMatch(String(error), new RegExp(secret));
+    return true;
+  });
+});
+
+for (const target of ['Array', 'Object']) test(`page-world ${target}.prototype.toJSON cannot corrupt our serialization or get changed by it`, async () => {
+  const h = harness();
+  vm.runInContext(`Object.defineProperty(${target}.prototype, 'toJSON', {value: function(){throw new Error('${secret}');}, writable: false, configurable: false});`, h.context);
+  const original = vm.runInContext(`${target}.prototype.toJSON`, h.context);
+  await run(h);
+  assert.equal(h.copied.length, 1);
+  const payload = JSON.parse(h.copied[0]);
+  assert.ok(isHoseiGradeImportV1(payload));
+  assert.ok(Array.isArray(payload.courses));
+  assert.ok(Array.isArray(payload.courses[0].reports));
+  assert.ok(Array.isArray(payload.courses[0].schoolings));
+  assert.deepEqual(payload, extract(harness()).value);
+  assert.equal(vm.runInContext(`${target}.prototype.toJSON`, h.context), original);
+  assert.match(h.alerts[0], /コピーしました/);
+  assert.doesNotMatch(h.alerts.join(''), new RegExp(secret));
+});
+
+test('legacy array JSON-text hook reproduces double-stringification, while final bookmarklet keeps all arrays', async () => {
+  const h = harness();
+  vm.runInContext(`Array.prototype.toJSON = function(){return '[]'};`, h.context);
+  assert.equal(vm.runInContext(`typeof JSON.parse(JSON.stringify({courses:[]})).courses`, h.context), 'string');
+  await run(h);
+  const payload = JSON.parse(h.copied[0]);
+  assert.equal(payload.courses.length, 32); assert.ok(isHoseiGradeImportV1(payload));
+});
+
+for (const [clipboard, expected] of [['denied', 'GI_CLIPBOARD_PRIMARY_FAILED'], ['missing', 'GI_CLIPBOARD_PRIMARY_UNAVAILABLE']]) test(`primary clipboard ${clipboard} is distinguishable even when fallback succeeds`, async () => {
+  const h = await run(harness([[cells(secret)]], { clipboard }));
+  assert.match(h.alerts[0], new RegExp(expected));
+  assert.match(h.alerts[0], /コピーしました/);
+  assertPrivate(h);
+});
+
+test('primary rejection and fallback failure both retain stage codes with no original exception', async () => {
+  const h = harness([[cells(secret)]], { clipboard: 'denied' });
+  h.context.document.execCommand = privateError;
+  await run(h);
+  assert.match(h.alerts[0], /GI_CLIPBOARD_PRIMARY_FAILED/);
+  assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_FAILED/);
+  assert.match(h.alerts[0], /コピーに失敗/);
+  assert.equal(h.copied.length, 0); assertPrivate(h);
+});
+
+for (const step of ['activeElement', 'getSelection', 'getRangeAt', 'cloneRange']) test(`fallback snapshot ${step} failure cannot prevent a local copy`, async () => {
+  const h = harness([[cells(secret)]], { clipboard: 'denied' });
+  if (step === 'activeElement') Object.defineProperty(h.context.document, step, { get: privateError });
+  if (step === 'getSelection') h.context.document.getSelection = privateError;
+  if (step === 'getRangeAt') h.context.document.getSelection = () => ({ rangeCount: 1, getRangeAt: privateError });
+  if (step === 'cloneRange') h.context.document.getSelection = () => ({ rangeCount: 1, getRangeAt: () => ({ cloneRange: privateError }) });
+  await run(h);
+  assert.equal(h.copied.length, 1);
+  assert.match(h.alerts[0], /コピーしました/);
+  assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_SNAPSHOT/); assertPrivate(h);
+});
+
+for (const step of ['createElement', 'append', 'select']) test(`fallback setup ${step} exception is contained and classified`, async () => {
+  const h = harness([[cells(secret)]], { clipboard: 'denied' });
+  if (step === 'createElement') h.context.document.createElement = privateError;
+  if (step === 'append') h.context.document.body.append = privateError;
+  if (step === 'select') {
+    const create = h.context.document.createElement;
+    h.context.document.createElement = tag => ({ ...create(tag), select: privateError });
+  }
+  await run(h);
+  assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_FAILED/);
+  assert.equal(h.copied.length, 0); assertPrivate(h);
+});
+
+for (const [step, expected] of [['clear', 'CLEAR'], ['remove', 'REMOVE'], ['focus', 'FOCUS'], ['removeAllRanges', 'SELECTION'], ['addRange', 'SELECTION']]) test(`fallback finally ${step} exception does not overwrite a successful copy`, async () => {
+  const h = harness([[cells(secret)]], { clipboard: 'denied' });
+  const doc = h.context.document;
+  if (step === 'focus') doc.activeElement.focus = privateError;
+  if (['clear', 'remove'].includes(step)) {
+    const create = doc.createElement;
+    doc.createElement = tag => {
+      const field = create(tag);
+      if (step === 'remove') {
+        field.remove = privateError;
+        field.parentNode = { removeChild: element => { assert.equal(element, field); h.events.push('remove-via-parent'); } };
+      } else {
+        let value;
+        Object.defineProperty(field, 'value', { get: () => value, set: text => { if (text === '') privateError(); value = text; } });
+      }
+      return field;
+    };
+  }
+  if (['removeAllRanges', 'addRange'].includes(step)) {
+    const selection = doc.getSelection(); selection[step] = privateError; doc.getSelection = () => selection;
+  }
+  await run(h);
+  assert.equal(h.copied.length, 1);
+  assert.match(h.alerts[0], /コピーしました/);
+  assert.doesNotMatch(h.alerts[0], /コピーしていません/);
+  assert.match(h.alerts[0], new RegExp(`GI_CLIPBOARD_FALLBACK_${expected}`));
+  if (step === 'remove') { assert.equal(h.fields[0].value, ''); assert.ok(h.events.includes('remove-via-parent')); }
+  assertPrivate(h);
+});
+
+test('fallback cleanup errors cannot mask an unsuccessful copy either', async () => {
+  const h = harness([[cells(secret)]], { clipboard: 'denied', fallback: false });
+  h.context.document.activeElement.focus = privateError;
+  await run(h);
+  assert.equal(h.copied.length, 0);
+  assert.match(h.alerts[0], /コピーに失敗/);
+  assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_FAILED/);
+  assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_FOCUS/); assertPrivate(h);
+});
+
+test('console failure does not interfere with copying and alert failure does not reject the runner', async () => {
+  const h = harness(); h.context.console.info = privateError;
+  await run(h); assert.equal(h.copied.length, 1);
+  const brokenAlert = harness(); brokenAlert.context.alert = privateError;
+  await run(brokenAlert); assert.equal(brokenAlert.copied.length, 1);
+});
+
+test('diagnostic field paths are schema literals and never copy invalid values or property names', () => {
+  const payload = extract(harness()).value;
+  const mutations = [
+    [x => { x.courses[0].rawName = ''; }, 'rawName', 'empty'],
+    [x => { x.courses[0].creditExam.date = secret; }, 'creditExam.date', 'date'],
+    [x => { x.courses[0].creditExam.credits = -1; }, 'creditExam.credits', 'negative'],
+    [x => { x.courses[0].reports[2].status = secret; }, 'reports[2].status', 'value'],
+    [x => { x.courses[0].schoolings[1].credits = Infinity; }, 'schoolings[1].credits', 'non_finite'],
+    [x => { x.courses[0].schoolings[0].rawYear = { [secret]: secret }; }, 'schoolings[0].rawYear', 'type'],
+    [x => { x.courses[0].reports.pop(); }, 'reports', 'length'],
+  ];
+  for (const [mutate, path, category] of mutations) {
+    const copy = structuredClone(payload); mutate(copy);
+    assert.equal(isHoseiGradeImportV1(copy), false);
+    assert.deepEqual(diagnoseHoseiGradeImportV1(copy), { courseIndex: 0, fieldPath: `courses[0].${path}`, category });
+    assert.doesNotMatch(JSON.stringify(diagnoseHoseiGradeImportV1(copy)), new RegExp(secret));
+  }
+  assert.equal(diagnoseHoseiGradeImportV1(payload), null);
+});
+
+test('real-world-style unrecognized cell text remains raw + null, without weakening validator', () => {
+  const h = harness(); extract(h);
+  const samples = ['', '　', '—', '認定', '履修中', '４', '4単位', '1,000', '*4', '○', '×', '保留', '2024/02/29', '2025/02/29', '99/12/31'];
+  for (const raw of samples) {
+    const row = cells('合成監査');
+    for (let i = 2; i < 24; i++) row[i] = raw;
+    const payload = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt, courses: plain(h.context.HoseiPlannerGradeExtractor.extractRows([row])) };
+    assert.ok(isHoseiGradeImportV1(payload));
+    assert.equal(diagnoseHoseiGradeImportV1(payload), null);
+  }
 });
