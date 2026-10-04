@@ -1,0 +1,192 @@
+# 実ページのextract例外：安全な境界診断
+
+実ページの最新結果（5cb8e677）は **GI_EXTRACT_FINAL_DIAGNOSTICS / table index: 2 / field: diagnostics.tableCandidates.keys**。失敗地点はdiagnosticsのexact-key検査です。diagnostics経路のpage-world built-in互換性問題が強いroot cause candidateですが、実ページの具体的なmutationと全体成功は未確認です。production blockerは利用者の成功確認まで継続します。
+
+## diagnosticsの固定allowlist snapshot
+
+diagnosticsForの候補mapをindexed loopへ変更し、固定5 fieldだけの新規plain record、新規table配列、新規tie配列を構築します。順序は維持します。Object.getOwnPropertyDescriptorで必須fieldがown propertyであることを確認し、prototypeだけにあるfieldは拒否します。extra own propertyやそのgetterは読まず、source object/prototype/arrayへの参照を出力に残しません。
+
+checkDiagnosticsShapeのObject.keys exact-key-count検査をすべて廃止しました。record、Array、nullまたはsafe count、各候補の5数値field、tie数値の検査は維持し、検査したallowlistだけをもう一度新規snapshotへコピーします。finalizeExtractionはそのsnapshotだけを返すため、consoleへ渡るdiagnosticsに未検査のextra dataは入りません。正常時のplain record形式も既存extensionと互換です。payload本体やcontract validatorは変更していません。
+
+既存GIコード、固定field検査、safe failure identityは維持します。旧*.keysラベルは許可リストに互換用として残りますが、通常経路では生成しません。下に記録する過去のObject.keys/map診断は修正前の履歴です。
+
+Object.keysのthrow/null/空配列/余分なprivate key、diagnostics用mapのthrow/異常shape/callback無視/source返却/private追加は、同じ合成環境で抽出成功・固定baseline一致の回帰試験に更新しました。source候補・配列のprivate own/inherited propertyやthrowing getterはdiagnostics、console、alert、safe failure、copied JSONへ流れません。必須field欠落や不正数値の失敗試験は維持します。
+
+Object.keys依存はshared extractorには残りません。ただし別moduleのclipboard serializerはObject.keysを使います。global Object.keysを全面的に壊した場合、抽出/finalizeは成功しても、その後のserializationがGI_SERIALIZE_*で停止します。今回の対象外として区別し、無根拠なbuiltin全面隔離は行いません。selectCandidateやcell/course parsingの既存mapも変更していません。
+
+Array.from mapper-ignore成功と32科目fixture、741e780固定baselineとのpayload/diagnostics一致を維持します。Object.keys/mapの互換性修正で合成の実ページ相当症状は解消しますが、法政実ページで同じmutationがあることは未確認です。
+
+## Array.from mapper互換性修正
+
+shared extractorの2引数Array.fromは、table候補のinspectとrowのlogical-cell変換の2か所だけでした。両方を単一引数Array.fromでのDOM collection変換と、0からlength未満までの明示indexed loopに分離しました。cellsForRow内のtd変換は元から単一引数なので変更していません。共有source内のArray.from呼出は現在すべて1引数です。
+
+table順、row順、categoryやmalformed rowを含む0-based row indexを維持します。query境界内で変換・loopを行い、内側のsafe failureはidentityを保って伝播します。table配列の異常shape/lengthは既存TABLE_RESULT（fieldラベルは既存のcandidates/candidates.length）、row配列の異常shapeは従来のROW_CLASSIFYで拒否します。
+
+実ページコードと一致する旧mapper-ignore試験は、今回のbugfixにより正常32科目・全payload/diagnostics一致へ期待値を変更しました。tableのみ／rowのみ／全Array.fromがmapperを無視する3ケースを両generated artifactで試験します。また全DOM collection変換が正確に1引数で呼ばれる試験を追加しました。他の失敗診断の期待値は変えていません。
+
+これはmapper引数依存だけを除く変更です。map/filterやString/Date/Set等の一括隔離、page prototype変更、selector/抽出rule/contract/validatorの変更はありません。下の診断監査記録の「mapper無視で失敗」は修正前の挙動です。修正後は同じ合成環境で成功し、開始commitの正常出力および741e780固定baselineと一致します。実ページ再実行で成功するまではroot cause confirmed / blocker resolvedとは扱いません。
+
+## 表示と境界
+
+通知は細分化コードを先頭に表示し、既存のfamily code `GI_EXTRACT_EXCEPTION` も併記します。raw例外を調べる、保存する、再throwする、consoleへ出す処理はありません。共有extractorが生成した安全なfailureだけを内部identityで識別して伝播させます。failureはnull prototypeで、code、任意の整数index、許可リスト内の固定field名だけを保持します。
+
+| 固定コード | 処理境界 | 出せるindex |
+|---|---|---|
+| GI_EXTRACT_INITIALIZE | 許容評価Setの初期化。失敗を記録しextract呼出時に通知 | なし |
+| GI_EXTRACT_TABLE_QUERY | documentの固定table selectorとArray.fromによる候補列挙 | なし |
+| GI_EXTRACT_TABLE_INSPECT | 各inspectTable全体のうち内側コードで捕捉されない処理・結果構築 | table |
+| GI_EXTRACT_ROW_QUERY | tableの固定row selectorとArray.fromによるrow列挙 | table |
+| GI_EXTRACT_CELL_QUERY | row.querySelectorAll('td')とArray.from | table / row |
+| GI_EXTRACT_CELL_FILTER | filter呼出、classList取得、contains('line_y_label') | table / row / cell（callback到達時） |
+| GI_EXTRACT_CELL_TEXT | map呼出、textContent取得、String/replace/trimによるclean | table / row / cell（callback到達時） |
+| GI_EXTRACT_ROW_CLASSIFY | logical 24-cell判定、category/course分類、分類filter | table / row（個別判定到達時） |
+| GI_EXTRACT_CANDIDATE_SELECT | largest courseRowCount、Math.max、tie判定・選択 | なし |
+| GI_EXTRACT_DIAGNOSTICS | 既存の候補件数・選択index・tie indexの構築 | table（選択済みの場合） |
+| GI_EXTRACT_CAPTURE_TIME | capturedAt用new Date().toISOString() | 選択table |
+| GI_EXTRACT_COURSE_PARSE | extractRows、行の正規化、number/report/schooling/course生成 | 選択table / logical row（行処理到達時） |
+| GI_EXTRACT_TABLE_RESULT | query後のArray shape・length読取 | なし。field=candidates / candidates.length |
+| GI_EXTRACT_CANDIDATE_RESULT | selection結果とselected / tieCandidateIndexes読取・shape | なし。field=selection / selected / tieCandidateIndexes |
+| GI_EXTRACT_SELECTED_RESULT | selected.index / courseRowCount / rows読取・shape | 確認済みtableのみ。field=selected.index / selected.courseRowCount / selected.rows |
+| GI_EXTRACT_FINALIZE | 成功・失敗result組立、最低限のpayload shape・diagnostics shape確認 | 選択済みtable。field=result |
+| GI_EXTRACT_FINAL_ASSEMBLE | assemble action / result組立 | field=result |
+| GI_EXTRACT_FINAL_RESULT | top-level record、okアクセスとboolean判定 | field=result / result.ok |
+| GI_EXTRACT_FINAL_DIAGNOSTICS | diagnosticsアクセス・各shape検査 | 下記の固定diagnostics field |
+| GI_EXTRACT_FINAL_VALUE | result.valueアクセスとrecord判定 | field=result.value |
+| GI_EXTRACT_FINAL_COURSES | value.coursesアクセスとArray判定 | field=value.courses |
+| GI_EXTRACT_FINAL_METADATA | schemaVersion / source / capturedAtのアクセス・検査 | 各value.*固定field |
+| GI_EXTRACT_FINAL_FAILURE_RESULT | ok:falseのreasonアクセス・許容値判定 | field=result.reason |
+| GI_EXTRACT_EXCEPTION | 上記の外の予期しない失敗／既存family code | なし |
+
+queryコードはselector呼出とその戻り値の列挙を含みます。列挙callback内で起きた例外は、より具体的な内側コードを維持します。stageを絞るためにquerySelectorAllとArray.fromを別実装へ置き換えてはいません。
+
+- indexはすべて0始まり。tableは固定selectorの候補順。
+- rowは対象tableの `tr.column_even, tr.column_odd` 順。category rowや24-cellでないrowも数えます。course indexではありません。
+- cellは `.line_y_label` を除いたlogical cell順。CELL_FILTERでは現在のcellを採用できるか未確定なので、直前までに採用したcell数＝次のlogical候補位置です。CELL_TEXTでは確定logical indexです。
+- `.filter` / `.map` 自体がcallback前に失敗した場合など、分からないindexは付けません。推測しません。
+- 非整数・負数・文字列等のindexは診断に含めません。
+
+## Privacy contract
+
+通知・console・安全なfailureに出すのは固定コード・固定field名・index・既存の候補件数だけです。科目名、評価、修得単位値、rawTerm、rawYear、日付、categoryRaw、法政ID、Cookie、URL query/hash、HTML、textContent、exception.message/stack/cause、innerHTML/outerHTMLは出しません。
+
+raw throwableにcode/messageがあっても読みません。throwされたProxyのproperty/getPrototypeOf trapも呼びません。内部failureを識別するための instanceof やpage由来constructor、Function.prototype.callにも依存しません。診断自身のindex転記にもArray iterator/map/filterを使いません。正常payloadには診断を追加しません。
+
+## Page world依存の監査
+
+| global / intrinsic | extractorでの用途・例外化時の到達境界 |
+|---|---|
+| Array.from | table/row/tdの列挙。最初の呼出が例外ならTABLE_QUERY、各NodeListのiteratorなら対応するQUERY |
+| Array.prototype.filter | label除外→CELL_FILTER、row分類→ROW_CLASSIFY、候補tie→CANDIDATE_SELECT |
+| Array.prototype.map | cell clean→CELL_TEXT、選択候補の件数/tie→CANDIDATE_SELECT、diagnostics→DIAGNOSTICS、選択row再正規化→COURSE_PARSE |
+| Array.prototype.some | extractorでは不使用。例外化しても正常fixture出力不変をテスト |
+| Array.prototype.every | extractorでは不使用。例外化してもextension抽出は不変。後段validatorは利用しているためcontract段階の別問題になり得る |
+| String / trim / replace | clean、number、report等。最初のcleanはCELL_TEXT、course中の処理ならCOURSE_PARSE |
+| Set / Set.prototype.has | 評価集合の構築→INITIALIZE、grade判定→COURSE_PARSE |
+| Math.max | 最大科目行数→CANDIDATE_SELECT |
+| Date / toISOString | capturedAt→CAPTURE_TIME |
+| Date.UTC / getUTCFullYear / getUTCMonth / getUTCDate | date正規化→COURSE_PARSE |
+| Element.querySelectorAll | table/row/cellの各固定selector。対応するQUERY |
+| DOMTokenList.contains / classList | label除外→CELL_FILTER |
+| Node.textContent getter | セル本文の読み取り→CELL_TEXT |
+| Function.prototype.call / apply / bind | extractorは明示呼出なし。例外化しても正常fixture出力不変をテスト |
+| Object.prototype汚染 | failureと座標contextは新規null-prototype object。message/stack/tableIndex汚染とthrowされたProxyをテスト |
+| Array / NodeList iterator | Set構築、Array.from、Math.maxのspread、extractRowsのfor-of。NodeList iteratorの例外をquery別に、Array iteratorをINITIALIZE / CANDIDATE_SELECTで再現 |
+| その他 | Array.isArray/push/slice、String.match/startsWith/charAt/slice/includes/padStart、Number、正規表現test等もpage worldから影響を受け得る。呼出元の境界で捕捉。診断用validRowIndexesは分類時にpushを使用 |
+
+これは「どこに影響し得るか」の監査であり、法政ページがこれらを書き換えているという証拠ではありません。合成mutationは原因特定用コードの試験です。今回safe intrinsicへの一括置換、借用intrinsicへの迂回、法政ページprototypeの変更は行っていません。
+
+## 意味論と互換性
+
+single sourceは `shared/grade-import/extractor.js`。診断用wrapper・座標追跡・異常返却値のshape guardを追加しています。selector、24-cell rule、category rule、largest-count/tie rule、date/report/grade/number ruleの変更はありません。前回はSet初期化失敗の通知時期をextract呼出時へ移し、安全なコードにしました。正常初期化の評価集合は同じです。
+
+`globalThis.HoseiPlannerGradeExtractor` は既存4メソッド（date/report/extractRows/extractCurrentDocument）のまま。isSafeExtractionFailureはBookmarkletが使用するESM内部連携用exportで、extension globalには追加していません。正常結果・table_not_found/course_rows_not_found結果は不変。例外時はraw Errorの代わりに安全な内部failureをthrowするため、popupの既存catch経路へ入ります。popup/content/background/session handoff/manifestは変更していません。
+
+HoseiGradeImportV1はschemaVersion/source/capturedAt/coursesのままで、validatorも変更しません。diagnosticsは引き続きpayload外です。
+
+## 固定baselineと試験
+
+`tests/fixtures/extraction-741e780.json` はcommit `741e780b0db2db304024c22e5ad35805dc0bd731` の既存generated extensionを実行して取得した合成結果です。同commitのBookmarklet結果とも一致を確認しています。現実装から期待値を再生成しないでください。実データは含みません。
+
+正常32科目・4候補・40行・重複tie、tableなし、courseなし、malformed/label除外、最大候補が一意の5ケースをdeep equalityで比較します。正常Bookmarkletはcourses配列・全course field・順序・category継承・diagnostics・selected/tieをbaselineと比較します。
+
+例外試験は各境界を両generated artifactで実行し、`SECRET_PERSONAL_GRADE_VALUE` がalert / console / failureへ含まれないことを確認します。前回までの45 Bookmarklet tests（toJSON/clipboard含む）は変更せず維持します。
+
+## 実ページでの次の1回
+
+1. 最新feature commitに対応するVercel Previewの `/planner` を開く。
+2. 「成績データを取り込む」→「成績JSONの取得方法」→「Bookmarkletのコードをコピー」を押す。
+3. 保存済みブックマークのURLを全文置き換える（先頭javascript:を含む）。
+4. ログイン済み法政成績表で実行する。
+5. 失敗時は先頭の細分化GI_EXTRACT_*コード、固定field名と表示されたtable/row/cell indexだけを共有する。成功した場合は科目数・コピー・Planner「読み込み・検証」を確認する。
+
+通知に前回のGI_EXTRACT_EXCEPTIONだけでなく先頭の細分化コードがあることを確認してください。userの成功確認まではblockerを解除しません。
+
+## 4bf56f6で残っていたgeneric境界の監査
+
+実ページでは最初とfamily併記の両方がGI_EXTRACT_EXCEPTIONでした。以下を式単位で確認しました。
+
+| 旧式・評価 | 旧境界 | 今回の分類 |
+|---|---|---|
+| checkInitialization() | INITIALIZE | 維持 |
+| querySelectorAll / Array.from / inspect callback | TABLE_QUERYおよび内側コード | 維持 |
+| candidates.length | outerのみ | TABLE_RESULT、field=candidates.length |
+| candidatesがArrayか | 確認なし | TABLE_RESULT、field=candidates |
+| no-table result literal | outerのみ（diagnostics生成はDIAGNOSTICS） | FINALIZE |
+| selectCandidate(candidates) | CANDIDATE_SELECT | 維持 |
+| 返却値のselected / tieCandidateIndexes分割代入 | outerのみ | CANDIDATE_RESULTで読取・shape guard。新しい通常recordからのみ分割代入 |
+| selected.indexを使うcontext構築 | outerのみ | SELECTED_RESULT、field=selected.index。確認した数値をcontextへ保持 |
+| diagnosticsFor引数のselected.index読取 | DIAGNOSTICS内 | 確認済みcontext.tableIndexを利用 |
+| selected.courseRowCount | outerのみ | SELECTED_RESULT、field=selected.courseRowCount |
+| no-course result literal | outerのみ | FINALIZE |
+| new Date().toISOString() | CAPTURE_TIME | 維持 |
+| extractRows呼出前の引数selected.rows | outerのみ（callee内のCOURSE_PARSEは未到達） | SELECTED_RESULT、field=selected.rows |
+| extractRows本体 | COURSE_PARSEおよび内側コード | 維持 |
+| value/result literalと返却 | outerのみ | FINALIZE |
+
+guardはArray/record、非負整数のlength/index/count等の構造を検査するだけです。値の補正、再抽出、データの全コピー、intrinsic置換はしません。成功・no-table・no-courseの全result構築をFINALIZEに入れました。consoleへ渡るdiagnosticsは既知の件数/indexのshapeと余分なenumerable propertyを検査し、異常map return値の文字列や追加値を出す前に拒否します。payloadの完全な検証は従来どおりPlanner共通validatorが行います。
+
+追加guardもpage worldのArray.isArray／Object.keysに依存します。これら自身の例外は呼出元のRESULT／FINALIZE境界で扱います。あらゆる悪意あるbuiltin置換を防ぐ隔離環境を作る変更ではありません。通常の想定経路の外側に残るのはローカル束縛・新規plain recordの固定field読取・context literal構築で、page由来のfieldアクセスは今回の境界内に移しました。genericは最後のfallbackとして維持します。
+
+finalizeのobject literal自体は通常のprototype setterを呼びません。直接的な組立例外はinternal helperのaction/getterを使って試験し、generated artifactでは最終Array guardの例外とdiagnostics mapの異常returnを試験します。selectCandidateは通常plain resultを返すため、そのresult.selected getter例外もinternal helperで試験します。現実のpage mutationがその形を作っているとは主張しません。
+
+boundaryのidentity判定は変更していません。CELL_TEXT / ROW_QUERY / COURSE_PARSEで作ったfailureをouterへthrowし、同一identity、isSafeExtractionFailure=true、Bookmarkletの先頭通知がinner codeになることを確認します。追加ESM exportのboundary / readCandidateResult / finalizeExtractionは内部検証用で、extensionの4メソッドAPIには追加しません。
+
+hostile return値の試験にはArray.fromのnull/array-like/length Proxy、mapper引数無視、filterのnull selected、tie mapの非Array、selectedの3フィールドのthrow/不正shape、diagnostics mapの非Array/文字列配列/余分なpropertyを含めます。旧4bf56f6でgenericだった合成例は、新版では具体的診断になります。正常抽出への修正をしたわけではなく、実ページのmutation存在も未確認です。root cause candidate／root cause確定とは扱いません。
+
+前回までの86 Bookmarklet testsを無変更で維持し、result/identity/hostile-return試験を追加しています。正常32科目とdiagnosticsの固定baselineも引き続きdeep equalityで比較します。
+
+## 08fd287 FINALIZE内部の監査と細分化
+
+以前は以下の全処理がGI_EXTRACT_FINALIZE / resultに集約されていました。
+
+| 旧式 | 新しい境界・field |
+|---|---|
+| assemble() | FINAL_ASSEMBLE / result |
+| requireRecord(assemble後の値) | FINAL_RESULT / result |
+| result.diagnostics | FINAL_DIAGNOSTICS / diagnostics |
+| requireRecord(diagnostics) | FINAL_DIAGNOSTICS / diagnostics |
+| tableCandidates読取・Array判定 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates |
+| tieCandidateIndexes読取・Array判定 | FINAL_DIAGNOSTICS / diagnostics.tieCandidateIndexes |
+| Object.keys(diagnostics)・個数検査 | FINAL_DIAGNOSTICS / diagnostics.keys |
+| Object.keys(tables/ties)・配列lengthと個数比較 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates.keys または diagnostics.tieCandidateIndexes.keys |
+| selectedCandidateIndex読取・null/整数判定 | FINAL_DIAGNOSTICS / diagnostics.selectedCandidateIndex |
+| tables[i]読取・record判定 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates[] |
+| Object.keys(table)・個数検査 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates[].keys |
+| tableの各count/index読取・整数判定 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates[].index / rowCount / valid24RowCount / categoryRowCount / courseRowCount |
+| ties[i]読取・整数判定 | FINAL_DIAGNOSTICS / diagnostics.tieCandidateIndexes[] |
+| result.okアクセス・分岐 | FINAL_RESULT / result.ok |
+| result.valueアクセス・record判定 | FINAL_VALUE / result.value |
+| value.coursesアクセス・Array判定 | FINAL_COURSES / value.courses |
+| schemaVersion / source / capturedAtアクセスと条件 | FINAL_METADATA / value.schemaVersion / value.source / value.capturedAt |
+| result.reasonアクセスとallowed reason判定 | FINAL_FAILURE_RESULT / result.reason |
+| return result直前 | 新たなpage propertyアクセスなし。FINALIZEを最後のfallbackとして維持 |
+
+diagnostics.tableCandidates[]配下のtable indexは、その診断candidateの0-based位置です。それ以外は確認済みのselected table indexです。[]は固定文字列で、実データや動的property名を表示しません。診断のfield許可リストはswitchで判定し、page側Array.includes等に依存しません。
+
+Object.keysについて、throw、null/array-like返却、キー省略、余分なキー混入、table/tie配列・candidate個別のthrowを合成試験しました。返却値がArrayであることを最低限確認するguardを追加しています。既存の検査はキー名ではなくキー数を比較する方針なので、同じ個数でキー名だけ異なる返却は検出しません。この方針は変更せず試験で明示しています。Object.keys自体は置換していません。
+
+diagnosticsForのmapは従来のままです。throwは既存DIAGNOSTICS、非Array/文字列配列はFINAL_DIAGNOSTICS、callbackを無視して元の候補要素を返す場合は通常診断より多いfieldを持つためdiagnostics.tableCandidates[].keysへ分類されます。mapを置換する修正はしていません。
+
+result/value/diagnosticsのgetterは内部helper試験で、Object.keys/map mutationは両generated artifactの実行で確認します。raw throwableのmessage/cause/private propertyやProxy trapを読まず、固定code/field/indexだけのsafe failureが外側まで維持されることを確認します。既存のFINALIZE期待は同じ失敗ケースの具体的code/fieldにのみ更新し、試験削除・skipはしません。
+
+旧FINALIZEを再現するObject.keysやmapの合成ケースは複数あり、現段階でそのどれかを実ページの原因候補として新たに特定できたわけではありません。次の実ページコード・fieldを得るための分類試験です。parser/contract/validatorの意味論、Array.from mapper-ignore成功、extensionの4 APIは維持します。
