@@ -689,16 +689,18 @@ test('media evidence: ambiguous identity and duplicate rows remain unresolved wi
   assert.equal(result.facts[0].methodEvidence.allEarnedCreditsAreMedia, false);
 });
 
-for (const schooling of [0, 1, 3, -1]) test(`media evidence: explicit schooling ${schooling} is retained and conflicting contribution held`, () => {
+for (const schooling of [0, 1, 3, -1]) test(`media evidence: explicit schooling ${schooling} follows official priority and validation`, () => {
   const x = mediaFixture(); x.row.schoolingCreditsTotal = schooling;
   const records = [mediaRecord(x)], result = mediaFacts(x, records), progress = run(x, [], records);
-  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, null);
+  const expectedSchooling = schooling === 1 ? 1 : null;
+  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, expectedSchooling);
   assert.equal(result.facts[0].schoolingEvidence.credits, schooling);
   assert.equal(result.facts[0].schoolingEvidence.source, 'official_row');
   assert.equal(x.row.schoolingCreditsTotal, schooling);
-  assert.ok(result.facts[0].diagnostics.includes('media_schooling_credits_conflict'));
-  assert.equal(overall(progress), 2); assert.equal(schoolingReference(progress), null);
-  assert.deepEqual(progress.importedWarnings.map(n => n.kind), ['schooling_confirmation']);
+  assert.equal(result.facts[0].diagnostics.includes('media_schooling_credits_conflict'), schooling === 0);
+  assert.equal(result.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'), expectedSchooling === null);
+  assert.equal(overall(progress), 2); assert.equal(schoolingReference(progress), expectedSchooling);
+  assert.deepEqual(progress.importedWarnings.map(n => n.kind), expectedSchooling === null ? ['schooling_confirmation'] : []);
 });
 
 for (const components of [[null], [2, 2], [4, 4]]) test(`media evidence: pure media official4 uses one budget, never component sum (${components})`, () => {
@@ -827,4 +829,76 @@ test('media evidence: schooling-only mapping accepts proven media but explicit z
   x.row.schoolingCreditsTotal = 0;
   assert.equal(mediaFacts(x).allocations[0].credits, 2);
   assert.equal(mediaFacts(x).allocations[0].schoolingCredits, null);
+});
+
+// Follow-up: authoritative positive schooling aggregates outrank media inference.
+for (const [label, earned, schooling, expected, warnings, evidenceSource] of [
+  ['A', 2, 2, 2, [], 'official_row'],
+  ['B', 2, null, 2, [], 'media_earned'],
+  ['C', 2, 0, null, ['schooling_confirmation'], 'official_row'],
+  ['D', 2, 1, 1, [], 'official_row'],
+  ['E', 4, 2, 2, [], 'official_row'],
+  ['F', 2, 3, null, ['schooling_confirmation'], 'official_row'],
+  ['G', 0, 0, 0, [], 'official_row'],
+  ['H', null, null, null, ['credits_unknown'], 'unknown'],
+]) test(`official schooling priority ${label}: earned ${earned}, source schooling ${schooling}`, () => {
+  const x = mediaFixture(earned === 4 ? 4 : 2);
+  x.row.earnedCreditsTotal = earned; x.row.schoolingCreditsTotal = schooling;
+  const records = [mediaRecord(x, { credits: 4 })], rows = [x.row];
+  const snapshot = structuredClone({ x, records, rows }); deepFreeze({ x, records, rows });
+  const result = mediaFacts(x, records, rows), progress = run(x, [], records);
+  assert.equal(result.allocations.length, earned === null ? 0 : 1);
+  if (earned !== null) {
+    assert.equal(result.allocations[0].credits, earned);
+    assert.equal(result.allocations[0].schoolingCredits, expected);
+  }
+  const fact = result.facts[0];
+  assert.equal(fact.schoolingEvidence.source, evidenceSource);
+  assert.equal(fact.schoolingEvidence.credits, evidenceSource === 'media_earned' ? earned : schooling);
+  assert.equal(fact.sourceRows[0].schoolingCreditsTotal, schooling);
+  assert.equal(fact.diagnostics.includes('media_schooling_credits_conflict'), label === 'C');
+  assert.equal(fact.diagnostics.includes('schooling_evidence_requires_confirmation'), ['C', 'F'].includes(label));
+  assert.deepEqual(progress.importedWarnings.map(n => n.kind), warnings);
+  assert.equal(overall(progress), earned); assert.equal(schoolingReference(progress), expected);
+  assert.deepEqual({ x, records, rows }, snapshot);
+});
+
+for (const schooling of [-1, NaN, Infinity, -Infinity]) test(`official schooling priority: invalid ${schooling} never falls back to media-derived value`, () => {
+  const x = mediaFixture(); x.row.schoolingCreditsTotal = schooling;
+  const records = [mediaRecord(x)], snapshot = structuredClone({ x, records }); deepFreeze({ x, records });
+  const result = mediaFacts(x, records), progress = run(x, [], records);
+  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, null);
+  assert.equal(result.facts[0].schoolingEvidence.source, 'official_row');
+  assert.equal(result.facts[0].schoolingEvidence.credits, schooling);
+  assert.ok(result.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'));
+  assert.equal(result.facts[0].diagnostics.includes('media_schooling_credits_conflict'), false);
+  assert.equal(overall(progress), 2); assert.equal(schoolingReference(progress), null);
+  assert.deepEqual(progress.importedWarnings.map(n => n.kind), ['schooling_confirmation']);
+  assert.deepEqual({ x, records }, snapshot);
+});
+
+for (const rawTerm of ['夏', 'メ']) test(`official schooling priority: ordinary mapping retains official1 with marker ${rawTerm}`, () => {
+  const x = mediaFixture(); x.mapping.mediaOnly = false; x.row.schoolingCreditsTotal = 1;
+  const records = [mediaRecord(x, { rawTerm })];
+  const result = mediaFacts(x, records), progress = run(x, [], records);
+  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, 1);
+  assert.equal(result.facts[0].schoolingEvidence.source, 'official_row');
+  assert.equal(result.facts[0].schoolingEvidence.credits, 1);
+  assert.deepEqual(result.facts[0].diagnostics, []);
+  assert.equal(overall(progress), 2); assert.equal(schoolingReference(progress), 1);
+  assert.deepEqual(progress.importedWarnings, []);
+});
+
+test('official schooling priority: positive official value still obeys law and recognition guards', () => {
+  for (const guard of ['law', 'recognition']) {
+    const x = mediaFixture(); x.row.schoolingCreditsTotal = 1;
+    if (guard === 'law') x.course.canonicalName = '情報学入門';
+    else { x.profile.admissionType = 'transfer_third_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 15; }
+    const records = [mediaRecord(x)], result = mediaFacts(x, records);
+    assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, null);
+    assert.equal(result.facts[0].schoolingEvidence.credits, 1);
+    assert.equal(result.facts[0].schoolingEvidence.source, 'official_row');
+    assert.equal(result.facts[0].diagnostics.includes('media_schooling_credits_conflict'), false);
+    assert.deepEqual(run(x, [], records).importedWarnings.map(n => n.kind), ['schooling_confirmation']);
+  }
 });

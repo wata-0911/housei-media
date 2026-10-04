@@ -169,9 +169,9 @@ export function deriveOfficialGraduationFacts(
       schooling = row.earnedCreditsTotal;
       fact.schoolingEvidence = { credits: schooling, source: 'media_earned', recordIds: fact.methodEvidence.recordIds.slice() };
     }
-    // Explicit 0 is a source value, not a missing value. Preserve it in the fact;
-    // any disagreement with all-media earned attribution holds schooling only.
-    const schoolingConflict = mediaEarned && row.schoolingCreditsTotal !== null && row.schoolingCreditsTotal !== row.earnedCreditsTotal;
+    // Valid positive official schooling takes precedence over media inference.
+    // Only explicit 0 conflicts with positive all-media earned attribution.
+    const schoolingConflict = mediaEarned && row.schoolingCreditsTotal === 0;
     if (schoolingConflict) fact.diagnostics.push('media_schooling_credits_conflict');
     if (row.earnedCreditsTotal === 0) schooling = 0;
     else if (schoolingConflict || !validCredits(schooling) || schooling > row.earnedCreditsTotal || schooling > composition

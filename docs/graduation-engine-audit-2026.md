@@ -755,3 +755,30 @@ Preview: ローカルVite起動は成功したが、in-app browserのタブ作�
 - duplicate official rowsは未変更・未解決（aggregate null、allocationなし）。認定architecture、旧課程、特殊sequence、repeatable、thesis統合も未解決。
 - 実ユーザー32科目のlocalStorageは保有していない。実件数・schooling参考値の増加量は推測しない。merge前に実データで対象3科目のallocation_held解消、算入可能なmediaのschooling加算、未修得非加算、duplicate継続保留、consoleを確認する。
 - `graduationCheckComplete=false`, `sourceLinksReverified=false`, `schemaVersion=22`を維持。PlannerState、persistent shape、migration、bookmarklet/extension変更なし。通常commit・通常pushのみ、main/devへの直接commit・mergeなし。
+
+## Follow-up: explicit official schooling aggregate priority（2026-10-04）
+
+前節の履歴は保持し、このfollow-upではofficial schooling aggregateの優先順位だけを修正した。開始時remote devは `b3951395341b202ae9325afd32c50e93f676e81b`（PR #67のbookmarklet変更を含む）、remote featureは `601377f6cf26ec11d83cc0f7cd51883ec5e461c0`。featureへの第三者追加commitはなし。featureの元のbaseおよび最新devとのmerge-baseは `904111d8156c2a1c51f613ac23b23726786c4fae`。既存feature上で続行し、更新devのmerge/rebaseはしていない。
+
+production変更は `officialGraduationFacts.ts` の `schoolingConflict` 条件と説明コメントのみ。media-earnedと公式schoolingの不一致全般を衝突にしていた条件を、`mediaEarned && row.schoolingCreditsTotal === 0` に限定した。
+
+|official earned|official schooling|他guard通過時の通常 / schooling|schoolingEvidence.source|警告|
+|---|---|---|---|---|
+|2|2|2 / 2|official_row|なし|
+|2|null|2 / 2|media_earned|なし、source rowはnullのまま|
+|2|0|2 / null|official_row|schooling_confirmation。明示0保持、media_schooling_credits_conflictとschooling_evidence_requires_confirmation|
+|2|1|2 / 1|official_row|なし。media推論で2へ上書きもnull化もしない|
+|4|2|4 / 2|official_row|なし。media推論で4へ上書きしない|
+|2|3|2 / null|official_row|既存上限validationによりschooling_confirmation|
+|0|0|0 / 0|official_row|なし|
+|null|null|unknown / unknown|unknown|credits_unknown、componentからearnedを生成しない|
+
+有効なpositive official schoolingはmedia推論より優先し、値の不一致だけでユーザー確認を要求しない。negative/non-finite/earned・composition上限違反や既存guard違反は引き続きschoolingを保留し、nullへの置換後にmedia補完へfallbackしない。nullの公式値だけ、安全なsource-owned media methodと正のofficial earned帰属による計算用補完を許す。通常Mappingでも同じ優先順位を維持する。
+
+rawTermのexact「メ」marker、直接sourceCourseId link、source= hosei_import、trim/NFKCのみ、editable term/Offering非authority、component非加算、duplicate保留、recognition/legacy/special/repeatable/thesis/out_of_scope/mapping等の契約は変更していない。`LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026` と認定schooling overlap guardも変更なし。全体schooling30と法律専門schooling8の軸分離は別sliceのまま。
+
+既存605ケースを削除・skipせず保持した。旧不一致テストのschooling=1は依頼された正常算入を厳密にassertするよう訂正し、0と不正値の保留assertを維持。media conflict diagnosticは0だけ、不正値は既存validation diagnosticをassertする。新規15ケースはA–H、negative/NaN/±Infinity、通常Mappingの夏/メ、positive official値に対する法律/認定guard。A–Hと不正値では凍結入力とsource rowの不変性も確認する。
+
+`graduationCheckComplete=false`、`sourceLinksReverified=false`、`schemaVersion=22`、persistent state shapeはすべて維持。公式sourceの追加再検証、UI、extension、bookmarklet、認定architectureの変更なし。通常commit・通常pushのみ。merge・PR作成なし。
+
+検証: `npm run test:planner` **620/620 PASS**（既存605 + 新規15、skip0）、`npm run test:extension` **19/19 PASS**。`npm run typecheck`、`npm run lint`、`npm run build`、`git diff --check`もPASS。build内のcatalog:checkは321 Course / 686 Offeringで成功。既存の500kB超chunk警告のみ。検証対象はこのfeatureのfollow-up差分であり、更新されたdevとの統合後検証やユーザー実データのPreview確認ではない。
