@@ -660,3 +660,125 @@ Preview: ローカルVite起動は成功したが、in-app browserのタブ作�
 ブラウザー接続回復後、終了していた開発サーバーを同じ `127.0.0.1:5178` のbuild済みPreviewへ切り替えて再確認。Plannerとプロフィールの描画、既存の計画2件（計6単位）、所属・入学情報の未入力表示、卒業可否を保証しない注意書きを確認した。成績表の修得済みは0単位、所属は未選択のため、実取込成績を使った卒業カード比較・二重加算・確認条件数の前後比較は未検証。プロフィール値や履修データは変更していない。
 
 終了済みdevサーバーに接続していた時点ではHMR切断、遅延import失敗、Homeの外部GAS/X timeout等がconsoleに残っていた。build済みPlannerの再読込後に新たなconsole error/warningは観測されなかった。これは確認した画面・操作範囲に限る。
+
+## Follow-up: source-owned media method / earned attribution（2026-10-04）
+
+この節は既存監査本文の訂正・置換ではなく、remote dev `904111d8156c2a1c51f613ac23b23726786c4fae` からの追加実装記録。branch: `feature/graduation-media-method-evidence`。対象はmedia/method evidenceのみ。
+
+### 今回再確認した公式根拠
+
+|公式source|確認箇所|確認した文言・意味|productionへ適用する範囲|
+|---|---|---|---|
+|[2026年度 学習のしおり](https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026.pdf#page=135)|冊子133頁 / PDF135頁「履修・成績通知書」の基本的な見方。公式PDFを取得し、該当ページを画像でも確認|「メ＝メディア」。修得単位は修得済み単位、S単位は修得済みスクーリング単位。登録・採点中の評価には＊が付く|`method=schooling`かつsource-owned `rawTerm`のtrim/NFKC後が「メ」の場合だけmethod証拠。marker自体は単位修得を証明しない。公式earned aggregateが別途必要|
+|[メディアスクーリング公式説明](https://www.tsukyo.hosei.ac.jp/system/schooling/media.html)|HTML本文（頁なし）|インターネットを使うスクーリングであり、試験合格で単位修得。所属・入学年次による条件もある|履修方法と修得の区別。科目の通常卒業算入条件や個別要件を無条件に解除する根拠にはしない|
+|[公式FAQ](https://www.tsukyo.hosei.ac.jp/faq/000-2)|スクーリング受講についての回答（HTML、頁なし）|メディアで修得した単位も、卒業に必要なスクーリング単位に含む旨を明記|安全にmediaへ帰属できる公式earned aggregateを、schooling不明時の計算用補完に使用|
+|[卒業必要要件](https://www.tsukyo.hosei.ac.jp/system/requirements/)|卒業所要単位・スクーリング条件（HTML、頁なし）|卒業要件にはスクーリング単位条件がある|今回の補完は参考進捗の入力であり、卒業判定の完成を意味しない|
+|[2026年度 学習のしおり・法律学科](https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026.pdf#page=49)|冊子47頁 / PDF49頁、注記cと＊印|データサイエンス科目等の＊印を除く専門教育科目から、スクーリング8単位を求める|既存の法律学科schooling除外guardを維持。全体30単位と専門8単位の配分軸の分離は今回実装しない（下記制約参照）|
+
+全source linkを再検証したわけではないため、`sourceLinksReverified=false` を維持。
+
+### Calculation-only contract
+
+`OfficialGraduationFact.methodEvidence` に `media: confirmed | unknown | conflict`, `allEarnedCreditsAreMedia`, `recordIds`, `rawTerms` を追加。persistent stateには保存しない。
+
+1. 独立したexact CurriculumCourse identity、一意または同値Mapping、通常bucket、構成単位の整合性、既存special/legacy/repeatable/認定重複guardを通過してから評価する。duplicateのmethod帰属は評価・解決しない。
+2. `record.source === 'hosei_import'` と `record.sourceCourseId === officialRow.id` を要求。名前、Offering、orphanから別rowに証拠を転用しない。
+3. 取込パイプラインは実質的証拠のある場合だけcomponentを作る。ただし `course-only:` fingerprintの通信互換rowは実際の通信学習証拠ではない。source detail（rawYear/rawTerm/date/credits/grade/examGrade/reports）が空の互換rowだけを除外。親sourceの再取込でfingerprintが変わっても、互換rowのprefixと直接link・空のsource detailで識別する。editable termや推定年度は互換rowを履修証拠に変えない。
+4. 残る直接linked source recordsが1件以上あり、すべて `method=schooling` かつ `rawTerm.normalize('NFKC').trim() === 'メ'` であればmedia confirmed。媒体名の曖昧一致・同義化は行わない。`メディア`、`MEDIA`、`前期メディア`等は不採用。
+5. mediaとその他のsource component（通常スクーリング、期不明のスクーリング、実質的通信記録等）が混在すればconflict。通信の採点待ち・リポートのみでも既存 `hasCorrespondenceEvidence` の意味を尊重する。component単位をsum/max/latestで選び、混在を解決しない。
+6. media confirmedと正のofficial `earnedCreditsTotal`の両方で、全official earnedをmedia-earnedへ帰属する。複数media componentでも予算は公式aggregateを一度だけ使う。component creditsは修得合計へ加算しない。
+7. `mapping.mediaOnly` は制度上必要なmethodであり、履修履歴の証明ではない。mediaOnlyの正単位は上記帰属を要求。unknownは `special_rule_evidence_required / method_evidence_required`、混在は `special_rule_evidence_required / method_evidence_conflict` でallocationを保留。
+8. `term`は編集可能なのでauthorityにしない。`selectedOfferingId` / `offeringId` / `Offering.deliveryCategory` / 年度別開講はhistorical methodの根拠にしない。既存identity validationは維持。
+
+### Schooling優先順位・zero/null/positive
+
+- 明示されたofficial `schoolingCreditsTotal`を優先し、factの`schoolingEvidence.source=official_row`と`sourceRows`に保持。
+- nullの場合だけ、上記の全media-earned帰属を使って`schoolingEvidence.source=media_earned`, `credits=earnedCreditsTotal`を計算用に補完。source rowのnullを書き換えない。
+- 明示0（および全media-earnedと食い違う他の明示値）は補完しない。`media_schooling_credits_conflict`と`schooling_evidence_requires_confirmation`を追加し、allocationのschoolingはnullにする。安全な通常卒業単位は算入し、既存の`schooling_confirmation`を使用する。
+- 既存の上限validation、法律学科除外、認定schooling重複guardは補完後にも適用する。
+- earned=0はmethod holdを要求せず、通常0 / schooling0。source evidenceは保持し、graduation warningなし。earned=nullはmetadata unknown / `credits_unknown`のままで、componentから修得単位を作らない。earned>0だけ修得帰属による補完対象。
+- mediaOnly=falseにも同じschooling evidence projectionを使用する。通常Mappingをmedia必須に変えず、既知の通常スクーリング値や既存allocationを維持する。
+
+|合成入力（他のguard通過）|従来|変更後の通常単位 / schooling単位|表示|
+|---|---|---|---|
+|mediaOnly, earned2, schooling2, rawTermメ|method保留|2 / 2|allocation_held解消|
+|mediaOnly, earned2, schooling null, 純media|method保留|2 / 2（計算用補完）|両確認不要|
+|mediaOnly, earned0, schooling null, rawTermメ|進捗0、警告なし|0 / 0|警告なしを維持|
+|earned null, rawTermメ|修得不明|unknown / unknown|credits_unknown|
+|mediaOnly, earned4, media2 + 夏2|method保留|unknown / unknown|allocation_held、method conflict|
+|mediaOnly, earned2, schooling明示0, rawTermメ|method保留|2 / unknown（sourceは0）|schooling_confirmation|
+|mediaOnly, earned4, 純media複数|method保留|4 / 4（componentの合計ではない）|両確認不要|
+
+### 現dev catalogの代表3科目
+
+全3科目のcurriculumCredits=2、mediaOnly=true、schoolingOnly=false。productionにこの3科目名の条件分岐は追加していない。
+
+**データサイエンス入門A** — CurriculumCourse id: `curriculum:13f927d9-f1b4-4994-aea3-b901ea666ee9`, curriculumCredits: 2
+
+|mappingId|scopeId / 所属|category|field|requirementType|mediaOnly|schoolingOnly|
+|---|---|---|---|---|---|---|
+|13f927d9-f1b4-4994-aea3-b901ea666ee9|aafa0eb9-e158-461c-9b15-83e41da1830d / 日本文学科・芸能文化コース|専門教育|null|選択|true|false|
+|659dfa75-8117-4810-80b5-cec57391f534|74e81655-5390-4980-984d-e4580f28594d / 日本文学科・言語コース|専門教育|null|選択|true|false|
+|75cc2f69-2eb6-4567-bad1-9790748fe613|d242111d-f0c1-420b-a41f-a33a14d15909 / 日本文学科・文学コース|専門教育|null|選択|true|false|
+|83c1d404-183b-423a-b31f-844879f6c561|e31201f3-4f1d-432a-906e-6af94af294c9 / 法律学科|専門教育|null|選択|true|false|
+|85928b36-0a6b-48c1-b1e9-1cf680b4b9f4|3641eb3c-91bd-4094-a56e-6e0f0da660f5 / 経済学科|専門教育|null|選択|true|false|
+|8b496d30-7d56-45a3-a3d9-6d5e47545e80|6609ce7c-3d7a-423e-9f19-7841dd841ca9 / 商業学科|専門教育|null|選択|true|false|
+|9733b520-7ba0-461e-b28b-760b27b3989e|118c5183-6aec-4fa1-905a-265f25d86db1 / 史学科|専門教育|null|選択|true|false|
+|d4860e8c-dd77-484d-ac89-3d6e2ba23d79|4d450b06-fb99-4bf2-a769-fe5f68dd337a / 地理学科|専門教育|null|選択|true|false|
+
+**データサイエンス応用基礎B** — CurriculumCourse id: `curriculum:0a477578-9769-4097-9107-30256649dbd1`, curriculumCredits: 2
+
+|mappingId|scopeId / 所属|category|field|requirementType|mediaOnly|schoolingOnly|
+|---|---|---|---|---|---|---|
+|0a477578-9769-4097-9107-30256649dbd1|4d450b06-fb99-4bf2-a769-fe5f68dd337a / 地理学科|専門教育|null|選択|true|false|
+|56d01222-3499-452b-b250-02787a8febcf|6609ce7c-3d7a-423e-9f19-7841dd841ca9 / 商業学科|専門教育|null|選択|true|false|
+|7117d9d8-bcfa-4a95-8c20-83c31114d6d0|e31201f3-4f1d-432a-906e-6af94af294c9 / 法律学科|専門教育|null|選択|true|false|
+|af123fa5-ef5c-40f0-85d8-e897b88518e8|aafa0eb9-e158-461c-9b15-83e41da1830d / 日本文学科・芸能文化コース|専門教育|null|選択|true|false|
+|b532b2f1-947c-406f-8604-2553f82eb4cf|74e81655-5390-4980-984d-e4580f28594d / 日本文学科・言語コース|専門教育|null|選択|true|false|
+|d77f69e4-f044-4d03-a889-d66f22dcd563|118c5183-6aec-4fa1-905a-265f25d86db1 / 史学科|専門教育|null|選択|true|false|
+|d7c71990-717c-4d0f-b72a-2515319d3b6f|3641eb3c-91bd-4094-a56e-6e0f0da660f5 / 経済学科|専門教育|null|選択|true|false|
+|ee9abba5-ad4d-4571-819e-56127326e8c8|d242111d-f0c1-420b-a41f-a33a14d15909 / 日本文学科・文学コース|専門教育|null|選択|true|false|
+
+**生物学2** — CurriculumCourse id: `curriculum:a8eeeac4-5ecd-417d-b1fc-fb0311770703`, curriculumCredits: 2
+
+|mappingId|scopeId / 所属|category|field|requirementType|mediaOnly|schoolingOnly|
+|---|---|---|---|---|---|---|
+|a8eeeac4-5ecd-417d-b1fc-fb0311770703|0aa8cc58-04cd-40c8-aad1-0975d4b55f9c / 共通|一般教育|自然|選択必修|true|false|
+
+### 検証・制約・残件
+
+- 新規mediaテスト50件。明示2/null/0、earned0/null、rawTermと編集termの分離、trim/NFKCと不採用marker、通常S/通信混在、実importのcourse-onlyとpending exam、wrong link/orphan、ambiguous identity、duplicate、純media複数、通常Mapping、同値/非同値Mapping、Offering順序・削除、凍結入力、既存special/legacy/repeatable/認定/除外guard、実catalog3科目×全8所属scopeを検証。
+- `npm run test:planner`: **605/605 PASS**、skipなし（既存555 + 新規50）。G1/G3/G5/G6/G14、PR #66までのsource-credit semantics、warning taxonomy、UX cleanupを含む既存テストは削除・skip・期待値弱体化なし。
+- `npm run test:extension`: **19/19 PASS**。`npm run typecheck`, `npm run lint`, `npm run build`, `git diff --check`: PASS。build内catalog:check成功。既存の500kB超chunk警告あり。
+- Preview: in-app browserは `Browser is not available: iab`、接続一覧もapps/browsersとも0件。Planner実画面・GraduationProgress描画・ブラウザーconsoleは未検証。合成fixtureで通常参考値・schooling参考値・警告taxonomyを計算APIまで検証した結果と区別する。
+- 法律学科のデータサイエンス2科目は、media method holdが解消し通常2単位となるが、既存の `LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026` guardによりschooling確認は残る。他7scopeでは純mediaで通常2 / schooling2。生物学2は全8scopeで通常2 / schooling2。冊子47頁の＊印は専門スクーリング8単位の対象制限であり、全体30単位からの一律除外を意味すると今回断定していない。既存エンジンの全体schoolingと専門schoolingの軸の分離は別sliceの残件として明示する。
+- duplicate official rowsは未変更・未解決（aggregate null、allocationなし）。認定architecture、旧課程、特殊sequence、repeatable、thesis統合も未解決。
+- 実ユーザー32科目のlocalStorageは保有していない。実件数・schooling参考値の増加量は推測しない。merge前に実データで対象3科目のallocation_held解消、算入可能なmediaのschooling加算、未修得非加算、duplicate継続保留、consoleを確認する。
+- `graduationCheckComplete=false`, `sourceLinksReverified=false`, `schemaVersion=22`を維持。PlannerState、persistent shape、migration、bookmarklet/extension変更なし。通常commit・通常pushのみ、main/devへの直接commit・mergeなし。
+
+## Follow-up: explicit official schooling aggregate priority（2026-10-04）
+
+前節の履歴は保持し、このfollow-upではofficial schooling aggregateの優先順位だけを修正した。開始時remote devは `b3951395341b202ae9325afd32c50e93f676e81b`（PR #67のbookmarklet変更を含む）、remote featureは `601377f6cf26ec11d83cc0f7cd51883ec5e461c0`。featureへの第三者追加commitはなし。featureの元のbaseおよび最新devとのmerge-baseは `904111d8156c2a1c51f613ac23b23726786c4fae`。既存feature上で続行し、更新devのmerge/rebaseはしていない。
+
+production変更は `officialGraduationFacts.ts` の `schoolingConflict` 条件と説明コメントのみ。media-earnedと公式schoolingの不一致全般を衝突にしていた条件を、`mediaEarned && row.schoolingCreditsTotal === 0` に限定した。
+
+|official earned|official schooling|他guard通過時の通常 / schooling|schoolingEvidence.source|警告|
+|---|---|---|---|---|
+|2|2|2 / 2|official_row|なし|
+|2|null|2 / 2|media_earned|なし、source rowはnullのまま|
+|2|0|2 / null|official_row|schooling_confirmation。明示0保持、media_schooling_credits_conflictとschooling_evidence_requires_confirmation|
+|2|1|2 / 1|official_row|なし。media推論で2へ上書きもnull化もしない|
+|4|2|4 / 2|official_row|なし。media推論で4へ上書きしない|
+|2|3|2 / null|official_row|既存上限validationによりschooling_confirmation|
+|0|0|0 / 0|official_row|なし|
+|null|null|unknown / unknown|unknown|credits_unknown、componentからearnedを生成しない|
+
+有効なpositive official schoolingはmedia推論より優先し、値の不一致だけでユーザー確認を要求しない。negative/non-finite/earned・composition上限違反や既存guard違反は引き続きschoolingを保留し、nullへの置換後にmedia補完へfallbackしない。nullの公式値だけ、安全なsource-owned media methodと正のofficial earned帰属による計算用補完を許す。通常Mappingでも同じ優先順位を維持する。
+
+rawTermのexact「メ」marker、直接sourceCourseId link、source= hosei_import、trim/NFKCのみ、editable term/Offering非authority、component非加算、duplicate保留、recognition/legacy/special/repeatable/thesis/out_of_scope/mapping等の契約は変更していない。`LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026` と認定schooling overlap guardも変更なし。全体schooling30と法律専門schooling8の軸分離は別sliceのまま。
+
+既存605ケースを削除・skipせず保持した。旧不一致テストのschooling=1は依頼された正常算入を厳密にassertするよう訂正し、0と不正値の保留assertを維持。media conflict diagnosticは0だけ、不正値は既存validation diagnosticをassertする。新規15ケースはA–H、negative/NaN/±Infinity、通常Mappingの夏/メ、positive official値に対する法律/認定guard。A–Hと不正値では凍結入力とsource rowの不変性も確認する。
+
+`graduationCheckComplete=false`、`sourceLinksReverified=false`、`schemaVersion=22`、persistent state shapeはすべて維持。公式sourceの追加再検証、UI、extension、bookmarklet、認定architectureの変更なし。通常commit・通常pushのみ。merge・PR作成なし。
+
+検証: `npm run test:planner` **620/620 PASS**（既存605 + 新規15、skip0）、`npm run test:extension` **19/19 PASS**。`npm run typecheck`、`npm run lint`、`npm run build`、`git diff --check`もPASS。build内のcatalog:checkは321 Course / 686 Offeringで成功。既存の500kB超chunk警告のみ。検証対象はこのfeatureのfollow-up差分であり、更新されたdevとの統合後検証やユーザー実データのPreview確認ではない。
