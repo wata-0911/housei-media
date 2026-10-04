@@ -27,6 +27,7 @@ async function run() {
       if (error.tableIndex !== undefined) position += `\ntable index: ${error.tableIndex}`;
       if (error.rowIndex !== undefined) position += `\nrow index: ${error.rowIndex}`;
       if (error.cellIndex !== undefined) position += `\ncell index: ${error.cellIndex}`;
+      if (error.field !== undefined) position += `\nfield: ${error.field}`;
       fail(error.code, `成績表の読み取りに失敗しました。 [GI_EXTRACT_EXCEPTION]${position}`);
     } else fail('GI_EXTRACT_EXCEPTION', '成績表の読み取りに失敗しました。');
     return;

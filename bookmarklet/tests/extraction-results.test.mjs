@@ -1,0 +1,96 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { test } from 'node:test';
+import { harness } from './fixtures/extraction-dom.mjs';
+import { boundary, readCandidateResult, finalizeExtraction, isSafeExtractionFailure } from '../../shared/grade-import/extractor.js';
+
+const extension = readFileSync(new URL('../../extension/hosei-planner-import/parser/extractor.js', import.meta.url), 'utf8');
+const bookmarklet = decodeURIComponent(JSON.parse(readFileSync(new URL('../../src/generated/gradeImportBookmarklet.json', import.meta.url), 'utf8')).bookmarklet.slice(11));
+const secret = 'SECRET_PERSONAL_GRADE_VALUE';
+const bomb = `throw new Error('${secret}')`;
+const selectedProxy = field => `const originalFilter=Array.prototype.filter; Array.prototype.filter=function(...args){const r=Reflect.apply(originalFilter,this,args); if(this[0]?.courseRowCount!==undefined) return [new Proxy(r[0],{get(target,key){if(key==='${field}'){${bomb}}return Reflect.get(target,key);}})]; return r;};`;
+const cases = [
+  ['Array.from returns null', 'Array.from=()=>null;', { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates' }],
+  ['Array.from returns array-like object', 'Array.from=()=>({length:0});', { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates' }],
+  ['Array.from ignores mapper argument', 'const originalFrom=Array.from; Array.from=value=>originalFrom(value);', { code:'GI_EXTRACT_CANDIDATE_RESULT', field:'selected' }],
+  ['candidate array length getter throws', `Array.from=()=>new Proxy([], {get(target,key){if(key==='length'){${bomb}}return Reflect.get(target,key);}});`, { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates.length' }],
+  ['candidate array length is invalid', `Array.from=()=>new Proxy([], {get(target,key){return key==='length'?'${secret}':Reflect.get(target,key);}});`, { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates.length' }],
+  ['array result check throws', `Array.isArray=()=>{${bomb}};`, { code:'GI_EXTRACT_TABLE_RESULT', field:'candidates' }],
+  ['filter returns null selected', `const originalFilter=Array.prototype.filter; Array.prototype.filter=function(...args){return this[0]?.courseRowCount!==undefined?[null]:Reflect.apply(originalFilter,this,args);};`, { code:'GI_EXTRACT_CANDIDATE_RESULT', field:'selected' }],
+  ['tie map returns non-array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this.length===2 && this[0]?.courseRowCount!==undefined)return {};return Reflect.apply(originalMap,this,args);};`, { code:'GI_EXTRACT_CANDIDATE_RESULT', field:'tieCandidateIndexes' }],
+  ['selected.index getter throws', selectedProxy('index'), { code:'GI_EXTRACT_SELECTED_RESULT', field:'selected.index' }],
+  ['selected.courseRowCount getter throws', selectedProxy('courseRowCount'), { code:'GI_EXTRACT_SELECTED_RESULT', tableIndex:2, field:'selected.courseRowCount' }],
+  ['selected.rows getter throws', selectedProxy('rows'), { code:'GI_EXTRACT_SELECTED_RESULT', tableIndex:2, field:'selected.rows' }],
+  ...['index','courseRowCount','rows'].map(field => [
+    `selected.${field} has invalid shape`, selectedProxy(field).replace(bomb, `return '${secret}';`),
+    {code:'GI_EXTRACT_SELECTED_RESULT', ...(field==='index'?{}:{tableIndex:2}), field:`selected.${field}`},
+  ]),
+  ['final courses guard throws', `const original=Array.isArray; Array.isArray=function(value){if(value?.[0]?.rawName){${bomb}}return original(value);};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
+  ['diagnostics map returns non-array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return {};return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
+  ['diagnostics map returns private string array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return ['${secret}'];return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
+  ['diagnostics map adds private property', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){const r=Reflect.apply(originalMap,this,args);if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) r.privateValue='${secret}';return r;};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
+  ['cell filter returns non-array', `const originalFilter=Array.prototype.filter; Array.prototype.filter=function(...args){return this[0]?.classList?null:Reflect.apply(originalFilter,this,args);};`, {code:'GI_EXTRACT_CELL_TEXT', tableIndex:2, rowIndex:0}],
+  ['row query Array.from returns wrong shape', `const original=Array.from; Array.from=function(value,...args){return value?.[0]?.physicalCells?null:original(value,...args);};`, {code:'GI_EXTRACT_ROW_CLASSIFY', tableIndex:2}],
+];
+for (const [name, script, expected] of cases) test(`result boundary: ${name} (both generated artifacts)`, async () => {
+  const direct=harness(); vm.runInContext(script,direct.context); vm.runInContext(extension,direct.context);
+  let failure;
+  try { direct.context.HoseiPlannerGradeExtractor.extractCurrentDocument(); } catch(error) { failure=error; }
+  assert.deepEqual({...failure},expected); assert.equal(Object.getPrototypeOf(failure),null);
+  assert.deepEqual(Object.keys(direct.context.HoseiPlannerGradeExtractor).sort(),['date','extractCurrentDocument','extractRows','report']);
+  const h=harness(); vm.runInContext(script,h.context); vm.runInContext(bookmarklet,h.context);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.alerts.length,1); assert.ok(h.alerts[0].startsWith(`[${expected.code}]`));
+  if(expected.field) assert.ok(h.alerts[0].includes(`field: ${expected.field}\n`));
+  else assert.doesNotMatch(h.alerts[0],/field:/);
+  assert.deepEqual(h.logs,[]); assert.deepEqual(h.copied,[]);
+  assert.doesNotMatch(JSON.stringify({failure,alerts:h.alerts,logs:h.logs}),new RegExp(secret));
+});
+
+const emptyContext = () => ({__proto__:null});
+const capture = action => { try { action(); } catch(error) { return error; } assert.fail('expected safe failure'); };
+for(const field of ['selected','tieCandidateIndexes']) test(`candidate result ${field} getter failure retains fixed field`,()=>{
+  let reads=0;
+  const untrusted=new Proxy({}, {get(){reads++;throw new Error(secret);},getPrototypeOf(){reads++;throw new Error(secret);}});
+  const result={selected:{},tieCandidateIndexes:[]}; Object.defineProperty(result,field,{get(){throw untrusted;}});
+  const error=capture(()=>boundary('GI_EXTRACT_EXCEPTION',emptyContext(),()=>readCandidateResult(result)));
+  assert.deepEqual({...error},{code:'GI_EXTRACT_CANDIDATE_RESULT',field});
+  assert.ok(isSafeExtractionFailure(error)); assert.equal(reads,0);
+});
+for(const value of [null, [], 'SECRET_PERSONAL_GRADE_VALUE']) test(`candidate result rejects ${value===null?'null':Array.isArray(value)?'array':'primitive'} record`,()=>{
+  const error=capture(()=>readCandidateResult(value));
+  assert.deepEqual({...error},{code:'GI_EXTRACT_CANDIDATE_RESULT',field:'selection'});
+});
+test('final assembly exception is sanitized, with no throwable property access',()=>{
+  let reads=0;
+  const raw=new Proxy({}, {get(){reads++;throw new Error(secret);}});
+  const error=capture(()=>boundary('GI_EXTRACT_EXCEPTION',emptyContext(),()=>finalizeExtraction(emptyContext(),()=>{throw raw;})));
+  assert.deepEqual({...error},{code:'GI_EXTRACT_FINALIZE',field:'result'}); assert.equal(reads,0);
+});
+test('final assembly payload getter exception is FINALIZE',()=>{
+  const error=capture(()=>finalizeExtraction(emptyContext(),()=>({ok:true,diagnostics:{tableCandidates:[],tieCandidateIndexes:[],selectedCandidateIndex:null},get value(){throw new Error(secret);}})));
+  assert.deepEqual({...error},{code:'GI_EXTRACT_FINALIZE',field:'result'});
+});
+for(const code of ['GI_EXTRACT_CELL_TEXT','GI_EXTRACT_ROW_QUERY','GI_EXTRACT_COURSE_PARSE']) test(`nested boundary preserves exact failure identity: ${code}`,()=>{
+  let inner;
+  const outer=capture(()=>boundary('GI_EXTRACT_EXCEPTION',emptyContext(),()=>{
+    inner=capture(()=>boundary(code,emptyContext(),()=>{throw new Error(secret);}));
+    throw inner;
+  }));
+  assert.equal(outer,inner); assert.ok(isSafeExtractionFailure(outer));
+  assert.deepEqual({...outer},{code});
+});
+for(const [code,install] of [
+  ['GI_EXTRACT_CELL_TEXT',h=>Object.defineProperty(h.tables[2].rows[1].physicalCells[2],'textContent',{get(){throw new Error(secret);}})],
+  ['GI_EXTRACT_ROW_QUERY',h=>{h.tables[2].querySelectorAll=()=>{throw new Error(secret);};}],
+  ['GI_EXTRACT_COURSE_PARSE',h=>vm.runInContext(`Set.prototype.has=()=>{${bomb}}`,h.context)],
+]) test(`Bookmarklet notification starts with preserved inner code: ${code}`,async()=>{
+  const h=harness();install(h);vm.runInContext(bookmarklet,h.context);await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(h.alerts[0].startsWith(`[${code}]`)); assert.deepEqual(h.logs,[]); assert.deepEqual(h.copied,[]);
+});
+test('arbitrary diagnostic field label is not copied or coerced',()=>{
+  let reads=0; const field=new Proxy({}, {get(){reads++;throw new Error(secret);}});
+  const error=capture(()=>boundary('GI_EXTRACT_FINALIZE',emptyContext(),()=>{throw null;},field));
+  assert.deepEqual({...error},{code:'GI_EXTRACT_FINALIZE'}); assert.equal(reads,0);
+});
