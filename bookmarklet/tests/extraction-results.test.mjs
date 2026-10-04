@@ -25,10 +25,10 @@ const cases = [
     `selected.${field} has invalid shape`, selectedProxy(field).replace(bomb, `return '${secret}';`),
     {code:'GI_EXTRACT_SELECTED_RESULT', ...(field==='index'?{}:{tableIndex:2}), field:`selected.${field}`},
   ]),
-  ['final courses guard throws', `const original=Array.isArray; Array.isArray=function(value){if(value?.[0]?.rawName){${bomb}}return original(value);};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
-  ['diagnostics map returns non-array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return {};return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
-  ['diagnostics map returns private string array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return ['${secret}'];return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
-  ['diagnostics map adds private property', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){const r=Reflect.apply(originalMap,this,args);if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) r.privateValue='${secret}';return r;};`, {code:'GI_EXTRACT_FINALIZE', tableIndex:2, field:'result'}],
+  ['final courses guard throws', `const original=Array.isArray; Array.isArray=function(value){if(value?.[0]?.rawName){${bomb}}return original(value);};`, {code:'GI_EXTRACT_FINAL_COURSES', tableIndex:2, field:'value.courses'}],
+  ['diagnostics map returns non-array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return {};return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINAL_DIAGNOSTICS', tableIndex:2, field:'diagnostics.tableCandidates'}],
+  ['diagnostics map returns private string array', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) return ['${secret}'];return Reflect.apply(originalMap,this,args);};`, {code:'GI_EXTRACT_FINAL_DIAGNOSTICS', tableIndex:0, field:'diagnostics.tableCandidates[]'}],
+  ['diagnostics map adds private property', `const originalMap=Array.prototype.map; Array.prototype.map=function(...args){const r=Reflect.apply(originalMap,this,args);if(this[0]?.courseRowCount!==undefined && args[0].length===1 && (''+args[0]).includes('valid24RowCount')) r.privateValue='${secret}';return r;};`, {code:'GI_EXTRACT_FINAL_DIAGNOSTICS', tableIndex:2, field:'diagnostics.tableCandidates.keys'}],
   ['cell filter returns non-array', `const originalFilter=Array.prototype.filter; Array.prototype.filter=function(...args){return this[0]?.classList?null:Reflect.apply(originalFilter,this,args);};`, {code:'GI_EXTRACT_CELL_TEXT', tableIndex:2, rowIndex:0}],
   ['row query Array.from returns wrong shape', `const original=Array.from; Array.from=function(value,...args){return value?.[0]?.physicalCells?null:original(value,...args);};`, {code:'GI_EXTRACT_ROW_CLASSIFY', tableIndex:2}],
 ];
@@ -95,11 +95,11 @@ test('final assembly exception is sanitized, with no throwable property access',
   let reads=0;
   const raw=new Proxy({}, {get(){reads++;throw new Error(secret);}});
   const error=capture(()=>boundary('GI_EXTRACT_EXCEPTION',emptyContext(),()=>finalizeExtraction(emptyContext(),()=>{throw raw;})));
-  assert.deepEqual({...error},{code:'GI_EXTRACT_FINALIZE',field:'result'}); assert.equal(reads,0);
+  assert.deepEqual({...error},{code:'GI_EXTRACT_FINAL_ASSEMBLE',field:'result'}); assert.equal(reads,0);
 });
-test('final assembly payload getter exception is FINALIZE',()=>{
+test('final assembly payload getter exception is FINAL_VALUE',()=>{
   const error=capture(()=>finalizeExtraction(emptyContext(),()=>({ok:true,diagnostics:{tableCandidates:[],tieCandidateIndexes:[],selectedCandidateIndex:null},get value(){throw new Error(secret);}})));
-  assert.deepEqual({...error},{code:'GI_EXTRACT_FINALIZE',field:'result'});
+  assert.deepEqual({...error},{code:'GI_EXTRACT_FINAL_VALUE',field:'result.value'});
 });
 for(const code of ['GI_EXTRACT_CELL_TEXT','GI_EXTRACT_ROW_QUERY','GI_EXTRACT_COURSE_PARSE']) test(`nested boundary preserves exact failure identity: ${code}`,()=>{
   let inner;

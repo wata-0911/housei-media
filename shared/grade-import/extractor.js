@@ -17,7 +17,40 @@ const boundary = (code, context, action, field) => {
     // Do not depend on array iterators/map/filter when reporting their failure.
     coordinate('tableIndex'); coordinate('rowIndex'); coordinate('cellIndex');
     // Only compile-time schema labels; never stringify an arbitrary field/value.
-    if (field === 'candidates' || field === 'candidates.length' || field === 'selection' || field === 'selected' || field === 'tieCandidateIndexes' || field === 'selected.index' || field === 'selected.courseRowCount' || field === 'selected.rows' || field === 'result') failure.field = field;
+    switch (field) {
+      case 'candidates':
+      case 'candidates.length':
+      case 'selection':
+      case 'selected':
+      case 'tieCandidateIndexes':
+      case 'selected.index':
+      case 'selected.courseRowCount':
+      case 'selected.rows':
+      case 'result':
+      case 'result.ok':
+      case 'result.value':
+      case 'result.reason':
+      case 'value.courses':
+      case 'value.schemaVersion':
+      case 'value.source':
+      case 'value.capturedAt':
+      case 'diagnostics':
+      case 'diagnostics.keys':
+      case 'diagnostics.tableCandidates':
+      case 'diagnostics.tableCandidates.keys':
+      case 'diagnostics.tieCandidateIndexes':
+      case 'diagnostics.tieCandidateIndexes.keys':
+      case 'diagnostics.selectedCandidateIndex':
+      case 'diagnostics.tableCandidates[]':
+      case 'diagnostics.tableCandidates[].keys':
+      case 'diagnostics.tableCandidates[].index':
+      case 'diagnostics.tableCandidates[].rowCount':
+      case 'diagnostics.tableCandidates[].valid24RowCount':
+      case 'diagnostics.tableCandidates[].categoryRowCount':
+      case 'diagnostics.tableCandidates[].courseRowCount':
+      case 'diagnostics.tieCandidateIndexes[]':
+        failure.field = field;
+    }
     lastFailure = failure;
     throw failure;
   }
@@ -161,28 +194,62 @@ const selectedCourseCount = (selected, context) => boundary('GI_EXTRACT_SELECTED
   return count;
 }, 'selected.courseRowCount');
 const selectedRows = (selected, context) => boundary('GI_EXTRACT_SELECTED_RESULT', context, () => requireArray(selected.rows), 'selected.rows');
-const checkDiagnosticsShape = diagnostics => {
-  requireRecord(diagnostics);
-  const tables = requireArray(diagnostics.tableCandidates);
-  const ties = requireArray(diagnostics.tieCandidateIndexes);
-  // Diagnostics reach a console sink. Reject wrong-shape map returns before
-  // logging, including extra enumerable properties; never print their values.
-  if (Object.keys(diagnostics).length !== 3 || Object.keys(tables).length !== tables.length || Object.keys(ties).length !== ties.length) throw null;
-  if (diagnostics.selectedCandidateIndex !== null && !isCount(diagnostics.selectedCandidateIndex)) throw null;
-  for (let i = 0; i < tables.length; i++) {
-    const table = requireRecord(tables[i]);
-    if (Object.keys(table).length !== 5 || !isCount(table.index) || !isCount(table.rowCount) || !isCount(table.valid24RowCount) || !isCount(table.categoryRowCount) || !isCount(table.courseRowCount)) throw null;
-  }
-  for (let i = 0; i < ties.length; i++) if (!isCount(ties[i])) throw null;
+const diagnosticsBoundary = (context, field, action) => boundary('GI_EXTRACT_FINAL_DIAGNOSTICS', context, action, field);
+const checkDiagnosticsShape = (diagnostics, context) => {
+  diagnosticsBoundary(context, 'diagnostics', () => requireRecord(diagnostics));
+  const tables = diagnosticsBoundary(context, 'diagnostics.tableCandidates', () => requireArray(diagnostics.tableCandidates));
+  const ties = diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes', () => requireArray(diagnostics.tieCandidateIndexes));
+  // Keep the existing key-count rule; only diagnose the operation and reject
+  // non-array Object.keys returns. Do not replace page-world built-ins.
+  const keysMatch = (value, expected) => {
+    const keys = requireArray(Object.keys(value));
+    if (keys.length !== expected) throw null;
+  };
+  diagnosticsBoundary(context, 'diagnostics.keys', () => keysMatch(diagnostics, 3));
+  diagnosticsBoundary(context, 'diagnostics.tableCandidates.keys', () => keysMatch(tables, tables.length));
+  diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes.keys', () => keysMatch(ties, ties.length));
+  diagnosticsBoundary(context, 'diagnostics.selectedCandidateIndex', () => {
+    const selected = diagnostics.selectedCandidateIndex;
+    if (selected !== null && !isCount(selected)) throw null;
+  });
+  diagnosticsBoundary(context, 'diagnostics.tableCandidates', () => {
+    for (let i = 0; i < tables.length; i++) {
+      // tableIndex here identifies the diagnostic candidate being checked.
+      const candidateContext = { __proto__: null, ...context, tableIndex: i };
+      const table = diagnosticsBoundary(candidateContext, 'diagnostics.tableCandidates[]', () => requireRecord(tables[i]));
+      diagnosticsBoundary(candidateContext, 'diagnostics.tableCandidates[].keys', () => keysMatch(table, 5));
+      const count = (field, read) => diagnosticsBoundary(candidateContext, field, () => { if (!isCount(read())) throw null; });
+      count('diagnostics.tableCandidates[].index', () => table.index);
+      count('diagnostics.tableCandidates[].rowCount', () => table.rowCount);
+      count('diagnostics.tableCandidates[].valid24RowCount', () => table.valid24RowCount);
+      count('diagnostics.tableCandidates[].categoryRowCount', () => table.categoryRowCount);
+      count('diagnostics.tableCandidates[].courseRowCount', () => table.courseRowCount);
+    }
+  });
+  diagnosticsBoundary(context, 'diagnostics.tieCandidateIndexes[]', () => {
+    for (let i = 0; i < ties.length; i++) if (!isCount(ties[i])) throw null;
+  });
 };
 const finalizeExtraction = (context, assemble) => boundary('GI_EXTRACT_FINALIZE', context, () => {
-  const result = requireRecord(assemble());
-  checkDiagnosticsShape(result.diagnostics);
-  if (result.ok === true) {
-    const value = requireRecord(result.value);
-    requireArray(value.courses);
-    if (value.schemaVersion !== 1 || value.source !== 'hosei_web_learning_grade_table' || typeof value.capturedAt !== 'string') throw null;
-  } else if (result.ok !== false || (result.reason !== 'table_not_found' && result.reason !== 'course_rows_not_found')) throw null;
+  const assembled = boundary('GI_EXTRACT_FINAL_ASSEMBLE', context, assemble, 'result');
+  const result = boundary('GI_EXTRACT_FINAL_RESULT', context, () => requireRecord(assembled), 'result');
+  const diagnostics = diagnosticsBoundary(context, 'diagnostics', () => result.diagnostics);
+  checkDiagnosticsShape(diagnostics, context);
+  const ok = boundary('GI_EXTRACT_FINAL_RESULT', context, () => {
+    const value = result.ok;
+    if (value !== true && value !== false) throw null;
+    return value;
+  }, 'result.ok');
+  if (ok) {
+    const value = boundary('GI_EXTRACT_FINAL_VALUE', context, () => requireRecord(result.value), 'result.value');
+    boundary('GI_EXTRACT_FINAL_COURSES', context, () => requireArray(value.courses), 'value.courses');
+    boundary('GI_EXTRACT_FINAL_METADATA', context, () => { if (value.schemaVersion !== 1) throw null; }, 'value.schemaVersion');
+    boundary('GI_EXTRACT_FINAL_METADATA', context, () => { if (value.source !== 'hosei_web_learning_grade_table') throw null; }, 'value.source');
+    boundary('GI_EXTRACT_FINAL_METADATA', context, () => { if (typeof value.capturedAt !== 'string') throw null; }, 'value.capturedAt');
+  } else boundary('GI_EXTRACT_FINAL_FAILURE_RESULT', context, () => {
+    const reason = result.reason;
+    if (reason !== 'table_not_found' && reason !== 'course_rows_not_found') throw null;
+  }, 'result.reason');
   return result;
 }, 'result');
 const extractCurrentDocument = () => boundary('GI_EXTRACT_EXCEPTION', { __proto__: null }, () => {

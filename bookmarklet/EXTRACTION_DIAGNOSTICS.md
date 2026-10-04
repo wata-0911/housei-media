@@ -1,6 +1,6 @@
 # 実ページのextract例外：安全な境界診断
 
-実ページの最新結果（f8e8f017）は **GI_EXTRACT_CANDIDATE_RESULT / field: selected**。Array.fromがmapper引数を無視する合成環境の結果と一致する、強いroot cause candidateです。下記の互換性修正を追加しましたが、法政ページのArray.from実装は未確認です。実ページの根本原因は未確定、production blockerは利用者の成功確認まで継続します。toJSONやclipboard cleanupを今回の直接原因とは扱いません。
+実ページの最新結果（08fd287）は **GI_EXTRACT_FINALIZE / table index: 2 / field: result**。前回のCANDIDATE_RESULT / selectedから失敗位置が進んでいます。Array.from mapper互換性修正は維持しますが、実ページでの全体成功は未確認です。今回はFINALIZE内部の診断強化のみです。根本原因は未確定、production blockerは利用者の成功確認まで継続します。
 
 ## Array.from mapper互換性修正
 
@@ -34,6 +34,13 @@ table順、row順、categoryやmalformed rowを含む0-based row indexを維持�
 | GI_EXTRACT_CANDIDATE_RESULT | selection結果とselected / tieCandidateIndexes読取・shape | なし。field=selection / selected / tieCandidateIndexes |
 | GI_EXTRACT_SELECTED_RESULT | selected.index / courseRowCount / rows読取・shape | 確認済みtableのみ。field=selected.index / selected.courseRowCount / selected.rows |
 | GI_EXTRACT_FINALIZE | 成功・失敗result組立、最低限のpayload shape・diagnostics shape確認 | 選択済みtable。field=result |
+| GI_EXTRACT_FINAL_ASSEMBLE | assemble action / result組立 | field=result |
+| GI_EXTRACT_FINAL_RESULT | top-level record、okアクセスとboolean判定 | field=result / result.ok |
+| GI_EXTRACT_FINAL_DIAGNOSTICS | diagnosticsアクセス・各shape検査 | 下記の固定diagnostics field |
+| GI_EXTRACT_FINAL_VALUE | result.valueアクセスとrecord判定 | field=result.value |
+| GI_EXTRACT_FINAL_COURSES | value.coursesアクセスとArray判定 | field=value.courses |
+| GI_EXTRACT_FINAL_METADATA | schemaVersion / source / capturedAtのアクセス・検査 | 各value.*固定field |
+| GI_EXTRACT_FINAL_FAILURE_RESULT | ok:falseのreasonアクセス・許容値判定 | field=result.reason |
 | GI_EXTRACT_EXCEPTION | 上記の外の予期しない失敗／既存family code | なし |
 
 queryコードはselector呼出とその戻り値の列挙を含みます。列挙callback内で起きた例外は、より具体的な内側コードを維持します。stageを絞るためにquerySelectorAllとArray.fromを別実装へ置き換えてはいません。
@@ -133,3 +140,39 @@ boundaryのidentity判定は変更していません。CELL_TEXT / ROW_QUERY / C
 hostile return値の試験にはArray.fromのnull/array-like/length Proxy、mapper引数無視、filterのnull selected、tie mapの非Array、selectedの3フィールドのthrow/不正shape、diagnostics mapの非Array/文字列配列/余分なpropertyを含めます。旧4bf56f6でgenericだった合成例は、新版では具体的診断になります。正常抽出への修正をしたわけではなく、実ページのmutation存在も未確認です。root cause candidate／root cause確定とは扱いません。
 
 前回までの86 Bookmarklet testsを無変更で維持し、result/identity/hostile-return試験を追加しています。正常32科目とdiagnosticsの固定baselineも引き続きdeep equalityで比較します。
+
+## 08fd287 FINALIZE内部の監査と細分化
+
+以前は以下の全処理がGI_EXTRACT_FINALIZE / resultに集約されていました。
+
+| 旧式 | 新しい境界・field |
+|---|---|
+| assemble() | FINAL_ASSEMBLE / result |
+| requireRecord(assemble後の値) | FINAL_RESULT / result |
+| result.diagnostics | FINAL_DIAGNOSTICS / diagnostics |
+| requireRecord(diagnostics) | FINAL_DIAGNOSTICS / diagnostics |
+| tableCandidates読取・Array判定 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates |
+| tieCandidateIndexes読取・Array判定 | FINAL_DIAGNOSTICS / diagnostics.tieCandidateIndexes |
+| Object.keys(diagnostics)・個数検査 | FINAL_DIAGNOSTICS / diagnostics.keys |
+| Object.keys(tables/ties)・配列lengthと個数比較 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates.keys または diagnostics.tieCandidateIndexes.keys |
+| selectedCandidateIndex読取・null/整数判定 | FINAL_DIAGNOSTICS / diagnostics.selectedCandidateIndex |
+| tables[i]読取・record判定 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates[] |
+| Object.keys(table)・個数検査 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates[].keys |
+| tableの各count/index読取・整数判定 | FINAL_DIAGNOSTICS / diagnostics.tableCandidates[].index / rowCount / valid24RowCount / categoryRowCount / courseRowCount |
+| ties[i]読取・整数判定 | FINAL_DIAGNOSTICS / diagnostics.tieCandidateIndexes[] |
+| result.okアクセス・分岐 | FINAL_RESULT / result.ok |
+| result.valueアクセス・record判定 | FINAL_VALUE / result.value |
+| value.coursesアクセス・Array判定 | FINAL_COURSES / value.courses |
+| schemaVersion / source / capturedAtアクセスと条件 | FINAL_METADATA / value.schemaVersion / value.source / value.capturedAt |
+| result.reasonアクセスとallowed reason判定 | FINAL_FAILURE_RESULT / result.reason |
+| return result直前 | 新たなpage propertyアクセスなし。FINALIZEを最後のfallbackとして維持 |
+
+diagnostics.tableCandidates[]配下のtable indexは、その診断candidateの0-based位置です。それ以外は確認済みのselected table indexです。[]は固定文字列で、実データや動的property名を表示しません。診断のfield許可リストはswitchで判定し、page側Array.includes等に依存しません。
+
+Object.keysについて、throw、null/array-like返却、キー省略、余分なキー混入、table/tie配列・candidate個別のthrowを合成試験しました。返却値がArrayであることを最低限確認するguardを追加しています。既存の検査はキー名ではなくキー数を比較する方針なので、同じ個数でキー名だけ異なる返却は検出しません。この方針は変更せず試験で明示しています。Object.keys自体は置換していません。
+
+diagnosticsForのmapは従来のままです。throwは既存DIAGNOSTICS、非Array/文字列配列はFINAL_DIAGNOSTICS、callbackを無視して元の候補要素を返す場合は通常診断より多いfieldを持つためdiagnostics.tableCandidates[].keysへ分類されます。mapを置換する修正はしていません。
+
+result/value/diagnosticsのgetterは内部helper試験で、Object.keys/map mutationは両generated artifactの実行で確認します。raw throwableのmessage/cause/private propertyやProxy trapを読まず、固定code/field/indexだけのsafe failureが外側まで維持されることを確認します。既存のFINALIZE期待は同じ失敗ケースの具体的code/fieldにのみ更新し、試験削除・skipはしません。
+
+旧FINALIZEを再現するObject.keysやmapの合成ケースは複数あり、現段階でそのどれかを実ページの原因候補として新たに特定できたわけではありません。次の実ページコード・fieldを得るための分類試験です。parser/contract/validatorの意味論、Array.from mapper-ignore成功、extensionの4 APIは維持します。
