@@ -1,4 +1,4 @@
-import { extractCurrentDocument } from '../shared/grade-import/extractor.js';
+import { extractCurrentDocument, isSafeExtractionFailure } from '../shared/grade-import/extractor.js';
 import { diagnoseHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
 import { GradeImportSerializationError, serializeGradeImport } from './serialize.ts';
 import { copyText } from './clipboard.js';
@@ -19,7 +19,18 @@ async function run() {
       return;
     }
     outcome = extractCurrentDocument();
-  } catch { fail('GI_EXTRACT_EXCEPTION', '成績表の読み取りに失敗しました。'); return; }
+  } catch (error) {
+    if (isSafeExtractionFailure(error)) {
+      // Only the identity-branded, null-prototype failure built by our extractor.
+      // Keep the existing family code alongside the more precise boundary code.
+      let position = '';
+      if (error.tableIndex !== undefined) position += `\ntable index: ${error.tableIndex}`;
+      if (error.rowIndex !== undefined) position += `\nrow index: ${error.rowIndex}`;
+      if (error.cellIndex !== undefined) position += `\ncell index: ${error.cellIndex}`;
+      fail(error.code, `成績表の読み取りに失敗しました。 [GI_EXTRACT_EXCEPTION]${position}`);
+    } else fail('GI_EXTRACT_EXCEPTION', '成績表の読み取りに失敗しました。');
+    return;
+  }
   if (!outcome.ok) {
     if (outcome.reason === 'table_not_found') fail('GI_EXTRACT_NO_TABLE', '成績表が見つかりません。Web学習サービスの成績表ページで実行してください。');
     else fail('GI_EXTRACT_NO_COURSES', '成績表は見つかりましたが、科目行が見つかりません。ページを再読み込みしてお試しください。');

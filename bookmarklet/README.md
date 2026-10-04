@@ -44,7 +44,7 @@ extractorとclipboard transportは分離しています。将来のpostMessage a
 | コード | 段階・意味 |
 |---|---|
 | GI_ORIGIN | 実行元が対象HTTPSドメイン外 |
-| GI_EXTRACT_EXCEPTION | DOM読み取り・parserで例外 |
+| GI_EXTRACT_EXCEPTION | 抽出例外のfamily code。細分化は[抽出診断](EXTRACTION_DIAGNOSTICS.md)を参照 |
 | GI_EXTRACT_NO_TABLE / GI_EXTRACT_NO_COURSES | 成績表なし / 科目行なし |
 | GI_CONTRACT_INVALID | 生成直後のcontract不一致 |
 | GI_CONTRACT_EXCEPTION | validator実行時の例外 |
@@ -68,3 +68,7 @@ contract不一致は最初の1件だけ、`course index`（0始まり）・`fiel
 - 旧dev parserから共通parserへの移動はIIFE/globalとESM exportの境界だけで処理は完全一致。696件のdate/report/row比較も一致。未知の単位・評価・日付表現はrawを保持し正規化値nullとなる既存仕様を維持。正当な実データの未対応表現はまだ得られておらず、parser/contractの拡張はしていません。
 
 実ページで再実行する際は新しく生成されたコードでブックマークURLを更新してください。失敗した場合、共有するのは **GI_コードと、表示されたcourse index / field / categoryのみ** です。JSON・科目名・成績・DOM・スクリーンショットの共有は不要です。成功時もfallbackの警告コードがあればコードだけで報告できます。
+
+## 抽出中の例外をさらに調べる
+
+実ページでGI_EXTRACT_EXCEPTIONが確認されたため、共有extractor内のquery / cell / classification / selection / course parse等に安全な診断境界を追加しました。コード一覧、indexの定義、page-world監査、意味論維持の検証、最新Previewからの再試行手順は [抽出診断](EXTRACTION_DIAGNOSTICS.md) を参照してください。根本原因は未確定で、実ページ成功までblockerは継続です。

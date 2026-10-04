@@ -2,7 +2,37 @@
 "use strict";
 (() => {
   // shared/grade-import/extractor.js
-  var GRADES = /* @__PURE__ */ new Set(["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"]);
+  var lastFailure;
+  var boundary = (code, context, action) => {
+    try {
+      return action();
+    } catch (error) {
+      if (error === lastFailure && lastFailure !== void 0) throw lastFailure;
+      const failure = { __proto__: null, code };
+      const coordinate = (key) => {
+        try {
+          const index = context[key];
+          if (typeof index === "number" && index >= 0 && index % 1 === 0 && index <= 9007199254740991) failure[key] = index;
+        } catch {
+        }
+      };
+      coordinate("tableIndex");
+      coordinate("rowIndex");
+      coordinate("cellIndex");
+      lastFailure = failure;
+      throw failure;
+    }
+  };
+  var GRADES;
+  var initializationFailed = false;
+  try {
+    GRADES = /* @__PURE__ */ new Set(["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"]);
+  } catch {
+    initializationFailed = true;
+  }
+  var checkInitialization = () => boundary("GI_EXTRACT_INITIALIZE", { __proto__: null }, () => {
+    if (initializationFailed) throw null;
+  });
   var clean = (value) => String(value ?? "").replace(/\u00a0/g, " ").trim();
   var numberField = (raw) => {
     const text = clean(raw).replace(/^\*/, "");
@@ -37,37 +67,59 @@
     creditExam: { rawDate: cells[11], rawCredits: cells[12], rawGrade: cells[13], date: date(cells[11]), credits: numberField(cells[12]).value, grade: grade(cells[13]), pendingMarker: clean(cells[12]).includes("*") },
     schoolings: [schooling(cells.slice(14, 19)), schooling(cells.slice(19, 24))]
   });
-  var cellsForRow = (row) => Array.from(row.querySelectorAll("td")).filter((cell) => !cell.classList.contains("line_y_label")).map((cell) => clean(cell.textContent));
+  var cellsForRow = (row, context = { __proto__: null }) => {
+    const physicalCells = boundary("GI_EXTRACT_CELL_QUERY", context, () => Array.from(row.querySelectorAll("td")));
+    let nextLogicalCellIndex = 0;
+    const cells = boundary("GI_EXTRACT_CELL_FILTER", context, () => physicalCells.filter((cell) => {
+      const keep = boundary("GI_EXTRACT_CELL_FILTER", { __proto__: null, ...context, cellIndex: nextLogicalCellIndex }, () => !cell.classList.contains("line_y_label"));
+      if (keep) nextLogicalCellIndex++;
+      return keep;
+    }));
+    return boundary("GI_EXTRACT_CELL_TEXT", context, () => cells.map((cell, cellIndex) => boundary("GI_EXTRACT_CELL_TEXT", { __proto__: null, ...context, cellIndex }, () => clean(cell.textContent))));
+  };
   var isCategoryRow = (cells) => cells.length === 24 && clean(cells[1]).startsWith("***");
   var isCourseRow = (cells) => cells.length === 24 && !isCategoryRow(cells) && clean(cells[1]) !== "";
-  var extractRows = (rows) => {
+  var extractRows = (rows, context = { __proto__: null }) => boundary("GI_EXTRACT_COURSE_PARSE", context, () => {
+    checkInitialization();
     let categoryRaw = null;
     const courses = [];
+    let rowIndex = 0;
     for (const row of rows) {
-      const cells = Array.isArray(row) ? row.map(clean) : cellsForRow(row);
-      if (cells.length !== 24) continue;
-      if (isCategoryRow(cells)) {
-        categoryRaw = clean(cells[1]);
-        continue;
-      }
-      if (clean(cells[1]) !== "") courses.push(course(cells, categoryRaw));
+      const rowContext = { __proto__: null, ...context, rowIndex };
+      boundary("GI_EXTRACT_COURSE_PARSE", rowContext, () => {
+        const cells = Array.isArray(row) ? row.map(clean) : cellsForRow(row, rowContext);
+        if (boundary("GI_EXTRACT_ROW_CLASSIFY", rowContext, () => cells.length !== 24)) return;
+        if (boundary("GI_EXTRACT_ROW_CLASSIFY", rowContext, () => isCategoryRow(cells))) {
+          categoryRaw = clean(cells[1]);
+          return;
+        }
+        if (boundary("GI_EXTRACT_ROW_CLASSIFY", rowContext, () => clean(cells[1]) !== "")) courses.push(course(cells, categoryRaw));
+      });
+      rowIndex++;
     }
     return courses;
-  };
-  var inspectTable = (table, index) => {
-    const logicalRows = Array.from(table.querySelectorAll("tr.column_even, tr.column_odd"), cellsForRow);
-    const validRows = logicalRows.filter((cells) => cells.length === 24);
-    const courseRows = validRows.filter(isCourseRow);
+  });
+  var inspectTable = (table, index) => boundary("GI_EXTRACT_TABLE_INSPECT", { __proto__: null, tableIndex: index }, () => {
+    const context = { __proto__: null, tableIndex: index };
+    const logicalRows = boundary("GI_EXTRACT_ROW_QUERY", context, () => Array.from(table.querySelectorAll("tr.column_even, tr.column_odd"), (row, rowIndex) => cellsForRow(row, { __proto__: null, ...context, rowIndex })));
+    const validRowIndexes = [];
+    const classify = (cells, rowIndex, predicate) => boundary("GI_EXTRACT_ROW_CLASSIFY", { __proto__: null, ...context, rowIndex }, () => predicate(cells));
+    const validRows = boundary("GI_EXTRACT_ROW_CLASSIFY", context, () => logicalRows.filter((cells, rowIndex) => {
+      const valid = classify(cells, rowIndex, (row) => row.length === 24);
+      if (valid) validRowIndexes.push(rowIndex);
+      return valid;
+    }));
+    const courseRows = boundary("GI_EXTRACT_ROW_CLASSIFY", context, () => validRows.filter((cells, validIndex) => classify(cells, validRowIndexes[validIndex], isCourseRow)));
     return {
       index,
       rows: logicalRows,
       courseRows,
       rowCount: logicalRows.length,
       valid24RowCount: validRows.length,
-      categoryRowCount: validRows.filter(isCategoryRow).length,
+      categoryRowCount: boundary("GI_EXTRACT_ROW_CLASSIFY", context, () => validRows.filter((cells, validIndex) => classify(cells, validRowIndexes[validIndex], isCategoryRow)).length),
       courseRowCount: courseRows.length
     };
-  };
+  });
   var diagnosticsFor = (candidates, selectedCandidateIndex = null, tieCandidateIndexes = []) => ({
     tableCandidates: candidates.map(({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount }) => ({ index, rowCount, valid24RowCount, categoryRowCount, courseRowCount })),
     selectedCandidateIndex,
@@ -79,14 +131,17 @@
     if (tied.length === 1) return { selected: tied[0], tieCandidateIndexes: [] };
     return { selected: tied[0], tieCandidateIndexes: tied.map((candidate) => candidate.index) };
   };
-  var extractCurrentDocument = () => {
-    const candidates = Array.from(document.querySelectorAll('table[id="seisekiTabele110"]'), inspectTable);
-    if (candidates.length === 0) return { ok: false, reason: "table_not_found", diagnostics: diagnosticsFor(candidates) };
-    const { selected, tieCandidateIndexes } = selectCandidate(candidates);
-    const diagnostics = diagnosticsFor(candidates, selected.index, tieCandidateIndexes);
+  var extractCurrentDocument = () => boundary("GI_EXTRACT_EXCEPTION", { __proto__: null }, () => {
+    checkInitialization();
+    const candidates = boundary("GI_EXTRACT_TABLE_QUERY", { __proto__: null }, () => Array.from(document.querySelectorAll('table[id="seisekiTabele110"]'), inspectTable));
+    if (candidates.length === 0) return { ok: false, reason: "table_not_found", diagnostics: boundary("GI_EXTRACT_DIAGNOSTICS", { __proto__: null }, () => diagnosticsFor(candidates)) };
+    const { selected, tieCandidateIndexes } = boundary("GI_EXTRACT_CANDIDATE_SELECT", { __proto__: null }, () => selectCandidate(candidates));
+    const context = { __proto__: null, tableIndex: selected.index };
+    const diagnostics = boundary("GI_EXTRACT_DIAGNOSTICS", context, () => diagnosticsFor(candidates, selected.index, tieCandidateIndexes));
     if (selected.courseRowCount === 0) return { ok: false, reason: "course_rows_not_found", diagnostics };
-    return { ok: true, value: { schemaVersion: 1, source: "hosei_web_learning_grade_table", capturedAt: (/* @__PURE__ */ new Date()).toISOString(), courses: extractRows(selected.rows) }, diagnostics };
-  };
+    const capturedAt = boundary("GI_EXTRACT_CAPTURE_TIME", context, () => (/* @__PURE__ */ new Date()).toISOString());
+    return { ok: true, value: { schemaVersion: 1, source: "hosei_web_learning_grade_table", capturedAt, courses: extractRows(selected.rows, context) }, diagnostics };
+  });
 
   // extension/hosei-planner-import/parser/entry.js
   globalThis.HoseiPlannerGradeExtractor = { date, report, extractRows, extractCurrentDocument };
