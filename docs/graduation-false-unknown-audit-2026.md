@@ -635,3 +635,14 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 |law_thesis_guidance_required_course|structured条件未対応：H26/H46；H53/H55|
 |law_total_with_thesis_min_credits|structured通常：H27–35（入力時）；H53/H55|
 |law_total_without_thesis_min_credits|structured通常：H27–35（入力時）；runtime省略枝あり；H53/H55|
+
+## H38 implementation follow-up — 2026-10-04
+
+- 実装commit：`5017d9790bd119b39ae4d0ec6fafeedb040580c4`（`feature/graduation-h38-foreign-recognition-axis`）。baseは監査HEAD `47d8686fb4f175a66e626b5321fef7003167e2fe`。開始時remote devは`d5c28e07187787ba805da7b749ede4c140d280a9`のままで、dev統合は不要だった。
+- H38のみ解決：認定外国語4・言語既知・外国語S相当認定nullでは、`group-foreign.earned=4`、`status=unknown`、schooling未確認reasonを維持する。synthetic単独caseのoverall下限は0から4へ戻る。schooling referenceのearnedはnull・status unknownのままで、ordinary4からSを推測しない。
+- overlayは外国語卒業枠4を置き換える。official外国語0/2/4、認定total null/4との共存でもordinaryは4、6/8へ増えない。S=0/1はearned4・unsatisfied、S=2はearned4・satisfiedを維持。英/独/仏、language unknown、mode unknown、exempt、invalid値、frozen入力、既存UI表示を検証。
+- 正式regression matrixを`tests/graduation-audit.test.mjs`へ27ケース追加。監査helperのH38だけを解決済みassertionへ更新し、他Hxx characterizationは変更していない。H37/H36/H39および他の監査findingは未解決のまま。
+- 検証：planner **647/647**、audit helper **17/17**、fail/skip 0。typecheck/lint/build/diff check PASS。build内のgrade-import artifact checkとcatalog checkもPASS（Course321 / Offering686）。Viteのchunk-size警告は残るがbuild成功。
+- production差分は`graduationProgress.ts`のH38分岐のみ。UI、認定architecture、persistent shape、catalog、source/Mapping authorityは不変。`graduationCheckComplete=false`、`sourceLinksReverified=false`、`schemaVersion=22`を維持。
+
+上記は実装後の追記。本文の66件inventory・A–E/P1等の集計と旧behavior記述は、監査時点baselineとして変更していない。

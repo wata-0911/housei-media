@@ -7,6 +7,10 @@ import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '..
 import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { initialState } from '../src/planner/storage.ts';
+import { graduationProfileValidationError } from '../src/planner/graduationProfile.ts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
 
 // Original audit characterizations now assert the Course-centered official contract.
 // Presentation compatibility assertions deliberately remain separate from graduation.
@@ -901,4 +905,143 @@ test('official schooling priority: positive official value still obeys law and r
     assert.equal(result.facts[0].diagnostics.includes('media_schooling_credits_conflict'), false);
     assert.deepEqual(run(x, [], records).importedWarnings.map(n => n.kind), ['schooling_confirmation']);
   }
+});
+
+// H38 changes only known foreign ordinary recognition with unknown schooling.
+function foreignRecognitionFixture(language = 'english', schooling = null) {
+  const x = fixture();
+  x.profile.admissionType = 'transfer_second_year';
+  x.profile.recognizedCredits.foreignLanguage = {
+    mode: 'recognized', credits: 4, language, schoolingEquivalentCredits: schooling,
+  };
+  return x;
+}
+const foreignRecognitionRun = (x, rows = [], selection = 'not_selected') =>
+  calculateGraduationProgress([], x.f, x.scope, [], selection, [], rows, x.profile);
+const foreignRecognitionCard = p => p.cards.find(c => c.requirementId === 'group-foreign');
+const h38SchoolingReference = p => p.referenceProgress.find(r => r.id === 'schooling-reference-progress');
+
+for (const language of ['english', 'german', 'french']) {
+  for (const [schooling, status] of [[null, 'unknown'], [0, 'unsatisfied'], [1, 'unsatisfied'], [2, 'satisfied']]) {
+    test(`H38 foreign recognition: ${language}4 / S${schooling} retains ordinary4 / ${status}`, () => {
+      const x = foreignRecognitionFixture(language, schooling);
+      assert.equal(graduationProfileValidationError(x.profile), null);
+      const p = foreignRecognitionRun(x);
+      const foreign = foreignRecognitionCard(p);
+      assert.deepEqual([foreign.earned, foreign.status], [4, status]);
+      if (schooling === null) assert.match(foreign.reason, /スクーリング相当認定単位が未確認.*0単位とは扱いません/);
+      if (schooling === 0 || schooling === 1) assert.match(foreign.reason, /2単位未満/);
+      const reference = p.referenceProgress.find(r => r.id === 'overall-reference-progress');
+      assert.deepEqual([reference.earned, reference.status, reference.target, reference.recognizedCredits], [4, 'partial', 128, 4]);
+      // The global recognition breakdown is independently unknown; foreign4 never supplies S4/S2.
+      assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).status, h38SchoolingReference(p).target,
+        h38SchoolingReference(p).recognizedCredits], [null, 'unknown', 30, null]);
+      assert.equal(p.graduationCheckComplete, false);
+    });
+  }
+}
+
+for (const credits of [0, 2, 4]) {
+  for (const total of [null, 4]) {
+    test(`H38 coexistence: official foreign${credits} plus recognized4 / aggregate${total} stays capped at4`, () => {
+      const x = foreignRecognitionFixture();
+      x.mapping.scopeId = x.common; x.mapping.category = '外国語'; x.mapping.field = '英語';
+      x.course.scopeIds = [x.common];
+      x.row.earnedCreditsTotal = credits; x.row.schoolingCreditsTotal = 0;
+      x.profile.recognizedCredits.totalCredits = total;
+      assert.equal(graduationProfileValidationError(x.profile), null);
+      const baseline = structuredClone(x);
+      baseline.profile.recognizedCredits.foreignLanguage = {
+        mode: 'none', credits: null, language: 'unknown', schoolingEquivalentCredits: null,
+      };
+      baseline.profile.recognizedCredits.totalCredits = null;
+      assert.equal(foreignRecognitionCard(foreignRecognitionRun(baseline, [baseline.row])).earned, credits);
+      const snapshot = structuredClone(x);
+      const p = foreignRecognitionRun(x, [x.row]);
+      assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [4, 'unknown']);
+      assert.equal(overall(p), 4, 'recognition total/detail and official foreign credits are not summed again');
+      assert.equal(h38SchoolingReference(p).earned, null);
+      assert.equal(h38SchoolingReference(p).status, 'unknown');
+      assert.deepEqual(p.importedWarnings, foreignRecognitionRun(baseline, [baseline.row]).importedWarnings,
+        'official schooling warnings are unchanged');
+      assert.deepEqual(x, snapshot);
+    });
+  }
+}
+
+for (const schooling of [null, 0, 2]) {
+  test(`H39 unchanged: unknown recognized language / S${schooling} remains held`, () => {
+    const x = foreignRecognitionFixture('unknown', schooling);
+    const foreign = foreignRecognitionCard(foreignRecognitionRun(x));
+    assert.deepEqual([foreign.earned, foreign.status], [null, 'unknown']);
+    assert.match(foreign.reason, /同一言語要件未確認/);
+  });
+}
+
+for (const [mode, earned, status] of [['exempt', 0, 'satisfied'], ['unknown', null, 'unknown']]) {
+  test(`H38 boundary: foreign mode=${mode} retains its existing behavior`, () => {
+    const x = foreignRecognitionFixture();
+    x.profile.recognizedCredits.totalCredits = 0;
+    x.profile.recognizedCredits.foreignLanguage = {
+      mode, credits: null, language: 'unknown', schoolingEquivalentCredits: null,
+    };
+    assert.equal(graduationProfileValidationError(x.profile), null);
+    const p = foreignRecognitionRun(x);
+    assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [earned, status]);
+    assert.equal(overall(p), 0);
+    assert.equal(h38SchoolingReference(p).earned, null);
+  });
+}
+
+test('H38 boundary: invalid foreign schooling recognition remains rejected by validation', () => {
+  for (const schooling of [-1, NaN, Infinity, -Infinity, 3]) {
+    const x = foreignRecognitionFixture('english', schooling);
+    assert.match(graduationProfileValidationError(x.profile), /外国語のスクーリング相当/);
+    const p = foreignRecognitionRun(x);
+    assert.equal(p.referenceProgress[0].earned, null);
+    assert.equal(p.referenceProgress[0].status, 'unknown');
+    assert.equal(h38SchoolingReference(p).earned, null);
+    assert.equal(h38SchoolingReference(p).status, 'unknown');
+  }
+});
+
+test('H38 retains ordinary4 without resolving H36 law thesis prerequisite or H37 general recognition', () => {
+  const x = foreignRecognitionFixture();
+  const p = foreignRecognitionRun(x, [], 'undecided');
+  assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [4, 'unknown']);
+  assert.deepEqual([p.referenceProgress[0].earned, p.referenceProgress[0].target, p.referenceProgress[0].status], [null, null, 'unknown']);
+  assert.match(p.referenceProgress[0].reason, /卒業論文の選択が未定/);
+  assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).target], [null, null]);
+  const general = p.cards.find(c => c.requirementId === 'group-general');
+  assert.deepEqual([general.earned, general.status], [null, 'unknown']);
+  assert.match(general.reason, /一般教育の認定情報が未確認/);
+});
+
+test('H38 calculation keeps frozen profile, official source, catalog and earlier cards immutable', () => {
+  const x = structuredClone(foreignRecognitionFixture());
+  x.mapping.scopeId = x.common; x.mapping.category = '外国語'; x.mapping.field = '英語';
+  x.course.scopeIds = [x.common];
+  const rows = [x.row];
+  const previous = foreignRecognitionRun(x, rows);
+  const inputSnapshot = structuredClone({ x, rows });
+  const cardSnapshot = structuredClone(previous);
+  deepFreeze(x); deepFreeze(rows); deepFreeze(previous);
+  const p = foreignRecognitionRun(x, rows);
+  assert.deepEqual({ x, rows }, inputSnapshot);
+  assert.deepEqual(previous, cardSnapshot);
+  assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [4, 'unknown']);
+  assert.equal(p.graduationCheckComplete, false);
+  assert.equal(catalog.metadata.sourceLinksReverified, false);
+  assert.equal(initialState().schemaVersion, 22);
+});
+
+test('H38 UI displays ordinary4 alongside held foreign completion', () => {
+  const p = foreignRecognitionRun(foreignRecognitionFixture());
+  const html = renderToStaticMarkup(createElement(GraduationProgressUI, { progress: p }));
+  const foreign = html.match(/<article[^>]*><h3[^>]*>外国語<\/h3>[\s\S]*?<\/article>/)?.[0];
+  assert.ok(foreign, 'the existing foreign card renders');
+  assert.match(foreign, />4<\/span> \/ 4単位/);
+  assert.match(foreign, /判定保留/);
+  assert.match(foreign, /スクーリング相当認定単位が未確認/);
+  assert.doesNotMatch(foreign, />達成</);
 });
