@@ -3,6 +3,9 @@
  * Synthetic inputs only; no saved learner state, catalog files or network writes.
  */
 import { test } from 'node:test';
+import { attachCurriculumCatalog } from '../src/planner/curriculumCatalog.ts';
+import { validateCatalog } from '../src/planner/validation.ts';
+import { createMappingResolver } from '../src/planner/plannerHelpers.ts';
 import assert from 'node:assert/strict';
 import { catalog } from '../src/planner/catalog.ts';
 import { initialState } from '../src/planner/storage.ts';
@@ -197,11 +200,28 @@ test('source facts and invariant flags are unchanged by all calculations', () =>
   assert.equal(initialState().schemaVersion, 22);
 });
 
-test('H31 resolved: explicit professional candidate holds dependencies only and retains official lower bound', () => {
-  const x = fixture();
-  const candidate = { ...x.offering, id: 'h31-candidate', curriculumCourseId: null, courseId: null, resolutionStatus: 'manual_review', credits: 90 };
-  x.c.offerings.push(candidate);
-  const p = calculateGraduationProgress([{ offeringId: candidate.id, status: 'earned', earnedOrder: null }], x.c, x.scope, [], 'not_selected', [], x.rows, x.profile);
+// H31/P2 fixtures follow production's validation/attach/reference checks.
+function h31Fixture(withMapping = true) {
+  const x = fixture(); x.c = structuredClone(catalog);
+  const known = x.c.offerings.find(o => o.resolutionStatus === 'matched' && o.method === 'correspondence' && o.credits === 4
+    && o.mappingIds.length === 1 && x.c.mappings.some(m => o.mappingIds.includes(m.mappingId) && m.scopeId === x.scope
+      && m.category === '専門教育' && m.requirementType === '選択必修' && m.curriculumCredits === 4));
+  assert.ok(known);
+  const course = x.c.curriculum.courses.find(c => c.id === known.curriculumCourseId);
+  Object.assign(x.row, { rawName: course.canonicalName, curriculumCourseId: course.id, candidateCurriculumCourseIds: [course.id], courseId: known.courseId });
+  const candidate = x.c.offerings.find(o => o.resolutionStatus === 'manual_review');
+  Object.assign(candidate, { mappingIds: withMapping ? known.mappingIds : [], method: 'correspondence', credits: 90 });
+  assert.equal(validateCatalog(x.c), true);
+  x.c = attachCurriculumCatalog(x.c, x.c.curriculum);
+  assert.equal(validateCatalog(x.c), true);
+  const resolve = createMappingResolver(x.c); x.c.offerings.forEach(resolve);
+  x.candidate = x.c.offerings.find(o => o.id === candidate.id);
+  assert.equal(x.candidate.curriculumCourseId, null);
+  return x;
+}
+test('H31/P2 production-valid direct Mapping candidate holds dependencies only and retains official lower bound', () => {
+  const x = h31Fixture();
+  const p = calculateGraduationProgress([{ offeringId: x.candidate.id, status: 'earned', earnedOrder: null }], x.c, x.scope, [], 'not_selected', [], x.rows, x.profile);
   for (const id of ['professional-law-required-elective', 'professional-law-elective', 'professional-law-total']) {
     assert.equal(card(p, id).status, 'unknown'); assert.match(card(p, id).reason, /対応関係を確認中/);
   }
@@ -209,10 +229,20 @@ test('H31 resolved: explicit professional candidate holds dependencies only and 
   for (const id of ['group-general', 'group-foreign', 'group-physical']) assert.deepEqual(card(p, id), card(progress(x), id));
   assert.equal(ref(p, 'overall').earned, 4); assert.equal(ref(p, 'overall').status, 'unknown');
 });
-test('H31 no candidate: conservative global hold retains known lower bound without counting unresolved budget', () => {
-  const x = fixture(); const candidate = { ...x.offering, id: 'h31-no-candidate', curriculumCourseId: null, mappingIds: [], resolutionStatus: 'manual_review', credits: 90 };
-  x.c.offerings.push(candidate);
-  const p = calculateGraduationProgress([{ offeringId: candidate.id, status: 'earned', earnedOrder: null }], x.c, x.scope, [], 'not_selected', [], x.rows, x.profile);
+test('H31/P2 production-valid no candidate: conservative global hold retains known lower bound without counting unresolved budget', () => {
+  const x = h31Fixture(false);
+  const p = calculateGraduationProgress([{ offeringId: x.candidate.id, status: 'earned', earnedOrder: null }], x.c, x.scope, [], 'not_selected', [], x.rows, x.profile);
   for (const id of ['group-general', 'group-foreign', 'group-physical', 'professional-law-total']) assert.equal(card(p, id).status, 'unknown');
   assert.equal(card(p, 'professional-law-total').earned, 4); assert.equal(ref(p, 'overall').earned, 4);
+});
+test('H31/P2 real runtime history manual_review stays in its special routing without common pollution', () => {
+  const x = fixture(); const scope = catalog.programs.find(p => p.department === '史学科').scopeId;
+  const input = attachCurriculumCatalog(catalog); assert.equal(validateCatalog(input), true);
+  const baseline = calculateGraduationProgress([], input, scope, [], 'selected', [], [], x.profile);
+  for (const offering of input.offerings.filter(o => o.resolutionStatus === 'manual_review')) {
+    const p = calculateGraduationProgress([{ offeringId: offering.id, status: 'earned', earnedOrder: null }], input, scope, [], 'selected', [], [], x.profile);
+    for (const id of ['group-general', 'group-foreign', 'group-physical', 'professional-history-required']) assert.deepEqual(card(p, id), card(baseline, id));
+    assert.match(card(p, 'professional-history-schooling-required-elective').reason, /修得順/);
+    assert.equal(p.graduationCheckComplete, false);
+  }
 });

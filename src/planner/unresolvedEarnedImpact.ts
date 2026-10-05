@@ -14,7 +14,7 @@ export type UnresolvedEarnedImpact = {
 export function unresolvedEarnedImpact(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string): UnresolvedEarnedImpact {
   const impact: UnresolvedEarnedImpact = { globalUnknown: false, candidates: [], cardIds: new Set() };
   const mappings = new Map(catalog.mappings.map(m => [m.mappingId, m]));
-  const courses = new Map(catalog.curriculum?.courses.map(c => [c.id, c]) ?? []);
+  const courses = catalog.curriculum?.courses ?? [];
   const programs = new Map(catalog.programs.map(p => [p.scopeId, p]));
   const department = programs.get(scopeId)?.department;
   const offerings = new Map(catalog.offerings.map(o => [o.id, o]));
@@ -54,19 +54,18 @@ export function unresolvedEarnedImpact(items: PlannerItem[], catalog: PlannerCat
     if (item.status !== 'earned' || offering?.resolutionStatus !== 'manual_review') continue;
     if (scopeId === HISTORY_SCOPE_ID && (isHistorySeminar(offering) || isHistoricalSources(offering))) continue;
     const relations = catalog.curriculum?.offeringRelations.filter(r => r.offeringId === offering.id) ?? [];
-    if (relations.length > 1) impact.globalUnknown = true;
-    const courseIds = new Set([
-      ...(offering.curriculumCourseId ? [offering.curriculumCourseId] : []),
-      ...relations.flatMap(r => [...(r.curriculumCourseId ? [r.curriculumCourseId] : []), ...r.candidateCurriculumCourseIds]),
-    ]);
-    const mappingIds = new Set(offering.mappingIds);
-    for (const id of courseIds) {
-      const course = courses.get(id);
-      if (!course || course.mappingIds.length === 0) { impact.globalUnknown = true; continue; }
-      course.mappingIds.forEach(id => mappingIds.add(id));
+    // attachCurriculumCatalog emits no institutional identity or relation
+    // candidates for manual_review. Stale post-attach identities are not
+    // localization authority, even if they reference a real Course.
+    if (relations.length !== 1 || offering.curriculumCourseId != null
+      || relations[0].curriculumCourseId !== null || relations[0].candidateCurriculumCourseIds.length !== 0) {
+      impact.globalUnknown = true; continue;
     }
-    if (mappingIds.size === 0) impact.globalUnknown = true;
-    for (const id of mappingIds) {
+    // The existing schema/resolver/attach contract permits explicit Mapping
+    // edges on manual_review while keeping its Course relation empty. These
+    // edges describe possible impact only; they never resolve or earn credits.
+    if (offering.mappingIds.length === 0) impact.globalUnknown = true;
+    for (const id of offering.mappingIds) {
       const mapping = mappings.get(id);
       if (!mapping || !programs.has(mapping.scopeId)
         || !['一般教育', '外国語', '保健体育', '専門教育'].includes(mapping.category)
@@ -77,7 +76,7 @@ export function unresolvedEarnedImpact(items: PlannerItem[], catalog: PlannerCat
         impact.globalUnknown = true; continue;
       }
       if (mapping.scopeId !== scopeId && !programs.get(mapping.scopeId)!.isCommon) continue;
-      const owners = [...courses.values()].filter(c => c.mappingIds.includes(id));
+      const owners = courses.filter(c => c.mappingIds.includes(id));
       const canonicalName = owners.length === 1 ? owners[0].canonicalName : null;
       impact.candidates.push({ mapping, canonicalName, method: offering.method });
       if (mapping.category === '専門教育') addProfessional(mapping, canonicalName, offering.method);

@@ -1,4 +1,11 @@
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { validateCatalog } from '../src/planner/validation.ts';
+import { attachCurriculumCatalog } from '../src/planner/curriculumCatalog.ts';
+import { isHistorySeminar, historySeminarField } from '../src/planner/historySeminar.ts';
+import { createMappingResolver } from '../src/planner/plannerHelpers.ts';
+import { generateCurriculumCatalog } from '../src/planner/curriculumGeneration.ts';
+import { applyManualMappingOverrides, manualMappingOverrideLedger, officialMappingOverrideLedger } from '../src/planner/manualMappingOverrides.ts';
 import assert from 'node:assert/strict';
 import { catalog } from '../src/planner/catalog.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
@@ -1784,8 +1791,8 @@ test('H36 existing UI displays known earned with unknown overall target/status',
 });
 
 test('H31 replaces H36 characterization: explicit law candidates hold professional dependencies only', () => {
-  const x = fixture(); x.offering.resolutionStatus = 'manual_review';
-  const p = h36Progress(x, { selection: 'not_selected', items: [item(x.offering, 'earned')], rows: [] });
+  const x = h31Fixture(); x.items = []; x.set({ course: x.course });
+  const p = x.calc();
   for (const id of ['professional-law-required-elective', 'professional-law-elective', 'professional-law-total']) {
     const c = p.cards.find(c => c.requirementId === id);
     assert.equal(c.status, 'unknown'); assert.equal(c.earned, 0);
@@ -1816,32 +1823,57 @@ test('H36 scope boundary: H43 unknown ordinary still holds independently known o
   assert.deepEqual(h36ReferenceValues(p, 'schooling').slice(0, 4), [null, 30, 'unknown', 'unknown']);
 });
 
-// H31: explicit institutional candidate edges only, with resolved lower bounds.
+// H31/P2: localization fixtures use production-valid direct Offering Mapping
+// edges. Unsupported post-attach identities are malformed safety tests only.
 function h31Fixture(department = '法律学科') {
   const x = fixture(department);
-  x.f = structuredClone(x.f);
-  x.offering = x.f.offerings[0]; x.mapping = x.f.mappings[0]; x.course = x.f.curriculum.courses[0];
+  const mappingTemplate = x.mapping, offeringTemplate = x.offering;
+  x.f = structuredClone(catalog);
+  let serial = 0, slot = 0;
+  const uuid = () => `00000000-0000-4000-8000-${(++serial).toString(16).padStart(12, '0')}`;
+  const replaceOffering = offering => {
+    const old = x.f.offerings[slot]; x.f.offerings[slot++] = offering;
+    x.f.curriculum.offeringRelations = x.f.curriculum.offeringRelations.filter(r => r.offeringId !== old.id);
+  };
   const add = (id, category, field, type, credits = 4, method = 'correspondence', name = id, scope = x.common) => {
-    const mapping = { ...x.mapping, mappingId: `h31-${id}`, scopeId: scope, category, field, requirementType: type, curriculumCredits: credits };
-    const course = { id: `h31-course-${id}`, canonicalName: name, curriculumCredits: credits, scopeIds: [scope], mappingIds: [mapping.mappingId] };
-    const offering = { ...x.offering, id: `h31-offering-${id}`, courseId: `h31-legacy-${id}`, curriculumCourseId: course.id, name, method, credits, mappingIds: [mapping.mappingId] };
-    x.f.mappings.push(mapping); x.f.curriculum.courses.push(course); x.f.offerings.push(offering);
+    const mapping = { ...mappingTemplate, mappingId: uuid(), scopeId: scope, category, field, requirementType: type, curriculumCredits: credits };
+    const course = { id: `curriculum:${mapping.mappingId}`, canonicalName: name, curriculumCredits: credits, scopeIds: [scope], mappingIds: [mapping.mappingId] };
+    const offering = { ...offeringTemplate, id: uuid(), courseId: uuid(), curriculumCourseId: course.id, name, method, credits, mappingIds: [mapping.mappingId] };
+    x.f.mappings.push(mapping); x.f.curriculum.courses.push(course); replaceOffering(offering);
     x.f.courses.push({ id: offering.courseId, canonicalName: name, identityStatus: 'provisional' });
     x.f.curriculum.offeringRelations.push({ offeringId: offering.id, curriculumCourseId: course.id, candidateCurriculumCourseIds: [course.id] });
     return { mapping, course, offering };
   };
   x.add = add;
+  Object.assign(x, add('professional', '専門教育', null, department === '史学科' ? '必修' : '選択必修', 4, 'correspondence', '監査科目', x.scope));
+  Object.assign(x.row, { curriculumCourseId: x.course.id, candidateCurriculumCourseIds: [x.course.id], courseId: x.offering.courseId });
   const general = [add('general1', '一般教育', '人文', '選択必修'), add('general2', '一般教育', '人文', '選択必修')];
   const foreign = add('foreign', '外国語', '英語', '選択必修', 4, 'schooling');
   const physical = add('physical', '保健体育', null, '選択必修', 2, 'correspondence', '健康・スポーツ科学概論');
   x.items = [x.offering, ...general.map(g => g.offering), foreign.offering, physical.offering].map(o => item(o, 'earned'));
-  x.candidate = { ...x.offering, id: 'h31-candidate', courseId: null, curriculumCourseId: null,
+  x.candidate = { ...x.offering, id: uuid(), courseId: null, curriculumCourseId: null,
     name: '表示名から候補を推測しない', resolutionStatus: 'manual_review', mappingIds: [], credits: 90 };
-  x.f.offerings.push(x.candidate);
+  replaceOffering(x.candidate);
   x.relation = { offeringId: x.candidate.id, curriculumCourseId: null, candidateCurriculumCourseIds: [] };
   x.f.curriculum.offeringRelations.push(x.relation);
-  x.set = (...rows) => { x.candidate.mappingIds = []; x.candidate.curriculumCourseId = null; x.relation.curriculumCourseId = null; x.relation.candidateCurriculumCourseIds = rows.map(r => r.course.id); };
-  x.calc = (candidateStatus = 'earned', rows = []) => calculateGraduationProgress([...x.items, ...(candidateStatus ? [item(x.candidate, candidateStatus)] : [])], x.f, x.scope, [], 'not_selected', [], rows, x.profile);
+  // A: explicit Offering Mapping edges are allowed on manual_review.
+  // B/C: institutional identity and relation candidates remain matched-only.
+  x.set = (...rows) => { x.candidate.mappingIds = [...new Set(rows.flatMap(r => r.course.mappingIds))]; };
+  x.build = () => {
+    // Keep complete annual coverage and the schema-valid UUID identities used
+    // by production. Every localization assertion goes through both gates.
+    assert.equal(x.f.offerings.length, 686);
+    assert.equal(validateCatalog(x.f), true, JSON.stringify(validateCatalog.errors));
+    const attached = attachCurriculumCatalog(x.f, x.f.curriculum);
+    assert.equal(validateCatalog(attached), true, JSON.stringify(validateCatalog.errors));
+    const resolve = createMappingResolver(attached);
+    for (const offering of attached.offerings) resolve(offering);
+    return attached;
+  };
+  const calculate = (input, status, rows) => calculateGraduationProgress([...x.items, ...(status ? [item(x.candidate, status)] : [])], input, x.scope, [], 'not_selected', [], rows, x.profile);
+  x.calc = (candidateStatus = 'earned', rows = []) => calculate(x.build(), candidateStatus, rows);
+  // Direct mutation is reserved for explicitly malformed safety assertions.
+  x.calcMalformed = (candidateStatus = 'earned', rows = []) => calculate(x.f, candidateStatus, rows);
   x.baseline = () => x.calc(null);
   return x;
 }
@@ -1882,14 +1914,11 @@ for (const [dept, prefix, types] of [['法律学科', 'law-', ['選択必修', '
     assert.equal(overall(x.calc()), 18); // 8+4+2+4, never candidate90.
   });
 }
-test('H31 common + professional union; direct Mapping and explicit Course routes agree with relation candidates', () => {
+test('H31 production-valid common + professional union uses only direct Offering Mapping edges', () => {
   const x = h31Fixture(); const common = x.add('common-target', '一般教育', '自然', '選択必修');
   const pro = x.add('pro-target', '専門教育', null, '選択', 4, 'correspondence', '専門候補', x.scope);
   x.set(common, pro); h31Compare(x, ['group-general', 'professional-law-elective', 'professional-law-total']);
-  const union = x.calc(); x.set(); x.candidate.mappingIds = [common.mapping.mappingId]; x.candidate.curriculumCourseId = pro.course.id;
-  assert.deepEqual(x.calc(), union);
-  x.candidate.curriculumCourseId = null; x.relation.curriculumCourseId = pro.course.id;
-  assert.deepEqual(x.calc(), union);
+  assert.deepEqual(x.relation.candidateCurriculumCourseIds, []); assert.equal(x.candidate.curriculumCourseId, null);
 });
 test('H31 outside current/common scopes affects no current requirement or ordinary card', () => {
   const x = h31Fixture(); const other = catalog.programs.find(p => p.department === '経済学科').scopeId;
@@ -1900,8 +1929,8 @@ test('H31 outside current/common scopes affects no current requirement or ordina
   assert.equal(p.referenceProgress[1].status, 'unknown');
 });
 for (const mode of ['absent', 'bad-mapping', 'bad-course', 'bad-scope', 'bad-category', 'bad-field', 'bad-type', 'partial-bad-candidate', 'wrong-department-type']) {
-  test(`H31 unsafe ${mode}: conservative global fallback, known lower bounds retained`, () => {
-    const x = h31Fixture(); const row = x.add('unsafe', '一般教育', '自然', '選択必修');
+  test(`H31 malformed/inconsistent ${mode}: conservative global fallback, known lower bounds retained`, () => {
+    const x = h31Fixture(); const baseline = x.baseline(); const row = x.add('unsafe', '一般教育', '自然', '選択必修');
     if (mode !== 'absent') x.set(row);
     if (mode === 'bad-mapping') x.candidate.mappingIds = ['missing'];
     if (mode === 'bad-course') x.relation.candidateCurriculumCourseIds = ['missing'];
@@ -1911,7 +1940,7 @@ for (const mode of ['absent', 'bad-mapping', 'bad-course', 'bad-scope', 'bad-cat
     if (mode === 'bad-type') { row.mapping.category = '専門教育'; row.mapping.requirementType = null; }
     if (mode === 'wrong-department-type') { row.mapping.category = '専門教育'; row.mapping.scopeId = x.scope; row.mapping.requirementType = '必修'; }
     if (mode === 'partial-bad-candidate') x.relation.candidateCurriculumCourseIds.push('missing');
-    h31Compare(x, x.baseline().cards.filter(c => ['group', 'professional_group'].includes(c.ruleType)).map(c => c.requirementId));
+    h31Compare(x, baseline.cards.filter(c => ['group', 'professional_group'].includes(c.ruleType)).map(c => c.requirementId), x.calcMalformed(), baseline);
   });
 }
 test('H31 non-earned manual_review and outside_mapping_scope preserve ordinary/projection semantics; matched resumes normal allocation', () => {
@@ -1923,14 +1952,16 @@ test('H31 non-earned manual_review and outside_mapping_scope preserve ordinary/p
   }
   x.candidate.resolutionStatus = 'outside_mapping_scope'; assert.deepEqual(x.calc().cards, x.baseline().cards);
   x.candidate.resolutionStatus = 'matched'; x.candidate.mappingIds = row.course.mappingIds; x.candidate.credits = 4;
+  Object.assign(x.relation, { curriculumCourseId: row.course.id, candidateCurriculumCourseIds: [row.course.id] });
   assert.equal(h31Card(x.calc(), 'group-general').earned, 12);
 });
 test('H31/H32: matched credits-null guard remains; manual-review null credits never become earned', () => {
   const x = h31Fixture(); const row = x.add('null', '一般教育', '自然', '選択必修'); x.set(row); x.candidate.credits = null;
   h31Compare(x, ['group-general']);
   x.candidate.resolutionStatus = 'matched'; x.candidate.mappingIds = row.course.mappingIds;
-  x.f.requirements.push({ ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: 'h31-null-req', scopeId: x.scope, value: 8, target: { curriculum_category: '一般教育' }, conditions: null });
-  const r = x.calc().requirements.find(r => r.requirementId === 'h31-null-req');
+  Object.assign(x.relation, { curriculumCourseId: row.course.id, candidateCurriculumCourseIds: [row.course.id] });
+  x.f.requirements.push({ ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: '11111111-1111-4111-8111-000000000001', scopeId: x.scope, value: 8, target: { curriculum_category: '一般教育' }, conditions: null });
+  const r = x.calc().requirements.find(r => r.requirementId === '11111111-1111-4111-8111-000000000001');
   assert.equal(r.status, 'unknown'); assert.equal(r.earned, null); assert.match(r.reason, /単位数不明/);
 });
 for (const [label, target] of [
@@ -1939,8 +1970,8 @@ for (const [label, target] of [
   ['requirement_type', { curriculum_category: '専門教育', requirement_type: '選択必修' }],
 ]) test(`H31 structured ${label}: intersecting unknown keeps resolved/official lower bound and target; nonintersection equals baseline`, () => {
   const x = h31Fixture(); x.mapping.field = '確認分野';
-  x.f.requirements.push({ ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: 'h31-structured', scopeId: x.scope, value: 12, target, conditions: null });
-  const row = p => p.requirements.find(r => r.requirementId === 'h31-structured');
+  x.f.requirements.push({ ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: '11111111-1111-4111-8111-000000000002', scopeId: x.scope, value: 12, target, conditions: null });
+  const row = p => p.requirements.find(r => r.requirementId === '11111111-1111-4111-8111-000000000002');
   x.set({ course: x.course });
   for (const rows of [[], [x.row]]) {
     const p = x.calc('earned', rows); const baseline = x.calc(null, rows);
@@ -1953,23 +1984,25 @@ for (const [label, target] of [
 });
 test('H31 named candidate without resolved annual match retains known zero + target; full-course lower bound is completion-only', () => {
   const x = h31Fixture(); const target = x.add('named', '一般教育', '自然', '選択必修', 4, 'correspondence', '制度名');
-  x.f.offerings = x.f.offerings.filter(o => o.id !== target.offering.id); x.set(target);
-  x.f.requirements.push({ ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: 'h31-named', scopeId: x.scope, value: 4, target: { course_name: '制度名' }, conditions: { full_course_credits_required: true } });
-  const r = x.calc().requirements.find(r => r.requirementId === 'h31-named');
+  target.offering.resolutionStatus = 'outside_mapping_scope';
+  target.offering.curriculumCourseId = null;
+  Object.assign(x.f.curriculum.offeringRelations.find(r => r.offeringId === target.offering.id), { curriculumCourseId: null, candidateCurriculumCourseIds: [] }); x.set(target);
+  x.f.requirements.push({ ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: '11111111-1111-4111-8111-000000000003', scopeId: x.scope, value: 4, target: { course_name: '制度名' }, conditions: { full_course_credits_required: true } });
+  const r = x.calc().requirements.find(r => r.requirementId === '11111111-1111-4111-8111-000000000003');
   assert.equal(r.status, 'unknown'); assert.equal(r.earned, 0); assert.equal(r.target, 4);
   x.set({ course: x.course }); x.f.requirements.at(-1).target = { course_name: x.course.canonicalName }; x.offering.credits = 2;
-  assert.equal(x.calc().requirements.find(r => r.requirementId === 'h31-named').earned, 0);
+  assert.equal(x.calc().requirements.find(r => r.requirementId === '11111111-1111-4111-8111-000000000003').earned, 0);
 });
 test('H31 method intersection matches existing method gate, while unsupported condition guard stays unchanged', async () => {
   const { unresolvedEarnedImpact, impactsRequirement } = await import('../src/planner/unresolvedEarnedImpact.ts');
   const x = h31Fixture(); x.set({ course: x.course });
-  const requirement = { ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: 'h31-method', scopeId: x.scope, value: 4, target: { curriculum_category: '専門教育' }, conditions: { method: 'schooling' } };
+  const requirement = { ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: '11111111-1111-4111-8111-000000000004', scopeId: x.scope, value: 4, target: { curriculum_category: '専門教育' }, conditions: { method: 'schooling' } };
   const matching = (m, r) => m.category === r.target.curriculum_category;
-  assert.equal(impactsRequirement(unresolvedEarnedImpact([item(x.candidate, 'earned')], x.f, x.scope), requirement, matching, null), false);
+  assert.equal(impactsRequirement(unresolvedEarnedImpact([item(x.candidate, 'earned')], x.build(), x.scope), requirement, matching, null), false);
   x.candidate.method = 'schooling';
-  assert.equal(impactsRequirement(unresolvedEarnedImpact([item(x.candidate, 'earned')], x.f, x.scope), requirement, matching, null), true);
+  assert.equal(impactsRequirement(unresolvedEarnedImpact([item(x.candidate, 'earned')], x.build(), x.scope), requirement, matching, null), true);
   x.f.requirements.push(requirement);
-  const r = x.calc().requirements.find(r => r.requirementId === 'h31-method');
+  const r = x.calc().requirements.find(r => r.requirementId === '11111111-1111-4111-8111-000000000004');
   assert.match(r.reason, /条件または例外/); assert.equal(r.earned, null);
   assert.equal(h31Card(x.calc(), 'professional-law-schooling').status, 'unknown');
   assert.equal(h31Card(x.calc(), 'group-foreign').status, h31Card(x.baseline(), 'group-foreign').status);
@@ -2016,12 +2049,16 @@ test('H31 law overflow keeps allocated lower bounds and known partials once; ele
 test('H31 runtime catalog inventory and history special routing stay unchanged', () => {
   const held = catalog.offerings.filter(o => o.resolutionStatus === 'manual_review');
   assert.equal(held.length, 8);
+  assert.equal(validateCatalog(catalog), true);
+  assert.deepEqual(held.reduce((counts, o) => { const field = historySeminarField(o); counts[field] = (counts[field] ?? 0) + 1; return counts; }, {}), { 日本: 4, 西洋: 2, 東洋: 2 });
+  assert.ok(held.every(isHistorySeminar));
   const scope = catalog.programs.find(p => p.department === '史学科').scopeId;
   const profile = fixture().profile;
   const baseline = calculateGraduationProgress([], catalog, scope, [], 'selected', [], [], profile);
   for (const offering of held) {
     assert.equal(offering.method, 'schooling'); assert.equal(offering.credits, 2); assert.deepEqual(offering.mappingIds, []);
-    assert.equal(offering.curriculumCourseId, null);
+    assert.equal(offering.courseId, null); assert.equal(offering.curriculumCourseId, null);
+    assert.equal(catalog.curriculum.offeringRelations.find(r => r.offeringId === offering.id).curriculumCourseId, null);
     assert.deepEqual(catalog.curriculum.offeringRelations.find(r => r.offeringId === offering.id).candidateCurriculumCourseIds, []);
     const p = calculateGraduationProgress([item(offering, 'earned')], catalog, scope, [], 'selected', [], [], profile);
     for (const id of ['group-general', 'group-foreign', 'group-physical', 'professional-history-required']) assert.deepEqual(h31Card(p, id), h31Card(baseline, id));
@@ -2050,16 +2087,22 @@ test('H31 affected UI displays known lower bounds beside hold status without can
   assert.doesNotMatch(html, /修得済み 108/);
   assert.equal(h31Card(p, 'professional-law-required-elective').earned, 4);
 });
-test('H31 official authority suppresses exact earned duplicates before impact analysis', () => {
-  const x = h31Fixture(); x.set({ course: x.course }); x.candidate.curriculumCourseId = x.course.id;
+test('H31 matched official duplicate authority remains independent of unresolved Mapping candidates', () => {
+  const x = h31Fixture(); x.set({ course: x.course });
+  x.candidate.resolutionStatus = 'matched'; x.candidate.credits = 4;
+  Object.assign(x.relation, { curriculumCourseId: x.course.id, candidateCurriculumCourseIds: [x.course.id] });
   const p = x.calc('earned', [x.row]); const baseline = x.calc(null, [x.row]);
   assert.deepEqual(p.cards, baseline.cards); assert.deepEqual(p.requirements, baseline.requirements); assert.deepEqual(p.referenceProgress, baseline.referenceProgress);
   assert.equal(overall(p), 18);
 });
 for (const mode of ['ambiguous', 'incompleteMetadata', 'legacyRepeatable']) test(`H31 coexistence preserves H34 ${mode} reason and null quantity`, () => {
   const x = h31Fixture(); x.set({ course: x.course });
-  if (mode === 'ambiguous') x.offering.mappingIds.push(x.add('conflict', '専門教育', null, '選択', 4, 'correspondence', '別専門', x.scope).mapping.mappingId);
-  if (mode === 'incompleteMetadata') x.mapping.curriculumCredits = null;
+  if (mode === 'ambiguous') {
+    const conflict = x.add('conflict', '専門教育', null, '選択', 4, 'correspondence', '別専門', x.scope);
+    x.offering.mappingIds.push(conflict.mapping.mappingId); x.offering.curriculumCourseId = null;
+    Object.assign(x.f.curriculum.offeringRelations.find(r => r.offeringId === x.offering.id), { curriculumCourseId: null, candidateCurriculumCourseIds: [x.course.id, conflict.course.id].sort() });
+  }
+  if (mode === 'incompleteMetadata') { x.mapping.curriculumCredits = null; x.course.curriculumCredits = null; }
   if (mode === 'legacyRepeatable') x.offering.name = '歴史資料学'; // No repeatable rule for this department: exercise the legacy guard.
   const before = h31Card(x.baseline(), 'professional-law-required-elective'); const after = h31Card(x.calc(), 'professional-law-required-elective');
   assert.equal(before.status, 'unknown'); assert.equal(before.earned, null); assert.deepEqual(after, before);
@@ -2094,6 +2137,84 @@ test('H31/H12 affected law structured totals use the existing safe partial alloc
   assert.equal(total.status, 'unknown'); assert.equal(total.earned, 0); assert.match(total.reason, /対応関係を確認中/);
   assert.equal(overall(p), 14);
   x.items = x.items.filter(i => i.offeringId !== x.offering.id);
-  x.f.offerings = x.f.offerings.filter(o => o.id !== x.offering.id);
+  const absent = { ...x.offering, id: '22222222-2222-4222-8222-222222222222', name: '制度外の開講', courseId: null, resolutionStatus: 'outside_mapping_scope', curriculumCourseId: null, mappingIds: [] };
+  x.f.offerings[x.f.offerings.indexOf(x.offering)] = absent;
+  Object.assign(x.f.curriculum.offeringRelations.find(r => r.offeringId === x.offering.id), { offeringId: absent.id, curriculumCourseId: null, candidateCurriculumCourseIds: [] });
   assert.equal(overall(x.calc('earned', [x.row])), 14); // H02 annual removal cannot alter independent Course authority.
+});
+
+test('H31/P2 reachability A: direct manual_review Mapping edges pass schema, generator and attach without acquiring Course identity', () => {
+  const raw = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url)));
+  const offering = raw.offerings.find(o => o.id === catalog.offerings.find(o => o.resolutionStatus === 'manual_review').id);
+  const mapping = raw.mappings.find(m => m.category === '一般教育');
+  offering.mappingIds = [mapping.mappingId];
+  assert.equal(validateCatalog(raw), true);
+  const input = applyManualMappingOverrides(raw);
+  assert.equal(validateCatalog(input), true);
+  assert.equal(input.offerings.find(o => o.id === offering.id).resolutionStatus, 'manual_review');
+  const rows = JSON.parse(readFileSync(new URL('../scripts/inputs/curriculum-rows-2026.json', import.meta.url))).rows;
+  const groups = JSON.parse(readFileSync(new URL('../scripts/inputs/curriculum-equivalences-2026.json', import.meta.url))).groups;
+  const generated = generateCurriculumCatalog(input, rows, groups);
+  assert.deepEqual(generated, catalog.curriculum); // Direct unresolved edges do not manufacture institutional relations.
+  const relation = generated.offeringRelations.find(r => r.offeringId === offering.id);
+  assert.deepEqual(relation, { offeringId: offering.id, curriculumCourseId: null, candidateCurriculumCourseIds: [] });
+  const attached = attachCurriculumCatalog(input, generated);
+  assert.equal(validateCatalog(attached), true);
+  const output = attached.offerings.find(o => o.id === offering.id);
+  assert.equal(output.resolutionStatus, 'manual_review'); assert.equal(output.curriculumCourseId, null);
+  assert.deepEqual(createMappingResolver(attached)(output), [mapping]);
+});
+for (const source of ['relation.curriculumCourseId', 'relation.candidateCurriculumCourseIds']) test(`H31/P2 reachability C: ${source} on manual_review is schema-valid but attach rejects; malformed runtime falls back globally`, () => {
+  const x = h31Fixture(); const baseline = x.baseline(); x.set({ course: x.course });
+  if (source === 'relation.curriculumCourseId') x.relation.curriculumCourseId = x.course.id;
+  else x.relation.candidateCurriculumCourseIds = [x.course.id];
+  assert.equal(validateCatalog(x.f), true); // Schema is structural; attach enforces the status/edge relationship.
+  assert.throws(() => attachCurriculumCatalog(x.f, x.f.curriculum), /Stale annual curriculum relation/);
+  h31Compare(x, baseline.cards.filter(c => ['group', 'professional_group'].includes(c.ruleType)).map(c => c.requirementId), x.calcMalformed(), baseline);
+});
+test('H31/P2 reachability C: Offering.curriculumCourseId is overwritten by attach, never an unresolved candidate authority', () => {
+  const x = h31Fixture(); x.candidate.curriculumCourseId = x.course.id;
+  assert.equal(validateCatalog(x.f), true);
+  const attached = x.build(); assert.equal(attached.offerings.find(o => o.id === x.candidate.id).curriculumCourseId, null);
+  // No direct Mapping edges: a raw input identity cannot make this professional-only.
+  const p = x.calc(); for (const c of p.cards.filter(c => ['group', 'professional_group'].includes(c.ruleType))) assert.equal(c.status, 'unknown');
+  assert.equal(overall(p), 18);
+  const baseline = x.calc(null);
+  h31Compare(x, baseline.cards.filter(c => ['group', 'professional_group'].includes(c.ruleType)).map(c => c.requirementId), x.calcMalformed(), baseline);
+});
+test('H31/P2 reachability B: nonempty institutional relation is supported only after matched resolution', () => {
+  const x = h31Fixture(); x.set({ course: x.course });
+  x.candidate.resolutionStatus = 'matched';
+  assert.throws(() => attachCurriculumCatalog(x.f, x.f.curriculum), /Stale annual curriculum relation/);
+  Object.assign(x.relation, { curriculumCourseId: x.course.id, candidateCurriculumCourseIds: [x.course.id] });
+  const attached = x.build(); assert.equal(attached.offerings.find(o => o.id === x.candidate.id).curriculumCourseId, x.course.id);
+});
+test('H31/P2 reachability D: nonexistent direct Mapping is rejected by production resolver and cannot localize malformed input', () => {
+  const x = h31Fixture(); x.candidate.mappingIds = ['ffffffff-ffff-4fff-8fff-ffffffffffff'];
+  assert.equal(validateCatalog(x.f), true); // A well-formed UUID still needs catalog referential validation.
+  assert.throws(() => x.build(), /Unknown mappingId/);
+  const p = x.calcMalformed(); for (const c of p.cards.filter(c => ['group', 'professional_group'].includes(c.ruleType))) assert.equal(c.status, 'unknown');
+  assert.equal(overall(p), 18);
+});
+test('H31/P2 production-valid no-candidate generic manual_review is globally held with known lower bounds', () => {
+  const x = h31Fixture(); assert.deepEqual(x.candidate.mappingIds, []); assert.equal(x.build().offerings.find(o => o.id === x.candidate.id).curriculumCourseId, null);
+  h31Compare(x, x.baseline().cards.filter(c => ['group', 'professional_group'].includes(c.ruleType)).map(c => c.requirementId));
+  assert.equal(overall(x.calc()), 18); assert.equal(x.calc().referenceProgress[0].status, 'unknown');
+});
+test('H31/P2 raw63 -> explicit override55 matched -> runtime8 unresolved preserves override boundary and flags', () => {
+  const raw = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url)));
+  const snapshot = structuredClone(raw); assert.equal(validateCatalog(raw), true);
+  assert.equal(raw.offerings.filter(o => o.resolutionStatus === 'manual_review').length, 63);
+  const overrides = [...manualMappingOverrideLedger.overrides, ...officialMappingOverrideLedger.overrides];
+  assert.equal(overrides.reduce((sum, o) => sum + o.offeringIds.length, 0), 55);
+  const patched = applyManualMappingOverrides(raw); assert.equal(validateCatalog(patched), true);
+  for (const override of overrides) for (const id of override.offeringIds) {
+    const original = raw.offerings.find(o => o.id === id), output = patched.offerings.find(o => o.id === id);
+    assert.equal(original.resolutionStatus, 'manual_review'); assert.deepEqual(original.mappingIds, []);
+    assert.equal(output.resolutionStatus, 'matched'); assert.deepEqual(output.mappingIds, override.mappingIds);
+  }
+  const attached = attachCurriculumCatalog(patched); assert.equal(validateCatalog(attached), true);
+  assert.equal(attached.offerings.filter(o => o.resolutionStatus === 'manual_review').length, 8);
+  assert.deepEqual(attached, catalog); assert.deepEqual(raw, snapshot);
+  assert.equal(attached.metadata.graduationCheckComplete, false); assert.equal(attached.metadata.sourceLinksReverified, false);
 });
