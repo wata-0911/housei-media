@@ -92,12 +92,15 @@ test('H36: undecided law thesis hides even known global S amount/target', () => 
   assert.equal(ref(progress(x, 'undecided'), 'schooling').earned, null);
   assert.equal(ref(progress(x, 'undecided'), 'schooling').target, null);
 });
-test('H02: annual removal invalidates a previously valid independent exact Course', () => {
+test('H02 resolved: annual removal preserves independent exact Course and official contribution', () => {
   const x = fixture(); x.row.offeringMatch = 'exact_unique'; x.row.selectedOfferingId = x.offering.id;
   assert.equal(exactImportedCurriculumId(x.row, x.c), x.course.id);
   x.c.offerings = [];
-  assert.equal(exactImportedCurriculumId(x.row, x.c), null);
-  assert.equal(facts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
+  assert.equal(exactImportedCurriculumId(x.row, x.c), x.course.id);
+  assert.equal(facts(x).allocations[0].credits, 4);
+  assert.equal(facts(x).allocations[0].completedCredits, 4);
+  assert.equal(facts(x).allocations[0].schoolingCredits, 2);
+  assert.equal(ref(progress(x), 'overall').earned, 4);
 });
 test('H12 resolved: eight full law Courses admit official partial schooling2 without completing its Course', () => {
   const x = fixture();

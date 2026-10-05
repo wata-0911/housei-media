@@ -7,9 +7,11 @@ import { generateCurriculumCatalog } from '../src/planner/curriculumGeneration.t
 import { matchImportedCurriculumCourse, curriculumMatchForOfferingSelection } from '../src/planner/curriculumImportMatch.ts';
 import { importPreview, applyImport } from '../src/planner/gradeImportApply.ts';
 import { migrateCurriculumState } from '../src/planner/curriculumMigration.ts';
-import { validImportedCurriculumIdentity } from '../src/planner/curriculumIdentityValidation.ts';
-import { initialState, loadState, saveState, saveRecoveredState, STORAGE_KEY } from '../src/planner/storage.ts';
+import { validImportedCurriculumIdentity, validImportedInstitutionalIdentity, recoverImportedAnnualMatches } from '../src/planner/curriculumIdentityValidation.ts';
+import { initialState, loadState, saveState, saveRecoveredState, STORAGE_KEY, BACKUP_KEY } from '../src/planner/storage.ts';
 import { validateCatalog, validateState } from '../src/planner/validation.ts';
+import { exactImportedCurriculumId } from '../src/planner/officialCourseCredits.ts';
+import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { applyManualMappingOverrides } from '../src/planner/manualMappingOverrides.ts';
 import { initialGraduationProfile } from '../src/planner/graduationProfile.ts';
@@ -288,7 +290,7 @@ test('persistence: partial or contradictory new match fields are rejected with r
   }
 });
 
-test('identity validation: exact opening requires an existing selected opening', () => {
+test('identity validation: exact opening requires an existing selection; H02 only recovers stale annual claims on load', () => {
   const f = fixture(); const row = preview(f)[0].sourceCourse;
   for (const selectedOfferingId of [null, 'nonexistent-offering']) {
     const bad = { ...row, selectedOfferingId, offeringMatch: 'exact_unique' };
@@ -297,7 +299,13 @@ test('identity validation: exact opening requires an existing selected opening',
     assert.equal(validateState(state, f), false);
     const raw = JSON.stringify(state); const memory = store(raw);
     assert.throws(() => saveState(memory, state, raw, f));
-    assert.ok(loadState(memory, f).error);
+    const loaded = loadState(memory, f);
+    if (selectedOfferingId === null) assert.ok(loaded.error, 'absent selection is malformed, not catalog staleness');
+    else {
+      assert.equal(loaded.error, null);
+      assert.deepEqual(loaded.state.importedCourseAchievements, [{ ...bad, offeringMatch: 'ambiguous' }]);
+      assert.equal(validateState(loaded.state, f), true);
+    }
     assert.equal(memory.getItem(STORAGE_KEY), raw);
   }
 });
@@ -585,4 +593,241 @@ test('import: clearing an opening selection retains independent course match and
   assert.equal(ambiguous.curriculumMatch, 'ambiguous');
   assert.equal(ambiguous.curriculumCourseId, null);
   assert.equal(ambiguous.candidateCurriculumCourseIds.length, 2);
+});
+
+// H02: Stage A survives stale Stage B, without repairing malformed Stage A.
+function h02Fixture(selectionSource = 'manual') {
+  const c = structuredClone(catalog);
+  const state = applyImport(initialState(), preview(catalog, importCourse('民法総則', {
+    earnedCredits: { raw: '4', value: 4 },
+  })), catalog.offerings);
+  const row = state.importedCourseAchievements[0];
+  const course = c.curriculum.courses.find(course => course.canonicalName === '民法総則');
+  const offering = c.offerings.find(offering => offering.curriculumCourseId === course.id);
+  Object.assign(row, { curriculumMatch: 'exact_unique', curriculumCourseId: course.id,
+    candidateCurriculumCourseIds: [course.id], offeringMatch: 'exact_unique',
+    selectedOfferingId: offering.id, candidateOfferingIds: [offering.id], selectionSource });
+  state.items = []; // Planner's annual references are a separate boundary, tested below.
+  state.graduationProfile = { ...state.graduationProfile, admissionYear: 2026,
+    admissionType: 'first_year', curriculumApplicability: 'current_2026' };
+  state.importedCourseUserMeta = { [row.id]: { lifecycleStatus: 'waiting', plannedYear: 2027, plannedTerm: null, studyYear: 4 } };
+  const scope = c.programs.find(p => p.department === '法律学科').scopeId;
+  assert.equal(validateState(state, c), true);
+  assert.ok(state.importedStudyRecords.some(record => record.sourceCourseId === row.id));
+  return { c, state, row, course, offering, scope };
+}
+const h02Facts = (x, state = x.state) => deriveOfficialGraduationFacts(state.importedCourseAchievements,
+  state.importedStudyRecords, x.c, x.scope, state.graduationProfile);
+const h02Progress = (x, state = x.state) => calculateGraduationProgress(state.items, x.c, x.scope, [],
+  'not_selected', state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile);
+function h02ChangeAnnual(x, change) {
+  if (change === 'deleted') x.c.offerings = x.c.offerings.filter(o => o.id !== x.offering.id);
+  else {
+    const other = x.c.curriculum.courses.find(c => c.canonicalName === '憲法').id;
+    x.offering.curriculumCourseId = change === 'contradictory-direct' ? other : null;
+    x.c.curriculum.offeringRelations = x.c.curriculum.offeringRelations.filter(r => r.offeringId !== x.offering.id);
+    if (change !== 'relation-missing') x.c.curriculum.offeringRelations.push({ offeringId: x.offering.id,
+      curriculumCourseId: null, candidateCurriculumCourseIds: change === 'contradictory-relation' ? [other] : [x.course.id, other] });
+  }
+}
+function h02Freeze(value) {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.values(value).forEach(h02Freeze); Object.freeze(value);
+  }
+  return value;
+}
+for (const source of ['manual', 'auto', 'none']) {
+  for (const change of ['deleted', 'relation-missing', 'contradictory-direct', 'contradictory-relation']) {
+    test(`H02: schema22 ${source}/${change} preserves Course, source links and quantities; only annual exact downgrades`, () => {
+      const x = h02Fixture(source);
+      const before = h02Facts(x);
+      const progressBefore = h02Progress(x);
+      h02ChangeAnnual(x, change);
+      const raw = JSON.stringify(x.state), storage = store(raw);
+      storage.setItem(BACKUP_KEY, 'existing backup');
+      const snapshot = structuredClone(x);
+      h02Freeze(x);
+      assert.equal(validImportedInstitutionalIdentity(x.row, x.c), true);
+      assert.equal(validImportedCurriculumIdentity(x.row, x.c), false);
+      assert.equal(validateState(x.state, x.c), false, 'raw stale annual exact is not accepted');
+      assert.equal(exactImportedCurriculumId(x.row, x.c), x.course.id);
+      const recovered = recoverImportedAnnualMatches(x.state, x.c);
+      const expected = structuredClone(x.state);
+      expected.importedCourseAchievements[0].offeringMatch = 'ambiguous';
+      assert.deepEqual(recovered, expected, 'no id, raw aggregate, profile, records, metadata or selection rewrite');
+      assert.equal(validateState(recovered, x.c), true);
+      assert.deepEqual(x, snapshot, 'calculation/recovery do not mutate frozen inputs');
+      const loaded = loadState(storage, x.c);
+      assert.equal(loaded.error, null);
+      assert.equal(loaded.raw, raw);
+      assert.deepEqual(loaded.state, expected, 'no initialState fallback or unrelated data loss');
+      assert.equal(storage.getItem(STORAGE_KEY), raw, 'load performs no storage writes');
+      assert.deepEqual(h02Facts(x, loaded.state), before);
+      assert.deepEqual(h02Progress(x, loaded.state), progressBefore);
+      assert.equal(before.allocations[0].credits, 4);
+      assert.equal(before.allocations[0].completedCredits, 4);
+      assert.equal(before.allocations[0].schoolingCredits, 2);
+      assert.equal(progressBefore.referenceProgress.find(r => r.id === 'overall-reference-progress').earned, 4);
+      const saved = saveState(storage, loaded.state, loaded.raw, x.c);
+      const reloaded = loadState(storage, x.c);
+      assert.equal(reloaded.error, null);
+      assert.deepEqual(reloaded.state, expected);
+      assert.equal(reloaded.raw, saved);
+      assert.equal(storage.getItem(BACKUP_KEY), 'existing backup');
+      storage.setItem(STORAGE_KEY, 'other tab changed storage');
+      assert.throws(() => saveState(storage, loaded.state, saved, x.c), /別の画面/);
+      assert.equal(storage.getItem(STORAGE_KEY), 'other tab changed storage');
+    });
+  }
+}
+for (const relation of ['direct', 'official-candidates']) {
+  test(`H02: compatible ${relation} keeps annual exact and save/load semantics unchanged`, () => {
+    const x = h02Fixture();
+    if (relation === 'official-candidates') h02ChangeAnnual(x, 'compatible-relation');
+    h02Freeze(x);
+    assert.equal(exactImportedCurriculumId(x.row, x.c), x.course.id);
+    assert.equal(validImportedCurriculumIdentity(x.row, x.c), true);
+    assert.equal(recoverImportedAnnualMatches(x.state, x.c), x.state, 'no unnecessary normalization');
+    const storage = store(JSON.stringify(x.state));
+    const loaded = loadState(storage, x.c);
+    assert.equal(loaded.error, null);
+    assert.deepEqual(loaded.state, x.state);
+    saveState(storage, loaded.state, loaded.raw, x.c);
+    assert.deepEqual(loadState(storage, x.c).state, x.state);
+  });
+}
+for (const annual of ['unmatched', 'ambiguous']) {
+  test(`H02: already ${annual} annual state retains exact Course without promotion`, () => {
+    const x = h02Fixture(); x.row.offeringMatch = annual;
+    h02ChangeAnnual(x, 'deleted');
+    assert.equal(exactImportedCurriculumId(x.row, x.c), x.course.id);
+    assert.equal(recoverImportedAnnualMatches(x.state, x.c), x.state);
+    assert.equal(loadState(store(JSON.stringify(x.state)), x.c).error, null);
+  });
+}
+for (const defect of ['empty', 'multiple', 'different', 'nonexistent', 'missing-extension', 'missing-selection']) {
+  test(`H02/H01: ${defect} malformed exact state is not repaired by annual recovery`, () => {
+    const x = h02Fixture();
+    const other = x.c.curriculum.courses.find(c => c.canonicalName === '憲法').id;
+    if (defect === 'empty') x.row.candidateCurriculumCourseIds = [];
+    if (defect === 'multiple') x.row.candidateCurriculumCourseIds = [x.course.id, other];
+    if (defect === 'different') x.row.candidateCurriculumCourseIds = [other];
+    if (defect === 'nonexistent') { x.row.curriculumCourseId = 'curriculum:nonexistent'; x.row.candidateCurriculumCourseIds = [x.row.curriculumCourseId]; }
+    if (defect === 'missing-extension') delete x.row.candidateCurriculumCourseIds;
+    if (defect === 'missing-selection') x.row.selectedOfferingId = null;
+    h02ChangeAnnual(x, 'deleted');
+    assert.equal(exactImportedCurriculumId(x.row, x.c), defect === 'missing-selection' ? x.course.id : null);
+    assert.equal(recoverImportedAnnualMatches(x.state, x.c), x.state);
+    const raw = JSON.stringify(x.state), storage = store(raw);
+    const loaded = loadState(storage, x.c);
+    assert.ok(loaded.error);
+    assert.deepEqual(loaded.state, initialState());
+    assert.equal(storage.getItem(STORAGE_KEY), raw);
+  });
+}
+for (const institutional of ['ambiguous', 'unmatched', 'legacy']) {
+  test(`H02: institutional ${institutional} never becomes exact from singleton annual/name/legacy evidence`, () => {
+    const x = h02Fixture();
+    if (institutional === 'legacy') Object.assign(x.row, { curriculumCourseId: undefined, curriculumMatch: undefined,
+      candidateCurriculumCourseIds: undefined, offeringMatch: undefined });
+    else Object.assign(x.row, { curriculumCourseId: null, curriculumMatch: institutional,
+      candidateCurriculumCourseIds: institutional === 'ambiguous' ? [x.course.id] : [], offeringMatch: 'ambiguous' });
+    h02ChangeAnnual(x, 'deleted');
+    assert.equal(exactImportedCurriculumId(x.row, x.c), null);
+    assert.equal(recoverImportedAnnualMatches(x.state, x.c), x.state);
+    assert.equal(h02Facts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
+    const loaded = loadState(store(JSON.stringify(x.state)), x.c);
+    assert.equal(loaded.error, null);
+    assert.equal(exactImportedCurriculumId(loaded.state.importedCourseAchievements[0], x.c), null);
+    if (institutional !== 'legacy') {
+      x.row.offeringMatch = 'exact_unique';
+      assert.equal(recoverImportedAnnualMatches(x.state, x.c), x.state);
+      assert.ok(loadState(store(JSON.stringify(x.state)), x.c).error, 'no independently exact Course to recover');
+    }
+  });
+}
+test('H02: Course.mappingIds remains authority; missing/conflicting/out-of-scope mappings stay held', () => {
+  for (const guard of ['mapping_not_found', 'mapping_descriptor_deleted', 'mapping_conflict', 'out_of_scope']) {
+    const x = h02Fixture(); h02ChangeAnnual(x, 'deleted');
+    if (guard === 'mapping_not_found') x.course.mappingIds = [];
+    if (guard === 'mapping_descriptor_deleted') x.c.mappings = x.c.mappings.filter(m => !x.course.mappingIds.includes(m.mappingId));
+    if (guard === 'mapping_conflict') {
+      const mapping = x.c.mappings.find(m => x.course.mappingIds.includes(m.mappingId) && m.scopeId === x.scope);
+      x.c.mappings.push({ ...mapping, mappingId: 'h02-conflict', requirementType: '選択' });
+      x.course.mappingIds.push('h02-conflict');
+    }
+    if (guard === 'out_of_scope') x.scope = x.c.programs.find(p => p.department === '史学科').scopeId;
+    assert.equal(h02Facts(x).allocations.length, 0);
+    assert.equal(h02Facts(x).facts[0].allocation.reason, guard === 'mapping_descriptor_deleted' ? 'mapping_not_found' : guard);
+  }
+});
+test('H02/H03: distinct duplicate official rows retain null aggregate, without dedupe/sum/max', () => {
+  const x = h02Fixture(); h02ChangeAnnual(x, 'deleted');
+  x.state.importedCourseAchievements.push({ ...x.row, id: '00000000-0000-4000-8000-000000000002' });
+  const loaded = loadState(store(JSON.stringify(x.state)), x.c);
+  assert.equal(loaded.error, null);
+  const result = h02Facts(x, loaded.state);
+  assert.equal(result.allocations.length, 0);
+  assert.equal(result.facts[0].earnedCreditsTotal, null);
+  assert.equal(result.facts[0].allocation.reason, 'duplicate_official_rows');
+});
+test('H02: PlannerItem still requires its annual Offering; unrelated Planner data survives recovery', () => {
+  for (const removed of [false, true]) {
+    const x = h02Fixture();
+    const offeringId = removed ? x.offering.id : x.c.offerings.find(o => o.id !== x.offering.id).id;
+    x.state.items = [{ offeringId, status: 'planned', plannedYear: 2027, plannedTerm: null, studyYear: null, earnedOrder: null }];
+    assert.equal(validateState(x.state, x.c), true);
+    h02ChangeAnnual(x, 'deleted');
+    const loaded = loadState(store(JSON.stringify(x.state)), x.c);
+    if (removed) { assert.ok(loaded.error); assert.deepEqual(loaded.state, initialState()); }
+    else { assert.equal(loaded.error, null); assert.deepEqual(loaded.state.items, x.state.items); }
+  }
+});
+test('H02: annual/component credits do not replace official aggregate or reconstruct missing identity', () => {
+  const x = h02Fixture();
+  x.offering.credits = 99; x.offering.method = 'media';
+  x.state.importedStudyRecords.forEach(r => { r.credits = 88; });
+  assert.equal(h02Facts(x).allocations[0].credits, 4);
+  h02ChangeAnnual(x, 'deleted');
+  assert.equal(h02Facts(x).allocations[0].credits, 4);
+  x.row.curriculumCourseId = null; x.row.curriculumMatch = 'unmatched'; x.row.candidateCurriculumCourseIds = [];
+  assert.equal(h02Facts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
+});
+test('H02: UI shows independent Course and annual review state; incompatible new manual proposal remains rejected', () => {
+  const x = h02Fixture(); h02ChangeAnnual(x, 'contradictory-direct');
+  const recovered = recoverImportedAnnualMatches(x.state, x.c), row = recovered.importedCourseAchievements[0];
+  const html = renderToStaticMarkup(createElement(ImportedManagementRows, { records: [], courseRows: [row],
+    offerings: x.c.offerings, catalog: x.c, disabled: false, onChange() {}, onChangeCourse() {}, onDelete() {} }));
+  assert.match(html, /カリキュラム科目: 民法総則 \/ 2026開講: 未特定/);
+  assert.match(html, /カリキュラム照合: 一意一致 \/ 開講照合: 要確認/);
+  const proposed = { ...row, ...curriculumMatchForOfferingSelection(row, x.offering, x.c.curriculum) };
+  assert.equal(proposed.curriculumCourseId, x.course.id, 'manual annual selection cannot overwrite independent A');
+  const raw = JSON.stringify(recovered), storage = store(raw);
+  assert.throws(() => saveState(storage, { ...recovered, importedCourseAchievements: [proposed] }, raw, x.c), /不正/);
+  assert.equal(storage.getItem(STORAGE_KEY), raw);
+});
+
+test('H02: compatible manual reselection and manual reimport retain recovered institutional identity and links', () => {
+  const x = h02Fixture(); h02ChangeAnnual(x, 'deleted');
+  const recovered = recoverImportedAnnualMatches(x.state, x.c), row = recovered.importedCourseAchievements[0];
+  const compatible = x.c.offerings.find(o => o.curriculumCourseId === x.course.id);
+  assert.ok(compatible);
+  const selected = { ...row, ...curriculumMatchForOfferingSelection(row, compatible, x.c.curriculum),
+    selectedOfferingId: compatible.id, selectionSource: 'manual' };
+  assert.equal(selected.curriculumCourseId, x.course.id);
+  assert.equal(selected.offeringMatch, 'exact_unique');
+  assert.equal(validImportedCurriculumIdentity(selected, x.c), true);
+  const storage = store(JSON.stringify(recovered));
+  saveState(storage, { ...recovered, importedCourseAchievements: [selected] }, storage.getItem(STORAGE_KEY), x.c);
+  assert.equal(loadState(storage, x.c).error, null);
+  const reimported = applyImport(recovered, importPreview(importData(importCourse('民法総則', {
+    earnedCredits: { raw: '4', value: 4 },
+  })), x.c.offerings, recovered.importedStudyRecords, recovered.importedCourseAchievements,
+  { curriculum: x.c.curriculum, mappings: x.c.mappings }), x.c.offerings);
+  assert.equal(reimported.importedCourseAchievements.length, 1);
+  assert.equal(reimported.importedCourseAchievements[0].id, row.id);
+  assert.equal(reimported.importedCourseAchievements[0].curriculumCourseId, x.course.id);
+  assert.equal(reimported.importedCourseAchievements[0].offeringMatch, 'ambiguous');
+  assert.deepEqual(reimported.importedCourseUserMeta, recovered.importedCourseUserMeta);
+  assert.deepEqual(reimported.importedStudyRecords.map(r => r.sourceCourseId), recovered.importedStudyRecords.map(r => r.sourceCourseId));
 });
