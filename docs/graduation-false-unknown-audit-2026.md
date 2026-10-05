@@ -742,3 +742,30 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - raw63→既存override55件matched→runtime8件manual_reviewを再確認。55件はexplicit override mappingsを持つ通常matched allocationであり、unresolved candidateへ戻さない。runtime8件は史学演習日本4/東洋2/西洋2、schooling2、mappingIds空、courseId/制度identity=null、relation候補空。史学scopeの既存special routing/修得順holdとgeneric除外は維持。
 - evaluateStructured/groupedCards/professionalCardsの既知下限・candidate credits非算入・overall known下限＋unknownは維持。H02/H12/H32/H34/H36/H38/H41/H42/H43/H19、schoolingUnknown/officialUnknown後段は変更しない。catalog/schema/generator/attach/persistent/UIは変更なし、schema22・両false flagを維持。future manual_review candidate-relation設計は別sliceであり、今回の根拠には使わない。元本文と先行H31 follow-upは履歴として保存した。
 - 検証：planner931/931、H31を含むaudit helper20/20、catalog contract系64/64（plannerにも含まれる）を直接実行し成功。extension19/19、bookmarklet168/168、typecheck/lint/build、git diff --check成功。skip追加なし。buildの既存chunk-size warningは残る。
+
+## H37 implementation follow-up — 2026-10-05
+
+- base：最初に専用checkoutを取得し、remoteを再取得した時点の`origin/dev`は`62b07defe2329d4c08d839a36bfc1307caddebb3`（PR #76/H31 merge後、提示SHAから進行なし）。ここから`feature/graduation-h37-preserve-general-recognition-lower-bound`を新規作成した。
+- reproduction：公式／resolvedの人文4＋人文認定unknownでは、修正前はdetail/general earnedともnull、overall参考では既知4が消えた。既知認定8＋8と自然unknown、総量36でも自然minimum4/8、放送大学認定併存でも同じ問題を正式testで再現した。
+- root cause：`applyRecognition()`が未知の認定増分をdetail earned=nullで表し、そのnullから一般group earnedもnullにした。`countedOverallCredits()`はそのcardを0として合計し、既知修得下限まで参考量から落としていた。
+- new contract：`known quantity + evaluation/completion unknown`。通常の安全な一般算入量、値が確定したrecognized、既存contractの放送大学認定だけを1回ずつ加算し、一般36 capを維持する。unknown増分は加算せず、未達fieldのdetail reason／group statusとreasonで未確認を表す。detailにstatus型を追加しない。
+- 人文4/8＋認定unknownはdetail4/general4/unknown、overall4/target124/unknownとなる。総量36でも未確認field minimumが残ればunknown。既知量だけで全field minimumと36を満たす場合はsatisfiedを維持する。first-yearと、既にminimumを満たしたfieldの未知追加認定を新たなholdへ広げない。
+- overallはH37由来のstatus/coverage/reasonだけを追加し、quantity/targetへglobal prerequisiteを追加しない。既存profile/invalid recognition hold、H36 law thesis target hold、H31 unresolved-earnedのreason優先、H41 officialUnknown後段を維持する。H31併存の旧H37 characterizationはgeneral32/overall42へ更新し、candidate90は加算せず、general/physicalのH31 unknownを解除しない。
+- 放送大学10は一般totalだけへ入り、3field minimumには配分しない。aggregate認定totalと内訳を二重計上しない。個別exemptのdetailは従来の要件免除表示を保ち、earned totalへ8を加算しない。all-exemptは従来どおりgeneral earned0で放送大学overlayを抑止する。
+- changed files：`src/planner/graduationProgress.ts`、`tests/graduation-audit.test.mjs`、本書の末尾追記だけ。productionは一般認定overlayとoverallのH37 evaluation propagationに限定。外国語／schoolingのproduction分岐、official aggregate authority、Course/Mapping authority、schema/storage/migration/profile/UIは変更しない。schemaVersion22、`graduationCheckComplete=false`、`sourceLinksReverified=false`を維持する。
+- 正式H37回帰31件を追加。3field×公式／Planner／混在、既知認定＋unknown、36 cap＋field未達、全条件既知、放送大学／認定aggregate、個別／全免除、法律卒論3状態、独立profile guards、known0、first-year、年次Offering欠落、component40非加算、official/Planner duplicate、H38 foreign4/Snull、H41/H42/H43併存を含む。先行H31/H38 testはH37が変える期待だけ更新し、candidate非算入と既存reason優先を追加確認した。
+- 検証：H37/H38/H31-overlay targeted **57/57**、planner **962/962**、extension **19/19**、bookmarklet **168/168**、audit helper **20/20**、fail/skip0。typecheck/lint/build/`git diff --check` PASS。buildのgrade-import artifact/catalog check PASS（Course321/Offering686）。既存Vite chunk-size warningのみ残る。audit helperのH37以外のassertionは変更せずそのまま成功した。
+- 未解決の隣接範囲：H25、H39、H14、H20、H32、H34、H41/H42/H43、H19等は今回解決しない。H31局所holdと既知下限、H36数量／target分離、H38 foreign earned4/status unknownは既存の修正を維持する。
+
+元の66件inventory、A–E/P1/P2集計、監査当時のbehavior、および先行follow-upは履歴として変更せず保存した。
+
+## H37 review follow-up — total-only recognition uncertainty — 2026-10-05
+
+- 同じ`feature/graduation-h37-preserve-general-recognition-lower-bound`上で、先行commit `23afceed65276868c1ce30dfec8f60a00540a2d9`へ追加修正する。remote再取得後もbranch/開始時base `62b07defe2329d4c08d839a36bfc1307caddebb3`は維持し、新branch・PR・merge・history rewriteは行わない。
+- P1 reproduction：一般教育8/8/8＝total24、12/8/8＝total28は各field minimumが既知で満たされるため、先行実装の`details.some(detail.reason === '認定情報未確認')`がfalseになり、未知の認定増分でtotal36へ到達し得るのにunsatisfiedと確定していた。新回帰の修正前実行ではtotal-only17件中15件が失敗し、既にtotal36を満たす2件だけ成功した。
+- field minimumのunknownとtotal36のunknownを分離する。`knownTotal`は従来どおり安全なcard earned＋確定recognized＋既存ルールの放送大学認定だけから計算し、unknown認定増分は加算しない。`recognitionMayApply`かつ既知total36未満かついずれかのgeneral mode unknownなら、field minimumがすべて満たされていてもgroup status/reasonをunknownにする。満たされたdetailへ認定未確認reasonは追加しない。
+- 先行follow-upの「既にminimumを満たしたfieldの未知追加認定を新たなholdへ広げない」はfield-level理由の局所性としてのみ維持する。group-levelではtotal36の達成可否への影響も確認する。既知量だけで全field minimumとtotal36を満たせばsatisfiedを維持する。
+- overallへのproduction変更は不要。既存H37 evaluation propagationがgroup-level total uncertaintyも受け取り、earned24/28・target124を保ったままstatus/coverage unknownとする。profile hold、H36 target hold、H31 reason優先、H38 foreign4/Snull、H41/H42/H43後段は変更しない。
+- 追加回帰19件：8/8/8・12/8/8×unknown3field×公式/Planner、known recognition0/4/12の一度だけ加算と36到達時の解除、放送大学0/8のtotalのみへの算入と36境界、confirmed none/first-year境界。既存の全minimum＋total36達成回帰も維持する。schemaVersion22、`graduationCheckComplete=false`、`sourceLinksReverified=false`を確認する。
+- changed files：`graduationProgress.ts`の一般教育overlayのみ、`tests/graduation-audit.test.mjs`への回帰追加、本書末尾の追記。schema/storage/migration/profile/UI、official aggregate正本、Course/Mapping identity authority、外国語／schoolingのproduction分岐は不変。元inventoryと先行follow-upは監査履歴として保存し、今回の訂正をこの追記に限定する。
+- 検証：H37/H38/H31-overlay targeted **76/76**、planner **981/981**、extension **19/19**、bookmarklet **168/168**、audit helper **20/20**。fail/skip0、既存test削除/skip追加なし。typecheck/lint/build/`git diff --check` PASS。grade-import artifacts/catalog check PASS（Course321/Offering686）、既存Vite chunk-size warningは維持。

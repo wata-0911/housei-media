@@ -1039,6 +1039,8 @@ function referencePrerequisiteReason(profile: GraduationProfile): string | null 
   return null;
 }
 
+const GENERAL_RECOGNITION_UNKNOWN_REASON = '一般教育の認定情報が未確認です。0単位認定とは扱いません。';
+
 /** Recognition is an independent source.  It is overlaid once on common cards;
  * exemptions satisfy their requirement but deliberately contribute no earned credits. */
 function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): ProgressCard[] {
@@ -1055,13 +1057,18 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     const details = card.details?.map((detail, index) => {
       const row = general[fields[index]];
       const earned = row.mode === 'exempt' ? detail.target : (detail.earned ?? 0) + (row.mode === 'recognized' ? row.credits ?? 0 : 0);
-      return recognitionMayApply && row.mode === 'unknown' && earned < detail.target ? { ...detail, earned: null, reason: '認定情報未確認' } : { ...detail, earned };
+      // H37: an unknown recognition increment does not erase the known lower bound.
+      return recognitionMayApply && row.mode === 'unknown' && earned < detail.target ? { ...detail, earned, reason: '認定情報未確認' } : { ...detail, earned };
     });
-    const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && (card.earned ?? 0) + credited + openUniversity >= 36;
-    const unknown = recognitionMayApply && !exempt && details?.some(detail => detail.earned === null);
-    return { ...card, earned: exempt ? 0 : unknown ? null : Math.min(card.target ?? 36, (card.earned ?? 0) + credited + openUniversity), details,
+    const knownTotal = (card.earned ?? 0) + credited + openUniversity;
+    const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && knownTotal >= 36;
+    const fieldUnknown = details?.some(detail => detail.reason === '認定情報未確認');
+    // Even met field minima leave total36 unresolved when recognition may add credits.
+    const totalUnknown = knownTotal < 36 && fields.some(key => general[key].mode === 'unknown');
+    const unknown = recognitionMayApply && !exempt && (fieldUnknown || totalUnknown);
+    return { ...card, earned: exempt ? 0 : Math.min(card.target ?? 36, knownTotal), details,
       status: exempt || completed ? 'satisfied' : unknown ? 'unknown' : card.status,
-      reason: unknown ? '一般教育の認定情報が未確認です。0単位認定とは扱いません。' : card.reason,
+      reason: unknown ? GENERAL_RECOGNITION_UNKNOWN_REASON : card.reason,
       note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : `${credited ? ' 公式認定単位を反映しています。' : ''}${openUniversity ? ` 放送大学認定 ${openUniversity}単位を一般教育（その他）に反映しています。` : ''}`}` };
   });
   next = replace(next, 'group-foreign', card => {
@@ -1341,10 +1348,18 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const thesisPage = thesisCreditsForDepartment(program.department) === 8 ? ({ '日本文学科': 49, '史学科': 52, '地理学科': 54 } as Record<string, number>)[program.department ?? ''] : ({ '法律学科': 46, '経済学科': 57, '商業学科': 59 } as Record<string, number>)[program.department ?? ''];
   const coveredCards = cards.map(card => withCoverage(card, card.ruleType === 'thesis_progress' ? thesisPage : catalog.requirements.find(rule => rule.id === card.requirementId)?.sourcePage));
   const reference = referenceProgress(coveredCards, calculationItems, offerings, eligibleMappings, program, profile, currentSelection);
+  const generalRecognitionUnknown = coveredCards.some(card => card.requirementId === 'group-general'
+    && card.reason?.startsWith(GENERAL_RECOGNITION_UNKNOWN_REASON));
   for (const row of reference) {
     if (row.id === 'overall-reference-progress' && (impact.globalUnknown || impact.candidates.length > 0)) {
       row.status = 'unknown'; row.coverageStatus = 'unknown';
       row.reason ??= UNRESOLVED_EARNED_REASON;
+      row.unknownReasonCategory = classifyUnknownReason(row.reason);
+    }
+    // H37 holds evaluation only; preserve the quantity, target and existing reason priority.
+    if (row.id === 'overall-reference-progress' && generalRecognitionUnknown) {
+      row.status = 'unknown'; row.coverageStatus = 'unknown';
+      row.reason ??= GENERAL_RECOGNITION_UNKNOWN_REASON;
       row.unknownReasonCategory = classifyUnknownReason(row.reason);
     }
     if (row.id === 'schooling-reference-progress' && row.earned !== null) row.earned += official.allocations.reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0);
