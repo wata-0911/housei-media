@@ -196,3 +196,23 @@ test('source facts and invariant flags are unchanged by all calculations', () =>
   assert.equal(catalog.metadata.sourceLinksReverified, false);
   assert.equal(initialState().schemaVersion, 22);
 });
+
+test('H31 resolved: explicit professional candidate holds dependencies only and retains official lower bound', () => {
+  const x = fixture();
+  const candidate = { ...x.offering, id: 'h31-candidate', curriculumCourseId: null, courseId: null, resolutionStatus: 'manual_review', credits: 90 };
+  x.c.offerings.push(candidate);
+  const p = calculateGraduationProgress([{ offeringId: candidate.id, status: 'earned', earnedOrder: null }], x.c, x.scope, [], 'not_selected', [], x.rows, x.profile);
+  for (const id of ['professional-law-required-elective', 'professional-law-elective', 'professional-law-total']) {
+    assert.equal(card(p, id).status, 'unknown'); assert.match(card(p, id).reason, /対応関係を確認中/);
+  }
+  assert.equal(card(p, 'professional-law-required-elective').earned, 4); assert.equal(card(p, 'professional-law-total').earned, 4);
+  for (const id of ['group-general', 'group-foreign', 'group-physical']) assert.deepEqual(card(p, id), card(progress(x), id));
+  assert.equal(ref(p, 'overall').earned, 4); assert.equal(ref(p, 'overall').status, 'unknown');
+});
+test('H31 no candidate: conservative global hold retains known lower bound without counting unresolved budget', () => {
+  const x = fixture(); const candidate = { ...x.offering, id: 'h31-no-candidate', curriculumCourseId: null, mappingIds: [], resolutionStatus: 'manual_review', credits: 90 };
+  x.c.offerings.push(candidate);
+  const p = calculateGraduationProgress([{ offeringId: candidate.id, status: 'earned', earnedOrder: null }], x.c, x.scope, [], 'not_selected', [], x.rows, x.profile);
+  for (const id of ['group-general', 'group-foreign', 'group-physical', 'professional-law-total']) assert.equal(card(p, id).status, 'unknown');
+  assert.equal(card(p, 'professional-law-total').earned, 4); assert.equal(ref(p, 'overall').earned, 4);
+});
