@@ -673,3 +673,19 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - production変更は`officialGraduationFacts.ts`のH57 predicateと名称hold例外のみ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、component非加算、Course.mappingIds authorityを維持。Offeringをhistorical authorityにしていない。
 
 本文の66件inventory/A–E/P1/P2集計、H38/H60 follow-upはbaselineとして変更せず保存した。次slice候補はH12法律partialを独立し、完成8科目32単位の公式証拠とC4/O2/S2を確認できる限定ケースから扱うこと。
+
+## H12 implementation follow-up — 2026-10-05
+
+- 実装commit：`6550f6d07690cc406a25dad08f050497c3442792`。branchは`feature/graduation-h12-law-partial-schooling`。開始時remote dev/baseは`46249ada46c1f303446a99f10a4268f2c08bd851`で提示SHAと一致。最新devから新規作成した。
+- repo内authorityを再確認：法律scope `e31201f3-4f1d-432a-906e-6af94af294c9`。選択必修は完成8科目AND32単位（catalog p.46/47）、overflowはexcess_only/double_count=false/threshold32/requires_completed_courses8（p.47）。partialのcatalog ruleは`law_partial_course_exception`、sourcePage47、unsupported表現を保持。専用allocatorのp.47 b実装と本監査S47bをauthorityとして再利用した。Webの全source再調査は行っていない。
+- 例：憲法C4/選択必修（Course `curriculum:36ad2e6f-d779-4bb1-8708-0f209b94dd61`、law Mapping `9e470186-9a37-4727-9f9d-acfa75bbd660`）、西洋法制史C4/選択（Course `curriculum:564fc155-b9aa-41f2-a9a4-0136dbf84bc8`、Mapping `564fc155-b9aa-41f2-a9a4-0136dbf84bc8`）。いずれも専門教育/field null/method-only false、sourcePage46、public/special/repeatable対象外。
+- H12のみ：現行2026 official catalog＋profile current_2026、法律、exact identity、selected scopeの専門選択必修/選択、Course/Mapping/row C4、公式O2/S2、認定免除/追加履修0/null、method-onlyなしに限定してgeneric partial holdを回避。special/duplicate/Mapping/recognition guardは前後とも維持。allocationは**credits2/completedCredits0/schoolingCredits2**で、完成Courseにはしない。
+- 旧：8 full＋partialでもallocation8件、total32。新：8 completed/32を専用allocatorが証明した場合だけpartial2を選択へ算入しtotal34。7/28ではtotal28、7/32・8/28でもpartial0、9/36ではoverflow4＋partial2を選択へ1回ずつ算入しtotal38。選択必修/選択partialの両方で確認し、partial自身はcompleted countへ入れない。
+- 入口例外だけでは汎用law total/elective要件がofficial O2を無条件加算する経路があるため、H12 allocation存在時に限りactiveな該当4要件を専用professional allocatorの値へ整合させた。required-electiveのfull-course計算やdedicated allocator自体は変更していない。既存unknown要件は昇格しない。
+- threshold未達でもvalid official S2を専門S8/全体S参考へ保持。H19除外名称は従来どおりSnull→schooling_confirmationでpartial ordinary0。H20認定S guard/H14 overlapも維持。卒論selected/not_selectedはtotal34/overall34、undecidedはprofessional既知34を保つが既存H36でoverall/S参考null、status unknownを保持。
+- S0/1/null/negative/NaN/±Infinity/3、O1/3/>4、C mismatch/null、wrong type、認定/追加履修positive、legacy/unknown/future、identity/Mapping不明、public/thesis/repeatable/specialは救済しない。O0/O4は既存zero/full契約。文学部partial H13も変更しない。
+- 正式test64件追加＋既存H12 characterization1件を対応する新契約へ更新（H12 matrix65件）。helperはH12だけ更新。duplicate partial/full、fullとの同Course collision、Planner/official重複、equivalent Mappingでcountを水増ししない。Offering削除/順序/credits99/method変更不変、component40非加算、rows/records/catalog/profile deep-freeze/deep-equality PASS。
+- 検証：planner **797/797**、audit helper **17/17**、extension **19/19**、bookmarklet **168/168**、fail/skip0。typecheck/lint/build/diff check PASS。grade-import artifact/catalog check PASS、Course321/Offering686不変。ローカルNode24.13.0。既存Vite chunk-size警告は残るがbuild成功。
+- productionは`officialGraduationFacts.ts`と`graduationProgress.ts`のみ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、Course.mappingIds authorityを維持。H02/H14/H19/H20/H36等を修正していない。既存のpartial表示文言・証拠件数とordinary算入量の区別（H47）も今回のUI修正対象外。
+
+本文66件inventory/A–E/P1/P2集計とH38/H60/H57 follow-upはbaselineとして変更していない。次slice候補はH02のexact制度identityとannual Offering欠落の分離（保存/復元の変更範囲を先に限定すること）。
