@@ -4,6 +4,7 @@ import { repairImportedAchievements } from './importedAchievementRepair';
 import { graduationProfileValidationError, initialGraduationProfile, MAX_GENERAL_RECOGNIZED_CREDITS_2026, MAX_OPEN_UNIVERSITY_RECOGNIZED_CREDITS_2026, MAX_RECOGNIZED_CREDITS_2026, recognizedCreditBreakdownTotal, schoolingRecognitionCap } from './graduationProfile';
 import { migrateCurriculumState } from './curriculumMigration';
 import { normalizeThesisProgressState } from './thesisSelection';
+import { recoverImportedAnnualMatches } from './curriculumIdentityValidation';
 
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
@@ -94,10 +95,11 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     // preceding state field and recognition-recovery shadow.
     // Wrap every earlier result before the additive v22 curriculum migration,
     // so no recognition/import shadow is lost.
-    const state = migrateCurriculumState(normalizeThesisProgressState((migrated.schemaVersion === 21 || migrated.schemaVersion === 22 ? migrated : {
+    const curriculumState = migrateCurriculumState(normalizeThesisProgressState((migrated.schemaVersion === 21 || migrated.schemaVersion === 22 ? migrated : {
       ...migrated, schemaVersion: 21, thesisGuidanceByScope: {},
       graduationProfile: { ...initialGraduationProfile(), ...(migrated.graduationProfile as object), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...((migrated.graduationProfile as Record<string, unknown> | undefined)?.recognizedCredits as object) } },
     }) as PlannerState, catalog), catalog);
+    const state = migrated.schemaVersion === 22 ? recoverImportedAnnualMatches(curriculumState, catalog) : curriculumState;
     const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
     if (!profile) throw new Error('Invalid recognition structure');
     if (!validateState(state, catalog)) {

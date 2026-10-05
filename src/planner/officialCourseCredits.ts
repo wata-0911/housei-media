@@ -1,11 +1,11 @@
 import type { ImportedCourseAchievement } from './gradeImportApply';
 import type { Offering, PlannerCatalog, PlannerItem } from './plannerCatalog';
-import { validImportedCurriculumIdentity } from './curriculumIdentityValidation';
+import { validImportedInstitutionalIdentity } from './curriculumIdentityValidation';
 
 /** Independent exact institutional identity; an annual opening is not required. */
 export function exactImportedCurriculumId(row: ImportedCourseAchievement, catalog: PlannerCatalog): string | null {
   return row.curriculumMatch === 'exact_unique' && row.curriculumCourseId
-    && validImportedCurriculumIdentity(row, catalog) ? row.curriculumCourseId : null;
+    && validImportedInstitutionalIdentity(row, catalog) ? row.curriculumCourseId : null;
 }
 
 /** Conservative official-priority policy for graduation and related calculations,

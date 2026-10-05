@@ -689,3 +689,18 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - productionは`officialGraduationFacts.ts`と`graduationProgress.ts`のみ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、Course.mappingIds authorityを維持。H02/H14/H19/H20/H36等を修正していない。既存のpartial表示文言・証拠件数とordinary算入量の区別（H47）も今回のUI修正対象外。
 
 本文66件inventory/A–E/P1/P2集計とH38/H60/H57 follow-upはbaselineとして変更していない。次slice候補はH02のexact制度identityとannual Offering欠落の分離（保存/復元の変更範囲を先に限定すること）。
+
+## H02 implementation follow-up — 2026-10-05
+
+- 実装commit：`9ccf40358ab4ad4d8a59a14a01c3af1e0343547f`。branchは`feature/graduation-h02-independent-course-identity`。開始時remote dev/baseは`762d1499bb9058a778579f53b85064f621ec5a7d`で提示SHAと一致。最新devをfetchして新規作成し、旧feature/auditをbaseにしていない。
+- 根本原因：公式Course参照が、institutional fieldsだけでなくcurrent annual exact relationも検証する関数を呼んでいた。`validImportedInstitutionalIdentity()`を分離し、`exactImportedCurriculumId()`はcurrent Courseに対して整合する既存exact/singletonだけを使う。既存`validImportedCurriculumIdentity()`は両方を検証する保存gateとして維持。卒業allocatorは変更していない。
+- schema22のload時、独立exact Courseが有効でselected idを持つannual exactだけを回復対象とする。Offering欠落／relation欠落／annual relationが別Course Bなら、`offeringMatch`だけを`ambiguous`へdowngradeする。Course A、candidate sets、selected id、selectionSource、legacy fields、source row id/aggregate、profile、meta、study recordsを保持。選択情報は確認用の履歴でありcurrent annual exactの証明ではない。compatibleなdirect又は正式candidate relationでは無変更。既存ambiguous/unmatchedも自動昇格しない。
+- institutional矛盾、exactなのに候補0/2/別id、存在しないCourse、partial extension、annual exactなのにselected id=nullは修復しない。ambiguous institutional singletonやlegacy courseIdから制度idを再生成しない。raw stale annual exactの新規saveは引き続き拒否し、load後にannual downgradeされたstateだけ保存可能。v21→v22 migrationは変更なし。
+- consumer監査：`validation`/`storage`はstrict保存＋v22 load回復、`curriculumMigration`は従来のcrosswalkとcontradiction downgrade、`curriculumImportMatch`/`gradeImportApply`/`ImportedCourseRepair`はStage A保持・Stage B選択を維持。公式fact、Course progress、official-priority Planner除外、管理projectionは独立identityを利用。既存category/Media表示用のlegacy resolverを卒業authorityへ昇格していない。UIは「制度一意一致・開講要確認／未特定」を既に表示可能で、変更不要。
+- 実catalogの民法総則C4/O4/S2はannual削除前後でofficial allocation O4/completed4/S2、overall参考4を保持。Course.mappingIds欠落・Mapping descriptor削除・conflict・out_of_scopeはhold、duplicate distinct idsはaggregate null／allocationなし。Offering99・component88を公式O4へ加算せず、componentsからidentityを再構築しない。
+- 正式regression31件追加。既存のmissing Offering load失敗期待1件はH02の回復期待へ更新し、strict save拒否とnull selection拒否を維持。manual/auto/none、direct/candidate relation矛盾、frozen state/catalog/profile/records不変、save/reload、expectedRaw競合保護、BACKUP不変、meta/sourceCourseId/row id保持、manual再選択・再取込を検証。helperの変更はH02のみ。
+- 境界：削除Offeringを直接参照するPlannerItemは引き続きinvalidで、loadは既存error/initialState結果（rawは保持）となる。無関係なPlannerItemは回復後も保持。PlannerItemやtodos/progress等のannual依存解消、CurriculumVersion、複数年度基盤は今回扱わない。
+- 検証：planner **828/828**、audit helper **17/17**、extension **19/19**、bookmarklet **168/168**、fail/skip0。typecheck/lint/build/diff check PASS。grade-import artifact/catalog check PASS（Course321/Offering686不変）。ローカルNode24.13.0で検証、Node22 remote CI成功とは扱わない。既存Vite chunk-size警告は残るがbuild成功。
+- production変更は`curriculumIdentityValidation.ts`、`officialCourseCredits.ts`、`storage.ts`のみ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、Course.mappingIds authorityを維持。H01/H03/H04/H06のguardと他Hxxのassertionは変更していない。
+
+元の66件inventory/A–E/P1/P2集計とH38/H60/H57/H12 follow-upは監査履歴として変更せず保存した。次slice候補はH36の卒論未定による既知数量の隠蔽を、completion statusと参考数量に分けて限定監査すること。
