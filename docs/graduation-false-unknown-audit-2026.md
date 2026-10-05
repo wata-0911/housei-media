@@ -659,3 +659,17 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - production変更は`officialGraduationFacts.ts`の小predicateとspecialCourse例外だけ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、Course.mappingIds authorityは不変。Offeringをhistorical authorityにしていない。
 
 本文の66件inventory、A–E/P1等の集計、監査時点behavior、H38 follow-upは変更せず保存した。次slice候補はH57の通常完成書道実技を独立して扱う限定実装。H61のfamily配分は別途公式証拠の確認を要する。
+
+## H57 implementation follow-up — 2026-10-05
+
+- 実装commit：`95ed8b2a4dace0115b8179d9982648c34f91ef47`。branchは`feature/graduation-h57-calligraphy-completion`。開始時remote dev/baseは`c58ceb7ca38b90adcabb63054b619545ed804c90`で、提示SHAと一致。H38/H60 merge後の最新devから新規作成した。
+- 変更前の実catalog監査：exact「書道実技」はCourse `curriculum:5e8b0825-7ba9-4a53-847c-7e56283718e5`、C2。日本文学科の文学/言語/芸能文化3コースに各1 Mapping（専門教育/選択/field null/C2/method-only false、catalog source page49/50/51）。学科・コース・requirementTypeをpredicateへ新規固定せず、既存Course.mappingIds・selected scope・allocation signature検証をauthorityとして使う。
+- H57安全subsetのみ解決：exact institutional identity/exact canonical、2026 official catalog source＋profile current_2026、selected scopeの通常professional bucket、Course/Mapping/row composition=2、公式O2/S1又はS2、認定免除/追加履修0又はnull、method-onlyなし。identity/duplicate/Mapping conflictは前段、professional recognition overlap等は後段のguardを維持し、名称holdだけを例外化した。
+- 旧：C2/O2/S1以上でもallocationなし。新：S1→ordinary2/completed2/schooling1、S2→ordinary2/completed2/schooling2。3コースそれぞれでprofessional-electiveとprofessional-japanese-totalへ2、overall参考2、schooling参考1又は2を一度だけ反映。allocation_heldを除去し、他のunresolved warningは保持する。
+- S0/null/negative/NaN/±Infinity/3/0.5、O1 partial（S0/1/null）、O>C、認定免除/追加履修positive、recognized professional overlap、duplicate、legacy/unknown課程、future catalog source、unknown composition、method-only/public/nonprofessional Mappingは救済しない。書道実技2・旧課程装飾のimportをfuzzy同定せず、既存identity holdを維持する。
+- `graduationProgress.ts`/`completedCurriculumCredits()`は変更なし。既存Planner経路S0=completed0、S1/S2=completed2を確認。H20 transfer認定S guardは後続で引き続きschooling_confirmationを生成する。H12/H14/H19等の契約は未変更。
+- 正式regression50件を追加し、helperはH57だけを解決済みassertionへ更新。H60/他Hxxのassertionは不変。Offering有無/順序/credits99、Planner earned重複、equivalent Mappingでもofficial2を二重加算しない。Course.mappingIds欠落はhold、component40非加算、deep-frozen入力は不変。
+- 検証：planner **733/733**、audit helper **17/17**、extension **19/19**、bookmarklet **168/168**、fail/skip0。typecheck/lint/build/diff check PASS。grade-import artifact check/catalog check PASS（Course321/Offering686不変）。ローカルNode24.13.0で検証し、Node22 remote CI成功とは扱わない。既存Vite chunk-size警告は残るがbuild成功。
+- production変更は`officialGraduationFacts.ts`のH57 predicateと名称hold例外のみ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、component非加算、Course.mappingIds authorityを維持。Offeringをhistorical authorityにしていない。
+
+本文の66件inventory/A–E/P1/P2集計、H38/H60 follow-upはbaselineとして変更せず保存した。次slice候補はH12法律partialを独立し、完成8科目32単位の公式証拠とC4/O2/S2を確認できる限定ケースから扱うこと。
