@@ -23,7 +23,7 @@ import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImpo
 import { importedGraduationNotices, type ImportedGraduationNotice } from './importedGraduationNotices';
 import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
 import { deriveOfficialGraduationFacts, officialFactCreditState, type OfficialAllocationInput } from './officialGraduationFacts';
-import { unresolvedOfficialImpact, officialImpactsCard, officialImpactsRequirement, type UnresolvedOfficialImpact } from './unresolvedOfficialImpact';
+import { unresolvedOfficialImpact, officialImpactsCard, officialImpactsRequirement, officialEvaluationCanChange, type UnresolvedOfficialImpact } from './unresolvedOfficialImpact';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -1346,7 +1346,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       const affected = requirement?.status === 'structured'
         ? officialImpactsRequirement(officialImpact, requirement)
         : officialImpactsCard(officialImpact, row.requirementId);
-      if (!affected) continue;
+      if (!affected || !officialEvaluationCanChange(officialImpact, row, requirement?.status === 'structured' ? requirement : undefined)) continue;
       row.status = 'unknown'; row.reason = [row.reason, officialReason].filter(Boolean).join('。');
     }
   }

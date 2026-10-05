@@ -150,3 +150,30 @@ export function officialImpactsRequirement(impact: UnresolvedOfficialImpact, req
       && (target.curriculum_field === undefined || destination.field === target.curriculum_field)
       && (target.requirement_type === undefined || destination.requirementType === target.requirement_type)));
 }
+
+/** Destination uncertainty is distinct from evaluation uncertainty. This only
+ * discharges H41's local hold: prior H31/recognition/quantity holds stay unknown,
+ * global fallback stays conservative, and H42/overall are applied separately.
+ */
+export function officialEvaluationCanChange(
+  impact: UnresolvedOfficialImpact,
+  row: { status: string; ruleType: string; earned: number | null; target: number | null },
+  requirement?: StructuredRequirement,
+): boolean {
+  if (impact.globalUnknown || row.status !== 'satisfied' || row.earned === null || row.target === null) return true;
+  // These cards evaluate lower bounds (including field/course-count minima),
+  // with optional caps. Their existing satisfied status proves ALL conditions,
+  // not just earned >= target. Overflow destinations are checked independently.
+  if (row.ruleType === 'group' || row.ruleType === 'professional_group') return false;
+  if (!requirement || !['min_credits', 'min_courses', 'required_course'].includes(requirement.ruleType)) return true;
+  // A history fifth-Course transfer can remove an existing seminar from a named
+  // or field-specific source requirement. Do not assume additive semantics there.
+  const target = requirement.target;
+  const seminarSourceSubset = target.requirement_type === 'スクーリング選択必修'
+    && (target.course_name !== undefined || target.course_names !== undefined || target.curriculum_field !== undefined);
+  if (seminarSourceSubset && impact.candidates.some(candidate => candidate.affectsHistorySeminar
+    && officialImpactsRequirement({ ...impact, candidates: [candidate] }, requirement))) return true;
+  // Only the evaluator's supported lower-bound/completion conditions are known
+  // monotone. Upper bounds, choose_one and future conditions remain held.
+  return Object.keys(requirement.conditions ?? {}).some(key => !['full_course_credits_required', 'min_courses', 'when'].includes(key));
+}

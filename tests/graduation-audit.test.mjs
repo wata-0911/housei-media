@@ -2745,3 +2745,138 @@ test('H41/H14 recognition overlap retains global fallback because cross-Course d
   assert.equal(unresolvedOfficialImpact(facts, false, input, x.scope, x.profile).globalUnknown, true);
   assert.match(h31Card(x.progress(input), 'group-general').reason, h41Reason);
 });
+
+// H41 review: possible destination does not imply a still-uncertain evaluation.
+function h41SaturatedGeneral(credits = [12, 12, 12]) {
+  const x = h41Fixture();
+  for (const [index, field] of ['人文', '社会', '自然'].entries()) {
+    for (let i = 0; i < credits[index] / 4; i++) {
+      const entry = x.add(`known-${field}-${i}`, '一般教育', field, '選択必修', 4, 'correspondence', `制度${field}${i}`);
+      x.rows.push(x.official(entry, 4));
+    }
+  }
+  x.held = x.add('held-general', '一般教育', '自然', '選択必修', 4, 'correspondence', '制度保留自然');
+  return x;
+}
+test('H41 saturation general36 plus all field minima remains satisfied without official reason', () => {
+  const x = h41SaturatedGeneral(), baseline = x.progress();
+  x.rows.push(x.official(x.held));
+  const p = x.progress();
+  assert.equal(h31Card(baseline, 'group-general').status, 'satisfied');
+  assert.deepEqual(h31Card(p, 'group-general'), h31Card(baseline, 'group-general'));
+  assert.equal(h31Card(p, 'group-general').earned, 36);
+  assert.deepEqual([overall(p), p.referenceProgress[0].status, p.referenceProgress[0].target], [36, 'unknown', baseline.referenceProgress[0].target]);
+  assert.match(p.referenceProgress[0].reason, h41Reason);
+  assert.equal(p.importedContributionCount, 9);
+});
+test('H41 saturation physical2 stays satisfied without allocating the held physical budget', () => {
+  const x = h41Fixture(), known = x.add('known-physical', '保健体育', null, '選択必修', 2, 'correspondence', '健康・スポーツ科学概論');
+  const held = x.add('held-physical', '保健体育', null, '選択必修', 2, 'correspondence', 'スポーツ総合演習');
+  x.rows = [x.official(known, 2)]; const baseline = x.progress();
+  x.rows.push(x.official(held)); const p = x.progress();
+  assert.equal(h31Card(baseline, 'group-physical').status, 'satisfied');
+  assert.deepEqual(h31Card(p, 'group-physical'), h31Card(baseline, 'group-physical'));
+  assert.deepEqual([overall(p), p.referenceProgress[0].status], [2, 'unknown']);
+});
+for (const completeDependents of [false, true]) test(`H41 saturation law32/8 courses keeps minimum satisfied; dependent saturation=${completeDependents}`, () => {
+  const x = h41Fixture();
+  for (let i = 0; i < (completeDependents ? 22 : 8); i++) {
+    const entry = x.add(`known-law-${i}`, '専門教育', null, i < 8 ? '選択必修' : '選択', 4, 'correspondence', `制度法学${i}`, x.scope);
+    x.rows.push(x.official(entry, 4));
+  }
+  const baseline = x.progress(); x.rows.push(x.official(x)); const p = x.progress();
+  assert.equal(h31Card(baseline, 'professional-law-required-elective').status, 'satisfied');
+  assert.deepEqual(h31Card(p, 'professional-law-required-elective'), h31Card(baseline, 'professional-law-required-elective'));
+  for (const id of ['professional-law-elective', 'professional-law-total']) {
+    if (completeDependents) {
+      assert.equal(h31Card(baseline, id).status, 'satisfied'); assert.deepEqual(h31Card(p, id), h31Card(baseline, id));
+    } else {
+      assert.equal(h31Card(p, id).status, 'unknown'); assert.match(h31Card(p, id).reason, h41Reason);
+      assert.equal(h31Card(p, id).earned, h31Card(baseline, id).earned);
+    }
+  }
+  assert.equal(overall(p), overall(baseline)); assert.equal(p.referenceProgress[0].status, 'unknown');
+});
+test('H41 saturation general total36 alone cannot bypass a missing field minimum', () => {
+  const x = h41SaturatedGeneral([20, 12, 4]);
+  assert.equal(h31Card(x.progress(), 'group-general').status, 'unsatisfied');
+  x.rows.push(x.official(x.held)); const p = x.progress();
+  assert.deepEqual([h31Card(p, 'group-general').earned, h31Card(p, 'group-general').status], [36, 'unknown']);
+  assert.match(h31Card(p, 'group-general').reason, h41Reason);
+});
+test('H41 saturation law32 with only four completed Courses still holds the course-count condition', () => {
+  const x = h41Fixture();
+  for (let i = 0; i < 4; i++) {
+    const entry = x.add(`large-law-${i}`, '専門教育', null, '選択必修', 8, 'correspondence', `制度大型法学${i}`, x.scope);
+    x.rows.push(x.official(entry, 8));
+  }
+  assert.equal(h31Card(x.progress(), 'professional-law-required-elective').status, 'unsatisfied');
+  x.rows.push(x.official(x)); const c = h31Card(x.progress(), 'professional-law-required-elective');
+  assert.equal(c.earned, 32); assert.equal(c.status, 'unknown'); assert.match(c.reason, h41Reason);
+});
+for (const [ruleType, conditions, preserve] of [
+  ['min_credits', null, true], ['min_credits', { min_courses: 2 }, true],
+  ['min_credits', { full_course_credits_required: true }, true],
+  ['min_credits', { full_course_credits_required: true, min_courses: 2 }, true],
+  ['min_courses', null, true], ['required_course', null, true],
+  ['required_course', { full_course_credits_required: true }, true],
+  ['max_credits', null, false], ['max_credits', { max_enrollments: 2 }, false],
+  ['exact_credits', null, false], ['choose_one', { choose_count: 1, options: ['制度確定', '監査科目'] }, false],
+]) test(`H41 saturation structured ${ruleType}/${JSON.stringify(conditions)} preserves only proven monotone success`, () => {
+  const x = h41Fixture(), known = x.add('known-structured', '専門教育', null, '選択必修', 4, 'correspondence', '制度確定', x.scope);
+  const second = x.add('known-second', '専門教育', null, '選択必修', 4, 'correspondence', '制度確定2', x.scope);
+  const rule = x.requirement('saturated-rule', { course_names: [known.course.canonicalName, second.course.canonicalName, x.course.canonicalName] }, conditions, ruleType);
+  rule.value = ruleType === 'min_courses' ? 2 : 8; rule.unit = ruleType === 'min_courses' ? 'courses' : 'credits';
+  x.rows = [x.official(known, 4), x.official(second, 4)]; const baseline = x.progress();
+  const before = baseline.requirements.find(r => r.requirementId === rule.id); assert.equal(before.status, 'satisfied');
+  x.rows.push(x.official(x)); const p = x.progress(), after = p.requirements.find(r => r.requirementId === rule.id);
+  assert.equal(after.earned, before.earned); assert.equal(after.target, before.target);
+  if (preserve) assert.deepEqual(after, before);
+  else { assert.equal(after.status, 'unknown'); assert.match(after.reason, h41Reason); }
+  assert.equal(overall(p), 8); assert.equal(p.referenceProgress[0].status, 'unknown');
+});
+test('H41 saturation cannot release an unsafe global fallback even with known general36', () => {
+  const x = h41SaturatedGeneral();
+  x.rows.push({ ...x.official(x.held), curriculumCourseId: null, curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] });
+  const c = h31Card(x.progress(), 'group-general');
+  assert.equal(c.earned, 36); assert.equal(c.status, 'unknown'); assert.match(c.reason, h41Reason);
+});
+test('H41 saturation preserves H31 hold and its reason priority even when known general36 meets all minima', () => {
+  const x = h41SaturatedGeneral(); x.rows.push(x.official(x.held));
+  x.set(x.held); x.items = [item(x.candidate, 'earned')];
+  const c = h31Card(x.progress(), 'group-general');
+  assert.equal(c.earned, 36); assert.equal(c.status, 'unknown');
+  assert.match(c.reason, /対応関係を確認中.*公式実績の算入を保留/);
+});
+test('H41 saturation foreign completion still receives broad H42 hold and no new H43 allocation', () => {
+  const x = h41Fixture(), known = x.add('known-foreign', '外国語', '英語', '選択必修', 4, 'schooling', '英語1');
+  const held = x.add('held-foreign', '外国語', '英語', '選択必修', 4, 'schooling', '英語2');
+  x.rows = [x.official(known, 4, 2)]; assert.equal(h31Card(x.progress(), 'group-foreign').status, 'satisfied');
+  x.rows.push(x.official(held, null, 2)); const p = x.progress(), c = h31Card(p, 'group-foreign');
+  assert.equal(c.earned, 4); assert.equal(c.status, 'unknown');
+  assert.match(c.reason, /公式実績のスクーリング/); assert.doesNotMatch(c.reason, h41Reason);
+  assert.equal(p.referenceProgress[1].earned, 2); assert.equal(p.referenceProgress[1].status, 'unknown');
+});
+test('H41 saturation frozen official rows/catalog/previous result retain known36 and invariants', () => {
+  const x = h41SaturatedGeneral(), input = x.build(), previous = x.progress(input);
+  x.rows.push(x.official(x.held));
+  const snapshot = structuredClone({ input, rows: x.rows, records: x.records, profile: x.profile, previous });
+  deepFreeze(input); deepFreeze(x.rows); deepFreeze(x.records); deepFreeze(x.profile); deepFreeze(previous);
+  const p = x.progress(input);
+  assert.equal(h31Card(p, 'group-general').status, 'satisfied');
+  assert.deepEqual({ input, rows: x.rows, records: x.records, profile: x.profile, previous }, snapshot);
+  assert.equal(initialState().schemaVersion, 22); assert.equal(p.graduationCheckComplete, false); assert.equal(input.metadata.sourceLinksReverified, false);
+});
+test('H41 saturation history seminar redistribution keeps a satisfied named source minimum held', () => {
+  const x = h41Fixture('史学科');
+  const seminar = x.add('known-seminar', '専門教育', '東洋史の分野', 'スクーリング選択必修', 2, 'schooling', '史学演習（東洋）2', x.scope);
+  const overview = x.add('held-overview', '専門教育', '日本史の分野', '必修', 4, 'schooling', '日本史概説', x.scope);
+  const rule = x.requirement('seminar-source', { course_name: seminar.course.canonicalName, requirement_type: 'スクーリング選択必修' }); rule.value = 2;
+  const total = x.requirement('history-ordinary-total', { curriculum_category: '専門教育' }); total.value = 2;
+  x.items = [item(seminar.offering, 'earned')];
+  const baseline = x.progress().requirements.find(r => r.requirementId === rule.id); assert.equal(baseline.status, 'satisfied');
+  x.rows = [x.official(overview, 4)]; const after = x.progress().requirements.find(r => r.requirementId === rule.id);
+  assert.equal(after.earned, baseline.earned); assert.equal(after.status, 'unknown'); assert.match(after.reason, h41Reason);
+  const totalAfter = x.progress().requirements.find(r => r.requirementId === total.id);
+  assert.equal(totalAfter.earned, 2); assert.equal(totalAfter.status, 'satisfied'); assert.doesNotMatch(totalAfter.reason ?? '', h41Reason);
+});

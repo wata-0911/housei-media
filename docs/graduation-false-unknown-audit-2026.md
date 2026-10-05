@@ -786,3 +786,15 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - invariants：`PlannerState.schemaVersion=22`、`graduationCheckComplete=false`、`sourceLinksReverified=false`。公式aggregate正本は`ImportedCourseAchievement.earnedCreditsTotal`のまま。component量・candidate/held量をearnedに足さず、unknownを確定0として扱わない。
 - unresolved adjacent IDs：H40、H42、H43、H19、H14/H20、H32、H34、H39、H55–H62の未解決special semanticsはこのsliceの対象外。元H01–H66 inventory、過去behavior、先行follow-upは書き換えず履歴として保存した。
 - 検証：H41 targeted **79/79**（先行実行）、`npm run test:planner` **1060/1060**、`npm run test:extension` **19/19**、`npm run test:bookmarklet` **168/168**、false-unknown audit helper **20/20**。fail/skip0。`npm run typecheck`、`npm run lint`、`npm run build`、`git diff --check` PASS。build内のgrade-import artifact/catalog check PASS（Course321/Offering686）、既存Vite chunk-size warningのみ残る。監査文書のbase時点の全byteがprefixとして保存されていることも確認した。通常commit/pushのみとし、PR作成・mergeは行わない。
+
+## H41 review follow-up — saturation / monotonicity — 2026-10-05
+
+- 対象：同じ`feature/graduation-h41-localize-official-unknown-impact`上の先行commit `53341c909180f320b575b65f90270690259070cf`への追加修正。remote再取得後もHEAD/remote featureは同SHA。新branch・PR・merge・history rewriteは行わない。
+- P2 reproduction：known人文12＋社会12＋自然12で一般36/各field minimum達成済みでも、safe一般Mappingのofficial held factを加えると、先行H41がsatisfiedをunknownへ戻した。体育2や専門最低要件、達成済みstructured minimumも同様。追加回帰の先行21件を修正前に実行し13件が失敗した。
+- root cause：potential destinationへの交差とevaluationが変わり得るかを同一視し、affectedなら既存statusを無条件に上書きしていた。
+- 修正：pure helper `officialEvaluationCanChange()`を追加し、既存impact判定の後で評価の単調性を確認する。safe localized impact、known earned/target、既存status=satisfiedを前提に、minimum/cappedのgroup/professional_groupを維持する。単純なearned>=targetではなく、既存evaluatorがfield・科目数等の全条件を満たした結果を使う。選択必修32/8科目はsatisfiedを維持し、未達の選択overflow先/専門totalは独立にholdする。dependent側もすでに確定達成なら維持する。
+- structured：`min_credits`/`min_courses`/`required_course`と既存lower-bound条件（full_course_credits_required/min_courses、activeな卒論when）に限定して、確定satisfiedならH41 reasonを追加しない。max_credits/exact_credits、choose_one、未知condition、既存unknown、unsafe global fallbackはconservative hold。史学5科目gateによる既存演習の再配分で減少し得る名前/field付きスクーリング選択必修source subsetもholdを継続し、振替に左右されない専門ordinary合計は単調なminimumとして維持する。
+- 境界：held/candidate単位は非加算、known earned/target/reasonは保持する。overallは引き続きknown lower bound＋unknown。H42のschooling後段とH43の独立S未算入、H31既存unknown/reason優先、H36/H37/H38の独立条件は変更しない。schemaVersion22、graduationCheckComplete=false、sourceLinksReverified=falseを維持する。
+- 回帰22件追加：一般36＋各minimum、体育2、法律32/8科目と未達/達成済みdependent、general36でもfield不足、law32でも科目数不足、structured最低/完成/科目数・max/exact/choose、global fallback、H31優先、H42/H43外国語/S、frozen input/previous result、史学source再配分とordinary total。先行79件は編集せず維持した。
+- changed files：`src/planner/unresolvedOfficialImpact.ts`、`src/planner/graduationProgress.ts`、`tests/graduation-audit.test.mjs`、本書の末尾追記のみ。先行監査記録は履歴として保存する。
+- 最終検証：H41 targeted **101/101**（既存79＋追加22）、planner **1082/1082**、extension **19/19**、bookmarklet **168/168**。fail/skip0。typecheck/lint/build/`git diff --check` PASS。buildのgrade-import artifact/catalog checkも成功し、既存Vite chunk-size warningのみ残る。通常の追加commit/push対象とし、PR作成・mergeは行わない。
