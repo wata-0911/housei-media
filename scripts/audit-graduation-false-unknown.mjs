@@ -86,11 +86,14 @@ test('H38 resolved: recognized foreign4/Snull retains ordinary4 with schooling u
   assert.equal(ref(p, 'schooling').earned, null);
   assert.equal(ref(p, 'schooling').status, 'unknown');
 });
-test('H36: undecided law thesis hides even known global S amount/target', () => {
+test('H36 resolved: undecided law thesis retains known quantities and independent global S target', () => {
   const x = fixture();
   assert.equal(ref(progress(x), 'schooling').earned, 2);
-  assert.equal(ref(progress(x, 'undecided'), 'schooling').earned, null);
-  assert.equal(ref(progress(x, 'undecided'), 'schooling').target, null);
+  const p = progress(x, 'undecided');
+  assert.deepEqual([ref(p, 'overall').earned, ref(p, 'overall').target, ref(p, 'overall').status], [4, null, 'unknown']);
+  assert.match(ref(p, 'overall').reason, /卒業論文の選択が未定/);
+  assert.deepEqual([ref(p, 'schooling').earned, ref(p, 'schooling').target, ref(p, 'schooling').status, ref(p, 'schooling').reason], [2, 30, 'partial', null]);
+  assert.equal(p.graduationCheckComplete, false);
 });
 test('H02 resolved: annual removal preserves independent exact Course and official contribution', () => {
   const x = fixture(); x.row.offeringMatch = 'exact_unique'; x.row.selectedOfferingId = x.offering.id;
