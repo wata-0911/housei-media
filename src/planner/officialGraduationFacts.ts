@@ -105,6 +105,22 @@ function isSafeHistoryIntroductionCompletion(
     && (row.additionalEnrollment === null || row.additionalEnrollment === 0);
 }
 
+/** H57 only: a completed official aggregate proves the existing S>=1 rule. */
+function isSafeCalligraphyPracticumCompletion(
+  course: CurriculumCourse, mapping: Mapping, row: ImportedCourseAchievement,
+  catalog: PlannerCatalog, profile?: GraduationProfile,
+): boolean {
+  return course.canonicalName === '書道実技'
+    && catalog.curriculum?.source === 'official_curriculum_mappings_2026'
+    && profile?.curriculumApplicability === 'current_2026'
+    && course.curriculumCredits === 2 && mapping.curriculumCredits === 2
+    && row.compositionCredits === 2 && row.earnedCreditsTotal === 2
+    && (row.schoolingCreditsTotal === 1 || row.schoolingCreditsTotal === 2)
+    && !mapping.schoolingOnly && !mapping.mediaOnly
+    && (row.recognizedExemption === null || row.recognizedExemption === 0)
+    && (row.additionalEnrollment === null || row.additionalEnrollment === 0);
+}
+
 /** Course.mappingIds is authoritative. scopeIds is diagnostic only. */
 export function deriveOfficialGraduationFacts(
   rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], catalog: PlannerCatalog,
@@ -167,7 +183,9 @@ export function deriveOfficialGraduationFacts(
     if (!commonBucket && !professionalBucket) { hold('special_rule_evidence_required', 'unsupported_basic_bucket'); continue; }
     const safeHistoryIntroduction = professionalBucket
       && isSafeHistoryIntroductionCompletion(course, mapping, row, department, catalog, profile);
-    if ((specialCourse(course.canonicalName, department, mapping) && !safeHistoryIntroduction) || profile?.curriculumApplicability === 'legacy_or_transition'
+    const safeCalligraphyPracticum = professionalBucket
+      && isSafeCalligraphyPracticumCompletion(course, mapping, row, catalog, profile);
+    if ((specialCourse(course.canonicalName, department, mapping) && !safeHistoryIntroduction && !safeCalligraphyPracticum) || profile?.curriculumApplicability === 'legacy_or_transition'
       || (row.recognizedExemption ?? 0) > 0 || (row.additionalEnrollment ?? 0) > 0 || row.earnedCreditsTotal > composition
       || (professionalBucket && ['法律学科', '日本文学科', '史学科', '地理学科'].includes(department ?? '') && row.earnedCreditsTotal > 0 && row.earnedCreditsTotal < composition)) {
       hold('special_rule_evidence_required'); continue;

@@ -8,6 +8,7 @@ import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeI
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { initialState } from '../src/planner/storage.ts';
 import { graduationProfileValidationError } from '../src/planner/graduationProfile.ts';
+import { matchImportedCurriculumCourse } from '../src/planner/curriculumImportMatch.ts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
@@ -1187,5 +1188,213 @@ test('H60 frozen source/profile/catalog/components retain aggregates and invaria
   assert.deepEqual({ x, records }, before);
   assert.equal(catalog.metadata.graduationCheckComplete, false);
   assert.equal(catalog.metadata.sourceLinksReverified, false);
+  assert.equal(initialState().schemaVersion, 22);
+});
+
+const h57CourseId = 'curriculum:5e8b0825-7ba9-4a53-847c-7e56283718e5';
+const h57Programs = catalog.programs.filter(p => catalog.curriculum.courses.find(c => c.id === h57CourseId).scopeIds.includes(p.scopeId));
+function h57Fixture(scope = h57Programs[0].scopeId, schooling = 1) {
+  const x = fixture('日本文学科'); x.f = structuredClone(catalog); x.scope = scope;
+  x.course = x.f.curriculum.courses.find(c => c.id === h57CourseId);
+  x.mapping = x.f.mappings.find(m => x.course.mappingIds.includes(m.mappingId) && m.scopeId === scope);
+  Object.assign(x.row, { rawName: '書道実技', curriculumCourseId: x.course.id, candidateCurriculumCourseIds: [x.course.id],
+    compositionCredits: 2, earnedCreditsTotal: 2, schoolingCreditsTotal: schooling, courseId: null });
+  return x;
+}
+const h57Elective = p => p.cards.find(c => c.requirementId === 'professional-elective');
+const h57Held = x => {
+  const result = facts(x);
+  assert.equal(result.allocations.length, 0);
+  assert.equal(result.facts[0].allocation.reason, 'special_rule_evidence_required');
+  assert.equal(run(x).importedContributionCount, 0);
+  assert.equal(run(x).importedWarnings.some(w => w.kind === 'allocation_held'), x.row.earnedCreditsTotal > 0,
+    'zero earned keeps the existing non-actionable warning contract');
+  return result;
+};
+
+for (const program of h57Programs) for (const schooling of [1, 2]) {
+  test(`H57 real ${program.course} C2/O2/S${schooling} completes and allocates2 only in selected scope`, () => {
+    const x = h57Fixture(program.scopeId, schooling);
+    assert.equal(x.course.canonicalName, '書道実技'); assert.equal(x.course.curriculumCredits, 2);
+    assert.equal(x.course.mappingIds.length, 3); assert.equal(h57Programs.length, 3);
+    assert.equal(x.mapping.category, '専門教育'); assert.equal(x.mapping.requirementType, '選択');
+    assert.equal(x.mapping.field, null); assert.equal(x.mapping.schoolingOnly, false); assert.equal(x.mapping.mediaOnly, false);
+    assert.equal(exactImportedCurriculumId(x.row, x.f), x.course.id);
+    const result = facts(x);
+    assert.equal(result.allocations.length, 1);
+    assert.deepEqual(result.facts[0].allocation, { kind: 'unique', mappingIds: [x.mapping.mappingId] });
+    assert.equal(result.allocations[0].mapping.scopeId, program.scopeId);
+    assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].completedCredits, 2);
+    assert.equal(result.allocations[0].schoolingCredits, schooling);
+    assert.ok(!result.facts[0].diagnostics.includes('special_rule_evidence_required'));
+    const p = run(x);
+    assert.equal(h57Elective(p).earned, 2); assert.equal(h57Elective(p).status, 'unsatisfied');
+    assert.equal(p.cards.find(c => c.requirementId === 'professional-required').earned, 0);
+    assert.equal(p.cards.find(c => c.requirementId === 'professional-required-elective').earned, 0);
+    assert.equal(p.cards.find(c => c.requirementId === 'professional-japanese-total').earned, 2);
+    assert.equal(overall(p), 2);
+    assert.equal(p.referenceProgress.find(r => r.id === 'schooling-reference-progress').earned, schooling);
+    assert.equal(p.importedContributionCount, 1); assert.equal(p.importedWarnings.length, 0);
+    assert.equal(p.graduationCheckComplete, false);
+  });
+}
+
+for (const schooling of [0, null, -1, NaN, Infinity, -Infinity, 3, 0.5]) {
+  test(`H57 S${schooling} cannot prove completed2 or infer valid schooling`, () => {
+    const x = h57Fixture(); x.row.schoolingCreditsTotal = schooling;
+    assert.equal(h57Held(x).facts[0].schoolingEvidence.credits, schooling);
+  });
+}
+for (const schooling of [0, 1, null]) {
+  test(`H57 partial C2/O1/S${schooling} never becomes completed2`, () => {
+    const x = h57Fixture(); x.row.earnedCreditsTotal = 1; x.row.schoolingCreditsTotal = schooling; h57Held(x);
+  });
+}
+for (const [label, change] of [
+  ['earned greater than composition', x => { x.row.earnedCreditsTotal = 3; }],
+  ['earned zero', x => { x.row.earnedCreditsTotal = 0; }],
+  ['unknown row composition', x => { x.row.compositionCredits = null; }],
+  ['recognized exemption positive', x => { x.row.recognizedExemption = 1; }],
+  ['additional enrollment positive', x => { x.row.additionalEnrollment = 1; }],
+  ['legacy curriculum', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }],
+  ['unknown curriculum', x => { x.profile.curriculumApplicability = 'unknown'; }],
+  ['future catalog source', x => { x.f.curriculum.source = 'official_curriculum_mappings_2027'; }],
+  ['decorated canonical identity', x => { x.course.canonicalName = '書道実技（旧課程）'; }],
+  ['media-only constraint', x => { x.mapping.mediaOnly = true; }],
+  ['schooling-only constraint', x => { x.mapping.schoolingOnly = true; }],
+  ['public mapping', x => { x.mapping.requirementType = '公開科目'; }],
+  ['nonprofessional mapping', x => { x.mapping.category = '一般教育'; }],
+]) {
+  test(`H57 excludes ${label} from the safe exception`, () => { const x = h57Fixture(); change(x); h57Held(x); });
+}
+
+test('H57 zero/null recognition fields are safe only with complete current official evidence', () => {
+  const x = h57Fixture();
+  for (const recognized of [0, null]) for (const additional of [0, null]) {
+    x.row.recognizedExemption = recognized; x.row.additionalEnrollment = additional;
+    assert.equal(facts(x).allocations[0].credits, 2);
+  }
+  assert.equal(deriveOfficialGraduationFacts([x.row], [], x.f, x.scope).allocations.length, 0);
+});
+
+test('H57 professional recognition overlap remains a separate later hold', () => {
+  const x = h57Fixture();
+  x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized-unrelated', offeringId: 'unrelated', credits: 2 }];
+  assert.ok(h57Held(x).facts[0].diagnostics.includes('recognized_overlap'));
+});
+
+test('H57 existing transfer schooling confirmation guard remains after the exception', () => {
+  const x = h57Fixture(); x.profile.admissionType = 'transfer_second_year';
+  for (const equivalent of [null, 7]) {
+    x.profile.recognizedCredits.schoolingEquivalentCredits = equivalent;
+    const result = facts(x);
+    assert.equal(result.allocations[0].credits, 2);
+    assert.equal(result.allocations[0].schoolingCredits, null);
+    assert.ok(result.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'));
+    assert.ok(run(x).importedWarnings.some(w => w.kind === 'schooling_confirmation'));
+  }
+});
+
+test('H57 duplicate different row ids retain unresolved aggregates without sum/max/dedupe', () => {
+  const x = h57Fixture(); const rows = [x.row, { ...x.row, id: 'h57-other-row', schoolingCreditsTotal: 2 }];
+  const result = deriveOfficialGraduationFacts(rows, [], x.f, x.scope, x.profile);
+  assert.equal(result.facts[0].allocation.reason, 'duplicate_official_rows');
+  assert.equal(result.facts[0].earnedCreditsTotal, null); assert.equal(result.facts[0].schoolingEvidence.credits, null);
+  assert.equal(result.facts[0].sourceRows.length, 2); assert.equal(result.allocations.length, 0);
+});
+
+test('H57 conflicting mapping signatures hold before the exception', () => {
+  const x = h57Fixture(); const conflicting = { ...x.mapping, mappingId: 'h57-conflict', requirementType: '選択必修' };
+  x.f.mappings.push(conflicting); x.course.mappingIds.push(conflicting.mappingId);
+  assert.equal(facts(x).facts[0].allocation.reason, 'mapping_conflict'); assert.equal(facts(x).allocations.length, 0);
+});
+
+test('H57 equivalent eligible mappings count one institutional completion after signature proof', () => {
+  const x = h57Fixture(); const equivalent = { ...x.mapping, mappingId: 'h57-equivalent' };
+  x.f.mappings.push(equivalent); x.course.mappingIds.push(equivalent.mappingId);
+  assert.equal(facts(x).facts[0].allocation.kind, 'equivalent'); assert.equal(facts(x).allocations.length, 1);
+  assert.equal(overall(run(x)), 2); assert.equal(h57Elective(run(x)).earned, 2);
+});
+
+test('H57 unresolved institutional identity is never repaired by its canonical name', () => {
+  const x = h57Fixture(); x.row.curriculumCourseId = null; x.row.curriculumMatch = 'ambiguous';
+  assert.equal(facts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
+  assert.equal(facts(x).allocations.length, 0);
+});
+for (const name of ['書道実技2', '書道実技（旧課程）']) {
+  test(`H57 import ${name} does not fuzzy-resolve to exact current calligraphy`, () => {
+    const x = h57Fixture();
+    const match = matchImportedCurriculumCourse({ rawName: name, categoryRaw: '専門教育', compositionCredits: { raw: '2', value: 2 } },
+      [], x.f.curriculum, x.f.mappings);
+    assert.equal(match.curriculumMatch, 'unmatched');
+    Object.assign(x.row, match, { rawName: name });
+    assert.equal(facts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
+    assert.equal(facts(x).allocations.length, 0);
+  });
+}
+
+for (const name of ['基礎特講', '卒業論文', '公開科目', '総合特講']) {
+  test(`H57 does not release neighboring special ${name} even with C2/O2/S1`, () => {
+    const x = h57Fixture(); x.course.canonicalName = name; h57Held(x);
+  });
+}
+
+test('H57 selected scope outside all Course.mappingIds is out of scope, not inferred', () => {
+  const x = h57Fixture(); x.scope = catalog.programs.find(p => p.department === '史学科').scopeId;
+  assert.equal(facts(x).facts[0].allocation.reason, 'out_of_scope'); assert.equal(facts(x).allocations.length, 0);
+});
+
+for (const program of h57Programs) {
+  test(`H57 ${program.course} official budget2 survives Planner overlap and Offering metadata/removal/order`, () => {
+    const x = h57Fixture(program.scopeId);
+    const offering = { ...x.offering, id: 'h57-presentation', name: '書道実技', curriculumCourseId: x.course.id,
+      mappingIds: [x.mapping.mappingId], credits: 2 };
+    x.f.offerings.push(offering);
+    assert.equal(overall(run(x, [item(offering, 'earned')])), 2);
+    assert.equal(h57Elective(run(x, [item(offering, 'earned')])).earned, 2);
+    x.f.offerings.reverse(); offering.credits = 99; offering.method = 'schooling'; offering.mappingIds = [];
+    assert.equal(overall(run(x, [item(offering, 'earned')])), 2);
+    assert.equal(facts(x).allocations[0].schoolingCredits, 1);
+    x.f.offerings = [];
+    assert.equal(overall(run(x)), 2);
+    x.course.mappingIds = [];
+    assert.equal(facts(x).facts[0].allocation.reason, 'mapping_not_found'); assert.equal(facts(x).allocations.length, 0);
+  });
+}
+
+test('H57 existing completedCurriculumCredits S0=0 and S1/S2=2 stays intact in Planner path', () => {
+  const x = h57Fixture();
+  const correspondence = { ...x.offering, id: 'h57-correspondence', name: '書道実技', curriculumCourseId: x.course.id,
+    mappingIds: [x.mapping.mappingId], credits: 2, method: 'correspondence' };
+  const schooling = { ...correspondence, id: 'h57-schooling', method: 'schooling', credits: 1 };
+  const another = { ...schooling, id: 'h57-schooling-2' };
+  x.f.offerings = [correspondence, schooling, another];
+  const manual = items => calculateGraduationProgress(items, x.f, x.scope, [], 'not_selected', [], [], x.profile);
+  assert.equal(h57Elective(manual([item(correspondence, 'earned')])).earned, 0);
+  correspondence.credits = 1;
+  assert.equal(h57Elective(manual([item(correspondence, 'earned'), item(schooling, 'earned')])).earned, 2);
+  assert.equal(h57Elective(manual([item(schooling, 'earned'), item(another, 'earned')])).earned, 2);
+});
+
+test('H57 removes only its allocation warning while another unresolved official row stays visible', () => {
+  const x = h57Fixture(); const other = { ...x.row, id: 'h57-unresolved', curriculumCourseId: null,
+    curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] };
+  const p = calculateGraduationProgress([], x.f, x.scope, [], 'not_selected', [], [x.row, other], x.profile);
+  assert.equal(p.importedContributionCount, 1);
+  assert.ok(p.importedWarnings.some(w => w.reason.includes('curriculum_identity_unresolved')));
+  assert.ok(!p.importedWarnings.some(w => w.reason.includes('special_rule_evidence_required')));
+  assert.equal(p.graduationCheckComplete, false);
+});
+
+test('H57 frozen inputs and large components cannot mutate or add to official2/S1', () => {
+  const x = h57Fixture();
+  const records = [{ id: 'h57-component', fingerprint: 'h57-component-source', source: 'hosei_import', sourceCourseId: x.row.id,
+    rawName: '書道実技', method: 'correspondence', rawTerm: '通', credits: 40 }];
+  const before = structuredClone({ x, records }); deepFreeze(x); deepFreeze(records);
+  const result = deriveOfficialGraduationFacts([x.row], records, x.f, x.scope, x.profile);
+  assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].completedCredits, 2);
+  assert.equal(result.allocations[0].schoolingCredits, 1); assert.equal(overall(run(x, [], records)), 2);
+  assert.deepEqual({ x, records }, before);
+  assert.equal(catalog.metadata.graduationCheckComplete, false); assert.equal(catalog.metadata.sourceLinksReverified, false);
   assert.equal(initialState().schemaVersion, 22);
 });
