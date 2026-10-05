@@ -27,7 +27,7 @@ const suffixes: Record<string, string> = {
 };
 const validAmountMetadata = (value: number | null) => value === null || (Number.isFinite(value) && value >= 0);
 
-function validMapping(mapping: Mapping, catalog: PlannerCatalog): boolean {
+export function validOfficialImpactMapping(mapping: Mapping, catalog: PlannerCatalog): boolean {
   const program = catalog.programs.find(p => p.scopeId === mapping.scopeId);
   if (!program || typeof mapping.schoolingOnly !== 'boolean' || typeof mapping.mediaOnly !== 'boolean'
     || !validAmountMetadata(mapping.curriculumCredits)
@@ -91,42 +91,51 @@ function candidateImpact(mapping: Mapping, canonicalName: string, department: st
   return { destinations, cardIds, affectsHistorySeminar };
 }
 
+/** Shared Course/Mapping identity validation. No Offering or quantity inference. */
+export function officialCandidateMappings(
+  fact: OfficialGraduationFact, catalog: PlannerCatalog, scopeId: string, profile: GraduationProfile,
+): Mapping[] | null {
+  const relevant = (m: Mapping) => m.scopeId === scopeId || catalog.programs.some(p => p.scopeId === m.scopeId && p.isCommon);
+  const owners = catalog.curriculum?.courses.filter(c => c.id === fact.curriculumCourseId) ?? [];
+  const course = owners.length === 1 ? owners[0] : undefined;
+  if (catalog.curriculum?.source !== 'official_curriculum_mappings_2026' || catalog.curriculum.schemaVersion !== 1
+    || profile.curriculumApplicability !== 'current_2026' || fact.diagnostics.includes('recognized_overlap')
+    || !course || !course.canonicalName
+    || course.canonicalName !== fact.canonicalName || !validAmountMetadata(course.curriculumCredits)
+    || !course.mappingIds.length || !fact.candidateMappingIds.length) {
+    return null;
+  }
+  // deriveOfficialGraduationFacts filters missing/outside Mapping ids before
+  // retaining candidates. Validate the authoritative edges too, so a missing
+  // or malformed edge cannot silently disappear from the potential union.
+  const edges = course.mappingIds.map(id => catalog.mappings.filter(m => m.mappingId === id));
+  if (edges.some(matches => matches.length !== 1 || !validOfficialImpactMapping(matches[0], catalog)
+    || matches[0].curriculumCredits !== course.curriculumCredits
+    || catalog.curriculum!.courses.filter(c => c.mappingIds.includes(matches[0].mappingId)).length !== 1)) {
+    return null;
+  }
+  const mappings = edges.map(matches => matches[0]).filter(relevant);
+  const expected = new Set(mappings.map(m => m.mappingId));
+  if (expected.size !== fact.candidateMappingIds.length || fact.candidateMappingIds.some(id => !expected.has(id))) {
+    return null;
+  }
+  return mappings;
+}
+
 export function unresolvedOfficialImpact(
   facts: OfficialGraduationFact[], hasOrphanRecords: boolean, catalog: PlannerCatalog,
   scopeId: string, profile: GraduationProfile,
 ): UnresolvedOfficialImpact {
   const impact: UnresolvedOfficialImpact = { globalUnknown: hasOrphanRecords, candidates: [], cardIds: new Set() };
   const department = catalog.programs.find(p => p.scopeId === scopeId)?.department ?? '';
-  const relevant = (m: Mapping) => m.scopeId === scopeId || catalog.programs.some(p => p.scopeId === m.scopeId && p.isCommon);
   for (const fact of facts) {
     if (fact.allocation.kind !== 'unknown' || officialFactCreditState(fact).allZero) continue;
-    const owners = catalog.curriculum?.courses.filter(c => c.id === fact.curriculumCourseId) ?? [];
-    const course = owners.length === 1 ? owners[0] : undefined;
-    if (catalog.curriculum?.source !== 'official_curriculum_mappings_2026' || catalog.curriculum.schemaVersion !== 1
-      || profile.curriculumApplicability !== 'current_2026' || fact.diagnostics.includes('recognized_overlap')
-      || !course || !course.canonicalName
-      || course.canonicalName !== fact.canonicalName || !validAmountMetadata(course.curriculumCredits)
-      || !course.mappingIds.length || !fact.candidateMappingIds.length) {
-      impact.globalUnknown = true; continue;
-    }
-    // deriveOfficialGraduationFacts filters missing/outside Mapping ids before
-    // retaining candidates. Validate the authoritative edges too, so a missing
-    // or malformed edge cannot silently disappear from the potential union.
-    const edges = course.mappingIds.map(id => catalog.mappings.filter(m => m.mappingId === id));
-    if (edges.some(matches => matches.length !== 1 || !validMapping(matches[0], catalog)
-      || matches[0].curriculumCredits !== course.curriculumCredits
-      || catalog.curriculum!.courses.filter(c => c.mappingIds.includes(matches[0].mappingId)).length !== 1)) {
-      impact.globalUnknown = true; continue;
-    }
-    const mappings = edges.map(matches => matches[0]).filter(relevant);
-    const expected = new Set(mappings.map(m => m.mappingId));
-    if (expected.size !== fact.candidateMappingIds.length || fact.candidateMappingIds.some(id => !expected.has(id))) {
-      impact.globalUnknown = true; continue;
-    }
+    const mappings = officialCandidateMappings(fact, catalog, scopeId, profile);
+    if (!mappings) { impact.globalUnknown = true; continue; }
     for (const mapping of mappings) {
-      const closure = candidateImpact(mapping, course.canonicalName, department);
+      const closure = candidateImpact(mapping, fact.canonicalName!, department);
       if (!closure) { impact.globalUnknown = true; continue; }
-      impact.candidates.push({ mapping, canonicalName: course.canonicalName, affectsHistorySeminar: closure.affectsHistorySeminar, destinations: closure.destinations });
+      impact.candidates.push({ mapping, canonicalName: fact.canonicalName!, affectsHistorySeminar: closure.affectsHistorySeminar, destinations: closure.destinations });
       for (const id of closure.cardIds) impact.cardIds.add(id);
     }
   }
@@ -139,12 +148,17 @@ export function officialImpactsCard(impact: UnresolvedOfficialImpact, id: string
 
 export function officialImpactsRequirement(impact: UnresolvedOfficialImpact, requirement: StructuredRequirement): boolean {
   if (impact.globalUnknown) return true;
-  // H42 keeps its broad schooling hold separately. Unknown official method may
-  // intersect either ordinary method condition; annual Offerings cannot settle it.
+  // Ordinary and schooling consumers share matching, not uncertainty flags.
   if (requirement.ruleType === 'min_schooling_credits') return false;
+  return officialCandidatesMatchRequirement(impact.candidates, requirement);
+}
+
+export function officialCandidatesMatchRequirement(
+  candidates: UnresolvedOfficialImpact['candidates'], requirement: StructuredRequirement,
+): boolean {
   const target = requirement.target;
   const names = target.course_names ?? (target.course_name ? [target.course_name] : null);
-  return impact.candidates.some(candidate => (names === null || names.includes(candidate.canonicalName) || (candidate.affectsHistorySeminar && names.some(name => name === '史学演習' || name.startsWith('史学演習（'))))
+  return candidates.some(candidate => (names === null || names.includes(candidate.canonicalName) || (candidate.affectsHistorySeminar && names.some(name => name === '史学演習' || name.startsWith('史学演習（'))))
     && candidate.destinations.some(destination =>
       (target.curriculum_category === undefined || destination.category === target.curriculum_category)
       && (target.curriculum_field === undefined || destination.field === target.curriculum_field)
