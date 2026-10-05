@@ -294,10 +294,12 @@ for (const [department, name] of [['法律学科', '法律学演習'], ['法律�
   });
 }
 
-test('official facts: law partial2 never activates the Planner partial exception', () => {
+test('H12 official facts: law partial2 retains evidence but cannot count ordinary without eight completions', () => {
   const x = fixture(); x.row.earnedCreditsTotal = 2;
-  assert.deepEqual(facts(x).facts[0].allocation, { kind: 'unknown', reason: 'special_rule_evidence_required' });
-  assert.equal(overall(run(x)), null);
+  assert.equal(facts(x).allocations[0].credits, 2);
+  assert.equal(facts(x).allocations[0].completedCredits, 0);
+  assert.equal(facts(x).allocations[0].schoolingCredits, 2);
+  assert.equal(overall(run(x)), 0);
 });
 
 test('official facts: legacy curriculum and recognized overlap are held separately', () => {
@@ -1397,4 +1399,215 @@ test('H57 frozen inputs and large components cannot mutate or add to official2/S
   assert.deepEqual({ x, records }, before);
   assert.equal(catalog.metadata.graduationCheckComplete, false); assert.equal(catalog.metadata.sourceLinksReverified, false);
   assert.equal(initialState().schemaVersion, 22);
+});
+
+function h12Fixture(fullCount = 8, type = '選択必修') {
+  const x = fixture(); x.f = structuredClone(catalog);
+  const pairs = x.f.curriculum.courses.flatMap(course => course.mappingIds.flatMap(id => {
+    const mapping = x.f.mappings.find(m => m.mappingId === id);
+    return mapping?.scopeId === x.scope && mapping.category === '専門教育' && mapping.curriculumCredits === 4
+      && !mapping.schoolingOnly && !mapping.mediaOnly && !/特講|演習|政治学|卒業論文|公開/.test(course.canonicalName)
+      ? [{ course, mapping }] : [];
+  }));
+  const full = pairs.filter(p => p.mapping.requirementType === '選択必修').slice(0, fullCount);
+  const partial = pairs.find(p => p.mapping.requirementType === type && !full.includes(p));
+  assert.equal(full.length, fullCount); assert.ok(partial);
+  const rowFor = (p, id, earned, schooling) => ({ ...x.row, id, rawName: p.course.canonicalName,
+    curriculumCourseId: p.course.id, candidateCurriculumCourseIds: [p.course.id], compositionCredits: 4,
+    earnedCreditsTotal: earned, schoolingCreditsTotal: schooling, courseId: null });
+  x.full = full; x.fullRows = full.map((p, i) => rowFor(p, `h12-full-${i}`, 4, 0));
+  x.course = partial.course; x.mapping = partial.mapping; x.row = rowFor(partial, 'h12-partial', 2, 2);
+  return x;
+}
+const h12Rows = x => [...x.fullRows, x.row];
+const h12Facts = (x, records = []) => deriveOfficialGraduationFacts(h12Rows(x), records, x.f, x.scope, x.profile);
+const h12Progress = (x, selection = 'not_selected', items = [], records = []) =>
+  calculateGraduationProgress(items, x.f, x.scope, [], selection, records, h12Rows(x), x.profile);
+const h12Card = (p, suffix) => p.cards.find(c => c.requirementId === `professional-law-${suffix}`);
+const h12Allocation = result => result.allocations.find(a => a.fact.sourceRowIds.includes('h12-partial'));
+const h12Fact = result => result.facts.find(f => f.sourceRowIds.includes('h12-partial'));
+const h12Count = p => h12Card(p, 'required-elective').details.find(d => d.unit === 'courses').earned;
+const h12OrdinaryRequirements = (x, p, total, elective) => {
+  for (const row of p.requirements) {
+    const rule = x.f.requirements.find(r => r.id === row.requirementId);
+    if (row.status === 'unknown') continue;
+    if (/^law_total_/.test(rule.ruleId)) assert.equal(row.earned, total, rule.ruleId);
+    if (/^law_elective_/.test(rule.ruleId)) assert.equal(row.earned, elective, rule.ruleId);
+  }
+};
+
+for (const type of ['選択必修', '選択']) for (const n of [0, 7, 8, 9]) {
+  test(`H12 ${n} distinct real full Courses plus ${type} C4/O2/S2 counts partial only after 8/32`, () => {
+    const x = h12Fixture(n, type); const result = h12Facts(x); const a = h12Allocation(result);
+    assert.equal(a.credits, 2); assert.equal(a.completedCredits, 0); assert.equal(a.schoolingCredits, 2);
+    assert.equal(result.allocations.filter(a => a.completedCredits > 0).length, n);
+    const p = h12Progress(x); const permitted = n >= 8 ? 2 : 0;
+    const elective = Math.max(0, n * 4 - 32) + permitted;
+    assert.equal(h12Count(p), n);
+    assert.equal(h12Card(p, 'required-elective').earned, Math.min(32, n * 4));
+    assert.equal(h12Card(p, 'elective').earned, elective);
+    assert.match(h12Card(p, 'elective').note, new RegExp(`部分修得 ${permitted}単位`));
+    assert.equal(h12Card(p, 'total').earned, n * 4 + permitted);
+    assert.equal(overall(p), n * 4 + permitted);
+    assert.equal(h12Card(p, 'schooling').earned, 2);
+    assert.equal(p.referenceProgress.find(r => r.id === 'schooling-reference-progress').earned, 2);
+    assert.equal(p.importedWarnings.length, 0);
+    h12OrdinaryRequirements(x, p, n * 4 + permitted, elective);
+    assert.equal(p.graduationCheckComplete, false);
+  });
+}
+
+for (const [label, n, credits] of [['seven Courses / 32 credits', 7, [8,4,4,4,4,4,4]], ['eight Courses / 28 credits', 8, [2,2,4,4,4,4,4,4]]]) {
+  test(`H12 AND threshold rejects ${label}`, () => {
+    const x = h12Fixture(n);
+    x.full.forEach((pair, i) => {
+      pair.course.curriculumCredits = credits[i];
+      // Other departments' edges do not affect the selected law Mapping.
+      pair.mapping.curriculumCredits = credits[i];
+      x.fullRows[i].compositionCredits = credits[i]; x.fullRows[i].earnedCreditsTotal = credits[i];
+    });
+    const p = h12Progress(x); const fullCredits = credits.reduce((a,b) => a+b,0);
+    assert.equal(h12Count(p), n); assert.equal(h12Card(p, 'elective').earned, 0);
+    assert.equal(h12Card(p, 'total').earned, fullCredits); assert.equal(overall(p), fullCredits);
+    assert.match(h12Card(p, 'elective').note, /部分修得 0単位/);
+    h12OrdinaryRequirements(x,p,fullCredits,0);
+  });
+}
+
+for (const s of [0, 1, null, 3, -1, NaN, Infinity, -Infinity]) {
+  test(`H12 S${s} cannot authorize ordinary partial credits`, () => {
+    const x=h12Fixture(); x.row.schoolingCreditsTotal=s;
+    assert.equal(h12Fact(h12Facts(x)).allocation.reason,'special_rule_evidence_required');
+    assert.equal(h12Allocation(h12Facts(x)),undefined);
+    assert.equal(h12Card(h12Progress(x),'elective').earned,0);
+  });
+}
+for (const [o, expectedCompletion, held] of [[0,0,false],[1,0,true],[3,0,true],[4,4,false],[5,0,true]]) {
+  test(`H12 O${o} preserves zero/full/invalid contracts without the partial exception`, () => {
+    const x=h12Fixture(0); x.row.earnedCreditsTotal=o; const result=h12Facts(x);
+    if (held) assert.equal(h12Allocation(result),undefined);
+    else {
+      assert.equal(h12Allocation(result).credits,o);
+      assert.equal(h12Allocation(result).completedCredits,expectedCompletion);
+      assert.equal(h12Count(h12Progress(x)),o===4?1:0);
+    }
+    assert.match(h12Card(h12Progress(x),'elective').note,/部分修得 0単位/);
+  });
+}
+
+for (const [label, change, reason] of [
+  ['required type',x=>{x.mapping.requirementType='必修';},'special_rule_evidence_required'],
+  ['public type',x=>{x.mapping.requirementType='公開科目';},'special_rule_evidence_required'],
+  ['unsupported type',x=>{x.mapping.requirementType='スクーリング選択必修';},'special_rule_evidence_required'],
+  ['Course composition',x=>{x.course.curriculumCredits=2;},'metadata_unknown'],
+  ['Mapping composition',x=>{x.mapping.curriculumCredits=2;},'metadata_unknown'],
+  ['row composition',x=>{x.row.compositionCredits=2;},'metadata_unknown'],
+  ['null composition',x=>{x.row.compositionCredits=null;},'special_rule_evidence_required'],
+  ['recognized exemption',x=>{x.row.recognizedExemption=2;},'special_rule_evidence_required'],
+  ['additional enrollment',x=>{x.row.additionalEnrollment=2;},'special_rule_evidence_required'],
+  ['legacy',x=>{x.profile.curriculumApplicability='legacy_or_transition';},'special_rule_evidence_required'],
+  ['unknown curriculum',x=>{x.profile.curriculumApplicability='unknown';},'special_rule_evidence_required'],
+  ['future catalog',x=>{x.f.curriculum.source='official_curriculum_mappings_2027';},'special_rule_evidence_required'],
+  ['media-only',x=>{x.mapping.mediaOnly=true;},'special_rule_evidence_required'],
+  ['schooling-only',x=>{x.mapping.schoolingOnly=true;},'special_rule_evidence_required'],
+  ['unresolved identity',x=>{x.row.curriculumCourseId=null;x.row.curriculumMatch='ambiguous';},'curriculum_identity_unresolved'],
+  ['missing Mapping',x=>{x.course.mappingIds=[];},'mapping_not_found'],
+  ['out of scope',x=>{x.scope=x.f.programs.find(p=>p.department==='史学科').scopeId;},'out_of_scope'],
+]) {
+  test(`H12 ${label} retains its guard`,()=>{
+    const x=h12Fixture(0);change(x); const r=h12Facts(x);
+    assert.equal(h12Fact(r).allocation.reason,reason); assert.equal(r.allocations.length,0);
+  });
+}
+test('H12 profile is required and zero/null recognition fields do not fabricate completion',()=>{
+  const x=h12Fixture(0);
+  assert.equal(deriveOfficialGraduationFacts(h12Rows(x),[],x.f,x.scope).allocations.length,0);
+  for(const recognized of [0,null]) for(const additional of [0,null]) {
+    x.row.recognizedExemption=recognized;x.row.additionalEnrollment=additional;
+    assert.equal(h12Allocation(h12Facts(x)).completedCredits,0);
+  }
+});
+test('H12 professional recognition and H20 schooling guards still apply after entry',()=>{
+  const x=h12Fixture(0);
+  x.profile.recognizedCredits.professionalCourses=[{id:'recognition',offeringId:'other',credits:4}];
+  assert.ok(h12Fact(h12Facts(x)).diagnostics.includes('recognized_overlap'));
+  assert.equal(h12Facts(x).allocations.length,0);
+  x.profile.recognizedCredits.professionalCourses=[];x.profile.admissionType='transfer_second_year';
+  x.profile.recognizedCredits.schoolingEquivalentCredits=null;
+  assert.equal(h12Allocation(h12Facts(x)).schoolingCredits,null);
+  assert.match(h12Card(h12Progress(x),'elective').note,/部分修得 0単位/);
+});
+test('H12 different eligible Mapping signatures remain conflicting',()=>{
+  const x=h12Fixture(0); const other={...x.mapping,mappingId:'h12-conflict',requirementType:'選択'};
+  x.f.mappings.push(other);x.course.mappingIds.push(other.mappingId);
+  assert.equal(h12Fact(h12Facts(x)).allocation.reason,'mapping_conflict');assert.equal(h12Facts(x).allocations.length,0);
+});
+for (const kind of ['partial duplicate','full duplicate','full/partial same Course']) {
+  test(`H12 ${kind} cannot inflate distinct completions or permit extra2`,()=>{
+    const x=h12Fixture();
+    if(kind==='partial duplicate') x.fullRows.push({...x.row,id:'h12-copy'});
+    else if(kind==='full duplicate') x.fullRows.push({...x.fullRows[0],id:'h12-copy'});
+    else {x.row.curriculumCourseId=x.fullRows[0].curriculumCourseId;x.row.candidateCurriculumCourseIds=x.fullRows[0].candidateCurriculumCourseIds.slice();}
+    const r=h12Facts(x); const duplicate=r.facts.find(f=>f.allocation.reason==='duplicate_official_rows');
+    assert.ok(duplicate);assert.equal(duplicate.earnedCreditsTotal,null);assert.equal(duplicate.sourceRows.length,2);
+    const p=h12Progress(x);assert.equal(h12Count(p),kind==='partial duplicate'?8:7);
+    assert.equal(h12Card(p,'elective').earned,0);assert.match(h12Card(p,'elective').note,/部分修得 0単位/);
+  });
+}
+for (const name of ['卒業論文','公開科目','法律学演習','法律学特講','政治学','総合特講','基礎特講']) {
+  test(`H12 does not bypass special family ${name}`,()=>{
+    const x=h12Fixture(0);x.course.canonicalName=name;
+    assert.equal(h12Fact(h12Facts(x)).allocation.reason,'special_rule_evidence_required');
+  });
+}
+for (const department of ['日本文学科','史学科','地理学科']) {
+  test(`H12 does not release ${department} partials`,()=>{
+    const x=fixture(department);x.row.earnedCreditsTotal=2;
+    assert.equal(facts(x).facts[0].allocation.reason,'special_rule_evidence_required');
+  });
+}
+test('H12 H19 excluded canonical name still nulls S and cannot feed permittedPartial',()=>{
+  const x=h12Fixture();x.course.canonicalName='情報学入門';
+  const a=h12Allocation(h12Facts(x));assert.equal(a.credits,2);assert.equal(a.completedCredits,0);assert.equal(a.schoolingCredits,null);
+  assert.ok(a.fact.diagnostics.includes('schooling_evidence_requires_confirmation'));
+  const p=h12Progress(x);assert.equal(h12Card(p,'elective').earned,0);assert.equal(h12Card(p,'total').earned,32);
+  assert.equal(h12Card(p,'schooling').earned,0);assert.equal(h12Card(p,'schooling').status,'unknown');
+  assert.equal(p.referenceProgress.find(r=>r.id==='schooling-reference-progress').earned,null);
+});
+for (const selection of ['selected','not_selected','undecided']) {
+  test(`H12 thesis ${selection} leaves partial qualification independent while retaining H36`,()=>{
+    const x=h12Fixture();const p=h12Progress(x,selection);
+    assert.equal(h12Card(p,'required-elective').earned,32);assert.equal(h12Count(p),8);
+    assert.equal(h12Card(p,'elective').earned,2);assert.equal(h12Card(p,'total').earned,34);
+    assert.equal(overall(p),selection==='undecided'?null:34);
+    assert.equal(p.referenceProgress.find(r=>r.id==='schooling-reference-progress').earned,selection==='undecided'?null:2);
+    assert.equal(h12Card(p,'total').target,selection==='undecided'?null:selection==='selected'?82:86);
+    h12OrdinaryRequirements(x,p,34,2);
+    if(selection==='undecided') assert.equal(h12Card(p,'total').status,'unknown');
+  });
+}
+for (const count of [7,8]) {
+  test(`H12 ${count} completions plus Planner duplicates cannot fake or double the threshold`,()=>{
+    const x=h12Fixture(count);
+    const offerings=h12Rows(x).map((row,i)=>({...x.offering,id:`h12-planner-${i}`,name:row.rawName,
+      curriculumCourseId:row.curriculumCourseId,mappingIds:x.f.curriculum.courses.find(c=>c.id===row.curriculumCourseId).mappingIds,credits:4}));
+    x.f.offerings.push(...offerings);const items=offerings.map(o=>item(o,'earned'));
+    const assertBudget=()=>{const p=h12Progress(x,'not_selected',items);assert.equal(h12Count(p),count);assert.equal(overall(p),count*4+(count===8?2:0));};
+    assertBudget(); x.f.offerings.reverse();offerings.forEach(o=>{o.credits=99;o.method='schooling';o.mappingIds=[];});assertBudget();
+    x.f.offerings=[]; assert.equal(overall(h12Progress(x)),count*4+(count===8?2:0));
+  });
+}
+test('H12 equivalent Mapping edges count one completed institutional Course, not two',()=>{
+  const x=h12Fixture(7);const pair=x.full[0];const same={...pair.mapping,mappingId:'h12-equivalent'};
+  x.f.mappings.push(same);pair.course.mappingIds.push(same.mappingId);
+  assert.equal(h12Count(h12Progress(x)),7);assert.equal(h12Card(h12Progress(x),'elective').earned,0);
+});
+test('H12 frozen rows/records/catalog/profile preserve source2 and completed0 despite components40',()=>{
+  const x=h12Fixture();const records=[{id:'h12-component',fingerprint:'h12-component',source:'hosei_import',sourceCourseId:x.row.id,
+    rawName:x.row.rawName,method:'correspondence',rawTerm:'通',credits:40}];
+  const before=structuredClone({x,records});deepFreeze(x);deepFreeze(records);
+  const a=h12Allocation(h12Facts(x,records));assert.equal(a.credits,2);assert.equal(a.completedCredits,0);assert.equal(a.schoolingCredits,2);
+  assert.equal(overall(h12Progress(x,'not_selected',[],records)),34);assert.deepEqual({x,records},before);
+  assert.equal(catalog.metadata.graduationCheckComplete,false);assert.equal(catalog.metadata.sourceLinksReverified,false);
+  assert.equal(initialState().schemaVersion,22);
 });

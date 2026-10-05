@@ -121,6 +121,22 @@ function isSafeCalligraphyPracticumCompletion(
     && (row.additionalEnrollment === null || row.additionalEnrollment === 0);
 }
 
+/** H12 only. The separate special-course and recognition guards still apply. */
+function isSafeLawPartialSchooling(
+  course: CurriculumCourse, mapping: Mapping, row: ImportedCourseAchievement,
+  department: string | null, catalog: PlannerCatalog, profile?: GraduationProfile,
+): boolean {
+  return department === '法律学科'
+    && catalog.curriculum?.source === 'official_curriculum_mappings_2026'
+    && profile?.curriculumApplicability === 'current_2026'
+    && ['選択必修', '選択'].includes(mapping.requirementType ?? '')
+    && course.curriculumCredits === 4 && mapping.curriculumCredits === 4
+    && row.compositionCredits === 4 && row.earnedCreditsTotal === 2 && row.schoolingCreditsTotal === 2
+    && !mapping.schoolingOnly && !mapping.mediaOnly
+    && (row.recognizedExemption === null || row.recognizedExemption === 0)
+    && (row.additionalEnrollment === null || row.additionalEnrollment === 0);
+}
+
 /** Course.mappingIds is authoritative. scopeIds is diagnostic only. */
 export function deriveOfficialGraduationFacts(
   rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], catalog: PlannerCatalog,
@@ -185,9 +201,11 @@ export function deriveOfficialGraduationFacts(
       && isSafeHistoryIntroductionCompletion(course, mapping, row, department, catalog, profile);
     const safeCalligraphyPracticum = professionalBucket
       && isSafeCalligraphyPracticumCompletion(course, mapping, row, catalog, profile);
+    // This passes evidence, not graduation credit: the law allocator still requires 8 completed Courses / 32 credits.
+    const safeLawPartial = professionalBucket && isSafeLawPartialSchooling(course, mapping, row, department, catalog, profile);
     if ((specialCourse(course.canonicalName, department, mapping) && !safeHistoryIntroduction && !safeCalligraphyPracticum) || profile?.curriculumApplicability === 'legacy_or_transition'
       || (row.recognizedExemption ?? 0) > 0 || (row.additionalEnrollment ?? 0) > 0 || row.earnedCreditsTotal > composition
-      || (professionalBucket && ['法律学科', '日本文学科', '史学科', '地理学科'].includes(department ?? '') && row.earnedCreditsTotal > 0 && row.earnedCreditsTotal < composition)) {
+      || (professionalBucket && !safeLawPartial && ['法律学科', '日本文学科', '史学科', '地理学科'].includes(department ?? '') && row.earnedCreditsTotal > 0 && row.earnedCreditsTotal < composition)) {
       hold('special_rule_evidence_required'); continue;
     }
     // Keep recognition architecture intact; uncertain overlap is not a new dedup/merge policy.

@@ -99,7 +99,7 @@ test('H02: annual removal invalidates a previously valid independent exact Cours
   assert.equal(exactImportedCurriculumId(x.row, x.c), null);
   assert.equal(facts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
 });
-test('H12: eight full law Courses still cannot admit official partial schooling2', () => {
+test('H12 resolved: eight full law Courses admit official partial schooling2 without completing its Course', () => {
   const x = fixture();
   x.rows = Array.from({ length: 9 }, (_, n) => {
     const m = { ...x.mapping, mappingId: `map-${n}` };
@@ -107,9 +107,14 @@ test('H12: eight full law Courses still cannot admit official partial schooling2
     x.c.mappings.push(m); x.c.curriculum.courses.push(c);
     return { ...x.row, id: `row-${n}`, curriculumCourseId: c.id, candidateCurriculumCourseIds: [c.id], earnedCreditsTotal: n === 8 ? 2 : 4, schoolingCreditsTotal: n === 8 ? 2 : 0 };
   });
-  assert.equal(facts(x).allocations.length, 8);
-  assert.equal(facts(x).facts.find(f => f.sourceRows.some(r => r.id === 'row-8')).allocation.reason, 'special_rule_evidence_required');
-  assert.equal(card(progress(x), 'professional-law-total').earned, 32);
+  const result = facts(x);
+  assert.equal(result.allocations.length, 9);
+  const partial = result.allocations.find(a => a.fact.sourceRowIds.includes('row-8'));
+  assert.equal(partial.credits, 2); assert.equal(partial.completedCredits, 0); assert.equal(partial.schoolingCredits, 2);
+  assert.equal(card(progress(x), 'professional-law-required-elective').earned, 32);
+  assert.equal(card(progress(x), 'professional-law-elective').earned, 2);
+  assert.equal(card(progress(x), 'professional-law-total').earned, 34);
+  assert.equal(ref(progress(x), 'overall').earned, 34);
 });
 test('H03: distinct duplicate ids remain unresolved; all-zero duplicate warnings are suppressed', () => {
   const x = fixture(); x.rows.push({ ...x.row, id: 'duplicate' });

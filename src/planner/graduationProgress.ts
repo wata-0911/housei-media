@@ -1277,6 +1277,26 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
   const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, hasUnresolvedEarned, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, official.allocations);
+  // H12 evidence is not automatically ordinary credit. Generic law totals must
+  // use the same 8-Course/32-credit allocation (including its elective destination).
+  if (catalog.programs.find(p => p.scopeId === scopeId)?.department === '法律学科'
+    && official.allocations.some(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
+      && a.mapping.curriculumCredits === 4 && a.credits === 2 && a.completedCredits === 0)) {
+    const lawOrdinaryCards: Record<string, string> = {
+      law_total_with_thesis_min_credits: 'professional-law-total',
+      law_total_without_thesis_min_credits: 'professional-law-total',
+      law_elective_with_thesis_min_credits: 'professional-law-elective',
+      law_elective_without_thesis_min_credits: 'professional-law-elective',
+    };
+    for (const row of requirements) {
+      if (row.status === 'unknown') continue; // Preserve thesis/unsupported-rule unknowns.
+      const rule = catalog.requirements.find(r => r.id === row.requirementId);
+      const card = rule && professional.find(c => c.requirementId === lawOrdinaryCards[rule.ruleId]);
+      if (!card) continue;
+      row.earned = card.earned === null ? null : card.normalEarned ?? card.earned;
+      row.status = card.status; row.reason = card.reason;
+    }
+  }
   const cards = applyRecognition([
     ...groupedCards(calculationItems, offerings, eligibleMappings, hasUnresolvedEarned, official.allocations),
     ...professional,
