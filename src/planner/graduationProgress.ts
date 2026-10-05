@@ -1060,9 +1060,13 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
       // H37: an unknown recognition increment does not erase the known lower bound.
       return recognitionMayApply && row.mode === 'unknown' && earned < detail.target ? { ...detail, earned, reason: '認定情報未確認' } : { ...detail, earned };
     });
-    const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && (card.earned ?? 0) + credited + openUniversity >= 36;
-    const unknown = recognitionMayApply && !exempt && details?.some(detail => detail.reason === '認定情報未確認');
-    return { ...card, earned: exempt ? 0 : Math.min(card.target ?? 36, (card.earned ?? 0) + credited + openUniversity), details,
+    const knownTotal = (card.earned ?? 0) + credited + openUniversity;
+    const completed = details?.every(detail => detail.earned !== null && detail.earned >= detail.target) && knownTotal >= 36;
+    const fieldUnknown = details?.some(detail => detail.reason === '認定情報未確認');
+    // Even met field minima leave total36 unresolved when recognition may add credits.
+    const totalUnknown = knownTotal < 36 && fields.some(key => general[key].mode === 'unknown');
+    const unknown = recognitionMayApply && !exempt && (fieldUnknown || totalUnknown);
+    return { ...card, earned: exempt ? 0 : Math.min(card.target ?? 36, knownTotal), details,
       status: exempt || completed ? 'satisfied' : unknown ? 'unknown' : card.status,
       reason: unknown ? GENERAL_RECOGNITION_UNKNOWN_REASON : card.reason,
       note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : `${credited ? ' 公式認定単位を反映しています。' : ''}${openUniversity ? ` 放送大学認定 ${openUniversity}単位を一般教育（その他）に反映しています。` : ''}`}` };

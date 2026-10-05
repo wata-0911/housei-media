@@ -2386,3 +2386,49 @@ test('H37 H41/H42/H43 official holds and schooling quantities retain their exist
   assert.deepEqual([p.referenceProgress[1].earned, p.referenceProgress[1].target, p.referenceProgress[1].status], [null, 30, 'unknown']);
   assert.match(p.referenceProgress[1].reason, /公式実績のスクーリング証拠/);
 });
+
+// H37 review follow-up: meeting all field minima does not settle total36.
+for (const values of [[8, 8, 8], [12, 8, 8]]) for (const [unknownKey] of h37Fields) for (const source of ['official', 'planner']) {
+  const earned = values.reduce((sum, credits) => sum + credits, 0);
+  test(`H37 total-only uncertainty ${values.join('/')} / ${unknownKey} / ${source} keeps lower bound${earned}`, () => {
+    const x = h37Fixture();
+    h37Fields.forEach(([, field], index) => x.general(field, values[index], source));
+    x.profile.recognizedCredits.general[unknownKey] = { mode: 'unknown', credits: null };
+    assert.equal(graduationProfileValidationError(x.profile), null);
+    const p = x.progress(); assertH37(p, earned);
+    assert.deepEqual(h37General(p).details.map(d => d.earned), values);
+    assert.ok(h37General(p).details.every(d => !d.reason), 'met field minima need no recognition hold');
+    assert.deepEqual([overall(p), p.referenceProgress[0].target, p.referenceProgress[0].recognizedCredits], [earned, 124, 0]);
+    assert.match(p.referenceProgress[0].reason, /一般教育の認定情報が未確認/);
+    assert.equal(initialState().schemaVersion, 22); assert.equal(x.f.metadata.sourceLinksReverified, false);
+  });
+}
+for (const credits of [0, 4, 12]) test(`H37 total-only hold uses known recognition${credits} once and releases at36`, () => {
+  const x = h37Fixture(); h37Fields.forEach(([, field]) => x.general(field, 8));
+  x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  x.profile.recognizedCredits.general.social = { mode: 'recognized', credits };
+  x.profile.recognizedCredits.totalCredits = credits;
+  const p = x.progress(), earned = 24 + credits;
+  assert.deepEqual(h37General(p).details.map(d => d.earned), [8, 8 + credits, 8]);
+  assert.ok(h37General(p).details.every(d => !d.reason));
+  if (earned < 36) assertH37(p, earned);
+  else assert.deepEqual([h37General(p).earned, h37General(p).status, h37General(p).reason], [36, 'satisfied', null]);
+  assert.deepEqual([overall(p), p.referenceProgress[0].target, p.referenceProgress[0].status], [earned, 124, earned < 36 ? 'unknown' : 'partial']);
+});
+for (const openUniversity of [0, 8]) test(`H37 total-only hold uses safe Open University${openUniversity} before deciding completion`, () => {
+  const x = h37Fixture(); [12, 8, 8].forEach((credits, index) => x.general(h37Fields[index][1], credits));
+  x.profile.recognizedCredits.general.natural = { mode: 'unknown', credits: null };
+  x.profile.recognizedCredits.openUniversityCredits = openUniversity;
+  const p = x.progress(), earned = 28 + openUniversity;
+  assert.deepEqual(h37General(p).details.map(d => d.earned), [12, 8, 8]);
+  if (earned < 36) assertH37(p, earned);
+  else assert.deepEqual([h37General(p).earned, h37General(p).status, h37General(p).reason], [36, 'satisfied', null]);
+  assert.deepEqual([overall(p), p.referenceProgress[0].status], [earned, earned < 36 ? 'unknown' : 'partial']);
+});
+for (const admission of ['other_transfer', 'first_year']) test(`H37 total24 with confirmed none stays unsatisfied for ${admission}`, () => {
+  const x = h37Fixture(); x.profile.admissionType = admission; h37Fields.forEach(([, field]) => x.general(field, 8));
+  if (admission === 'first_year') x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  const p = x.progress();
+  assert.deepEqual([h37General(p).earned, h37General(p).status, h37General(p).reason], [24, 'unsatisfied', null]);
+  assert.deepEqual([overall(p), p.referenceProgress[0].status], [24, 'partial']);
+});
