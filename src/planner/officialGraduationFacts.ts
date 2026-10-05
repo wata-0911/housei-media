@@ -78,7 +78,7 @@ function deriveMethodEvidence(row: ImportedCourseAchievement, records: ImportedS
   };
 }
 
-function specialCourse(name: string, department: string | null, mapping: Mapping): boolean {
+export function specialOfficialCourse(name: string, department: string | null, mapping: Mapping): boolean {
   const base = baseName(name);
   return base === '卒業論文' || base === '基礎特講' || base === '書道実技'
     || /旧課程|旧カリキュラム/.test(name)
@@ -203,7 +203,7 @@ export function deriveOfficialGraduationFacts(
       && isSafeCalligraphyPracticumCompletion(course, mapping, row, catalog, profile);
     // This passes evidence, not graduation credit: the law allocator still requires 8 completed Courses / 32 credits.
     const safeLawPartial = professionalBucket && isSafeLawPartialSchooling(course, mapping, row, department, catalog, profile);
-    if ((specialCourse(course.canonicalName, department, mapping) && !safeHistoryIntroduction && !safeCalligraphyPracticum) || profile?.curriculumApplicability === 'legacy_or_transition'
+    if ((specialOfficialCourse(course.canonicalName, department, mapping) && !safeHistoryIntroduction && !safeCalligraphyPracticum) || profile?.curriculumApplicability === 'legacy_or_transition'
       || (row.recognizedExemption ?? 0) > 0 || (row.additionalEnrollment ?? 0) > 0 || row.earnedCreditsTotal > composition
       || (professionalBucket && !safeLawPartial && ['法律学科', '日本文学科', '史学科', '地理学科'].includes(department ?? '') && row.earnedCreditsTotal > 0 && row.earnedCreditsTotal < composition)) {
       hold('special_rule_evidence_required'); continue;
