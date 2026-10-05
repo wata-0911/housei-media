@@ -798,3 +798,13 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - 回帰22件追加：一般36＋各minimum、体育2、法律32/8科目と未達/達成済みdependent、general36でもfield不足、law32でも科目数不足、structured最低/完成/科目数・max/exact/choose、global fallback、H31優先、H42/H43外国語/S、frozen input/previous result、史学source再配分とordinary total。先行79件は編集せず維持した。
 - changed files：`src/planner/unresolvedOfficialImpact.ts`、`src/planner/graduationProgress.ts`、`tests/graduation-audit.test.mjs`、本書の末尾追記のみ。先行監査記録は履歴として保存する。
 - 最終検証：H41 targeted **101/101**（既存79＋追加22）、planner **1082/1082**、extension **19/19**、bookmarklet **168/168**。fail/skip0。typecheck/lint/build/`git diff --check` PASS。buildのgrade-import artifact/catalog checkも成功し、既存Vite chunk-size warningのみ残る。通常の追加commit/push対象とし、PR作成・mergeは行わない。
+
+## H41 review follow-up 2 — evaluator condition normalization — 2026-10-06
+
+- 対象：同じ`feature/graduation-h41-localize-official-unknown-impact`上の`2c3595895adc901a57f4ea06b3efe128e92a3103`への追加修正。remote再取得後もHEAD/remote featureは同SHA。新branch・PR・merge・history rewriteは行わない。
+- P2 reproduction：2026 catalogの`law_elective_with_thesis_min_credits`は`includes_thesis: true`と`when: { thesis_selected: true }`を持つ。卒論あり・既知選択50/52単位にlocalized held elective factを加えると、professional cardはsatisfiedを維持する一方、structured requirementだけがH41 unknownへ戻った。追加11回帰を修正前に実行し、50/52単位とfrozen catalog caseの3件が失敗することを確認した。
+- root cause：通常の`evaluateStructured()`は`withoutThesisCondition()`でwhen/includes_thesisを除いたcondition集合を評価しているが、H41の`officialEvaluationCanChange()`には元requirementが渡され、branch annotationを未知の計算conditionと判定していた。
+- 修正：impact判定には元requirementを使い、active branchのmonotonicity判定には既存`withoutThesisCondition()`で正規化したrequirementを渡す。H41専用のincludes_thesis allowlistは追加せず、evaluatorと同じ正規化を再利用する。undecided branchは未評価のまま既存H36 unknown/target/reasonを維持する。
+- 回帰11件：実catalogの法律選択/専門totalを用いた卒論あり48/50/52単位、なし52/54/56単位、branch annotation付きmax_credits/exact_credits/choose_oneのconservative hold、卒論未定のH36 quantity/target/reason、frozen catalog/rows/profile/previous resultを固定した。known earned/target不変、held非加算、inactive branch除外、overall unknownも確認する。先行H41 101件と既存監査本文は編集せず保持した。
+- changed files：`src/planner/graduationProgress.ts`のH41呼出箇所、`tests/graduation-audit.test.mjs`への追加、本書末尾追記のみ。H42/H43/H31/H36/H37/H38の実装、allocation/identity authority、schema/storage/profile shape、schemaVersion22と両false flagは変更しない。
+- 最終検証：H41 targeted **112/112**（既存101＋追加11）、planner **1093/1093**、extension **19/19**、bookmarklet **168/168**。fail/skip0。typecheck/lint/build/`git diff --check` PASS。build内のgrade-import artifact/catalog checkも成功し、既存Vite chunk-size warningのみ残る。通常追加commit/pushのみとし、PR作成・mergeは行わない。

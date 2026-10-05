@@ -1346,7 +1346,11 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       const affected = requirement?.status === 'structured'
         ? officialImpactsRequirement(officialImpact, requirement)
         : officialImpactsCard(officialImpact, row.requirementId);
-      if (!affected || !officialEvaluationCanChange(officialImpact, row, requirement?.status === 'structured' ? requirement : undefined)) continue;
+      // Match the conditions actually evaluated above; branch annotations are
+      // not calculation conditions. Keep the original target for impact analysis.
+      const evaluatedRequirement = requirement?.status === 'structured' && thesisCondition(requirement, currentSelection) === 'active'
+        ? withoutThesisCondition(requirement) : undefined;
+      if (!affected || !officialEvaluationCanChange(officialImpact, row, evaluatedRequirement)) continue;
       row.status = 'unknown'; row.reason = [row.reason, officialReason].filter(Boolean).join('。');
     }
   }

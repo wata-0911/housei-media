@@ -2880,3 +2880,86 @@ test('H41 saturation history seminar redistribution keeps a satisfied named sour
   const totalAfter = x.progress().requirements.find(r => r.requirementId === total.id);
   assert.equal(totalAfter.earned, 2); assert.equal(totalAfter.status, 'satisfied'); assert.doesNotMatch(totalAfter.reason ?? '', h41Reason);
 });
+
+// H41 review 2: use the evaluator's branch normalization, including catalog annotations.
+function h41LawBranchFixture(electiveCredits) {
+  const x = h41Fixture();
+  for (let i = 0; i < 8; i++) {
+    const entry = x.add(`normalization-required-${i}`, '専門教育', null, '選択必修', 4, 'correspondence', `制度必修正規化${i}`, x.scope);
+    x.rows.push(x.official(entry, 4));
+  }
+  for (let remaining = electiveCredits, i = 0; remaining > 0; i++) {
+    const credits = Math.min(4, remaining);
+    const entry = x.add(`normalization-elective-${i}`, '専門教育', null, '選択', credits, 'correspondence', `制度選択正規化${i}`, x.scope);
+    x.rows.push(x.official(entry, credits)); remaining -= credits;
+  }
+  x.held = x.add('normalization-held', '専門教育', null, '選択', 4, 'correspondence', '制度選択保留正規化', x.scope);
+  x.branchProgress = (selection, input = x.build(), rows = x.rows) => calculateGraduationProgress([], input, x.scope, [], selection, [], rows, x.profile);
+  x.rule = ruleId => x.f.requirements.find(r => r.ruleId === ruleId && r.scopeId === x.scope);
+  return x;
+}
+for (const [selection, electiveCredits] of [
+  ['selected', 48], ['selected', 50], ['selected', 52],
+  ['not_selected', 52], ['not_selected', 54], ['not_selected', 56],
+]) test(`H41 normalization actual law catalog ${selection}/elective${electiveCredits}: branch minimum and total retain evaluator semantics`, () => {
+  const x = h41LawBranchFixture(electiveCredits), selected = selection === 'selected';
+  const suffix = selected ? 'with_thesis' : 'without_thesis';
+  const elective = x.rule(`law_elective_${suffix}_min_credits`), total = x.rule(`law_total_${suffix}_min_credits`);
+  assert.deepEqual(elective.conditions, selected ? { includes_thesis: true, when: { thesis_selected: true } } : { when: { thesis_selected: false } });
+  assert.deepEqual(total.conditions, { when: { thesis_selected: selected } });
+  const baseline = x.branchProgress(selection); x.rows.push(x.official(x.held));
+  const p = x.branchProgress(selection);
+  for (const [rule, known] of [[elective, electiveCredits], [total, electiveCredits + 32]]) {
+    const before = baseline.requirements.find(r => r.requirementId === rule.id), after = p.requirements.find(r => r.requirementId === rule.id);
+    assert.equal(before.earned, known); assert.equal(after.earned, before.earned); assert.equal(after.target, before.target);
+    if (known >= rule.value) {
+      assert.equal(before.status, 'satisfied'); assert.deepEqual(after, before); assert.doesNotMatch(after.reason ?? '', h41Reason);
+    } else {
+      assert.equal(before.status, 'unsatisfied'); assert.equal(after.status, 'unknown'); assert.match(after.reason, h41Reason);
+    }
+  }
+  const card = h31Card(p, 'professional-law-elective'), beforeCard = h31Card(baseline, 'professional-law-elective');
+  assert.equal(card.earned, beforeCard.earned); assert.equal(card.target, beforeCard.target);
+  if (electiveCredits >= elective.value) assert.deepEqual(card, beforeCard);
+  else { assert.equal(card.status, 'unknown'); assert.match(card.reason, h41Reason); }
+  const inactive = x.rule(`law_elective_${selected ? 'without_thesis' : 'with_thesis'}_min_credits`);
+  assert.ok(!p.requirements.some(r => r.requirementId === inactive.id));
+  assert.equal(overall(p), overall(baseline)); assert.equal(p.referenceProgress[0].target, baseline.referenceProgress[0].target);
+  assert.equal(p.referenceProgress[0].status, 'unknown'); assert.match(p.referenceProgress[0].reason, h41Reason);
+  assert.equal(p.importedContributionCount, x.rows.length - 1, 'held official aggregate never contributes');
+});
+for (const ruleType of ['max_credits', 'exact_credits', 'choose_one']) test(`H41 normalization annotated ${ruleType} remains conservatively held`, () => {
+  const x = h41LawBranchFixture(52);
+  const rule = x.requirement(`normalization-${ruleType}`, { curriculum_category: '専門教育', requirement_type: '選択' },
+    { includes_thesis: true, when: { thesis_selected: true }, ...(ruleType === 'choose_one' ? { choose_count: 1, options: ['選択'] } : {}) }, ruleType);
+  rule.value = 52;
+  const before = x.branchProgress('selected').requirements.find(r => r.requirementId === rule.id);
+  assert.equal(before.status, 'satisfied'); x.rows.push(x.official(x.held));
+  const after = x.branchProgress('selected').requirements.find(r => r.requirementId === rule.id);
+  assert.equal(after.status, 'unknown'); assert.equal(after.earned, before.earned); assert.equal(after.target, before.target);
+  assert.match(after.reason, h41Reason);
+});
+test('H41 normalization undecided law thesis preserves H36 quantities, unknown requirements and reference target', () => {
+  const x = h41LawBranchFixture(52), baseline = x.branchProgress('undecided');
+  x.rows.push(x.official(x.held)); const p = x.branchProgress('undecided');
+  for (const branch of ['with_thesis', 'without_thesis']) for (const kind of ['elective', 'total']) {
+    const rule = x.rule(`law_${kind}_${branch}_min_credits`);
+    const before = baseline.requirements.find(r => r.requirementId === rule.id), after = p.requirements.find(r => r.requirementId === rule.id);
+    assert.equal(before.status, 'unknown'); assert.equal(after.status, 'unknown');
+    assert.equal(after.earned, before.earned); assert.equal(after.target, before.target);
+    assert.match(after.reason, /卒論有無が未定.*公式実績の算入を保留/);
+  }
+  assert.equal(p.referenceProgress[0].target, null); assert.equal(p.referenceProgress[0].status, 'unknown');
+  assert.equal(overall(p), overall(baseline));
+  assert.match(p.referenceProgress[0].reason, /卒業論文の選択が未定.*公式実績の算入を保留/);
+});
+test('H41 normalization leaves frozen original catalog annotations and previous result unchanged', () => {
+  const x = h41LawBranchFixture(50), input = x.build(), previous = x.branchProgress('selected', input);
+  x.rows.push(x.official(x.held));
+  const snapshot = structuredClone({ input, rows: x.rows, profile: x.profile, previous });
+  deepFreeze(input); deepFreeze(x.rows); deepFreeze(x.profile); deepFreeze(previous);
+  const p = x.branchProgress('selected', input), rule = x.rule('law_elective_with_thesis_min_credits');
+  assert.equal(p.requirements.find(r => r.requirementId === rule.id).status, 'satisfied');
+  assert.deepEqual({ input, rows: x.rows, profile: x.profile, previous }, snapshot);
+  assert.equal(initialState().schemaVersion, 22); assert.equal(p.graduationCheckComplete, false); assert.equal(input.metadata.sourceLinksReverified, false);
+});
