@@ -646,3 +646,16 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - production差分は`graduationProgress.ts`のH38分岐のみ。UI、認定architecture、persistent shape、catalog、source/Mapping authorityは不変。`graduationCheckComplete=false`、`sourceLinksReverified=false`、`schemaVersion=22`を維持。
 
 上記は実装後の追記。本文の66件inventory・A–E/P1等の集計と旧behavior記述は、監査時点baselineとして変更していない。
+
+## H60 implementation follow-up — 2026-10-05
+
+- 実装commit：`fa1bff4f87e6847d9027ae7f56b5d74a9b15d7f2`。branchは`feature/graduation-h60-history-intro-completion`、base/開始時remote devは`3f99590b0cfbbc29ec9831e937c9557ca4972919`。H38 merge後の最新devから新規作成し、旧feature/auditをbaseにしていない。
+- H60の安全subsetだけ解決：2026 catalog source＋profile `current_2026`、史学科、exact canonical「史学概論」、exact institutional identity、通常専門必修Mapping（field null、method-onlyなし）、公式C4/O4/S0、認定免除/追加履修0又はnull、重複/Mapping conflictなし。名称によるblanket holdだけをこの条件で除外し、後続guardを維持する。
+- 実catalog Course：`curriculum:0203762e-4a77-4eca-b1e0-e361cb4b780a`、C4。史学科scope `118c5183-6aec-4fa1-905a-265f25d86db1`、Mapping `2f8f63e5-2378-4057-9643-fdf28a712eca`（専門教育/必修/field null/S-only false/media-only false）。Course.mappingIdsには地理学科の選択Mapping `0203762e-4a77-4eca-b1e0-e361cb4b780a`もあるが、史学科の算入には使わない。
+- 旧：通常完成行でも`special_rule_evidence_required`、allocationなし。新：official allocation O4/completed4/S0。`professional-history-required`のearned4（16未満なのでunsatisfied）、overall参考下限4、schooling参考0、imported contribution 1。卒業達成へ昇格しない。
+- partial O2、O>C、O0、S null/positive/negative/NaN/±Infinity、認定免除positive、追加履修positive、professional認定overlap、duplicate、legacy/unknown課程、future catalog source、canonical装飾/番号、public/elective/method-only Mapping、unknown composition、identity/Mapping conflictは解除しない。史学演習・歴史資料学・日本/東洋/西洋史概説・考古学もholdを維持。H57書道実技、H61および他findingは未解決のまま。
+- 正式regressionを36件追加。Offering removal/order/credit metadataと同CourseのPlanner earnedで4→8等にならず、Course.mappingIdsを失うとhold。frozen row/profile/catalog/componentsは不変、component40をofficial4へ加算しない。helperはH60だけ解決済みassertionへ更新し、H57のcharacterization/期待値を維持。
+- 検証：planner **683/683**、audit helper **17/17**、extension **19/19**、bookmarklet **168/168**、fail/skip 0。typecheck/lint/build/diff check PASS。build内grade-import artifact checkとcatalog check PASS（Course321 / Offering686）。Viteのchunk-size警告は残るがbuild成功。CI定義の検証commandをローカルNode24で実行し、Node22のremote CI成功とは扱わない。
+- production変更は`officialGraduationFacts.ts`の小predicateとspecialCourse例外だけ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、Course.mappingIds authorityは不変。Offeringをhistorical authorityにしていない。
+
+本文の66件inventory、A–E/P1等の集計、監査時点behavior、H38 follow-upは変更せず保存した。次slice候補はH57の通常完成書道実技を独立して扱う限定実装。H61のfamily配分は別途公式証拠の確認を要する。

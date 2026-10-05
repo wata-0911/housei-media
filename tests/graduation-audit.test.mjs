@@ -1045,3 +1045,147 @@ test('H38 UI displays ordinary4 alongside held foreign completion', () => {
   assert.match(foreign, /スクーリング相当認定単位が未確認/);
   assert.doesNotMatch(foreign, />達成</);
 });
+
+function h60Fixture() {
+  const x = fixture('史学科');
+  x.f = structuredClone(catalog);
+  x.course = x.f.curriculum.courses.find(c => c.canonicalName === '史学概論');
+  x.mapping = x.f.mappings.find(m => x.course.mappingIds.includes(m.mappingId) && m.scopeId === x.scope);
+  Object.assign(x.row, { rawName: x.course.canonicalName, curriculumCourseId: x.course.id,
+    candidateCurriculumCourseIds: [x.course.id], compositionCredits: 4, earnedCreditsTotal: 4,
+    schoolingCreditsTotal: 0, courseId: null });
+  return x;
+}
+const h60Required = p => p.cards.find(c => c.requirementId === 'professional-history-required');
+const h60Held = x => {
+  const result = facts(x);
+  assert.equal(result.allocations.length, 0);
+  assert.equal(result.facts[0].allocation.reason, 'special_rule_evidence_required');
+  return result;
+};
+
+test('H60 real 2026 catalog exact history introduction C4/O4/S0 allocates ordinary4', () => {
+  const x = h60Fixture();
+  assert.equal(x.course.id, 'curriculum:0203762e-4a77-4eca-b1e0-e361cb4b780a');
+  assert.equal(x.course.curriculumCredits, 4);
+  assert.equal(x.mapping.requirementType, '必修');
+  assert.equal(x.mapping.field, null);
+  assert.equal(x.mapping.schoolingOnly, false);
+  assert.equal(x.mapping.mediaOnly, false);
+  assert.equal(exactImportedCurriculumId(x.row, x.f), x.course.id);
+  const result = facts(x);
+  assert.deepEqual(result.facts[0].allocation, { kind: 'unique', mappingIds: [x.mapping.mappingId] });
+  assert.equal(result.allocations[0].credits, 4);
+  assert.equal(result.allocations[0].completedCredits, 4);
+  assert.equal(result.allocations[0].schoolingCredits, 0);
+  assert.equal(result.allocations[0].mapping.scopeId, x.scope);
+  assert.ok(!result.facts[0].diagnostics.includes('special_rule_evidence_required'));
+  const p = run(x);
+  assert.equal(h60Required(p).earned, 4);
+  assert.equal(h60Required(p).status, 'unsatisfied', '4 does not satisfy the required16 bucket');
+  assert.equal(p.cards.find(c => c.requirementId === 'professional-history-elective').earned, 0);
+  assert.equal(overall(p), 4);
+  assert.equal(p.referenceProgress.find(r => r.id === 'schooling-reference-progress').earned, 0);
+  assert.equal(p.importedContributionCount, 1);
+  assert.equal(p.importedWarnings.length, 0);
+  assert.equal(p.graduationCheckComplete, false);
+});
+
+for (const [label, change] of [
+  ['partial O2', x => { x.row.earnedCreditsTotal = 2; }],
+  ['O greater than C', x => { x.row.earnedCreditsTotal = 6; }],
+  ['O0', x => { x.row.earnedCreditsTotal = 0; }],
+  ['recognition positive', x => { x.row.recognizedExemption = 1; }],
+  ['additional enrollment positive', x => { x.row.additionalEnrollment = 1; }],
+  ['legacy curriculum', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }],
+  ['unknown curriculum', x => { x.profile.curriculumApplicability = 'unknown'; }],
+  ['future catalog source', x => { x.f.curriculum.source = 'official_curriculum_mappings_2027'; }],
+  ['decorated canonical name', x => { x.course.canonicalName = '史学概論（旧課程）'; }],
+  ['prefix name', x => { x.course.canonicalName = '史学概論2'; }],
+  ['public mapping', x => { x.mapping.requirementType = '公開科目'; }],
+  ['elective mapping', x => { x.mapping.requirementType = '選択'; }],
+  ['schooling-only mapping', x => { x.mapping.schoolingOnly = true; }],
+  ['media-only mapping', x => { x.mapping.mediaOnly = true; }],
+  ['unknown official composition', x => { x.row.compositionCredits = null; }],
+  ['recognized professional overlap', x => { x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: 'unrelated', credits: 4 }]; }],
+]) {
+  test(`H60 excludes ${label} from the safe exception`, () => { const x = h60Fixture(); change(x); h60Held(x); });
+}
+
+for (const schooling of [null, 1, 2, 4, -1, NaN, Infinity, -Infinity]) {
+  test(`H60 keeps schooling ${schooling} held without inferring zero or positive credits`, () => {
+    const x = h60Fixture(); x.row.schoolingCreditsTotal = schooling;
+    const result = h60Held(x);
+    assert.equal(result.facts[0].schoolingEvidence.credits, schooling);
+    assert.equal(run(x).importedContributionCount, 0);
+  });
+}
+
+test('H60 requires current profile and accepts only zero/null recognition fields', () => {
+  const x = h60Fixture();
+  assert.equal(deriveOfficialGraduationFacts([x.row], [], x.f, x.scope).allocations.length, 0);
+  for (const recognition of [0, null]) for (const additional of [0, null]) {
+    x.row.recognizedExemption = recognition; x.row.additionalEnrollment = additional;
+    assert.equal(facts(x).allocations[0].credits, 4);
+  }
+});
+
+test('H60 duplicate different official ids stay unresolved without sum/max/dedupe', () => {
+  const x = h60Fixture(); const rows = [x.row, { ...x.row, id: 'h60-second-row' }];
+  const result = deriveOfficialGraduationFacts(rows, [], x.f, x.scope, x.profile);
+  assert.equal(result.facts[0].allocation.reason, 'duplicate_official_rows');
+  assert.equal(result.facts[0].earnedCreditsTotal, null);
+  assert.equal(result.facts[0].schoolingEvidence.credits, null);
+  assert.equal(result.facts[0].sourceRows.length, 2);
+  assert.equal(result.allocations.length, 0);
+  const p = calculateGraduationProgress([], x.f, x.scope, [], 'not_selected', [], rows, x.profile);
+  assert.equal(p.importedContributionCount, 0);
+  assert.ok(p.importedWarnings.some(w => w.reason.includes('duplicate_official_rows')));
+});
+
+test('H60 mapping conflict and unresolved institutional identity still precede the exception', () => {
+  const x = h60Fixture(); const other = { ...x.mapping, mappingId: 'h60-conflict', requirementType: '選択' };
+  x.f.mappings.push(other); x.course.mappingIds.push(other.mappingId);
+  assert.equal(facts(x).facts[0].allocation.reason, 'mapping_conflict');
+  assert.equal(facts(x).allocations.length, 0);
+  x.row.curriculumMatch = 'ambiguous';
+  assert.equal(facts(x).facts[0].allocation.reason, 'curriculum_identity_unresolved');
+  assert.equal(facts(x).allocations.length, 0);
+});
+
+for (const name of ['史学演習1', '歴史資料学2', '日本史概説', '東洋史概説', '西洋史概説', '考古学']) {
+  test(`H60 does not release neighboring history family ${name}`, () => {
+    const x = fixture('史学科'); x.course.canonicalName = name; x.row.schoolingCreditsTotal = 0;
+    h60Held(x);
+  });
+}
+
+test('H60 Offering removal/order/metadata and Planner earned cannot change or double official4', () => {
+  const x = h60Fixture();
+  const offering = { ...x.offering, id: 'h60-presentation', name: '史学概論', curriculumCourseId: x.course.id,
+    mappingIds: [x.mapping.mappingId], credits: 4 };
+  x.f.offerings.push(offering);
+  assert.equal(h60Required(run(x, [item(offering, 'earned')])).earned, 4);
+  assert.equal(overall(run(x, [item(offering, 'earned')])), 4);
+  x.f.offerings.reverse(); offering.credits = 99; offering.method = 'schooling'; offering.mappingIds = [];
+  assert.equal(overall(run(x, [item(offering, 'earned')])), 4);
+  assert.equal(facts(x).allocations[0].schoolingCredits, 0);
+  x.f.offerings = [];
+  assert.equal(overall(run(x)), 4);
+  assert.equal(facts(x).allocations[0].credits, 4);
+  x.course.mappingIds = [];
+  assert.equal(facts(x).facts[0].allocation.reason, 'mapping_not_found', 'Course.mappingIds remains authority');
+});
+
+test('H60 frozen source/profile/catalog/components retain aggregates and invariant flags', () => {
+  const x = h60Fixture();
+  const records = [{ id: 'h60-component', fingerprint: 'h60-component-source', source: 'hosei_import', sourceCourseId: x.row.id,
+    method: 'correspondence', rawTerm: '通', credits: 40 }];
+  const before = structuredClone({ x, records }); deepFreeze(x); deepFreeze(records);
+  assert.equal(deriveOfficialGraduationFacts([x.row], records, x.f, x.scope, x.profile).allocations[0].credits, 4);
+  assert.equal(overall(run(x, [], records)), 4);
+  assert.deepEqual({ x, records }, before);
+  assert.equal(catalog.metadata.graduationCheckComplete, false);
+  assert.equal(catalog.metadata.sourceLinksReverified, false);
+  assert.equal(initialState().schemaVersion, 22);
+});
