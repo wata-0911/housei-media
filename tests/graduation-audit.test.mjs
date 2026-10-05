@@ -943,7 +943,8 @@ for (const language of ['english', 'german', 'french']) {
       if (schooling === null) assert.match(foreign.reason, /スクーリング相当認定単位が未確認.*0単位とは扱いません/);
       if (schooling === 0 || schooling === 1) assert.match(foreign.reason, /2単位未満/);
       const reference = p.referenceProgress.find(r => r.id === 'overall-reference-progress');
-      assert.deepEqual([reference.earned, reference.status, reference.target, reference.recognizedCredits], [4, 'partial', 128, 4]);
+      assert.deepEqual([reference.earned, reference.status, reference.target, reference.recognizedCredits], [4, 'unknown', 128, 4]);
+      assert.match(reference.reason, /一般教育の認定情報が未確認/); // H37, independent of foreign S.
       // The global recognition breakdown is independently unknown; foreign4 never supplies S4/S2.
       assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).status, h38SchoolingReference(p).target,
         h38SchoolingReference(p).recognizedCredits], [null, 'unknown', 30, null]);
@@ -1025,7 +1026,7 @@ test('H38 retains ordinary4 with H36 target hold and H37 general recognition unr
   assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).target, h38SchoolingReference(p).status], [null, 30, 'unknown']);
   assert.match(h38SchoolingReference(p).reason, /認定スクーリング相当単位が未入力/);
   const general = p.cards.find(c => c.requirementId === 'group-general');
-  assert.deepEqual([general.earned, general.status], [null, 'unknown']);
+  assert.deepEqual([general.earned, general.status], [0, 'unknown']);
   assert.match(general.reason, /一般教育の認定情報が未確認/);
 });
 
@@ -2026,7 +2027,12 @@ test('H31 recognition overlay cannot promote general/physical candidate holds; H
   const p = x.calc(); assert.equal(h31Card(p, 'group-general').status, 'unknown'); assert.equal(h31Card(p, 'group-general').earned, 36);
   assert.equal(h31Card(p, 'group-physical').status, 'unknown'); assert.equal(h31Card(p, 'group-physical').earned, 2);
   x.profile.recognizedCredits.general.natural = { mode: 'unknown', credits: null };
-  assert.equal(h31Card(x.calc(), 'group-general').earned, null); assert.match(h31Card(x.calc(), 'group-general').reason, /認定情報が未確認/);
+  const held = x.calc();
+  assert.equal(h31Card(held, 'group-general').earned, 32); assert.match(h31Card(held, 'group-general').reason, /認定情報が未確認/);
+  assert.equal(h31Card(held, 'group-general').status, 'unknown');
+  assert.equal(h31Card(held, 'group-general').details[2].earned, 0, 'candidate90 is never earned');
+  assert.equal(overall(held), 42); // general32 + foreign4 + physical2 + professional4.
+  assert.match(held.referenceProgress[0].reason, /対応関係を確認中/, 'existing H31 reference reason has priority');
 });
 test('H31 geography transfer candidate uses institutional identity and holds destination closure, keeps resolved transfers unchanged', () => {
   const x = h31Fixture('地理学科');
@@ -2217,4 +2223,166 @@ test('H31/P2 raw63 -> explicit override55 matched -> runtime8 unresolved preserv
   assert.equal(attached.offerings.filter(o => o.resolutionStatus === 'manual_review').length, 8);
   assert.deepEqual(attached, catalog); assert.deepEqual(raw, snapshot);
   assert.equal(attached.metadata.graduationCheckComplete, false); assert.equal(attached.metadata.sourceLinksReverified, false);
+});
+
+// H37: unknown recognition increments hold evaluation, never erase safe quantities.
+// Reuse the schema/attach-validated H31 builder, with no unresolved candidate item.
+const h37Fields = [['humanities', '人文'], ['social', '社会'], ['natural', '自然']];
+function h37Fixture(department = '経済学科') {
+  const x = h31Fixture(department);
+  x.items = []; x.rows = [];
+  x.profile.admissionType = 'other_transfer';
+  x.profile.recognizedCredits.schoolingEquivalentCredits = 0;
+  for (const [key] of h37Fields) x.profile.recognizedCredits.general[key] = { mode: 'none', credits: null };
+  x.profile.recognizedCredits.foreignLanguage = { mode: 'none', credits: null, language: 'unknown', schoolingEquivalentCredits: null };
+  x.profile.recognizedCredits.physicalEducation = { mode: 'none', credits: null };
+  let serial = 0;
+  x.general = (field, credits, source = 'official') => {
+    const row = x.add(`h37-general-${++serial}`, '一般教育', field, '選択必修', credits);
+    if (source === 'planner') x.items.push(item(row.offering, 'earned'));
+    else x.rows.push({ ...x.row, id: `h37-official-${serial}`, fingerprint: `h37-source-${serial}`, rawName: row.course.canonicalName,
+      curriculumCourseId: row.course.id, candidateCurriculumCourseIds: [row.course.id], courseId: row.offering.courseId,
+      compositionCredits: credits, earnedCreditsTotal: credits, schoolingCreditsTotal: 0 });
+    return row;
+  };
+  x.progress = (selection = 'not_selected', records = [], input = x.build()) =>
+    calculateGraduationProgress(x.items, input, x.scope, [], selection, records, x.rows, x.profile);
+  return x;
+}
+const h37General = p => h31Card(p, 'group-general');
+function assertH37(p, earned) {
+  const general = h37General(p), reference = creditReference(p, 'overall-reference-progress');
+  assert.deepEqual([general.earned, general.status, general.coverageStatus], [earned, 'unknown', 'unknown']);
+  assert.match(general.reason, /一般教育の認定情報が未確認.*0単位認定とは扱いません/);
+  assert.equal(reference.status, 'unknown'); assert.equal(reference.coverageStatus, 'unknown');
+  assert.equal(p.graduationCheckComplete, false);
+}
+for (const [key, field] of h37Fields) for (const source of ['official', 'planner', 'mixed']) {
+  test(`H37 ${field}/${source}: known4 survives unknown recognition below minimum8`, () => {
+    const x = h37Fixture();
+    if (source === 'mixed') { x.general(field, 2); x.general(field, 2, 'planner'); }
+    else x.general(field, 4, source);
+    x.profile.recognizedCredits.general[key] = { mode: 'unknown', credits: null };
+    assert.equal(graduationProfileValidationError(x.profile), null);
+    const p = x.progress(); assertH37(p, 4);
+    const detail = h37General(p).details.find(d => d.label === field);
+    assert.deepEqual([detail.earned, detail.target, detail.reason], [4, 8, '認定情報未確認']);
+    assert.equal(overall(p), 4); assert.equal(p.referenceProgress[0].target, 124);
+    assert.match(p.referenceProgress[0].reason, /一般教育の認定情報が未確認/);
+  });
+}
+for (const total of [null, 16]) test(`H37 known recognition8+8 and unknown natural coexist once / aggregate${total}`, () => {
+  const x = h37Fixture(); x.general('自然', 4);
+  x.profile.recognizedCredits.general = { humanities: { mode: 'recognized', credits: 8 }, social: { mode: 'recognized', credits: 8 }, natural: { mode: 'unknown', credits: null } };
+  x.profile.recognizedCredits.totalCredits = total;
+  assert.equal(graduationProfileValidationError(x.profile), null);
+  const p = x.progress(); assertH37(p, 20);
+  assert.deepEqual(h37General(p).details.map(d => d.earned), [8, 8, 4]);
+  assert.equal(overall(p), 20); assert.equal(p.referenceProgress[0].recognizedCredits, 16);
+});
+test('H37 capped total36 does not satisfy unknown field minimum4/8', () => {
+  const x = h37Fixture(); x.general('人文', 16); x.general('社会', 16); x.general('自然', 4);
+  x.profile.recognizedCredits.general.natural = { mode: 'unknown', credits: null };
+  const p = x.progress(); assertH37(p, 36);
+  assert.deepEqual(h37General(p).details.map(d => d.earned), [16, 16, 4]); assert.equal(overall(p), 36);
+});
+for (const credits of [12, 16]) test(`H37 known field${credits} x3 meets all conditions despite unknown recognition`, () => {
+  const x = h37Fixture();
+  for (const [key, field] of h37Fields) { x.general(field, credits); x.profile.recognizedCredits.general[key] = { mode: 'unknown', credits: null }; }
+  const p = x.progress(), general = h37General(p);
+  assert.deepEqual([general.earned, general.status, general.reason], [36, 'satisfied', null]);
+  assert.ok(general.details.every(d => d.earned === credits && !d.reason));
+  assert.deepEqual([overall(p), p.referenceProgress[0].target, p.referenceProgress[0].status, p.referenceProgress[0].reason], [36, 124, 'partial', null]);
+});
+for (const total of [null, 18]) test(`H37 Open University10 goes only to total, once / aggregate${total}`, () => {
+  const x = h37Fixture(); x.general('人文', 4);
+  x.profile.recognizedCredits.general.social = { mode: 'recognized', credits: 8 };
+  x.profile.recognizedCredits.general.natural = { mode: 'unknown', credits: null };
+  x.profile.recognizedCredits.openUniversityCredits = 10; x.profile.recognizedCredits.totalCredits = total;
+  assert.equal(graduationProfileValidationError(x.profile), null);
+  const p = x.progress(); assertH37(p, 22);
+  assert.deepEqual(h37General(p).details.map(d => d.earned), [4, 8, 0]);
+  assert.equal(overall(p), 22); assert.equal(p.referenceProgress[0].recognizedCredits, 18);
+});
+test('H37 Open University retains cap36 while an unknown field minimum stays held', () => {
+  const x = h37Fixture(); x.general('人文', 16); x.general('社会', 12);
+  x.profile.recognizedCredits.general.natural = { mode: 'unknown', credits: null };
+  x.profile.recognizedCredits.openUniversityCredits = 10;
+  const p = x.progress(); assertH37(p, 36); assert.equal(overall(p), 36);
+  assert.equal(h37General(p).details[2].earned, 0);
+});
+test('H37 individual field exemption relieves minimum without supplying8 earned', () => {
+  const x = h37Fixture(); x.general('社会', 4);
+  x.profile.recognizedCredits.general.humanities = { mode: 'exempt', credits: null };
+  x.profile.recognizedCredits.general.natural = { mode: 'unknown', credits: null };
+  const p = x.progress(); assertH37(p, 4);
+  assert.equal(h37General(p).details[0].earned, 8, 'existing detail expresses requirement relief');
+  assert.equal(overall(p), 4, 'exempt detail8 is never added to the graduation total');
+});
+test('H37 all-exempt behavior keeps earned0 and ignores Open University overlay', () => {
+  const x = h37Fixture(); x.profile.admissionType = 'bachelor_admission'; x.general('社会', 4);
+  for (const [key] of h37Fields) x.profile.recognizedCredits.general[key] = { mode: 'exempt', credits: null };
+  x.profile.recognizedCredits.openUniversityCredits = 10;
+  const p = x.progress();
+  assert.deepEqual([h37General(p).earned, h37General(p).status], [0, 'satisfied']);
+  assert.equal(overall(p), 0); assert.equal(p.referenceProgress[0].target, 82); assert.equal(p.referenceProgress[0].exemptionCredits, 42);
+});
+for (const selection of ['selected', 'not_selected', 'undecided']) test(`H37 overall keeps general4 + professional4 with law thesis ${selection}`, () => {
+  const x = h37Fixture('法律学科'); x.general('人文', 4);
+  x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  x.items.push(item(x.offering, 'earned'));
+  const p = x.progress(selection); assertH37(p, 4);
+  assert.deepEqual([overall(p), p.referenceProgress[0].target], [8, selection === 'undecided' ? null : selection === 'selected' ? 124 : 128]);
+  assert.match(p.referenceProgress[0].reason, selection === 'undecided' ? /卒業論文の選択が未定/ : /一般教育の認定情報が未確認/);
+});
+for (const [label, setup, reason] of [
+  ['curriculum unknown', x => { x.profile.curriculumApplicability = 'unknown'; }, /適用課程が未確認/],
+  ['legacy curriculum', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }, /旧課程・経過措置/],
+  ['invalid recognition', x => { x.profile.recognizedCredits.openUniversityCredits = 11; }, /認定単位の入力/],
+  ['missing transfer recognition', x => { x.profile.recognizedCredits.schoolingEquivalentCredits = null; }, /認定単位合計または公式/],
+]) test(`H37 preserves independent reference-wide ${label} hold and priority`, () => {
+  const x = h37Fixture(); x.general('人文', 4); x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null }; setup(x);
+  const p = x.progress(); assertH37(p, label === 'legacy curriculum' ? 0 : label === 'invalid recognition' ? 15 : 4);
+  assert.deepEqual([overall(p), p.referenceProgress[0].target], [null, null]); assert.match(p.referenceProgress[0].reason, reason);
+});
+test('H37 known zero is a lower bound with unknown increment, not confirmed zero recognition', () => {
+  const x = h37Fixture(); x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  const p = x.progress(); assertH37(p, 0); assert.equal(overall(p), 0); assert.equal(p.referenceProgress[0].target, 124);
+  x.profile.recognizedCredits.general.humanities = { mode: 'none', credits: null };
+  const none = x.progress(); assert.deepEqual([h37General(none).earned, h37General(none).status], [0, 'unsatisfied']);
+  assert.equal(none.referenceProgress[0].status, 'partial');
+});
+test('H37 first-year unknown recognition retains ordinary calculation without new holds', () => {
+  const x = h37Fixture(); x.profile.admissionType = 'first_year'; x.general('人文', 4);
+  x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  const p = x.progress(); assert.deepEqual([h37General(p).earned, h37General(p).status, h37General(p).reason], [4, 'unsatisfied', null]);
+  assert.equal(p.referenceProgress[0].status, 'partial');
+});
+test('H37 official authority survives annual Offering removal and ignores component40', () => {
+  const x = h37Fixture(); x.general('人文', 4); x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  const row = x.rows[0], input = x.build(); input.offerings = []; input.curriculum.offeringRelations = [];
+  const records = [{ id: 'h37-component', fingerprint: 'h37-component', source: 'hosei_import', sourceCourseId: row.id,
+    rawName: row.rawName, method: 'correspondence', rawTerm: 'T', credits: 40, grade: 'A', rawYear: '2026', date: null, term: null }];
+  const snapshot = structuredClone({ profile: x.profile, rows: x.rows, records, input });
+  const p = x.progress('not_selected', records, input); assertH37(p, 4); assert.equal(overall(p), 4);
+  assert.equal(p.importedContributionCount, 1); assert.deepEqual({ profile: x.profile, rows: x.rows, records, input }, snapshot);
+  assert.equal(initialState().schemaVersion, 22); assert.equal(input.metadata.sourceLinksReverified, false);
+});
+test('H37 official/Planner duplicate contributes once and H38 foreign4/Snull stays held', () => {
+  const x = h37Fixture(); const row = x.general('人文', 4); x.items.push(item(row.offering, 'earned'));
+  x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  x.profile.recognizedCredits.foreignLanguage = { mode: 'recognized', credits: 4, language: 'english', schoolingEquivalentCredits: null };
+  const p = x.progress(); assertH37(p, 4); assert.equal(overall(p), 8);
+  assert.deepEqual([h31Card(p, 'group-foreign').earned, h31Card(p, 'group-foreign').status], [4, 'unknown']);
+  assert.match(h31Card(p, 'group-foreign').reason, /スクーリング相当認定単位が未確認/);
+});
+test('H37 H41/H42/H43 official holds and schooling quantities retain their existing boundary', () => {
+  const x = h37Fixture(); x.general('人文', 4); x.general('社会', 4);
+  x.rows[1].earnedCreditsTotal = null; x.rows[1].schoolingCreditsTotal = 2;
+  x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
+  const p = x.progress(); assertH37(p, 4); assert.equal(overall(p), 4);
+  assert.equal(h31Card(p, 'group-foreign').status, 'unknown'); assert.equal(h31Card(p, 'group-physical').status, 'unknown');
+  assert.match(p.referenceProgress[0].reason, /一般教育の認定情報が未確認.*公式実績の算入を保留/);
+  assert.deepEqual([p.referenceProgress[1].earned, p.referenceProgress[1].target, p.referenceProgress[1].status], [null, 30, 'unknown']);
+  assert.match(p.referenceProgress[1].reason, /公式実績のスクーリング証拠/);
 });
