@@ -704,3 +704,15 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - production変更は`curriculumIdentityValidation.ts`、`officialCourseCredits.ts`、`storage.ts`のみ。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22、persistent shape、official aggregate正本、Course.mappingIds authorityを維持。H01/H03/H04/H06のguardと他Hxxのassertionは変更していない。
 
 元の66件inventory/A–E/P1/P2集計とH38/H60/H57/H12 follow-upは監査履歴として変更せず保存した。次slice候補はH36の卒論未定による既知数量の隠蔽を、completion statusと参考数量に分けて限定監査すること。
+
+## H36 implementation follow-up — 2026-10-05
+
+- branch：`feature/graduation-h36-reference-known-quantities`。開始時にremoteを再取得し、remote dev/base `6665047467d8efda3b832e3d35482bfc553d141a`（PR #74/H02 merge後、提示SHAから進行なし）から新規作成した。
+- 原因は卒論未定reasonをreference全体の数量・targetへ共用していたこと。`referencePrerequisiteReason()`には既存のreference-wide profile/recognition guardを残し、法律の卒論未定reasonだけをoverall target/evaluationへ分離。quantity、target、statusを独立に扱い、既知earnedをstatus unknownだけでnullにしない。
+- 安全なfirst-year/current_2026法律O4/S2：旧overall null/null→新earned4/target null/status unknown/coverage unknown（既存卒論未定reasonを保持）。旧global S null/null→新earned2/target30/status partial/coverage partial/reason null。公式のみ・Plannerのみ・両者重複でO4/S2、既知0、複数公式Course O12/S6を確認。official aggregate正本・component非加算・official priorityは不変。
+- H12の8 completed Courses/32＋C4/O2/S2はprofessional ordinary34、overall earned34/target null/unknown、global S2/30/partialを保持。partial completed0、count8、permittedPartial2、二重計上防止は未変更。H38はordinary4とforeign unknownを保持し、認定S未確認によるschooling unknownも維持。卒論selected124/not_selected128、専門target82/86、thesis progress unknown、卒論依存generic unknownは不変。undecidedの保存statusは既存契約どおりnot_startedへ正規化し、selectedへ昇格しない。
+- transfer認定欠落、invalid recognition、課程unknown/legacy、入学区分unknownの全体holdは維持。bachelorや認定S未確認、official S null、Planner allocation不確定も楽観化しない。H31/H41/H42/H43/H19は別の回帰で現状維持し、helperの他Hxx assertionは未変更。H02 annual Offering removalとCourse.mappingIds authorityも既存回帰で確認。
+- 正式H36回帰32件追加、H12/H38の旧H36期待だけ更新。planner **861/861**、audit helper **17/17**、extension **19/19**、bookmarklet **168/168**、fail/skip0。typecheck/lint/build/diff check PASS。buildのgrade-import artifact/catalog check PASS（Course321/Offering686）。ローカルNode24.13.0、既存Vite chunk-size警告あり。最新devの計算との全結果比較でもselected/not_selectedと他学科を確認した。
+- productionは`graduationProgress.ts`のみ。UIは既にknown earned＋unknown statusを表示できるため変更なし。persistent shape/storage/migration/profile/type変更なし、schemaVersion22、`graduationCheckComplete=false`、`sourceLinksReverified=false`を維持。H31/H37/H41/H42/H43/H19の解決は今回行っていない。
+
+元の66件inventory、A–E/P1/P2集計、監査当時のbehavior、H38/H60/H57/H12/H02 follow-upは変更せず保存した。次slice候補はH31のmanual-review earnedによる無関係bucketへのunknown伝播を、独立して限定監査すること。

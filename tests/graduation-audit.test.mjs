@@ -7,6 +7,7 @@ import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '..
 import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { initialState } from '../src/planner/storage.ts';
+import { setThesisProgressForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
 import { graduationProfileValidationError } from '../src/planner/graduationProfile.ts';
 import { matchImportedCurriculumCourse } from '../src/planner/curriculumImportMatch.ts';
 import { createElement } from 'react';
@@ -1008,13 +1009,14 @@ test('H38 boundary: invalid foreign schooling recognition remains rejected by va
   }
 });
 
-test('H38 retains ordinary4 without resolving H36 law thesis prerequisite or H37 general recognition', () => {
+test('H38 retains ordinary4 with H36 target hold and H37 general recognition unresolved', () => {
   const x = foreignRecognitionFixture();
   const p = foreignRecognitionRun(x, [], 'undecided');
   assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [4, 'unknown']);
-  assert.deepEqual([p.referenceProgress[0].earned, p.referenceProgress[0].target, p.referenceProgress[0].status], [null, null, 'unknown']);
+  assert.deepEqual([p.referenceProgress[0].earned, p.referenceProgress[0].target, p.referenceProgress[0].status], [4, null, 'unknown']);
   assert.match(p.referenceProgress[0].reason, /卒業論文の選択が未定/);
-  assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).target], [null, null]);
+  assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).target, h38SchoolingReference(p).status], [null, 30, 'unknown']);
+  assert.match(h38SchoolingReference(p).reason, /認定スクーリング相当単位が未入力/);
   const general = p.cards.find(c => c.requirementId === 'group-general');
   assert.deepEqual([general.earned, general.status], [null, 'unknown']);
   assert.match(general.reason, /一般教育の認定情報が未確認/);
@@ -1575,12 +1577,14 @@ test('H12 H19 excluded canonical name still nulls S and cannot feed permittedPar
   assert.equal(p.referenceProgress.find(r=>r.id==='schooling-reference-progress').earned,null);
 });
 for (const selection of ['selected','not_selected','undecided']) {
-  test(`H12 thesis ${selection} leaves partial qualification independent while retaining H36`,()=>{
+  test(`H12 thesis ${selection} leaves partial qualification independent with H36 quantity retention`,()=>{
     const x=h12Fixture();const p=h12Progress(x,selection);
     assert.equal(h12Card(p,'required-elective').earned,32);assert.equal(h12Count(p),8);
     assert.equal(h12Card(p,'elective').earned,2);assert.equal(h12Card(p,'total').earned,34);
-    assert.equal(overall(p),selection==='undecided'?null:34);
-    assert.equal(p.referenceProgress.find(r=>r.id==='schooling-reference-progress').earned,selection==='undecided'?null:2);
+    assert.equal(overall(p),34);
+    assert.equal(p.referenceProgress[0].target,selection==='undecided'?null:selection==='selected'?124:128);
+    assert.equal(p.referenceProgress[0].status,selection==='undecided'?'unknown':'partial');
+    assert.deepEqual(h36ReferenceValues(p, 'schooling'), [2,30,'partial','partial',null]);
     assert.equal(h12Card(p,'total').target,selection==='undecided'?null:selection==='selected'?82:86);
     h12OrdinaryRequirements(x,p,34,2);
     if(selection==='undecided') assert.equal(h12Card(p,'total').status,'unknown');
@@ -1610,4 +1614,202 @@ test('H12 frozen rows/records/catalog/profile preserve source2 and completed0 de
   assert.equal(overall(h12Progress(x,'not_selected',[],records)),34);assert.deepEqual({x,records},before);
   assert.equal(catalog.metadata.graduationCheckComplete,false);assert.equal(catalog.metadata.sourceLinksReverified,false);
   assert.equal(initialState().schemaVersion,22);
+});
+
+
+// H36 changes only the law optional-thesis target prerequisite.
+const h36Reason = '法学部の卒業論文の選択が未定のため、124/128単位を確定できません。';
+const h36ReferenceValues = (p, axis) => {
+  const r = p.referenceProgress.find(r => r.id === `${axis}-reference-progress`);
+  return [r.earned, r.target, r.status, r.coverageStatus, r.reason];
+};
+const h36Progress = (x, { selection = 'undecided', items = [], rows = [x.row], records = [], thesis = null } = {}) =>
+  calculateGraduationProgress(items, x.f, x.scope, [], selection, records, rows, x.profile, thesis);
+const h36Assert = (p, ordinary, schooling) => {
+  assert.deepEqual(h36ReferenceValues(p, 'overall'), [ordinary, null, 'unknown', 'unknown', h36Reason]);
+  assert.deepEqual(h36ReferenceValues(p, 'schooling'), [schooling, 30, 'partial', 'partial', null]);
+  assert.equal(p.graduationCheckComplete, false);
+};
+function h36PlannerFixture() {
+  const x = fixture();
+  x.offering.credits = 2;
+  const schooling = { ...x.offering, id: 'h36-schooling', method: 'schooling' };
+  x.f.offerings.push(schooling);
+  x.f.curriculum.offeringRelations.push({ offeringId: schooling.id, curriculumCourseId: x.course.id, candidateCurriculumCourseIds: [x.course.id] });
+  x.items = [item(x.offering, 'earned'), item(schooling, 'earned')];
+  return x;
+}
+
+test('H36 official-only O4/S2 keeps known quantities with undecided target/evaluation', () => {
+  const x = fixture(); const p = h36Progress(x);
+  h36Assert(p, 4, 2);
+  for (const id of ['professional-law-total', 'professional-law-elective']) {
+    const c = p.cards.find(c => c.requirementId === id);
+    assert.equal(c.status, 'unknown'); assert.equal(c.target, null);
+  }
+  const thesis = p.cards.find(c => c.ruleType === 'thesis_progress');
+  assert.equal(thesis.status, 'unknown'); assert.equal(thesis.earned, 0);
+  const dependent = p.requirements.filter(r => /卒論有無が未定/.test(r.reason ?? ''));
+  assert.ok(dependent.length >= 4);
+  for (const r of dependent) assert.equal(r.status, 'unknown');
+});
+
+test('H36 Planner-only completed correspondence2 + schooling2 retains O4/S2', () => {
+  const x = h36PlannerFixture(); h36Assert(h36Progress(x, { items: x.items, rows: [] }), 4, 2);
+});
+
+test('H36 official priority suppresses same-Course Planner quantities once', () => {
+  const x = h36PlannerFixture(); const official = h36Progress(x);
+  const combined = h36Progress(x, { items: x.items });
+  h36Assert(combined, 4, 2);
+  assert.deepEqual(combined.referenceProgress, official.referenceProgress);
+  assert.equal(combined.importedContributionCount, 1);
+});
+
+for (const source of ['empty', 'official']) test(`H36 ${source} known zero remains zero, not unknown quantity`, () => {
+  const x = fixture(); x.row.earnedCreditsTotal = 0; x.row.schoolingCreditsTotal = 0;
+  h36Assert(h36Progress(x, { rows: source === 'empty' ? [] : [x.row] }), 0, 0);
+});
+
+test('H36 multiple distinct official Courses retain sum O12/S6 without annual Offerings', () => {
+  const x = h12Fixture(3);
+  for (const row of x.fullRows) row.schoolingCreditsTotal = 2;
+  x.f.offerings = []; x.f.curriculum.offeringRelations = [];
+  h36Assert(h36Progress(x, { rows: x.fullRows }), 12, 6);
+});
+
+for (const [selection, target, professionalTarget] of [['selected', 124, 82], ['not_selected', 128, 86]]) {
+  test(`H36 ${selection} retains existing reference and professional targets`, () => {
+    const x = fixture(); const p = h36Progress(x, { selection });
+    assert.deepEqual(h36ReferenceValues(p, 'overall'), [4, target, 'partial', 'partial', null]);
+    assert.deepEqual(h36ReferenceValues(p, 'schooling'), [2, 30, 'partial', 'partial', null]);
+    const c = p.cards.find(c => c.requirementId === 'professional-law-total');
+    assert.equal(c.earned, 4); assert.equal(c.target, professionalTarget); assert.equal(c.status, 'unsatisfied');
+    assert.equal(p.graduationCheckComplete, false);
+  });
+}
+
+for (const status of ['not_started', 'planned', 'in_progress', 'earned']) {
+  test(`H36 persisted undecided thesis normalizes ${status} without selecting thesis`, () => {
+    const x = fixture();
+    const state = setThesisProgressForScope(initialState(), x.f, x.scope, { selection: 'undecided', status });
+    const thesis = thesisProgressForScope(state, x.f, x.scope);
+    assert.deepEqual(thesis, { selection: 'undecided', status: 'not_started' });
+    const p = h36Progress(x, { thesis }); h36Assert(p, 4, 2);
+    assert.equal(p.cards.find(c => c.ruleType === 'thesis_progress').status, 'unknown');
+  });
+}
+
+const h36Guards = [
+  ['curriculum unknown', x => { x.profile.curriculumApplicability = 'unknown'; }, /適用課程が未確認/],
+  ['legacy', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }, /旧課程・経過措置/],
+  ['admission unknown', x => { x.profile.admissionType = 'unknown'; }, /入学区分が未入力/],
+  ['transfer recognition missing', x => { x.profile.admissionType = 'transfer_second_year'; }, /編入学の認定単位/],
+  ['invalid recognition', x => { x.profile.recognizedCredits.totalCredits = -1; }, /認定単位の入力/],
+];
+for (const [label, setup, reason] of h36Guards) test(`H36 preserves reference-wide ${label} guard`, () => {
+  const x = fixture(); setup(x);
+  const p = h36Progress(x); const baseline = h36Progress(x, { selection: 'not_selected' });
+  assert.deepEqual(p.referenceProgress, baseline.referenceProgress);
+  for (const axis of ['overall', 'schooling']) {
+    const values = h36ReferenceValues(p, axis);
+    assert.deepEqual(values.slice(0, 4), [null, null, 'unknown', 'unknown']);
+    assert.match(values[4], reason);
+  }
+});
+
+for (const admission of ['transfer_second_year', 'bachelor_admission']) {
+  test(`H36 ${admission} missing global recognized S remains unknown`, () => {
+    const x = fixture(); x.profile.admissionType = admission;
+    if (admission === 'transfer_second_year') x.profile.recognizedCredits.totalCredits = 0;
+    const p = h36Progress(x);
+    assert.deepEqual(h36ReferenceValues(p, 'overall'), [4, null, 'unknown', 'unknown', h36Reason]);
+    const s = h36ReferenceValues(p, 'schooling');
+    assert.deepEqual(s.slice(0, 4), [null, 30, 'unknown', 'unknown']);
+    assert.match(s[4], /認定スクーリング相当単位が未入力/);
+    assert.equal(p.referenceProgress[0].exemptionCredits, null);
+    assert.equal(p.graduationCheckComplete, false);
+  });
+}
+
+test('H36 official S null retains existing schooling uncertainty', () => {
+  const x = fixture(); x.row.schoolingCreditsTotal = null;
+  const p = h36Progress(x);
+  assert.equal(overall(p), 4); assert.equal(p.referenceProgress[0].target, null);
+  assert.deepEqual(h36ReferenceValues(p, 'schooling').slice(0, 4), [null, 30, 'unknown', 'unknown']);
+  assert.match(h36ReferenceValues(p, 'schooling')[4], /スクーリング証拠に未確認/);
+});
+
+test('H36 Planner schooling allocation ambiguity retains its independent unknown', () => {
+  const x = h36PlannerFixture();
+  const other = { ...x.mapping, mappingId: 'h36-other-map', requirementType: '選択' };
+  x.f.mappings.push(other); x.course.mappingIds.push(other.mappingId);
+  for (const o of x.f.offerings) o.mappingIds.push(other.mappingId);
+  const p = h36Progress(x, { items: x.items, rows: [] });
+  const s = h36ReferenceValues(p, 'schooling');
+  assert.deepEqual(s.slice(1, 4), [30, 'unknown', 'unknown']);
+  assert.match(s[4], /算入先を一意に確認できない/);
+});
+
+for (const program of catalog.programs.filter(p => !p.isCommon && p.department !== '法律学科')) {
+  test(`H36 leaves ${program.department}/${program.course ?? program.scopeId} reference behavior independent of optional law thesis`, () => {
+    const profile = fixture().profile;
+    for (const selection of ['undecided', 'selected', 'not_selected']) {
+      const p = calculateGraduationProgress([], catalog, program.scopeId, [], selection, [], [], profile);
+      assert.deepEqual(h36ReferenceValues(p, 'overall'), [0, 124, 'partial', 'partial', null]);
+      assert.deepEqual(h36ReferenceValues(p, 'schooling'), [0, 30, 'partial', 'partial', null]);
+      assert.equal(p.graduationCheckComplete, false);
+    }
+  });
+}
+
+test('H36 frozen official aggregates own O4/S2 despite components40 and Planner duplicates', () => {
+  const x = h36PlannerFixture();
+  const records = [{ id: 'h36-component', fingerprint: 'h36-source', source: 'hosei_import', sourceCourseId: x.row.id,
+    rawName: x.row.rawName, method: 'schooling', rawTerm: 'S', credits: 40 }];
+  const before = structuredClone({ x, records }); deepFreeze(x); deepFreeze(records);
+  h36Assert(h36Progress(x, { items: x.items, records }), 4, 2);
+  assert.deepEqual({ x, records }, before);
+  assert.equal(initialState().schemaVersion, 22);
+  assert.equal(catalog.metadata.graduationCheckComplete, false);
+  assert.equal(catalog.metadata.sourceLinksReverified, false);
+});
+
+test('H36 existing UI displays known earned with unknown overall target/status', () => {
+  const p = h36Progress(fixture());
+  const html = renderToStaticMarkup(createElement(GraduationProgressUI, { progress: p }));
+  assert.match(html, /修得済み 4/); assert.match(html, /修得済み 2/);
+  assert.match(html, /30単位/); assert.match(html, /124\/128単位を確定できません/);
+  assert.match(html, /この数値だけで卒業可否は判定しません/);
+});
+
+test('H36 scope boundary: H31 manual-review earned Offering still propagates unknown', () => {
+  const x = fixture(); x.offering.resolutionStatus = 'manual_review';
+  const p = h36Progress(x, { selection: 'not_selected', items: [item(x.offering, 'earned')], rows: [] });
+  for (const id of ['group-general', 'group-foreign', 'group-physical', 'professional-law-total']) {
+    const c = p.cards.find(c => c.requirementId === id);
+    assert.equal(c.status, 'unknown');
+    assert.equal(c.earned, id === 'professional-law-total' ? null : 0);
+    assert.match(c.reason, /対応関係を確認中/);
+  }
+  assert.equal(p.graduationCheckComplete, false);
+});
+
+test('H36 scope boundary: H41 held official fact still propagates unknown to unrelated cards', () => {
+  const x = fixture();
+  const held = { ...x.row, id: 'h36-held', curriculumCourseId: null, curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] };
+  const p = h36Progress(x, { selection: 'not_selected', rows: [x.row, held] });
+  for (const id of ['group-general', 'group-foreign', 'group-physical', 'professional-law-total']) {
+    assert.equal(p.cards.find(c => c.requirementId === id).status, 'unknown');
+  }
+  assert.equal(overall(p), 4); assert.equal(p.referenceProgress[0].status, 'unknown');
+  assert.match(p.referenceProgress[0].reason, /公式実績の算入を保留/);
+});
+
+test('H36 scope boundary: H43 unknown ordinary still holds independently known official S2 allocation', () => {
+  const x = fixture(); x.row.earnedCreditsTotal = null;
+  const facts = deriveOfficialGraduationFacts([x.row], [], x.f, x.scope, x.profile);
+  assert.equal(facts.facts[0].schoolingEvidence.credits, 2); assert.equal(facts.allocations.length, 0);
+  const p = h36Progress(x, { selection: 'not_selected' });
+  assert.deepEqual(h36ReferenceValues(p, 'schooling').slice(0, 4), [null, 30, 'unknown', 'unknown']);
 });

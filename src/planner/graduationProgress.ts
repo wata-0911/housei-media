@@ -1021,14 +1021,13 @@ function publicCourseCard(publicCourses: PublicCourse[], catalog: PlannerCatalog
   }] };
 }
 
-function referencePrerequisiteReason(profile: GraduationProfile, program: { department: string | null }, thesisSelection: ThesisSelection): string | null {
+function referencePrerequisiteReason(profile: GraduationProfile): string | null {
   const credits = profile.recognizedCredits as Partial<GraduationProfile['recognizedCredits']>;
   if (credits.general && credits.foreignLanguage && credits.physicalEducation && credits.professionalCourses && graduationProfileValidationError(profile)) return '認定単位の入力を確認してください。異常な認定値は全体参考進捗に算入しません。';
   if (profile.curriculumApplicability === 'unknown') return '適用課程が未確認のため、2026年度の必要単位を適用できません。';
   if (profile.curriculumApplicability === 'legacy_or_transition') return '旧課程・経過措置では2026年度の必要単位を適用しません。';
   if (profile.admissionType === 'unknown') return '入学区分が未入力のため、個別の認定単位を扱えません。';
   if (['transfer_second_year', 'transfer_third_year', 'other_transfer', 'hosei_internal_transfer'].includes(profile.admissionType) && !hasCreditBearingRecognition(profile.recognizedCredits)) return '編入学の認定単位合計または公式の個別認定結果が未入力です。0としては扱いません。';
-  if (program.department === '法律学科' && thesisSelection === 'undecided') return '法学部の卒業論文の選択が未定のため、124/128単位を確定できません。';
   return null;
 }
 
@@ -1128,8 +1127,12 @@ function countedSchoolingCredits(items: PlannerItem[], offerings: Map<string, Of
 }
 
 function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], program: { department: string | null }, profile: GraduationProfile, thesisSelection: ThesisSelection): ReferenceProgress[] {
-  const prerequisiteReason = referencePrerequisiteReason(profile, program, thesisSelection);
-  const target = prerequisiteReason ? null : program.department === '法律学科' && thesisSelection === 'not_selected'
+  const prerequisiteReason = referencePrerequisiteReason(profile);
+  // H36: optional law thesis selection holds the overall target/evaluation,
+  // not known earned quantities or the independent global schooling target.
+  const overallReason = prerequisiteReason ?? (program.department === '法律学科' && thesisSelection === 'undecided'
+    ? '法学部の卒業論文の選択が未定のため、124/128単位を確定できません。' : null);
+  const target = overallReason ? null : program.department === '法律学科' && thesisSelection === 'not_selected'
     ? 124 + (thesisCreditsForDepartment(program.department) ?? 0) : 124;
   const creditBearingRoute = profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && profile.admissionType !== 'bachelor_admission';
   const detailedRecognized = recognizedCreditBreakdownTotal(profile.recognizedCredits);
@@ -1143,14 +1146,14 @@ function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[
   const schoolingReason = prerequisiteReason ?? (profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && schoolingRecognized === null
     ? '編入学の認定スクーリング相当単位が未入力です。0としては扱いません。'
     : schooling.uncertain ? '一部の修得済み科目はスクーリング算入先を一意に確認できないため、含めていません。' : null);
-  const bachelor = profile.admissionType === 'bachelor_admission' && prerequisiteReason === null;
+  const bachelor = profile.admissionType === 'bachelor_admission' && overallReason === null;
   const exemptionCredits = bachelor ? 42 : null;
   const make = (id: ReferenceProgress['id'], label: string, earned: number | null, referenceTarget: number | null, recognizedCredits: number | null, reason: string | null, exemptions: number | null = null): ReferenceProgress => ({
     id, label, earned, target: referenceTarget, recognizedCredits, exemptionCredits: exemptions, status: reason ? 'unknown' : 'partial', coverageStatus: reason ? 'unknown' : 'partial', reason,
     unknownReasonCategory: reason ? classifyUnknownReason(reason) : null, sourceRefs: sourcesForGraduationCard(id),
   });
   return [
-    make('overall-reference-progress', bachelor ? '卒業対象単位（参考）' : '全体所要単位（参考）', prerequisiteReason ? null : overallEarned, bachelor && target !== null ? target - 42 : target, recognizedTotal, prerequisiteReason, exemptionCredits),
+    make('overall-reference-progress', bachelor ? '卒業対象単位（参考）' : '全体所要単位（参考）', prerequisiteReason ? null : overallEarned, bachelor && target !== null ? target - 42 : target, recognizedTotal, overallReason, exemptionCredits),
     make('schooling-reference-progress', 'スクーリング（参考）', prerequisiteReason || schoolingRecognized === null ? null : schooling.credits + schoolingRecognized, prerequisiteReason ? null : 30, schoolingRecognized, schoolingReason),
   ];
 }
