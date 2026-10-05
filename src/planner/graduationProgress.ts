@@ -23,6 +23,7 @@ import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImpo
 import { importedGraduationNotices, type ImportedGraduationNotice } from './importedGraduationNotices';
 import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
 import { deriveOfficialGraduationFacts, officialFactCreditState, type OfficialAllocationInput } from './officialGraduationFacts';
+import { unresolvedOfficialImpact, officialImpactsCard, officialImpactsRequirement, type UnresolvedOfficialImpact } from './unresolvedOfficialImpact';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -192,6 +193,7 @@ function evaluateStructured(
   eligibleMappings: (offering: Offering) => Mapping[],
   impact: UnresolvedEarnedImpact,
   official: OfficialAllocationInput[],
+  officialImpact: UnresolvedOfficialImpact,
 ): RequirementProgress {
   if (!conditionIsSafe(requirement)) return unknown(requirement, '条件または例外を安全に自動評価できません');
   if (!targetIsClear(requirement)) return unknown(requirement, '対象集合を一意に特定できません');
@@ -211,7 +213,8 @@ function evaluateStructured(
   const officialMatched = official.filter(a => mappingMatches(a.mapping, requirement)
     && (names === null || names.includes(a.fact.canonicalName ?? '')));
   const affected = impactsRequirement(impact, requirement, mappingMatches, targetMappingIds);
-  if (!affected && targetMappingIds !== null && targetMappingIds.size === 0 && officialMatched.length === 0) return unknown(requirement, '対象科目のmappingを一意に特定できません');
+  const officialTargetKnown = !officialImpact.globalUnknown && officialImpactsRequirement(officialImpact, requirement);
+  if (!affected && !officialTargetKnown && targetMappingIds !== null && targetMappingIds.size === 0 && officialMatched.length === 0) return unknown(requirement, '対象科目のmappingを一意に特定できません');
 
   const matched = items.flatMap(item => {
     const offering = offerings.get(item.offeringId);
@@ -1263,7 +1266,10 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const heldFacts = official.facts.filter(f => f.allocation.kind === 'unknown'
     && !officialFactCreditState(f).allZero);
   const importedWarnings = importedGraduationNotices(official, importedCourseAchievements, importedStudyRecords);
-  const officialUnknown = heldFacts.length > 0 || importedStudyRecords.some(record => !importedCourseAchievements.some(row => row.id === record.sourceCourseId));
+  const hasOrphanRecords = importedStudyRecords.some(record => !importedCourseAchievements.some(row => row.id === record.sourceCourseId));
+  // H42/H43 intentionally retain the broader unresolved-official source guard.
+  const officialUnknown = heldFacts.length > 0 || hasOrphanRecords;
+  const officialImpact = unresolvedOfficialImpact(official.facts, hasOrphanRecords, catalog, scopeId, profile);
   const identity = (offering: Offering | undefined) => offering?.courseId ? `course:${offering.courseId}` : offering ? `offering:${offering.id}` : null;
   const existingCourseIds = new Set(items.map(item => identity(catalogOfferings.get(item.offeringId))).filter((id): id is string => id !== null));
   const recognizedItems = (profile.recognizedCredits.professionalCourses ?? []).flatMap(course => {
@@ -1288,7 +1294,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     const condition = thesisCondition(requirement, currentSelection);
     if (condition === 'inactive') return [];
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
-      return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, impact, official.allocations)];
+      return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, impact, official.allocations, officialImpact)];
     });
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
@@ -1336,11 +1342,21 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   if (officialUnknown) {
     for (const row of [...requirements, ...cards]) {
       if (row.ruleType === 'thesis_progress') continue;
+      const requirement = catalog.requirements.find(r => r.id === row.requirementId);
+      const affected = requirement?.status === 'structured'
+        ? officialImpactsRequirement(officialImpact, requirement)
+        : officialImpactsCard(officialImpact, row.requirementId);
+      if (!affected) continue;
       row.status = 'unknown'; row.reason = [row.reason, officialReason].filter(Boolean).join('。');
     }
   }
   const schoolingUnknown = officialUnknown || official.allocations.some(a => !officialFactCreditState(a.fact).allZero && a.schoolingCredits === null)
     || official.facts.some(f => !officialFactCreditState(f).allZero && f.allocation.kind === 'unknown' && f.schoolingEvidence.credits !== 0);
+  // The former global official hold also held schooling-specific structured rows.
+  // Preserve that H42 evaluation uncertainty under its schooling reason.
+  if (officialUnknown && !officialImpact.globalUnknown) for (const row of requirements.filter(r => r.ruleType === 'min_schooling_credits')) {
+    row.status = 'unknown'; row.reason = [row.reason, '公式実績のスクーリング算入条件が未確認です'].filter(Boolean).join('。');
+  }
   if (schoolingUnknown) for (const row of cards.filter(c => c.requirementId === 'group-foreign' || c.requirementId === 'professional-law-schooling')) {
     row.status = 'unknown'; row.reason = [row.reason, '公式実績のスクーリング算入条件が未確認です'].filter(Boolean).join('。');
   }
@@ -1368,7 +1384,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       row.status = 'unknown'; row.coverageStatus = 'unknown';
       row.reason = [row.reason, row.id === 'overall-reference-progress' ? officialReason : '公式実績のスクーリング証拠に未確認の算入条件があります'].filter(Boolean).join('。');
       row.unknownReasonCategory = classifyUnknownReason(row.reason);
-      if (row.earned === 0) row.earned = null;
+      if (row.earned === 0 && (row.id === 'schooling-reference-progress' || officialImpact.globalUnknown)) row.earned = null;
     }
   }
   const reasons = new Map<string, { count: number; labels: string[] }>();

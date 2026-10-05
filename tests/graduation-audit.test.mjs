@@ -13,6 +13,7 @@ import { deriveImportedAchievements } from '../src/planner/importedAchievementCa
 import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
 import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
+import { unresolvedOfficialImpact, officialImpactsRequirement } from '../src/planner/unresolvedOfficialImpact.ts';
 import { initialState } from '../src/planner/storage.ts';
 import { setThesisProgressForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
 import { graduationProfileValidationError } from '../src/planner/graduationProfile.ts';
@@ -172,7 +173,7 @@ test('audit: null and zero official totals suppress earned duplicates without in
   for (const credits of [null, 0]) {
     x.row.earnedCreditsTotal = credits;
     assert.deepEqual(derive(x, [item(x.offering, 'earned')]).plannerItems, []);
-    assert.equal(overall(run(x, [item(x.offering, 'earned')])), credits === null ? null : 0);
+    assert.equal(overall(run(x, [item(x.offering, 'earned')])), 0, 'H41 retains the resolved lower bound, not a zero official aggregate');
     assert.equal(run(x).referenceProgress[0].status, credits === null ? 'unknown' : 'partial');
   }
 });
@@ -256,7 +257,7 @@ test('official facts: conflicting official rows preserve every aggregate without
   assert.deepEqual(result.facts[0].allocation, { kind: 'unknown', reason: 'duplicate_official_rows' });
   assert.deepEqual(deriveOfficialGraduationFacts([second, x.row], [], x.f, x.scope), result);
   const progress = calculateGraduationProgress([item(x.offering, 'earned')], x.f, x.scope, [], 'not_selected', [], [x.row, second], x.profile);
-  assert.equal(overall(progress), null); assert.match(progress.importedWarnings[0].reason, /duplicate_official_rows/);
+  assert.equal(overall(progress), 0); assert.equal(progress.referenceProgress[0].status, 'unknown'); assert.match(progress.importedWarnings[0].reason, /duplicate_official_rows/);
   assert.deepEqual(deriveOfficialGraduationFacts([x.row, x.row], [], x.f, x.scope), deriveOfficialGraduationFacts([x.row], [], x.f, x.scope));
 });
 
@@ -268,7 +269,8 @@ for (const change of ['null_total', 'composition_mismatch', 'course_mapping_mism
     if (change === 'course_mapping_mismatch') x.mapping.curriculumCredits = 2;
     assert.deepEqual(facts(x).facts[0].allocation, { kind: 'unknown', reason: 'metadata_unknown' });
     assert.equal(facts(x).facts[0].earnedCreditsTotal, x.row.earnedCreditsTotal);
-    assert.equal(overall(run(x)), null);
+    assert.equal(overall(run(x)), change === 'course_mapping_mismatch' ? null : 0);
+    assert.equal(run(x).referenceProgress[0].status, 'unknown');
   });
 }
 
@@ -298,7 +300,9 @@ for (const [department, name] of [['法律学科', '法律学演習'], ['法律�
     const x = fixture(department); x.course.canonicalName = name;
     assert.deepEqual(facts(x).facts[0].allocation, { kind: 'unknown', reason: 'special_rule_evidence_required' });
     assert.equal(facts(x).facts[0].schoolingEvidence.credits, 2);
-    assert.equal(overall(run(x)), null);
+    const safeClosure = ['日本史概説', '現地研究', '地誌学特講', '人文地理学演習', '自然地理学演習'].includes(name);
+    assert.equal(overall(run(x)), safeClosure ? 0 : null);
+    assert.equal(run(x).referenceProgress[0].status, 'unknown');
   });
 }
 
@@ -457,7 +461,7 @@ test('import UX: null official credit is unknown, never treated as explicit zero
   assert.equal(notices.length, 1); assert.equal(notices[0].kind, 'credits_unknown');
   assert.match(notices[0].reason, /metadata_unknown/);
   assert.equal(facts(x).facts[0].earnedCreditsTotal, null);
-  assert.equal(overall(run(x)), null);
+  assert.equal(overall(run(x)), 0); assert.equal(run(x).referenceProgress[0].status, 'unknown');
 });
 test('import UX: schooling-only confirmation retains official allocation and ordinary credit', () => {
   const x = fixture(); x.row.schoolingCreditsTotal = null;
@@ -536,9 +540,9 @@ for (const values of [[null], [0, null], [null, null], [4], [0, 4], [4, 4], [4, 
     const result = deriveOfficialGraduationFacts(rows, [], x.f, x.scope, x.profile);
     const progress = calculateCreditRows(x, rows);
     assert.deepEqual(progress.importedWarnings.map(notice => notice.kind), [values.some(value => value !== null && value > 0) ? 'allocation_held' : 'credits_unknown']);
-    assert.equal(overall(progress), null);
+    assert.equal(overall(progress), values.length === 1 && values[0] === 4 ? null : 0);
     assert.equal(professional(progress).status, 'unknown');
-    assert.ok(progress.requirements.filter(row => row.ruleType !== 'thesis_progress').every(row => row.status === 'unknown'));
+    assert.equal(progress.cards.find(c => c.requirementId === 'group-general').status, values.length === 1 && values[0] === 4 ? 'unknown' : 'unsatisfied');
     assert.equal(creditReference(progress, 'overall-reference-progress').status, 'unknown');
     assert.equal(creditReference(progress, 'schooling-reference-progress').status, 'unknown');
     assert.equal(creditReference(progress, 'schooling-reference-progress').earned, null);
@@ -636,7 +640,7 @@ test('media evidence: earned null cannot become credits from marker or component
   const result = mediaFacts(x, records), progress = run(x, [], records);
   assert.equal(result.allocations.length, 0); assert.equal(result.facts[0].schoolingEvidence.credits, null);
   assert.equal(result.facts[0].methodEvidence.allEarnedCreditsAreMedia, false);
-  assert.equal(overall(progress), null); assert.equal(schoolingReference(progress), null);
+  assert.equal(overall(progress), 0); assert.equal(progress.referenceProgress[0].status, 'unknown'); assert.equal(schoolingReference(progress), null);
   assert.deepEqual(progress.importedWarnings.map(n => n.kind), ['credits_unknown']);
 });
 
@@ -793,7 +797,7 @@ for (const name of ['データサイエンス入門A', 'データサイエンス
     for (const program of x.f.programs.filter(p => !p.isCommon)) {
       x.scope = program.scopeId;
       assert.equal(mediaFacts(x, []).allocations.length, 0);
-      assert.equal(overall(run(x)), null); assert.equal(schoolingReference(run(x)), null);
+      assert.equal(overall(run(x)), 0); assert.equal(run(x).referenceProgress[0].status, 'unknown'); assert.equal(schoolingReference(run(x)), null);
       const records = [mediaRecord(x)], result = mediaFacts(x, records), progress = run(x, [], records);
       assert.equal(result.allocations.length, 1); assert.equal(result.allocations[0].credits, 2);
       const lawExclusion = program.department === '法律学科' && name !== '生物学2';
@@ -874,7 +878,8 @@ for (const [label, earned, schooling, expected, warnings, evidenceSource] of [
   assert.equal(fact.diagnostics.includes('media_schooling_credits_conflict'), label === 'C');
   assert.equal(fact.diagnostics.includes('schooling_evidence_requires_confirmation'), ['C', 'F'].includes(label));
   assert.deepEqual(progress.importedWarnings.map(n => n.kind), warnings);
-  assert.equal(overall(progress), earned); assert.equal(schoolingReference(progress), expected);
+  assert.equal(overall(progress), earned ?? 0); assert.equal(schoolingReference(progress), expected);
+  if (earned === null) assert.equal(progress.referenceProgress[0].status, 'unknown');
   assert.deepEqual({ x, records, rows }, snapshot);
 });
 
@@ -2381,7 +2386,8 @@ test('H37 H41/H42/H43 official holds and schooling quantities retain their exist
   x.rows[1].earnedCreditsTotal = null; x.rows[1].schoolingCreditsTotal = 2;
   x.profile.recognizedCredits.general.humanities = { mode: 'unknown', credits: null };
   const p = x.progress(); assertH37(p, 4); assert.equal(overall(p), 4);
-  assert.equal(h31Card(p, 'group-foreign').status, 'unknown'); assert.equal(h31Card(p, 'group-physical').status, 'unknown');
+  assert.equal(h31Card(p, 'group-foreign').status, 'unknown'); assert.equal(h31Card(p, 'group-physical').status, 'unsatisfied');
+  assert.doesNotMatch(h31Card(p, 'group-physical').reason ?? '', /公式実績の算入を保留/);
   assert.match(p.referenceProgress[0].reason, /一般教育の認定情報が未確認.*公式実績の算入を保留/);
   assert.deepEqual([p.referenceProgress[1].earned, p.referenceProgress[1].target, p.referenceProgress[1].status], [null, 30, 'unknown']);
   assert.match(p.referenceProgress[1].reason, /公式実績のスクーリング証拠/);
@@ -2431,4 +2437,311 @@ for (const admission of ['other_transfer', 'first_year']) test(`H37 total24 with
   const p = x.progress();
   assert.deepEqual([h37General(p).earned, h37General(p).status, h37General(p).reason], [24, 'unsatisfied', null]);
   assert.deepEqual([overall(p), p.referenceProgress[0].status], [24, 'partial']);
+});
+
+// H41: official candidate edges describe uncertainty, never earned allocations.
+function h41Fixture(department = '法律学科') {
+  const x = h31Fixture(department); x.items = [];
+  x.rows = []; x.records = [];
+  x.official = (entry, earned = null, schooling = 0) => ({ ...x.row,
+    id: `h41-${entry.course.id}`, fingerprint: `h41-${entry.course.id}`, rawName: entry.course.canonicalName,
+    curriculumCourseId: entry.course.id, candidateCurriculumCourseIds: [entry.course.id], courseId: null,
+    earnedCreditsTotal: earned, compositionCredits: entry.course.curriculumCredits, schoolingCreditsTotal: schooling });
+  x.progress = (input = x.build(), rows = x.rows, items = x.items) => calculateGraduationProgress(items, input, x.scope, [], 'not_selected', x.records, rows, x.profile);
+  x.requirement = (id, target, conditions = null, ruleType = 'min_credits') => {
+    const rule = { ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'),
+      id: `41414141-4141-4141-8141-${x.f.requirements.length.toString(16).padStart(12, '0')}`, ruleId: id, scopeId: x.scope, value: 12, target, conditions, ruleType };
+    x.f.requirements.push(rule); return rule;
+  };
+  return x;
+}
+const h41Reason = /公式実績の算入を保留/;
+const h41Affected = p => p.cards.filter(c => h41Reason.test(c.reason ?? '')).map(c => c.requirementId).sort();
+function h41Assert(x, affected, p = x.progress(), baseline = x.progress(undefined, [])) {
+  affected = affected.filter(id => baseline.cards.some(c => c.requirementId === id));
+  assert.deepEqual(h41Affected(p), [...affected].sort());
+  for (const id of affected) {
+    const before = h31Card(baseline, id), after = h31Card(p, id);
+    assert.equal(after.status, 'unknown', id); assert.equal(after.earned, before.earned, id);
+    assert.equal(after.target, before.target, id);
+  }
+  assert.equal(overall(p), overall(baseline));
+  assert.equal(p.referenceProgress[0].status, 'unknown');
+  assert.equal(p.referenceProgress[0].target, baseline.referenceProgress[0].target);
+  assert.match(p.referenceProgress[0].reason, h41Reason);
+}
+for (const [category, field, name, id] of [
+  ['一般教育', '人文', '制度人文', 'group-general'], ['一般教育', '社会', '制度社会', 'group-general'],
+  ['一般教育', '自然', '制度自然', 'group-general'], ['外国語', '英語', '英語１', 'group-foreign'],
+  ['保健体育', null, '健康・スポーツ科学概論', 'group-physical'],
+]) test(`H41 common ${category}/${field}: only intersecting ordinary bucket gets official reason`, () => {
+  const x = h41Fixture(); const held = x.add('h41-common', category, field, '選択必修', 4, 'correspondence', name);
+  x.rows = [x.official(held)]; h41Assert(x, [id]);
+  const p = x.progress();
+  assert.equal(h31Card(p, 'group-foreign').status, 'unknown'); // H42 remains broad.
+  assert.match(h31Card(p, 'professional-law-schooling').reason, /公式実績のスクーリング/);
+  assert.equal(p.referenceProgress[1].earned, null);
+});
+for (const [dept, prefix, types] of [
+  ['法律学科', 'law-', ['選択必修', '選択']], ['日本文学科', '', ['必修', '選択必修', '選択']],
+  ['史学科', 'history-', ['必修', 'スクーリング選択必修', '選択']],
+  ['地理学科', 'geography-', ['必修', 'スクーリング必修', '選択必修', '選択']],
+  ['経済学科', 'economics-', ['選択必修', '選択']], ['商業学科', 'commerce-', ['選択必修', '選択']],
+]) for (const type of types) test(`H41 professional ${dept}/${type}: bucket and total/overflow closure`, () => {
+  const x = h41Fixture(dept), held = x.add('h41-pro', '専門教育', null, type, 4, 'correspondence', '保留制度科目', x.scope);
+  x.rows = [x.official(held)];
+  const suffix = { 必修: 'required', 選択必修: 'required-elective', 選択: 'elective', スクーリング必修: 'schooling-required', スクーリング選択必修: 'schooling-required-elective' }[type];
+  const affected = [`professional-${prefix}${suffix}`];
+  if (type === '選択必修' && ['法律学科', '日本文学科', '地理学科'].includes(dept)) affected.push(`professional-${prefix}elective`);
+  if (dept !== '史学科') affected.push(`professional-${dept === '日本文学科' ? 'japanese-' : prefix}total`);
+  if (dept === '史学科' && type === 'スクーリング選択必修') affected.push('professional-history-elective', 'history-seminar-required-elective', 'history-seminar-elective');
+  h41Assert(x, affected);
+});
+test('H41 structured category/field/type/names and dependent totals intersect only institutional destinations', () => {
+  const x = h41Fixture(), held = x.add('h41-named', '専門教育', null, '選択必修', 4, 'correspondence', '制度上の保留科目', x.scope);
+  x.rows = [x.official(held), x.official(x, 4)];
+  const targets = [
+    ['h41-category', { curriculum_category: '専門教育' }, true],
+    ['h41-type', { curriculum_category: '専門教育', requirement_type: '選択必修' }, true],
+    ['h41-overflow', { curriculum_category: '専門教育', requirement_type: '選択' }, true],
+    ['h41-name', { course_name: held.course.canonicalName }, true],
+    ['h41-names', { course_names: ['別科目', held.course.canonicalName] }, true],
+    ['h41-other', { curriculum_category: '保健体育' }, false],
+    ['h41-field', { curriculum_category: '一般教育', curriculum_field: '自然' }, false],
+    ['h41-other-name', { course_name: x.course.canonicalName }, false],
+  ];
+  for (const row of targets) { const rule = x.requirement(row[0], row[1]); row.push(rule.id); }
+  const input = x.build(); input.offerings = []; input.curriculum.offeringRelations = [];
+  const p = x.progress(input), baseline = x.progress(input, [x.rows[1]]);
+  for (const [id, , affected, ruleId] of targets) {
+    const row = p.requirements.find(r => r.requirementId === ruleId), before = baseline.requirements.find(r => r.requirementId === ruleId);
+    assert.equal(h41Reason.test(row.reason ?? ''), affected, id);
+    if (!affected) assert.deepEqual(row, before, id);
+    else { assert.equal(row.status, 'unknown'); assert.equal(row.target, 12); assert.equal(row.earned, id.includes('name') ? 0 : before.earned); }
+  }
+  assert.equal(overall(p), 4);
+});
+test('H41 multiple safe Mapping candidates hold their union without allocating either budget', () => {
+  const x = h41Fixture(), general = x.add('h41-union', '一般教育', '自然', '選択必修');
+  const edge = { ...x.mapping, mappingId: '41414141-4141-4141-8141-000000000001' };
+  x.f.mappings.push(edge); general.course.mappingIds.push(edge.mappingId); general.course.scopeIds.push(x.scope);
+  x.rows = [x.official(general, 4)];
+  h41Assert(x, ['group-general', 'professional-law-required-elective', 'professional-law-elective', 'professional-law-total']);
+  const facts = deriveOfficialGraduationFacts(x.rows, [], x.f, x.scope, x.profile);
+  assert.equal(facts.facts[0].allocation.reason, 'mapping_conflict'); assert.equal(facts.allocations.length, 0);
+  x.f.mappings.reverse(); general.course.mappingIds.reverse(); x.f.curriculum.courses.reverse();
+  assert.equal(overall(x.progress()), 0);
+});
+for (const mode of ['missing-edge', 'missing-all', 'bad-scope', 'bad-category', 'bad-type', 'bad-field', 'bad-flag', 'bad-credit', 'credit-mismatch', 'duplicate-owner', 'duplicate-map', 'stale-source', 'legacy-profile', 'unresolved-identity']) {
+  test(`H41 unsafe ${mode}: global fallback and known4 survive`, () => {
+    const x = h41Fixture(), held = x.add('h41-unsafe', '専門教育', null, '選択', 4, 'correspondence', '保留科目', x.scope);
+    x.rows = [x.official(x, 4), x.official(held)]; const input = x.build();
+    const m = input.mappings.find(m => m.mappingId === held.mapping.mappingId), c = input.curriculum.courses.find(c => c.id === held.course.id);
+    if (mode === 'missing-edge') c.mappingIds.push('missing');
+    if (mode === 'missing-all') c.mappingIds = ['missing'];
+    if (mode === 'bad-scope') { m.scopeId = 'invalid'; x.rows.push({ ...x.rows[1], id: 'duplicate' }); }
+    if (mode === 'bad-category') m.category = '不明';
+    if (mode === 'bad-type') m.requirementType = '必修';
+    if (mode === 'bad-field') m.field = 123;
+    if (mode === 'bad-flag') m.schoolingOnly = 'unknown';
+    if (mode === 'bad-credit') m.curriculumCredits = -1;
+    if (mode === 'credit-mismatch') m.curriculumCredits = null;
+    if (mode === 'duplicate-owner') input.curriculum.courses.push({ ...c, id: 'another-owner' });
+    if (mode === 'duplicate-map') input.mappings.push({ ...m });
+    if (mode === 'stale-source') input.curriculum.source = 'official_curriculum_mappings_2027';
+    if (mode === 'legacy-profile') x.profile.curriculumApplicability = 'legacy_or_transition';
+    if (mode === 'unresolved-identity') { x.rows[1].curriculumCourseId = null; x.rows[1].curriculumMatch = 'unmatched'; }
+    input.offerings = []; input.curriculum.offeringRelations = [];
+    const p = x.progress(input);
+    for (const c of p.cards.filter(c => c.ruleType !== 'thesis_progress')) assert.match(c.reason, h41Reason, c.requirementId);
+    // Legacy profile has its independent reference-wide guard and allocation hold.
+    assert.equal(overall(p), mode === 'legacy-profile' ? null : 4);
+    assert.equal(p.referenceProgress[0].status, 'unknown');
+  });
+}
+for (const values of [[4, 4], [4, 8], [null, 4], [null, null]]) test(`H41 duplicate ${values}: exact destination survives unresolved amount`, () => {
+  const x = h41Fixture(), held = x.add('h41-duplicate', '専門教育', null, '選択', 4, 'correspondence', '重複科目', x.scope);
+  x.rows = values.map((value, i) => ({ ...x.official(held, value), id: `h41-duplicate-${i}` }));
+  const f = deriveOfficialGraduationFacts(x.rows, [], x.f, x.scope, x.profile);
+  assert.equal(f.facts[0].earnedCreditsTotal, null); assert.equal(f.allocations.length, 0);
+  h41Assert(x, ['professional-law-elective', 'professional-law-total']);
+});
+for (const mode of ['amount-null', 'institutional-credits-null', 'row-composition-mismatch']) test(`H41 metadata ${mode}: unknown amount does not erase safe destination`, () => {
+  const x = h41Fixture(); x.rows = [x.official(x, mode === 'amount-null' ? null : 4)];
+  if (mode === 'institutional-credits-null') { x.course.curriculumCredits = null; x.mapping.curriculumCredits = null; }
+  if (mode === 'row-composition-mismatch') x.rows[0].compositionCredits = 9;
+  h41Assert(x, ['professional-law-required-elective', 'professional-law-elective', 'professional-law-total']);
+});
+test('H41 orphan: raw name, annual exact match and component40 cannot restore official authority', () => {
+  const x = h41Fixture(); x.rows = [x.official(x, 4)];
+  x.records = [{ id: 'orphan', sourceCourseId: 'missing', source: 'hosei_import', rawName: x.course.canonicalName,
+    method: 'schooling', credits: 40, offeringId: x.offering.id, earnedCreditsTotal: 40, schoolingCreditsTotal: 40 }];
+  const p = x.progress(); assert.equal(overall(p), 4);
+  for (const c of p.cards.filter(c => c.ruleType !== 'thesis_progress')) assert.match(c.reason, h41Reason);
+  x.rows = []; assert.equal(overall(x.progress()), null, 'H40 quantity uncertainty remains');
+});
+for (const mode of ['zero', 'zero-duplicate', 'zero-conflict', 'outside']) test(`H41 ${mode}: no new current hold`, () => {
+  const x = h41Fixture(); x.rows = [x.official(x, 0)];
+  if (mode === 'zero-duplicate') x.rows.push({ ...x.rows[0], id: 'other-zero' });
+  if (mode === 'zero-conflict') x.course.mappingIds.push('missing');
+  if (mode === 'outside') {
+    x.mapping.scopeId = catalog.programs.find(p => p.department === '経済学科').scopeId;
+    x.course.scopeIds = [x.mapping.scopeId]; x.rows[0].earnedCreditsTotal = 4;
+  }
+  const input = x.f; input.offerings = []; input.curriculum.offeringRelations = [];
+  const p = x.progress(input), baseline = x.progress(input, []);
+  assert.deepEqual(p.cards, baseline.cards); assert.deepEqual(p.requirements, baseline.requirements);
+  assert.deepEqual(p.referenceProgress, baseline.referenceProgress);
+});
+test('H41 known elective12 stays12, overall12/target128 unknown, held budgets excluded', () => {
+  const x = h41Fixture();
+  for (let i = 0; i < 4; i++) {
+    const entry = x.add(`elective${i}`, '専門教育', null, '選択', 4, 'correspondence', `制度選択${i}`, x.scope);
+    x.rows.push(x.official(entry, i === 3 ? null : 4));
+  }
+  const p = x.progress(), c = h31Card(p, 'professional-law-elective');
+  assert.equal(c.earned, 12); assert.equal(c.status, 'unknown');
+  assert.deepEqual([overall(p), p.referenceProgress[0].target, p.referenceProgress[0].status], [12, 128, 'unknown']);
+  assert.equal(p.importedContributionCount, 3);
+});
+test('H41/H42/H43: unrelated ordinary reason disappears but broad schooling status and held S2 remain', () => {
+  const x = h41Fixture(); x.rows = [x.official(x, null, 2)];
+  const p = x.progress();
+  assert.equal(h31Card(p, 'group-general').status, 'unsatisfied');
+  assert.equal(h31Card(p, 'group-physical').status, 'unsatisfied');
+  for (const id of ['group-foreign', 'professional-law-schooling']) {
+    const c = h31Card(p, id); assert.equal(c.status, 'unknown');
+    assert.match(c.reason, /公式実績のスクーリング算入条件/); assert.doesNotMatch(c.reason, h41Reason);
+  }
+  const f = deriveOfficialGraduationFacts(x.rows, [], x.f, x.scope, x.profile);
+  assert.equal(f.facts[0].schoolingEvidence.credits, 2); assert.equal(f.allocations.length, 0);
+  assert.equal(p.referenceProgress[1].earned, null); assert.equal(p.referenceProgress[1].status, 'unknown');
+  assert.equal(overall(p), 0); assert.equal(p.referenceProgress[0].status, 'unknown');
+});
+test('H41/H31 coexist independently with existing reason priority and no candidate90 or held credits', () => {
+  const x = h41Fixture(), common = x.add('h41-h31', '一般教育', '自然', '選択必修');
+  x.set(common, x); x.items = [item(x.candidate, 'earned')]; x.rows = [x.official(x)];
+  const p = x.progress();
+  assert.match(h31Card(p, 'group-general').reason, /対応関係を確認中/);
+  assert.doesNotMatch(h31Card(p, 'group-general').reason, h41Reason);
+  assert.match(h31Card(p, 'professional-law-total').reason, /対応関係を確認中.*公式実績の算入を保留/);
+  assert.match(p.referenceProgress[0].reason, /対応関係を確認中.*公式実績の算入を保留/);
+  assert.equal(overall(p), 0);
+});
+for (const [dept, name] of [['日本文学科', '書道実技'], ['史学科', '歴史資料学'], ['法律学科', '法律学演習'], ['地理学科', '現地研究（不明）'], ['法律学科', '公開科目'], ['法律学科', '旧課程科目']]) {
+  test(`H41 special ${name}: unknown dependency stays globally held without changing family allocation`, () => {
+    const x = h41Fixture(dept), held = x.add('special', '専門教育', null, '選択', 4, 'correspondence', name, x.scope);
+    x.rows = [x.official(held, 4)]; const p = x.progress();
+    assert.match(h31Card(p, 'group-general').reason, h41Reason); assert.equal(overall(p), null);
+    assert.equal(deriveOfficialGraduationFacts(x.rows, [], x.f, x.scope, x.profile).allocations.length, 0);
+  });
+}
+for (const [name, types, field] of [
+  ['現地研究', ['schooling-required', 'elective'], null],
+  ['地誌学特講', ['required-elective', 'elective'], '地誌・その他の分野'],
+  ['人文地理学演習', ['schooling-required', 'required-elective', 'elective'], '人文地理の分野'],
+  ['自然地理学演習', ['schooling-required', 'required-elective', 'elective'], '自然地理の分野'],
+  ['人文地理学特講', ['elective'], null],
+]) test(`H41 geography ${name}: existing staged destinations hold without new special allocation`, () => {
+  const x = h41Fixture('地理学科'), held = x.add('transfer', '専門教育', field, '選択', 4, 'schooling', name, x.scope);
+  x.rows = [x.official(held, 4)];
+  h41Assert(x, [...types.map(type => `professional-geography-${type}`), 'professional-geography-total']);
+  assert.equal(deriveOfficialGraduationFacts(x.rows, [], x.f, x.scope, x.profile).allocations.length, 0);
+});
+test('H41 history overview holds required, schooling-required-elective, elective and seminar transfer dependencies', () => {
+  const x = h41Fixture('史学科'), held = x.add('overview', '専門教育', '日本史の分野', '必修', 4, 'schooling', '日本史概説', x.scope);
+  x.rows = [x.official(held, 4)];
+  h41Assert(x, ['professional-history-required', 'professional-history-schooling-required-elective', 'professional-history-elective', 'history-seminar-required-elective', 'history-seminar-elective']);
+});
+test('H41 official authority and immutable inputs survive removed Offerings, forged display names and component40', () => {
+  const x = h41Fixture(), common = x.add('general', '一般教育', '自然', '選択必修');
+  x.rows = [x.official(x, 4), x.official(common)];
+  x.records = [{ id: 'component', sourceCourseId: x.rows[1].id, source: 'hosei_import', method: 'schooling', credits: 40, rawName: '専門教育へ偽装' }];
+  const input = x.build(); input.offerings = []; input.curriculum.offeringRelations = [];
+  const previous = x.progress(input), snapshot = structuredClone({ input, rows: x.rows, records: x.records, profile: x.profile, previous });
+  deepFreeze(input); deepFreeze(x.rows); deepFreeze(x.records); deepFreeze(x.profile); deepFreeze(previous);
+  const next = x.progress(input);
+  assert.deepEqual({ input, rows: x.rows, records: x.records, profile: x.profile, previous }, snapshot);
+  assert.deepEqual(next, previous); assert.equal(overall(next), 4);
+  assert.deepEqual(h41Affected(next), ['group-general']);
+  assert.equal(initialState().schemaVersion, 22); assert.equal(next.graduationCheckComplete, false);
+  assert.equal(input.metadata.graduationCheckComplete, false); assert.equal(input.metadata.sourceLinksReverified, false);
+});
+
+test('H41 structured field intersection distinguishes natural from humanities while holding the category total', () => {
+  const x = h41Fixture(), held = x.add('natural-target', '一般教育', '自然', '選択必修');
+  x.rows = [x.official(held)];
+  const natural = x.requirement('natural', { curriculum_category: '一般教育', curriculum_field: '自然' });
+  const humanities = x.requirement('humanities', { curriculum_category: '一般教育', curriculum_field: '人文' });
+  const total = x.requirement('general-total', { curriculum_category: '一般教育' });
+  const p = x.progress(), baseline = x.progress(undefined, []);
+  for (const rule of [natural, total]) assert.match(p.requirements.find(r => r.requirementId === rule.id).reason, h41Reason);
+  assert.deepEqual(p.requirements.find(r => r.requirementId === humanities.id), baseline.requirements.find(r => r.requirementId === humanities.id));
+});
+test('H41 method uncertainty uses no annual method; unsupported condition reason keeps priority and H42 structured S stays broad', () => {
+  const x = h41Fixture(); x.rows = [x.official(x)];
+  const methodRules = ['schooling', 'correspondence'].map(method => x.requirement(`method-${method}`, { curriculum_category: '専門教育' }, { method }));
+  const unrelated = x.requirement('unrelated-method', { curriculum_category: '一般教育' }, { method: 'schooling' });
+  const schooling = x.requirement('unrelated-schooling', { curriculum_category: '保健体育' }, null, 'min_schooling_credits');
+  const input = x.build(), p = x.progress(input);
+  const facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile).facts;
+  const impact = unresolvedOfficialImpact(facts, false, input, x.scope, x.profile);
+  for (const rule of methodRules) {
+    assert.equal(officialImpactsRequirement(impact, rule), true);
+    assert.match(p.requirements.find(r => r.requirementId === rule.id).reason, /条件または例外.*公式実績の算入を保留/);
+  }
+  assert.equal(officialImpactsRequirement(impact, unrelated), false);
+  const schoolRow = p.requirements.find(r => r.requirementId === schooling.id);
+  assert.equal(schoolRow.status, 'unknown'); assert.match(schoolRow.reason, /公式実績のスクーリング/); assert.doesNotMatch(schoolRow.reason, h41Reason);
+  input.offerings.forEach(o => { o.name = '偽の科目'; o.method = o.method === 'schooling' ? 'correspondence' : 'schooling'; o.credits = 99; });
+  assert.deepEqual(x.progress(input), p);
+});
+for (const mode of ['missing-candidate', 'extra-candidate', 'duplicate-candidate', 'stale-name', 'stale-course', 'stale-schema']) test(`H41 retained fact ${mode}: malformed metadata forces global fallback`, () => {
+  const x = h41Fixture(); x.rows = [x.official(x)];
+  const input = x.build(), facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile).facts;
+  if (mode === 'missing-candidate') facts[0].candidateMappingIds = [];
+  if (mode === 'extra-candidate') facts[0].candidateMappingIds.push('missing');
+  if (mode === 'duplicate-candidate') facts[0].candidateMappingIds.push(x.mapping.mappingId);
+  if (mode === 'stale-name') facts[0].canonicalName = '年次名から推定不可';
+  if (mode === 'stale-course') facts[0].curriculumCourseId = 'missing';
+  if (mode === 'stale-schema') input.curriculum.schemaVersion = 2;
+  const snapshot = structuredClone({ input, facts }); deepFreeze(input); deepFreeze(facts);
+  assert.equal(unresolvedOfficialImpact(facts, false, input, x.scope, x.profile).globalUnknown, true);
+  assert.deepEqual({ input, facts }, snapshot);
+});
+test('H41 valid outside edges and diagnostic scopeIds do not expand a current elective hold', () => {
+  const x = h41Fixture(), held = x.add('selected', '専門教育', null, '選択', 4, 'correspondence', '複数学科科目', x.scope);
+  const other = { ...held.mapping, mappingId: '41414141-4141-4141-8141-000000000099', scopeId: catalog.programs.find(p => p.department === '経済学科').scopeId };
+  x.f.mappings.push(other); held.course.mappingIds.push(other.mappingId); held.course.scopeIds.push(other.scopeId);
+  x.rows = [x.official(held)]; const input = x.build();
+  input.curriculum.courses.find(c => c.id === held.course.id).scopeIds = ['diagnostic-only'];
+  h41Assert(x, ['professional-law-elective', 'professional-law-total'], x.progress(input), x.progress(input, []));
+});
+for (const selection of ['selected', 'not_selected', 'undecided']) test(`H41/H36 law thesis ${selection}: known4, independent target and reason priority retained`, () => {
+  const x = h41Fixture(), held = x.add('held', '専門教育', null, '選択', 4, 'correspondence', '保留科目', x.scope);
+  x.rows = [x.official(x, 4), x.official(held)];
+  const p = calculateGraduationProgress([], x.build(), x.scope, [], selection, [], x.rows, x.profile);
+  assert.equal(overall(p), 4); assert.equal(p.referenceProgress[0].status, 'unknown');
+  assert.equal(p.referenceProgress[0].target, selection === 'undecided' ? null : selection === 'selected' ? 124 : 128);
+  if (selection === 'undecided') assert.match(p.referenceProgress[0].reason, /卒業論文の選択が未定.*公式実績の算入を保留/);
+});
+test('H41 geography and history structured dependencies include transferred fields and existing seminar identities', () => {
+  for (const dept of ['地理学科', '史学科']) {
+    const x = h41Fixture(dept), history = dept === '史学科';
+    const held = x.add('stage', '専門教育', null, history ? '必修' : '選択', 4, 'schooling', history ? '日本史概説' : '人文地理学演習', x.scope);
+    const rule = x.requirement('transferred', { curriculum_category: '専門教育', requirement_type: history ? '選択' : '選択必修',
+      curriculum_field: history ? '東洋史の分野' : '人文地理の分野', ...(history ? { course_name: '史学演習（東洋）2' } : {}) });
+    x.rows = [x.official(held, 4)]; const p = x.progress();
+    assert.match(p.requirements.find(r => r.requirementId === rule.id).reason, h41Reason);
+    assert.equal(overall(p), 0);
+  }
+});
+
+test('H41/H14 recognition overlap retains global fallback because cross-Course deduplication is unresolved', () => {
+  const x = h41Fixture(); x.rows = [x.official(x, 4)];
+  x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: null, credits: 4 }];
+  const input = x.build(), facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile).facts;
+  assert.ok(facts[0].diagnostics.includes('recognized_overlap'));
+  assert.equal(unresolvedOfficialImpact(facts, false, input, x.scope, x.profile).globalUnknown, true);
+  assert.match(h31Card(x.progress(input), 'group-general').reason, h41Reason);
 });
