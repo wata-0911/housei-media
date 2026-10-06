@@ -32,24 +32,27 @@ export function unresolvedSchoolingImpact(
     // is not a confirmed zero, even though the original source row says zero.
     if (fact.schoolingEvidence.credits === 0 && !fact.diagnostics.includes('media_schooling_credits_conflict')) continue;
     impact.globalReferenceUnknown = true;
-    const closure = allocation ? {
-      globalUnknown: !validOfficialImpactMapping(allocation.mapping, catalog),
-      candidates: [{ mapping: allocation.mapping, canonicalName: fact.canonicalName!, affectsHistorySeminar: false,
-        destinations: [{ category: allocation.mapping.category, field: allocation.mapping.field, requirementType: allocation.mapping.requirementType }] }],
-    } : unresolvedOfficialImpact([fact], false, catalog, scopeId, profile);
-    if (closure.globalUnknown) {
+    const mappings = allocation
+      ? validOfficialImpactMapping(allocation.mapping, catalog) ? [allocation.mapping] : null
+      : officialCandidateMappings(fact, catalog, scopeId, profile);
+    if (!mappings) {
       impact.globalUnknown = true;
-      // Exact exclusion can settle law S8 even when a special family's other
-      // destinations remain unsafe. Validate the same Course/Mapping edges;
-      // do not infer identity from its source/display name (or from an Offering).
-      const mappings = officialCandidateMappings(fact, catalog, scopeId, profile);
-      const excluded = mappings && mappings.length > 0
-        && LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(fact.canonicalName ?? '')
-        && mappings.every(m => m.scopeId === scopeId && m.category === '専門教育');
-      if (isLaw && !excluded) impact.lawProfessionalUnknown = true;
+      if (isLaw) impact.lawProfessionalUnknown = true;
+      continue;
     }
-    impact.candidates.push(...closure.candidates);
-    for (const candidate of closure.candidates) {
+    const ordinaryClosure = allocation ? null : unresolvedOfficialImpact([fact], false, catalog, scopeId, profile);
+    // A special family's unresolved ordinary routing does not erase its proven
+    // schooling location. Keep known transfer destinations where H41 has a safe
+    // closure; otherwise retain every validated Mapping, without allocating S.
+    const candidates = ordinaryClosure?.candidates.slice() ?? [];
+    for (const mapping of mappings) {
+      if (!candidates.some(candidate => candidate.mapping.mappingId === mapping.mappingId)) {
+        candidates.push({ mapping, canonicalName: fact.canonicalName!, affectsHistorySeminar: false,
+          destinations: [{ category: mapping.category, field: mapping.field, requirementType: mapping.requirementType }] });
+      }
+    }
+    impact.candidates.push(...candidates);
+    for (const candidate of candidates) {
       const mapping = candidate.mapping;
       if (mapping.category === '外国語' && ['英語', '独語', '仏語'].includes(mapping.field ?? '')) impact.foreignLanguages.add(mapping.field!);
       if (isLaw && mapping.scopeId === scopeId && mapping.category === '専門教育'
@@ -63,4 +66,15 @@ export function unresolvedSchoolingImpact(
 export function schoolingImpactsRequirement(impact: UnresolvedSchoolingImpact, requirement: StructuredRequirement): boolean {
   return requirement.ruleType === 'min_schooling_credits'
     && (impact.globalUnknown || officialCandidatesMatchRequirement(impact.candidates, requirement));
+}
+
+/** A missing S increment can complete a language only after its ordinary minimum
+ * is met. Other ordinary/recognition holds remain the caller's responsibility.
+ */
+export function schoolingCanChangeForeignCompletion(
+  impact: UnresolvedSchoolingImpact,
+  languages: Array<{ label: string; earned: number | null; schooling?: number }>,
+): boolean {
+  return impact.globalUnknown || languages.some(language => impact.foreignLanguages.has(language.label)
+    && language.earned !== null && language.earned >= 4 && (language.schooling ?? 0) < 2);
 }

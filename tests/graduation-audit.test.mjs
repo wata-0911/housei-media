@@ -14,6 +14,7 @@ import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '..
 import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { unresolvedOfficialImpact, officialImpactsRequirement } from '../src/planner/unresolvedOfficialImpact.ts';
+import { unresolvedSchoolingImpact } from '../src/planner/unresolvedSchoolingImpact.ts';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from '../src/planner/graduationSources.ts';
 import { initialState } from '../src/planner/storage.ts';
 import { setThesisProgressForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
@@ -3149,4 +3150,97 @@ test('H42 exact exclusion is not a name prefix; held exclusion still does not re
   assert.equal(h31Card(p, 'professional-law-schooling').status, 'unsatisfied'); assert.equal(h42S(p).earned, null);
   excluded.course.canonicalName += '追加'; x.rows = [x.official(excluded, null, 2)];
   assert.equal(h31Card(x.progress(), 'professional-law-schooling').status, 'unknown');
+});
+
+// H42 review: destination uncertainty and completion uncertainty are independent.
+for (const other of ['none', 'English2', 'German4']) test(`H42 review P2-1 English O2/Snull plus ${other} checks same-language ordinary minimum`, () => {
+  const x = h41Fixture(), english = x.add('english-partial', '外国語', '英語', '選択必修');
+  x.rows = [x.official(english, 2, null)];
+  if (other !== 'none') {
+    const known = x.add('known', '外国語', other === 'English2' ? '英語' : '独語', '選択必修');
+    x.rows.push(x.official(known, other === 'English2' ? 2 : 4, 0));
+  }
+  const p = x.progress(), c = h31Card(p, 'group-foreign');
+  assert.deepEqual([c.earned, c.status], [other === 'none' ? 2 : 4, other === 'English2' ? 'unknown' : 'unsatisfied']);
+  assert.equal(h42Language(p, '英語').schooling, 0);
+  if (other === 'English2') assert.match(c.reason, h42Reason); else assert.equal(c.reason, null);
+  assert.equal(h42S(p).status, 'unknown');
+});
+for (const language of ['英語', '独語']) test(`H42 review P2-1 English O4/S2 remains satisfied with ${language} O2/Snull`, () => {
+  const x = h41Fixture(), english = x.add('english', '外国語', '英語', '選択必修');
+  const extra = x.add('extra', '外国語', language, '選択必修');
+  x.rows = [x.official(english, 4, 2), x.official(extra, 2, null)];
+  const c = h31Card(x.progress(), 'group-foreign'); assert.deepEqual([c.earned, c.status, c.reason], [4, 'satisfied', null]);
+});
+for (const [department, category, field, name, lawHeld] of [
+  ['法律学科', '一般教育', '人文', '基礎特講', false],
+  ['日本文学科', '専門教育', null, '総合特講', false],
+  ['史学科', '専門教育', '日本史の分野', '歴史資料学', false],
+  ['経済学科', '専門教育', null, '経済学特講', false],
+  ['法律学科', '専門教育', null, '法律学演習', true],
+  ['法律学科', '専門教育', null, '総合特講', false],
+]) for (const s of [null, 2]) test(`H42 review P2-2 ${department}/${name}/S${s} localizes schooling independently of H41 special routing`, () => {
+  const x = h41Fixture(department), entry = x.add('special', category, field, '選択', 4, 'correspondence', name, category === '一般教育' ? x.common : x.scope);
+  const same = x.requirement('special-s', { curriculum_category: category }, null, 'min_schooling_credits');
+  const foreign = x.requirement('foreign-s', { curriculum_category: '外国語' }, null, 'min_schooling_credits');
+  x.rows = [x.official(entry, 4, s)]; const input = x.build();
+  const facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+  assert.equal(facts.allocations.length, 0);
+  const ordinary = unresolvedOfficialImpact(facts.facts, false, input, x.scope, x.profile);
+  assert.equal(ordinary.globalUnknown, true, 'H41 special ordinary fallback stays unchanged');
+  const schooling = unresolvedSchoolingImpact(facts, false, input, x.scope, x.profile);
+  assert.equal(schooling.globalUnknown, false); assert.equal(schooling.foreignLanguages.size, 0);
+  assert.equal(schooling.lawProfessionalUnknown, lawHeld);
+  const p = x.progress(input);
+  const s0 = x.progress(input, [x.official(entry, 4, 0)]);
+  // H41's independent ordinary reason/status remains; H42 adds no foreign hold.
+  assert.deepEqual(h31Card(p, 'group-foreign'), h31Card(s0, 'group-foreign'));
+  if (department === '法律学科') {
+    const law = h31Card(p, 'professional-law-schooling');
+    assert.deepEqual([law.earned, law.status], [0, lawHeld ? 'unknown' : 'unsatisfied']);
+  }
+  assert.deepEqual([h42S(p).earned, h42S(p).status], [null, 'unknown']);
+  assert.equal(overall(p), null); // Existing H41 global quantity boundary, no held4 or S2.
+  assert.equal(p.requirements.find(r => r.requirementId === same.id).status, 'unknown');
+  assert.equal(p.requirements.find(r => r.requirementId === foreign.id).status, 'unsatisfied');
+});
+for (const mode of ['missing-edge', 'duplicate-owner', 'bad-field', 'orphan']) test(`H42 review P2-2 ${mode} retains truly global schooling fallback`, () => {
+  const x = h41Fixture(), entry = x.add('special', '一般教育', '人文', '選択', 4, 'correspondence', '基礎特講');
+  x.rows = [x.official(entry, 4, null)]; const input = x.build();
+  const course = input.curriculum.courses.find(c => c.id === entry.course.id);
+  if (mode === 'missing-edge') course.mappingIds.push('missing');
+  if (mode === 'duplicate-owner') input.curriculum.courses.push({ ...course, id: 'another-owner' });
+  if (mode === 'bad-field') input.mappings.find(m => m.mappingId === entry.mapping.mappingId).field = 'unsafe';
+  if (mode === 'orphan') x.records = [{ id: 'orphan', sourceCourseId: 'missing', method: 'schooling', credits: 0 }];
+  const p = x.progress(input);
+  assert.match(h31Card(p, 'group-foreign').reason, h42Reason);
+  assert.equal(h31Card(p, 'professional-law-schooling').status, 'unknown'); assert.equal(h42S(p).status, 'unknown');
+});
+test('H42 review frozen special union never selects just one destination or adds held S2', () => {
+  const x = h41Fixture(), entry = x.add('special-union', '一般教育', '人文', '選択', 4, 'correspondence', '基礎特講');
+  const edge = { ...x.mapping, mappingId: '42424242-4242-4242-8242-000000000002' };
+  x.f.mappings.push(edge); entry.course.mappingIds.push(edge.mappingId); entry.course.scopeIds.push(x.scope);
+  x.rows = [x.official(entry, 4, 2)]; const input = x.build(); input.offerings = []; input.curriculum.offeringRelations = [];
+  const previous = x.progress(input), snapshot = structuredClone({ input, rows: x.rows, profile: x.profile, previous });
+  [input, x.rows, x.profile, previous].forEach(deepFreeze);
+  assert.deepEqual(x.progress(input), previous); assert.deepEqual({ input, rows: x.rows, profile: x.profile, previous }, snapshot);
+  const facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+  const impact = unresolvedSchoolingImpact(facts, false, input, x.scope, x.profile);
+  assert.equal(impact.globalUnknown, false); assert.equal(impact.foreignLanguages.size, 0); assert.equal(impact.lawProfessionalUnknown, true);
+  assert.deepEqual(new Set(impact.candidates.map(c => c.mapping.category)), new Set(['一般教育', '専門教育']));
+  assert.equal(h42S(previous).earned, null); assert.equal(h42S(previous).status, 'unknown');
+});
+test('H42 review mixed special union retains safe H41 transfer destinations beside fallback Mapping', () => {
+  const x = h41Fixture('史学科'), entry = x.add('mixed-overview', '一般教育', '人文', '選択', 4, 'correspondence', '日本史概説');
+  const edge = { ...x.mapping, mappingId: '42424242-4242-4242-8242-000000000003', field: '日本史の分野' };
+  x.f.mappings.push(edge); entry.course.mappingIds.push(edge.mappingId); entry.course.scopeIds.push(x.scope);
+  const rule = x.requirement('transferred-s', { curriculum_category: '専門教育', requirement_type: '選択', curriculum_field: '西洋史の分野' }, null, 'min_schooling_credits');
+  x.rows = [x.official(entry, 4, null)]; const input = x.build();
+  const facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+  const ordinary = unresolvedOfficialImpact(facts.facts, false, input, x.scope, x.profile);
+  assert.equal(ordinary.globalUnknown, true); assert.equal(ordinary.candidates.length, 1);
+  const school = unresolvedSchoolingImpact(facts, false, input, x.scope, x.profile);
+  assert.equal(school.globalUnknown, false); assert.equal(school.candidates.length, 2);
+  assert.deepEqual(school.candidates.find(c => c.mapping.mappingId === edge.mappingId), ordinary.candidates[0]);
+  assert.equal(x.progress(input).requirements.find(r => r.requirementId === rule.id).status, 'unknown');
 });

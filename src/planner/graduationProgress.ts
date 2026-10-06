@@ -23,7 +23,7 @@ import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImpo
 import { importedGraduationNotices, type ImportedGraduationNotice } from './importedGraduationNotices';
 import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
 import { deriveOfficialGraduationFacts, officialFactCreditState, type OfficialAllocationInput } from './officialGraduationFacts';
-import { unresolvedSchoolingImpact, schoolingImpactsRequirement, type UnresolvedSchoolingImpact } from './unresolvedSchoolingImpact';
+import { unresolvedSchoolingImpact, schoolingImpactsRequirement, schoolingCanChangeForeignCompletion, type UnresolvedSchoolingImpact } from './unresolvedSchoolingImpact';
 import { unresolvedOfficialImpact, officialImpactsCard, officialImpactsRequirement, officialEvaluationCanChange, type UnresolvedOfficialImpact } from './unresolvedOfficialImpact';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
@@ -1370,7 +1370,8 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
         if ((schoolingImpact.globalUnknown || schoolingImpact.foreignLanguages.has(detail.label))
           && (detail.schooling ?? 0) < 2) detail.reason ??= OFFICIAL_SCHOOLING_REASON;
       }
-      if (!schoolingImpact.globalUnknown && (row.status === 'satisfied' || schoolingImpact.foreignLanguages.size === 0)) continue;
+      if ((!schoolingImpact.globalUnknown && row.status === 'satisfied')
+        || !schoolingCanChangeForeignCompletion(schoolingImpact, row.details ?? [])) continue;
     } else if (row.requirementId === 'professional-law-schooling') {
       if (!schoolingImpact.lawProfessionalUnknown || (!schoolingImpact.globalUnknown && row.status === 'satisfied')) continue;
     } else continue;
