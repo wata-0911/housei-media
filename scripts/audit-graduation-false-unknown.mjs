@@ -65,9 +65,11 @@ test('H14: unrelated recognized course holds all professional facts', () => {
   assert.equal(facts(x).facts[0].allocation.kind, 'unknown');
   assert.ok(facts(x).facts[0].diagnostics.includes('recognized_overlap'));
 });
-test('H41/H42: local professional S uncertainty reaches foreign language', () => {
+test('H42 resolved: local professional S uncertainty leaves foreign language unchanged', () => {
   const x = fixture(); x.row.schoolingCreditsTotal = null;
-  assert.equal(card(progress(x), 'group-foreign').status, 'unknown');
+  assert.equal(card(progress(x), 'group-foreign').status, 'unsatisfied');
+  assert.equal(card(progress(x), 'professional-law-schooling').status, 'unknown');
+  assert.equal(ref(progress(x), 'schooling').status, 'unknown');
   assert.equal(card(progress(x), 'group-general').status, 'unsatisfied');
   assert.equal(ref(progress(x), 'overall').earned, 4);
 });
