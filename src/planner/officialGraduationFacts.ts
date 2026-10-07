@@ -3,6 +3,8 @@ import type { CurriculumCourse, GraduationProfile, Mapping, PlannerCatalog } fro
 import { exactImportedCurriculumId } from './officialCourseCredits';
 import { REPEATABLE_CREDIT_RULES } from './repeatableRules';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources';
+import { resolveRecognizedProfessionalCurriculumIdentity } from './recognizedProfessionalIdentity';
+import { officialCandidateMappings } from './unresolvedOfficialImpact';
 
 export type OfficialUnknownReason = 'curriculum_identity_unresolved' | 'mapping_not_found' | 'mapping_conflict'
   | 'duplicate_official_rows' | 'metadata_unknown' | 'special_rule_evidence_required' | 'out_of_scope';
@@ -146,6 +148,8 @@ export function deriveOfficialGraduationFacts(
   const department = catalog.programs.find(p => p.scopeId === selectedScopeId)?.department ?? null;
   const mappings = new Map(catalog.mappings.map(m => [m.mappingId, m]));
   const courses = new Map(catalog.curriculum?.courses.map(c => [c.id, c]) ?? []);
+  const recognitionIdentities = (profile?.recognizedCredits.professionalCourses ?? [])
+    .map(row => resolveRecognizedProfessionalCurriculumIdentity(row, catalog));
   const groups = new Map<string, ImportedCourseAchievement[]>();
   // Repeated input of the very same source row is idempotent. Different ids are never deduped by fingerprint.
   for (const row of [...new Map(rows.map(row => [row.id, row])).values()].sort((a, b) => a.id.localeCompare(b.id))) {
@@ -208,8 +212,12 @@ export function deriveOfficialGraduationFacts(
       || (professionalBucket && !safeLawPartial && ['法律学科', '日本文学科', '史学科', '地理学科'].includes(department ?? '') && row.earnedCreditsTotal > 0 && row.earnedCreditsTotal < composition)) {
       hold('special_rule_evidence_required'); continue;
     }
-    // Keep recognition architecture intact; uncertain overlap is not a new dedup/merge policy.
-    if (professionalBucket && (profile?.recognizedCredits.professionalCourses?.length ?? 0) > 0) {
+    // H14: release only when ALL recognition identities are exact and disjoint.
+    // Validate the official Course/Mapping owners too; ambiguous ownership cannot
+    // prove different Courses. No-recognition behavior and later guards are unchanged.
+    if (professionalBucket && recognitionIdentities.length > 0
+      && (!profile || !officialCandidateMappings(fact, catalog, selectedScopeId, profile)
+        || recognitionIdentities.some(result => result.kind !== 'resolved' || result.curriculumCourseId === id))) {
       hold('special_rule_evidence_required', 'recognized_overlap'); continue;
     }
     fact.methodEvidence = deriveMethodEvidence(row, records);
