@@ -32,7 +32,7 @@ const isDate = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d
 const numeric = (value: unknown) => isRecord(value) && typeof value.raw === 'string' && (value.value === null || (typeof value.value === 'number' && Number.isFinite(value.value) && value.value >= 0));
 const grade = (value: unknown) => value === null || (typeof value === 'string' && grades.includes(value as HoseiGrade));
 
-/** Validates every nested field because extension JSON is always treated as untrusted input. */
+/** Checks contract values only; use parseHoseiGradeImportV1 at input boundaries to remove unknown keys. */
 export function isHoseiGradeImportV1(value: unknown): value is HoseiGradeImportV1 {
   if (!isRecord(value) || value.schemaVersion !== 1 || value.source !== 'hosei_web_learning_grade_table' || typeof value.capturedAt !== 'string' || Number.isNaN(Date.parse(value.capturedAt)) || !Array.isArray(value.courses)) return false;
   return value.courses.every(course => {
@@ -43,6 +43,39 @@ export function isHoseiGradeImportV1(value: unknown): value is HoseiGradeImportV
     const schoolingsOk = course.schoolings.every(schooling => isRecord(schooling) && ['rawYear', 'rawTerm', 'rawDate', 'rawCredits', 'rawGrade'].every(key => typeof schooling[key] === 'string') && isStringOrNull(schooling.year) && isStringOrNull(schooling.term) && (schooling.date === null || isDate(schooling.date)) && (schooling.credits === null || (typeof schooling.credits === 'number' && Number.isFinite(schooling.credits) && schooling.credits >= 0)) && grade(schooling.grade));
     return reportsOk && schoolingsOk;
   });
+}
+
+/**
+ * The untrusted JSON boundary. Preserve v1 validation and project every object
+ * onto its allowlisted fields. Never retain input objects, including reports.
+ * Unknown fields are discarded rather than rejecting otherwise valid imports.
+ */
+export function parseHoseiGradeImportV1(value: unknown): HoseiGradeImportV1 | null {
+  if (!isHoseiGradeImportV1(value)) return null;
+  const numeric = (field: HoseiGradeImportNumeric): HoseiGradeImportNumeric => ({ raw: field.raw, value: field.value });
+  const schooling = (slot: HoseiGradeImportSchooling): HoseiGradeImportSchooling => ({
+    rawYear: slot.rawYear, rawTerm: slot.rawTerm, rawDate: slot.rawDate,
+    rawCredits: slot.rawCredits, rawGrade: slot.rawGrade,
+    year: slot.year, term: slot.term, date: slot.date, credits: slot.credits, grade: slot.grade,
+  });
+  return {
+    schemaVersion: value.schemaVersion, source: value.source, capturedAt: value.capturedAt,
+    courses: value.courses.map(course => ({
+      rawName: course.rawName, categoryRaw: course.categoryRaw,
+      compositionCredits: numeric(course.compositionCredits),
+      additionalEnrollment: numeric(course.additionalEnrollment),
+      recognizedExemption: numeric(course.recognizedExemption),
+      earnedCredits: numeric(course.earnedCredits),
+      schoolingCredits: numeric(course.schoolingCredits),
+      reports: course.reports.map(report => ({ raw: report.raw, status: report.status, date: report.date })),
+      creditExam: {
+        rawDate: course.creditExam.rawDate, rawCredits: course.creditExam.rawCredits, rawGrade: course.creditExam.rawGrade,
+        date: course.creditExam.date, credits: course.creditExam.credits, grade: course.creditExam.grade,
+        pendingMarker: course.creditExam.pendingMarker,
+      },
+      schoolings: [schooling(course.schoolings[0]), schooling(course.schoolings[1])],
+    })),
+  };
 }
 
 export type HoseiGradeImportValidationIssue = {
