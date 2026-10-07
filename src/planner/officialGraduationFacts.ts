@@ -55,7 +55,7 @@ export function officialFactCreditState(fact: Pick<OfficialGraduationFact, 'sour
 const validCredits = (value: number | null): value is number => value !== null && Number.isFinite(value) && value >= 0;
 const baseName = (name: string) => name.normalize('NFKC').replace(/[（(［[].*$/, '');
 
-function deriveMethodEvidence(row: ImportedCourseAchievement, records: ImportedStudyRecord[]): OfficialMethodEvidence {
+export function deriveMethodEvidence(row: ImportedCourseAchievement, records: ImportedStudyRecord[]): OfficialMethodEvidence {
   // importPreview creates correspondence records only with source evidence, except
   // its explicitly fingerprinted course-only compatibility row. Inferred years,
   // editable terms and annual matches do not turn that fallback into evidence.
