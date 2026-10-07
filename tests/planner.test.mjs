@@ -2249,6 +2249,8 @@ test('planner export CSV writes UTF-8 BOM, headers, RFC4180 escaping, and leaves
   assert.equal(plannerExportFileName(new Date(2026, 8, 29)), 'hosei-planner-2026-09-29');
 });
 
+const emptyGradeSchoolings = () => Array.from({ length: 2 }, () => ({ rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null }));
+
 test('grade import contract accepts only complete v1 extension JSON and has no final grade field', () => {
   const schooling = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
   const value = {
@@ -2286,7 +2288,7 @@ test('grade import keeps pending correspondence and uses date or capture date fo
   const preview = importPreview(data, []);
   assert.equal(hasCorrespondenceEvidence(course), true);
   assert.deepEqual(preview.map(unit => [unit.method, unit.academicYear, unit.yearSource]), [['correspondence', 2026, 'inferred'], ['schooling', 2025, 'inferred'], ['schooling', 2026, 'inferred']]);
-  const explicit = { ...course, schoolings: [{ ...course.schoolings[0], rawYear: '25', year: '25', date: '2026-07-01' }] };
+  const explicit = { ...course, schoolings: [{ ...course.schoolings[0], rawYear: '25', year: '25', date: '2026-07-01' }, course.schoolings[1]] };
   const explicitPreview = importPreview({ ...data, courses: [explicit] }, []);
   assert.deepEqual(explicitPreview.find(unit => unit.method === 'schooling') && [explicitPreview.find(unit => unit.method === 'schooling').academicYear, explicitPreview.find(unit => unit.method === 'schooling').yearSource], [2025, 'source']);
 });
@@ -2306,7 +2308,7 @@ test('grade import infers academic years and selects every non-duplicate compone
 });
 
 test('imported achievement grouping and manual edits preserve import identity', () => {
-  const unit = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [{ rawName: '古い実績', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '', value: null }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2025/03/31', rawCredits: '', rawGrade: '', date: '2025-03-31', credits: null, grade: null, pendingMarker: false }, schoolings: [] }] }, [], [])[0];
+  const unit = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [{ rawName: '古い実績', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '', value: null }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2025/03/31', rawCredits: '', rawGrade: '', date: '2025-03-31', credits: null, grade: null, pendingMarker: false }, schoolings: emptyGradeSchoolings() }] }, [], [])[0];
   const state = applyImport(initialState(), [unit], []); const edited = { ...state.importedStudyRecords[0], academicYear: 2024, yearSource: 'manual', term: '冬' };
   assert.equal(edited.fingerprint, state.importedStudyRecords[0].fingerprint); assert.equal(edited.yearSource, 'manual'); assert.equal(edited.term, '冬');
   assert.deepEqual(groupImportedAchievements([edited, { ...edited, id: 'newer', academicYear: 2026 }, { ...edited, id: 'none', academicYear: null }]).map(([year]) => year), [2026, 2024, null]);
@@ -2391,7 +2393,7 @@ test('imported media history requires an explicit link or unambiguous media term
 });
 
 test('source grade-table rows retain official earned credits without component details or a safe catalog match', () => {
-  const course = name => ({ rawName: name, categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] });
+  const course = name => ({ rawName: name, categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: emptyGradeSchoolings() });
   const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: Array.from({ length: 20 }, (_, index) => course(`未照合${index}`)) };
   const preview = importPreview(data, []);
   const applied = applyImport(initialState(), preview, []);
@@ -2404,7 +2406,7 @@ test('source grade-table rows retain official earned credits without component d
 });
 
 test('reimport adds a missing source row even when its detail component already exists', () => {
-  const course = { rawName: '再取込', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2026/07/01', rawCredits: '', rawGrade: '', date: '2026-07-01', credits: null, grade: null, pendingMarker: false }, schoolings: [] };
+  const course = { rawName: '再取込', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2026/07/01', rawCredits: '', rawGrade: '', date: '2026-07-01', credits: null, grade: null, pendingMarker: false }, schoolings: emptyGradeSchoolings() };
   const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] };
   const preview = importPreview(data, []);
   const legacyComponentOnly = { ...initialState(), importedStudyRecords: [preview[0]] };
@@ -2419,7 +2421,7 @@ test('source row identity ignores capture time and categoryRaw overrides a safe 
   const row = { id: 'row-category', fingerprint: 'stable', source: 'hosei_import', rawName: offering.name, categoryRaw: '外国語', capturedAt: '2026-09-29T00:00:00.000Z', earnedCreditsTotal: 2, schoolingCreditsTotal: null, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: offering.courseId, selectedOfferingId: offering.id, match: 'exact_unique', candidateOfferingIds: [offering.id] };
   const derived = deriveImportedAchievements([], offeringsById, [], [row]);
   assert.equal(derived.categoryOverrides.get(`imported-category:${row.id}`), '外国語');
-  const course = { rawName: '同一行', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] };
+  const course = { rawName: '同一行', categoryRaw: null, compositionCredits: { raw: '2', value: 2 }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '2', value: 2 }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: emptyGradeSchoolings() };
   const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-09-29T00:00:00.000Z', courses: [course] }, []), []);
   const laterPreview = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-01T00:00:00.000Z', courses: [course] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
   assert.ok(laterPreview.every(unit => unit.sourceDuplicate && !unit.selected));
@@ -2448,7 +2450,7 @@ test('raw categories count unmatched source rows once while graduation remains u
 });
 
 test('source rows upsert changed earned credits and auto normal schooling stays pending for media review', () => {
-  const course = earned => ({ rawName: '更新科目', categoryRaw: null, compositionCredits: { raw: String(earned), value: earned }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: String(earned), value: earned }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: [] });
+  const course = earned => ({ rawName: '更新科目', categoryRaw: null, compositionCredits: { raw: String(earned), value: earned }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: String(earned), value: earned }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: emptyGradeSchoolings() });
   const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-01-01T00:00:00.000Z', courses: [course(2)] }, []), []);
   const update = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-02-01T00:00:00.000Z', courses: [course(4)] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
   const updated = applyImport(firstImport, update, []);

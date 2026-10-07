@@ -8,9 +8,13 @@ const injectAndRead = async tabId => {
   return result.result;
 };
 $('read').addEventListener('click', async () => {
-  $('result').hidden = true; status('成績表を読み取っています…');
+  imported = null; $('result').hidden = true; status('成績表を読み取っています…');
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !Number.isInteger(tab.id) || !globalThis.HoseiPlannerCaptureOrigin.isAllowed(tab.url)) {
+      status('法政大学のHTTPSのWeb学習サービスで成績表ページを開いてください。');
+      return;
+    }
     const outcome = await injectAndRead(tab.id);
     if (!outcome.ok) { status(outcome.reason === 'course_rows_not_found' ? '成績表は見つかりましたが、科目行を読み取れませんでした。ページを再読み込みしてもう一度お試しください。' : 'このページでは成績表を確認できません。Web学習サービスの成績表ページを開いてください。'); return; }
     imported = outcome.value; $('count').textContent = `${imported.courses.length}科目`;
