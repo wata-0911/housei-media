@@ -2,7 +2,6 @@ import { deriveCurriculumCourseProgress } from '../planner/curriculumCourseProgr
 import { useCallback, useEffect, useState } from 'react';
 import CourseSearch from '../components/planner/CourseSearch';
 import CurriculumCourseList from '../components/planner/CurriculumCourseList';
-import ProgramSettings from '../components/planner/ProgramSettings';
 import CategorySummary from '../components/planner/CategorySummary';
 import { annualCreditLimitReferences, createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
 import CreditSummary from '../components/planner/CreditSummary';
@@ -238,9 +237,6 @@ export default function PlannerPage() {
       </div>
       {loaded.recognitionWarning && activeTab !== 'profile' && <p role="alert" className="mt-4 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{loaded.recognitionWarning}</p>}
       {activeTab === 'annual' && <div id="annual-panel" role="tabpanel" aria-labelledby="annual-tab" className="space-y-6">
-        <ProgramSettings catalog={catalog} scopeId={state.selectedScopeId} thesis={thesisProgress} disabled={loaded.error !== null}
-          onThesisSelectionChange={selection => commit(setThesisProgressForScope(state, catalog, state.selectedScopeId, { selection }), '卒業論文の選択を保存しました。')}
-          onThesisStatusChange={status => commit(setThesisProgressForScope(state, catalog, state.selectedScopeId, { status }), '卒業論文の進捗を保存しました。')} />
         {profileNeedsAttention && <p className="border-l-4 border-sky-600 bg-sky-50 p-3 text-sm text-sky-900">卒業判定に必要なプロフィール設定があります。プロフィールタブで確認してください。</p>}
         <AnnualCreditLimitNotice rows={annualLimitRows} />
         <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
@@ -255,10 +251,37 @@ export default function PlannerPage() {
         <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />
       </div>}
       {activeTab === 'profile' && <div id="profile-panel" role="tabpanel" aria-labelledby="profile-tab">
-        <PlannerProfileTab catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} disabled={loaded.error !== null} recognitionWarning={loaded.recognitionWarning}
-          onScopeChange={selectedScopeId => commit(stateForScopeChange(state, catalog, selectedScopeId), '所属を保存しました。卒業論文の進捗は学科ごとに保存します。')}
-          onProfileChange={graduationProfile => commit({ ...state, graduationProfile }, 'プロフィール設定を保存しました。')} />
-      </div>}
+        <PlannerProfileTab
+          catalog={catalog}
+          scopeId={state.selectedScopeId}
+          profile={state.graduationProfile}
+          thesis={thesisProgress}
+          disabled={loaded.error !== null}
+          recognitionWarning={loaded.recognitionWarning}
+          onScopeChange={selectedScopeId =>
+            commit(
+              stateForScopeChange(state, catalog, selectedScopeId),
+              '所属を保存しました。卒業論文の進捗は学科ごとに保存します。'
+            )
+          }
+          onProfileChange={graduationProfile =>
+            commit({ ...state, graduationProfile }, 'プロフィール設定を保存しました。')
+          }
+          onThesisSelectionChange={selection =>
+            commit(
+              setThesisProgressForScope(state, catalog, state.selectedScopeId, { selection }),
+              '卒業論文の選択を保存しました。'
+            )
+          }
+          onThesisStatusChange={status =>
+            commit(
+              setThesisProgressForScope(state, catalog, state.selectedScopeId, { status }),
+              '卒業論文の進捗を保存しました。'
+            )
+          }
+        />
+      </div>
+      }
     </div>
   </div>;
 }
