@@ -25,6 +25,7 @@ import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
 import { deriveOfficialGraduationFacts, officialFactCreditState, type OfficialAllocationInput } from './officialGraduationFacts';
 import { unresolvedSchoolingImpact, schoolingImpactsRequirement, schoolingCanChangeForeignCompletion, type UnresolvedSchoolingImpact } from './unresolvedSchoolingImpact';
 import { heldOfficialSchoolingContributions } from './heldOfficialSchooling';
+import { lawExcludedOfficialSchoolingContributions } from './lawExcludedOfficialSchooling';
 import { unresolvedOfficialImpact, officialImpactsCard, officialImpactsRequirement, officialEvaluationCanChange, type UnresolvedOfficialImpact } from './unresolvedOfficialImpact';
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
@@ -1280,7 +1281,9 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const officialUnknown = heldFacts.length > 0 || hasOrphanRecords;
   const officialImpact = unresolvedOfficialImpact(official.facts, hasOrphanRecords, catalog, scopeId, profile);
   const heldSchooling = heldOfficialSchoolingContributions(official, importedCourseAchievements, importedStudyRecords, catalog, scopeId, profile);
-  const schoolingImpact = unresolvedSchoolingImpact(official, hasOrphanRecords, catalog, scopeId, profile, heldSchooling);
+  const globalSchooling = [...heldSchooling,
+    ...lawExcludedOfficialSchoolingContributions(official, importedCourseAchievements, importedStudyRecords, catalog, scopeId, profile, heldSchooling)];
+  const schoolingImpact = unresolvedSchoolingImpact(official, hasOrphanRecords, catalog, scopeId, profile, globalSchooling);
   const identity = (offering: Offering | undefined) => offering?.courseId ? `course:${offering.courseId}` : offering ? `offering:${offering.id}` : null;
   const existingCourseIds = new Set(items.map(item => identity(catalogOfferings.get(item.offeringId))).filter((id): id is string => id !== null));
   const recognizedItems = (profile.recognizedCredits.professionalCourses ?? []).flatMap(course => {
@@ -1399,7 +1402,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     }
     if (row.id === 'schooling-reference-progress' && row.earned !== null) {
       row.earned += official.allocations.reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0)
-        + heldSchooling.reduce((sum, contribution) => sum + contribution.schoolingCredits, 0);
+        + globalSchooling.reduce((sum, contribution) => sum + contribution.schoolingCredits, 0);
     }
     const uncertain = row.id === 'overall-reference-progress' ? officialUnknown : schoolingImpact.globalReferenceUnknown;
     if (uncertain) {
