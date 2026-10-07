@@ -1,11 +1,11 @@
 import type { GraduationProfile, PlannerCatalog, StructuredRequirement } from './plannerCatalog';
 import { officialFactCreditState, type DerivedOfficialGraduationFacts } from './officialGraduationFacts';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources';
-import type { HeldOfficialSchoolingContribution } from './heldOfficialSchooling';
+import type { GlobalOfficialSchoolingContribution } from './globalOfficialSchooling';
 import { validOfficialImpactMapping, officialCandidateMappings, officialCandidatesMatchRequirement, unresolvedOfficialImpact, type UnresolvedOfficialImpact } from './unresolvedOfficialImpact';
 
 /** H42 describes missing schooling increments, never a second allocation ledger.
- * H43 can account for an increment in global reference without resolving its
+ * H19/H43 can account for an increment in global reference without resolving its
  * foreign/law/structured eligibility. This helper itself never adds credits.
  */
 export type UnresolvedSchoolingImpact = {
@@ -19,7 +19,7 @@ export type UnresolvedSchoolingImpact = {
 export function unresolvedSchoolingImpact(
   official: DerivedOfficialGraduationFacts, hasOrphanRecords: boolean, catalog: PlannerCatalog,
   scopeId: string, profile: GraduationProfile,
-  heldSchooling: readonly HeldOfficialSchoolingContribution[] = [],
+  globalSchooling: readonly GlobalOfficialSchoolingContribution[] = [],
 ): UnresolvedSchoolingImpact {
   const isLaw = catalog.programs.some(p => p.scopeId === scopeId && p.department === '法律学科');
   const impact: UnresolvedSchoolingImpact = {
@@ -27,7 +27,7 @@ export function unresolvedSchoolingImpact(
     candidates: [], foreignLanguages: new Set(), lawProfessionalUnknown: isLaw && hasOrphanRecords,
   };
   const allocations = new Map(official.allocations.map(a => [a.fact, a]));
-  const globallyAccounted = new Set(heldSchooling.map(c => c.fact));
+  const globallyAccounted = new Set(globalSchooling.map(c => c.fact));
   for (const fact of official.facts) {
     if (fact.allocation.kind === 'out_of_scope' || officialFactCreditState(fact).allZero) continue;
     const allocation = allocations.get(fact);
