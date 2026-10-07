@@ -43,7 +43,7 @@ import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievemen
 import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
 import { graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from '../src/planner/graduationProfile.ts';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
-import { annualCreditLimitReferences } from '../src/planner/annualPlan.ts';
+import { annualCreditLimitReferences, annualCreditLimitStatus } from '../src/planner/annualPlan.ts';
 import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/thesisGuidance.ts';
 
 function memoryStore(raw = null) {
@@ -3323,12 +3323,58 @@ test('future notice renders provisional catalog reference only for years beyond 
   assert.equal(planningTermLabel(item(first.id), first), first.period ?? '期未設定');
 });
 
+test('annual credit limit status classifies safe, limit, exceeded, and unknown cases', () => {
+  const row = (knownTotalCredits, unknownCorrespondenceItems = 0) => ({
+    year: 2026,
+    correspondenceCredits: knownTotalCredits,
+    unknownCorrespondenceItems,
+    schoolingRegistrationCredits: 0,
+    knownTotalCredits,
+    exceedsOfficial49: knownTotalCredits > 49,
+  });
+
+  assert.equal(annualCreditLimitStatus(row(48)), 'safe');
+  assert.equal(annualCreditLimitStatus(row(49)), 'at_limit');
+  assert.equal(annualCreditLimitStatus(row(50)), 'exceeded');
+  assert.equal(annualCreditLimitStatus(row(40, 1)), 'unknown');
+  assert.equal(annualCreditLimitStatus(row(49, 1)), 'unknown');
+  assert.equal(annualCreditLimitStatus(row(50, 1)), 'exceeded');
+});
+
+test('annual limit notice stays hidden while the plan is safely below the limit', () => {
+  const rows = annualCreditLimitReferences(
+    [item(first.id)],
+    offeringsById
+  );
+
+  const html = renderToStaticMarkup(
+    createElement(AnnualCreditLimitNotice, { rows })
+  );
+
+  assert.equal(html, '');
+});
+
 test('future annual limits explicitly reference 2026 while normal 2026 wording remains intact', () => {
   for (const year of [2026, 2027, 2028]) {
-    const rows = annualCreditLimitReferences([{ ...item(first.id), plannedYear: year }], offeringsById);
-    const html = renderToStaticMarkup(createElement(AnnualCreditLimitNotice, { rows }));
-    if (year > 2026) assert.match(html, /2026年度ルールを参考表示・将来年度の上限は未確認/);
-    else { assert.match(html, /公式49単位の参考/); assert.doesNotMatch(html, /将来年度の上限は未確認/); }
+    const rows = [{
+      year,
+      correspondenceCredits: 50,
+      unknownCorrespondenceItems: 0,
+      schoolingRegistrationCredits: 0,
+      knownTotalCredits: 50,
+      exceedsOfficial49: true,
+    }];
+
+    const html = renderToStaticMarkup(
+      createElement(AnnualCreditLimitNotice, { rows })
+    );
+
+    if (year > 2026) {
+      assert.match(html, /2026年度ルールを参考表示・将来年度の上限は未確認/);
+    } else {
+      assert.match(html, /公式49単位の参考/);
+      assert.doesNotMatch(html, /将来年度の上限は未確認/);
+    }
   }
 });
 

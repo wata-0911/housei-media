@@ -48,6 +48,21 @@ export function groupAnnualPlan(items: PlannerItem[], offerings: Map<string, Off
   });
 }
 
+export type AnnualCreditLimitStatus =
+  | 'safe'
+  | 'at_limit'
+  | 'exceeded'
+  | 'unknown';
+
+export function annualCreditLimitStatus(
+  row: AnnualCreditLimitReference
+): AnnualCreditLimitStatus {
+  if (row.exceedsOfficial49) return 'exceeded';
+  if (row.unknownCorrespondenceItems > 0) return 'unknown';
+  if (row.knownTotalCredits === 49) return 'at_limit';
+  return 'safe';
+}
+
 export type AnnualCreditLimitReference = {
   year: number;
   correspondenceCredits: number;
