@@ -479,7 +479,7 @@ test('annual official UI: a null-only correspondence year is visible as unknown,
   assert.equal(rows.length, 1); assert.equal(rows[0].unknownCorrespondenceItems, 1); assert.equal(rows[0].knownTotalCredits, 0);
   const html = renderToStaticMarkup(createElement(AnnualCreditLimitNotice, { rows }));
   assert.match(html, /通信 既知0単位（未確定1件）/);
-  assert.match(html, /既知合計だけでは49単位以内か確認できません/);
+  assert.match(html, /年間履修上限を判定できません/);
   assert.doesNotMatch(html, /通信 4単位|通信 0単位/);
 });
 test('annual official: only earned source-linked correspondence uses the matching official row', () => {

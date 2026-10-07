@@ -29,7 +29,6 @@ import { deriveCurriculumCourseView } from '../planner/curriculumCourseView';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/plannerItemState';
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
 import { guidanceEligibilityCredits, guidanceForScope } from '../planner/thesisGuidance';
-import BrowserExtensionEntrySection from '../components/planner/BrowserExtensionEntrySection';
 import { missingGraduationProfilePrerequisites } from '../planner/graduationProfile';
 
 function readSavedState(): LoadResult {
@@ -244,7 +243,6 @@ export default function PlannerPage() {
           onThesisStatusChange={status => commit(setThesisProgressForScope(state, catalog, state.selectedScopeId, { status }), '卒業論文の進捗を保存しました。')} />
         {profileNeedsAttention && <p className="border-l-4 border-sky-600 bg-sky-50 p-3 text-sm text-sky-900">卒業判定に必要なプロフィール設定があります。プロフィールタブで確認してください。</p>}
         <AnnualCreditLimitNotice rows={annualLimitRows} />
-        <BrowserExtensionEntrySection />
         <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
         <CurriculumCourseList catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
