@@ -15,6 +15,7 @@ import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeI
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { unresolvedOfficialImpact, officialImpactsRequirement } from '../src/planner/unresolvedOfficialImpact.ts';
 import { unresolvedSchoolingImpact } from '../src/planner/unresolvedSchoolingImpact.ts';
+import { heldOfficialSchoolingContributions } from '../src/planner/heldOfficialSchooling.ts';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from '../src/planner/graduationSources.ts';
 import { initialState } from '../src/planner/storage.ts';
 import { setThesisProgressForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
@@ -2972,7 +2973,7 @@ test('H41 normalization leaves frozen original catalog annotations and previous 
   assert.equal(initialState().schemaVersion, 22); assert.equal(p.graduationCheckComplete, false); assert.equal(input.metadata.sourceLinksReverified, false);
 });
 
-// H42: only official schooling dependencies; held positive S remains unallocated (H43).
+// H42: consumer-specific schooling dependencies remain independent of H43.
 const h42Reason = /公式実績のスクーリング/;
 const h42S = p => p.referenceProgress.find(r => r.id === 'schooling-reference-progress');
 const h42Language = (p, name) => h31Card(p, 'group-foreign').details.find(d => d.label === name);
@@ -2997,7 +2998,7 @@ for (const language of ['英語', '独語']) test(`H42 foreign known English4/S2
   assert.equal(h42Language(p, '英語').reason ?? null, null);
   assert.equal(h42S(p).earned, 2);
 });
-test('H42 safe English/German candidate union affects no French or law S; H43 held S2 not added', () => {
+test('H42 safe English/German candidate union affects no French or law S; H43 counts global S2 only', () => {
   const x = h41Fixture(), entry = x.add('union', '外国語', '英語', '選択必修');
   const edge = { ...entry.mapping, mappingId: '42424242-4242-4242-8242-000000000001', field: '独語' };
   x.f.mappings.push(edge); entry.course.mappingIds.push(edge.mappingId);
@@ -3005,7 +3006,7 @@ test('H42 safe English/German candidate union affects no French or law S; H43 he
   for (const lang of ['英語', '独語']) assert.match(h42Language(p, lang).reason, h42Reason);
   assert.equal(h42Language(p, '仏語').reason ?? null, null);
   assert.equal(h31Card(p, 'professional-law-schooling').status, 'unsatisfied');
-  assert.deepEqual([h31Card(p, 'group-foreign').earned, h42S(p).earned, h42S(p).status], [0, null, 'unknown']);
+  assert.deepEqual([h31Card(p, 'group-foreign').earned, h42S(p).earned, h42S(p).status], [0, 2, 'partial']);
 });
 for (const known of [2, 8]) test(`H42 law S minimum preserves known${known} and saturation`, () => {
   const x = h41Fixture();
@@ -3243,4 +3244,223 @@ test('H42 review mixed special union retains safe H41 transfer destinations besi
   assert.equal(school.globalUnknown, false); assert.equal(school.candidates.length, 2);
   assert.deepEqual(school.candidates.find(c => c.mapping.mappingId === edge.mappingId), ordinary.candidates[0]);
   assert.equal(x.progress(input).requirements.find(r => r.requirementId === rule.id).status, 'unknown');
+});
+
+// H43: preserve only independently proven global S; ordinary remains held.
+test('H43 pre-fix reproduction: literature partial official O2/S2 preserves global S only', () => {
+  const x = h41Fixture('日本文学科');
+  const ordinary = x.requirement('h43-ordinary', { curriculum_category: '専門教育' });
+  ordinary.value = 2;
+  const schooling = x.requirement('h43-schooling', { curriculum_category: '専門教育' }, null, 'min_schooling_credits');
+  schooling.value = 2;
+  x.rows = [x.official(x, 2, 2)]; const input = x.build();
+  const facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+  assert.equal(facts.facts[0].earnedCreditsTotal, 2);
+  assert.equal(facts.facts[0].allocation.kind, 'unknown');
+  assert.equal(facts.allocations.length, 0);
+  const p = x.progress(input);
+  assert.deepEqual([h42S(p).earned, h42S(p).status], [2, 'partial']);
+  assert.equal(p.importedContributionCount, 0);
+  assert.deepEqual([overall(p), p.referenceProgress[0].status], [0, 'unknown']);
+  assert.match(p.referenceProgress[0].reason, h41Reason);
+  for (const rule of [ordinary, schooling]) {
+    const result = p.requirements.find(r => r.requirementId === rule.id);
+    assert.deepEqual([result.earned, result.status], [0, 'unknown']);
+  }
+  assert.deepEqual([h31Card(p, 'professional-required-elective').earned, h31Card(p, 'professional-required-elective').status], [0, 'unknown']);
+});
+
+function h43Fixture() {
+  const x = h41Fixture('日本文学科'); x.rows = [x.official(x, 2, 2)];
+  return x;
+}
+function h43Evidence(x, input = x.build()) {
+  const official = deriveOfficialGraduationFacts(x.rows, x.records, input, x.scope, x.profile);
+  const contributions = heldOfficialSchoolingContributions(official, x.rows, x.records, input, x.scope, x.profile);
+  return { official, contributions, impact: unresolvedSchoolingImpact(official,
+    x.records.some(record => !x.rows.some(row => row.id === record.sourceCourseId)), input, x.scope, x.profile, contributions) };
+}
+for (const department of ['日本文学科', '史学科', '地理学科']) test(`H43 ${department} partial keeps S and identical ordinary consumers`, () => {
+  const x = h41Fixture(department); x.rows = [x.official(x, 2, 2)]; const input = x.build();
+  const p = x.progress(input), before = x.progress(input, [{ ...x.rows[0], schoolingCreditsTotal: null }]);
+  const { contributions, impact, official } = h43Evidence(x, input);
+  assert.equal(official.allocations.length, 0); assert.equal(contributions.length, 1);
+  assert.equal(impact.globalReferenceUnknown, false);
+  assert.equal(h42S(p).earned, 2);
+  assert.deepEqual(p.cards, before.cards); assert.deepEqual(p.requirements, before.requirements);
+  assert.deepEqual(p.referenceProgress[0], before.referenceProgress[0]);
+});
+test('H43 allocated and held quantities coexist once, including official-priority Planner dedupe', () => {
+  const x = h43Fixture(), known = x.add('h43-known', '一般教育', '人文', '選択必修');
+  x.rows.push(x.official(known, 4, 2));
+  x.items = [item(x.offering, 'earned'), item(known.offering, 'earned')];
+  x.offering.method = 'schooling'; known.offering.method = 'schooling';
+  const input = x.build(), { official, contributions } = h43Evidence(x, input);
+  assert.equal(official.allocations.length, 1); assert.equal(contributions.length, 1);
+  assert.equal(h42S(x.progress(input)).earned, 4); assert.equal(overall(x.progress(input)), 4);
+  x.rows.push(x.rows[0]); // Same source ID is idempotent, not a second snapshot.
+  assert.equal(h42S(x.progress(input)).earned, 4);
+});
+test('H43 normal allocated S never produces a second contribution', () => {
+  const x = h43Fixture(); x.rows[0].earnedCreditsTotal = 4;
+  const { official, contributions } = h43Evidence(x);
+  assert.equal(official.allocations[0].schoolingCredits, 2); assert.equal(contributions.length, 0);
+  assert.equal(h42S(x.progress()).earned, 2);
+});
+for (const s of [0, null]) test(`H43 held S=${s} retains zero versus unknown semantics`, () => {
+  const x = h43Fixture(); x.rows[0].schoolingCreditsTotal = s;
+  assert.equal(h43Evidence(x).contributions.length, 0);
+  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], s === 0 ? [0, 'partial'] : [null, 'unknown']);
+});
+for (const [label, mutate] of [
+  ['negative S', x => { x.rows[0].schoolingCreditsTotal = -1; }],
+  ['NaN S', x => { x.rows[0].schoolingCreditsTotal = NaN; }],
+  ['infinite S', x => { x.rows[0].schoolingCreditsTotal = Infinity; }],
+  ['S above earned', x => { x.rows[0].schoolingCreditsTotal = 3; }],
+  ['S above composition', x => { x.rows[0].schoolingCreditsTotal = 5; }],
+  ['null earned', x => { x.rows[0].earnedCreditsTotal = null; }],
+  ['negative earned', x => { x.rows[0].earnedCreditsTotal = -1; }],
+  ['NaN earned', x => { x.rows[0].earnedCreditsTotal = NaN; }],
+  ['infinite earned', x => { x.rows[0].earnedCreditsTotal = Infinity; }],
+  ['earned above composition', x => { x.rows[0].earnedCreditsTotal = 5; }],
+  ['missing source composition', x => { x.rows[0].compositionCredits = null; }],
+  ['composition mismatch', x => { x.rows[0].compositionCredits = 2; }],
+  ['unresolved identity', x => { x.rows[0].curriculumCourseId = null; x.rows[0].curriculumMatch = 'unmatched'; }],
+  ['duplicate snapshots', x => { x.rows.push({ ...x.rows[0], id: 'duplicate' }); }],
+  ['duplicate null snapshot', x => { x.rows.push({ ...x.rows[0], id: 'duplicate', earnedCreditsTotal: null, schoolingCreditsTotal: null }); }],
+  ['recognized exemption', x => { x.rows[0].recognizedExemption = 2; }],
+  ['additional enrollment', x => { x.rows[0].additionalEnrollment = 1; }],
+  ['negative exemption', x => { x.rows[0].recognizedExemption = -1; }],
+  ['legacy curriculum', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }],
+  ['unknown curriculum', x => { x.profile.curriculumApplicability = 'unknown'; }],
+  ['professional recognition', x => { x.profile.recognizedCredits.professionalCourses = [{ id: 'h43-recognition', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 2 }]; }],
+  ['transfer recognized S', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 2; }],
+  ['transfer unknown S', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = null; }],
+]) test(`H43 excludes ${label}`, () => {
+  const x = h43Fixture(), input = x.build(); mutate(x);
+  const { contributions, impact } = h43Evidence(x, input);
+  assert.equal(contributions.length, 0); assert.equal(impact.globalReferenceUnknown, true);
+  // Recognition may independently contribute; H43 must not release its hold.
+  assert.equal(h42S(x.progress(input)).status, 'unknown');
+});
+for (const mode of ['missing-edge', 'duplicate-edge', 'duplicate-owner', 'bad-field', 'null-credits', 'mismatched-credits', 'bad-source', 'schooling-only', 'media-only', 'out-of-scope']) test(`H43 excludes unsafe Mapping ${mode}`, () => {
+  const x = h43Fixture(), input = x.build();
+  const course = input.curriculum.courses.find(c => c.id === x.course.id);
+  const mapping = input.mappings.find(m => m.mappingId === x.mapping.mappingId);
+  if (mode === 'missing-edge') course.mappingIds.push('missing');
+  if (mode === 'duplicate-edge') input.mappings.push({ ...mapping });
+  if (mode === 'duplicate-owner') input.curriculum.courses.push({ ...course, id: 'other-owner' });
+  if (mode === 'bad-field') mapping.field = 'unproven';
+  if (mode === 'null-credits') { course.curriculumCredits = null; mapping.curriculumCredits = null; }
+  if (mode === 'mismatched-credits') mapping.curriculumCredits = 2;
+  if (mode === 'bad-source') input.curriculum.source = 'unknown';
+  if (mode === 'schooling-only') mapping.schoolingOnly = true;
+  if (mode === 'media-only') mapping.mediaOnly = true;
+  if (mode === 'out-of-scope') mapping.scopeId = input.programs.find(p => p.department === '経済学科').scopeId;
+  const { contributions } = h43Evidence(x, input); assert.equal(contributions.length, 0);
+  const p = x.progress(input);
+  assert.deepEqual([h42S(p).earned, h42S(p).status], mode === 'out-of-scope' ? [0, 'partial'] : [null, 'unknown']);
+});
+test('H43 orphan cannot supply quantity, safe other fact remains a known lower bound', () => {
+  const x = h43Fixture(); x.records = [{ id: 'orphan', method: 'schooling', sourceCourseId: 'missing', credits: 40 }];
+  const input = x.build(), p = x.progress(input);
+  assert.deepEqual([h42S(p).earned, h42S(p).status], [2, 'unknown']);
+  assert.equal(h43Evidence(x, input).contributions.length, 1);
+  x.rows = [];
+  assert.equal(h43Evidence(x, input).contributions.length, 0);
+  assert.deepEqual([h42S(x.progress(input)).earned, h42S(x.progress(input)).status], [null, 'unknown']);
+});
+test('H43 source media conflict is checked even before ordinary hold derived method evidence', () => {
+  const x = h43Fixture(); x.records = [mediaRecord(x, { sourceCourseId: x.rows[0].id }),
+    { ...mediaRecord(x, { sourceCourseId: x.rows[0].id }), id: 'nonmedia', method: 'correspondence', rawTerm: null }];
+  assert.equal(h43Evidence(x).contributions.length, 0);
+  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [null, 'unknown']);
+});
+for (const name of LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026) test(`H43 H19 boundary excludes ${name}`, () => {
+  const x = h41Fixture(); x.course.canonicalName = name; x.offering.name = name;
+  x.rows = [x.official(x, 1, 1)]; const input = x.build();
+  const { official, contributions } = h43Evidence(x, input);
+  assert.equal(official.allocations.length, 0); assert.equal(contributions.length, 0);
+  assert.deepEqual([h42S(x.progress(input)).earned, h42S(x.progress(input)).status], [null, 'unknown']);
+});
+for (const [department, name] of [['日本文学科', '総合特講'], ['史学科', '歴史資料学'], ['地理学科', '現地研究'], ['経済学科', '経済学特講'], ['日本文学科', '書道実技'], ['日本文学科', '基礎特講']]) test(`H43 excludes separate special policy ${department}/${name}`, () => {
+  const x = h41Fixture(department); x.course.canonicalName = name; x.offering.name = name;
+  x.rows = [x.official(x, 2, 2)];
+  assert.equal(h43Evidence(x).contributions.length, 0);
+  assert.equal(h42S(x.progress()).status, 'unknown');
+});
+for (const category of ['外国語', '専門教育']) test(`H43 H42 ${category} union counts global once without releasing local consumers`, () => {
+  const x = h41Fixture(), entry = category === '外国語' ? x.add('union-h43', category, '英語', '選択必修') : x;
+  const edge = { ...entry.mapping, mappingId: '43434343-4343-4343-8343-000000000001',
+    ...(category === '外国語' ? { field: '独語' } : { requirementType: '選択' }) };
+  x.f.mappings.push(edge); entry.course.mappingIds.push(edge.mappingId);
+  const rule = x.requirement('h43-local-S', { curriculum_category: category }, null, 'min_schooling_credits'); rule.value = 2;
+  x.rows = [x.official(entry, 4, 2)]; const input = x.build(), p = x.progress(input);
+  const { official, contributions, impact } = h43Evidence(x, input);
+  const before = unresolvedSchoolingImpact(official, false, input, x.scope, x.profile);
+  assert.equal(contributions.length, 1); assert.equal(impact.globalReferenceUnknown, false);
+  assert.deepEqual({ ...impact, globalReferenceUnknown: true }, before);
+  assert.deepEqual([h42S(p).earned, h42S(p).status], [2, 'partial']);
+  const local = p.requirements.find(r => r.requirementId === rule.id);
+  assert.deepEqual([local.earned, local.status], [0, 'unknown']);
+  const card = h31Card(p, category === '外国語' ? 'group-foreign' : 'professional-law-schooling');
+  assert.deepEqual([card.earned, card.status], [0, 'unknown']);
+  if (category === '外国語') assert.equal(h31Card(p, 'professional-law-schooling').status, 'unsatisfied');
+  else assert.equal(h31Card(p, 'group-foreign').status, 'unsatisfied');
+});
+test('H43 known S2 survives a second unresolved quantity without removing ordinary reasons', () => {
+  const x = h43Fixture(), other = x.add('unknown-h43', '一般教育', '人文', '選択必修');
+  x.rows.push(x.official(other, null, null)); const p = x.progress();
+  assert.deepEqual([h42S(p).earned, h42S(p).status], [2, 'unknown']);
+  assert.match(p.referenceProgress[0].reason, h41Reason); assert.equal(overall(p), 0);
+});
+test('H43 frozen authority preserves official aggregate despite component40 and annual credits99', () => {
+  const x = h43Fixture(), input = x.build();
+  x.records = [mediaRecord(x, { sourceCourseId: x.rows[0].id, credits: 40 })];
+  const offering = input.offerings.find(o => o.id === x.offering.id); offering.credits = 99; offering.method = 'schooling';
+  x.items = [item(offering, 'earned')];
+  const previous = x.progress(input), original = structuredClone({ input, rows: x.rows, records: x.records, profile: x.profile, items: x.items, previous });
+  [input, x.rows, x.records, x.profile, x.items, previous].forEach(deepFreeze);
+  const { official, contributions } = h43Evidence(x, input);
+  assert.equal(official.facts[0].earnedCreditsTotal, 2); assert.equal(contributions[0].schoolingCredits, 2);
+  assert.deepEqual(x.progress(input), previous); assert.equal(h42S(previous).earned, 2); assert.equal(overall(previous), 0);
+  assert.deepEqual({ input, rows: x.rows, records: x.records, profile: x.profile, items: x.items, previous }, original);
+  const noOffering = structuredClone(input); noOffering.offerings = [];
+  assert.equal(h42S(x.progress(noOffering, x.rows, [])).earned, 2);
+  assert.equal(initialState().schemaVersion, 22);
+  assert.equal(input.metadata.graduationCheckComplete, false); assert.equal(input.metadata.sourceLinksReverified, false);
+});
+
+test('H43 recognized_overlap remains held and recognition schooling is never added twice', () => {
+  const x = h43Fixture(); x.rows[0].earnedCreditsTotal = 4; x.offering.method = 'schooling';
+  x.profile.recognizedCredits.professionalCourses = [{ id: 'h43-recognition', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 4 }];
+  const input = x.build(), { official, contributions } = h43Evidence(x, input);
+  assert.ok(official.facts[0].diagnostics.includes('recognized_overlap'));
+  assert.equal(official.allocations.length, 0); assert.equal(contributions.length, 0);
+  assert.deepEqual([h42S(x.progress(input)).earned, h42S(x.progress(input)).status], [4, 'unknown']);
+});
+test('H43 null source S is not inferred from even all-media components', () => {
+  const x = h43Fixture(); x.rows[0].schoolingCreditsTotal = null;
+  x.records = [mediaRecord(x, { sourceCourseId: x.rows[0].id, credits: 40 })];
+  assert.equal(h43Evidence(x).contributions.length, 0);
+  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [null, 'unknown']);
+});
+test('H43 zero earned budget cannot acquire positive schooling from records', () => {
+  const x = h43Fixture(); x.rows[0].earnedCreditsTotal = 0;
+  x.records = [mediaRecord(x, { sourceCourseId: x.rows[0].id, credits: 40 })];
+  assert.equal(h43Evidence(x).contributions.length, 0);
+  assert.equal(h42S(x.progress()).earned, 0);
+});
+test('H43 safe quantity can coexist with other profile prerequisites remaining unknown', () => {
+  const x = h43Fixture(); x.profile.admissionType = 'unknown'; x.profile.recognizedCredits.schoolingEquivalentCredits = 0;
+  assert.equal(h43Evidence(x).contributions.length, 1);
+  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [null, 'unknown']);
+});
+test('H43 unsafe candidate in otherwise safe union excludes the entire contribution', () => {
+  const x = h43Fixture();
+  const edge = { ...x.mapping, mappingId: '43434343-4343-4343-8343-000000000002', requirementType: '選択', mediaOnly: true };
+  x.f.mappings.push(edge); x.course.mappingIds.push(edge.mappingId);
+  const input = x.build();
+  assert.equal(h43Evidence(x, input).contributions.length, 0);
+  assert.deepEqual([h42S(x.progress(input)).earned, h42S(x.progress(input)).status], [null, 'unknown']);
 });
