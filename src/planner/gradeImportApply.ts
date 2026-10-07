@@ -1,4 +1,4 @@
-import type { HoseiGradeImportCourse, HoseiGradeImportV1 } from './gradeImportContract';
+import { parseHoseiGradeImportV1, type HoseiGradeImportCourse } from './gradeImportContract';
 import type { Offering, PlannerItem, PlannerState } from './plannerCatalog';
 import { plannerItemFromCourseSearch } from './plannerItemState';
 import { isStandardTerm } from './planTable';
@@ -86,7 +86,11 @@ function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, occ
   const inferred = sourceYear ?? (schooling ? academicYearFromDate(schooling.date ?? capturedAt.slice(0, 10)) : inferredCorrespondenceYear(course, capturedAt).academicYear);
   return { id: crypto.randomUUID(), fingerprint: sourceFingerprint(course, occurrence), source: 'hosei_import', rawName: course.rawName, categoryRaw: course.categoryRaw, capturedAt, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, academicYear: inferred, yearSource: sourceYear !== null ? 'source' : inferred !== null ? 'inferred' : 'unknown', ...curriculumMatch, offeringMatch: selectedOffering ? 'exact_unique' : openingCandidates.length ? 'ambiguous' : 'unmatched', courseId, selectedOfferingId: selectedOffering?.id ?? null, selectionSource: selectedOffering ? 'auto' : 'none', match: courseId ? 'exact_unique' : candidates.length ? 'ambiguous' : 'unmatched', candidateOfferingIds: candidates.map(candidate => candidate.id) };
 }
-export function importPreview(data: HoseiGradeImportV1, offerings: Offering[], existing: ImportedStudyRecord[] = [], existingCourses: ImportedCourseAchievement[] = [], context: ImportCurriculumContext = defaultCurriculumContext): ImportPreviewUnit[] {
+export function importPreview(value: unknown, offerings: Offering[], existing: ImportedStudyRecord[] = [], existingCourses: ImportedCourseAchievement[] = [], context: ImportCurriculumContext = defaultCurriculumContext): ImportPreviewUnit[] {
+  // All entry points, including direct callers, cross the same boundary before
+  // matching, fingerprinting or retaining any source data in preview units.
+  const data = parseHoseiGradeImportV1(value);
+  if (!data) throw new Error('JSON が成績表 contract v1 を満たしていません。');
   const rows: ImportPreviewUnit[] = [];
   const occurrences = new Map<string, number>();
   for (const course of data.courses) {

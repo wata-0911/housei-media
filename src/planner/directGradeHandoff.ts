@@ -1,4 +1,4 @@
-import { isHoseiGradeImportV1, type HoseiGradeImportV1 } from './gradeImportContract';
+import { parseHoseiGradeImportV1, type HoseiGradeImportV1 } from './gradeImportContract';
 import { importPreview, type ImportedStudyRecord, type ImportPreviewUnit } from './gradeImportApply';
 import type { Offering } from './plannerCatalog';
 
@@ -20,6 +20,7 @@ export function isGradeHandoffResponse(value: unknown, token: string): value is 
 
 /** The page validates again even though the extension only gives data to this origin. */
 export function previewDirectGradeHandoff(value: unknown, offerings: Offering[], existing: ImportedStudyRecord[]): { data: HoseiGradeImportV1; units: ImportPreviewUnit[] } | null {
-  if (!isHoseiGradeImportV1(value)) return null;
-  return { data: value, units: importPreview(value, offerings, existing) };
+  const data = parseHoseiGradeImportV1(value);
+  if (!data) return null;
+  return { data, units: importPreview(data, offerings, existing) };
 }
