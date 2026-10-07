@@ -2,8 +2,8 @@
 
 ## 1. Document Status
 
-- 状態: 現行実装の Architecture v1（2026-10-07、Asia/Tokyo）。将来設計の確定書ではない。
-- 基準: `origin/dev` の `1b14ff44f93ef665c0677d4d36b5077fa2cd8deb`（PR #87 `fix(planner): enforce grade import trust boundary` merge）。H41/H42 とその review follow-up を含む。H43の限定schooling経路はPR #88後の `6ab100abcc7d9cdc4b29ea0204b7799c8bd4c9ee` をbaseに追加。H19のLaw S30/S8分離はPR #91後の `7643130971246768624fe486a1fbb0d4d1cc8cd1` をbaseに追加。
+- 状態: 現行実装の Architecture v1（2026-10-08、Asia/Tokyo）。将来設計の確定書ではない。
+- 基準: `origin/dev` の `1b14ff44f93ef665c0677d4d36b5077fa2cd8deb`（PR #87 `fix(planner): enforce grade import trust boundary` merge）。H41/H42 とその review follow-up を含む。H43の限定schooling経路はPR #88後の `6ab100abcc7d9cdc4b29ea0204b7799c8bd4c9ee` をbaseに追加。H19のLaw S30/S8分離はPR #91後の `7643130971246768624fe486a1fbb0d4d1cc8cd1` をbaseに追加。H14の専門認定overlap局所化は `dfb92b2c15aaccd7a3e86e7e466f2d9bbc51de79` をbaseに追加。
 - `PlannerState.schemaVersion = 22`。catalog metadata の `graduationCheckComplete = false`、`sourceLinksReverified = false` を維持する。
 - `graduationCheckComplete` は engine/catalog の開発上の完成度であり、個別学生の卒業可否ではない。個別の充足表示を合成して最終卒業判定を返すエンジンではない。
 - 本書の「official」は取り込まれた成績表行の**計算上の authority**を指す。大学による署名・真正性を認証したデータという意味ではない。
@@ -241,11 +241,14 @@ UIのCourseProgressや年度単位、成績表示、学習・評価・guidance�
 - **Exemptions:** 要件を免除するものでearned creditを作らない。fieldの免除はminimumを緩和し、全免除cardのearnedは0。学士入学のoverall referenceでは42の免除を別表示しtargetから分離する。
 - **Open University:** 明示的認定の上限10、一般教育totalへの寄与。人文/社会/自然のnamed field minimumを埋めない。全一般教育免除なら加算しない。
 - **Professional recognition:** 有効な`offeringId`から計算専用earned PlannerItemを作る。保存itemsへ追加しない。既存items（statusを問わない）および先に生成した認定itemの `courseId`、それがなければOffering IDでdedupeし、卒論Offeringは生成対象外。この経路の算入はOffering/Mappingを通り、認定rowの`credits`をそのまま全consumerへ加える方式ではない。
-- **Officialとの重複境界:** earned PlannerItemは第5章のexact CurriculumCourse/source linkによるofficial優先除外を受ける。一方、専門認定itemはその後に生成され、同じhelperを再度通すわけではない。official側はprofileに専門認定が1件でもある場合、該当professional factを `recognized_overlap` で広くholdする。これが同一official identityとの二重算入を避ける保守的境界であり、認定とofficialをidentityごとに精密merge/dedupe済みという意味ではない。
+- **Officialとの重複境界（H14）:** earned PlannerItemは第5章のexact CurriculumCourse/source linkによるofficial優先除外を受ける。一方、専門認定itemはその後に生成され、同じhelperを再度通すわけではない。`resolveRecognizedProfessionalCurriculumIdentity()` は計算専用projectionとして、recognized rowをexplicit relation経由でexact institutional CurriculumCourseへ解決する。current_2026かつofficial Course/Mappingの全edge・owner・metadataが安全で、**全recognized rowsが比較可能**、かつ当該official Courseとすべて異なる場合だけ `recognized_overlap` holdを解除する。同一Courseが1件でもある場合、または認定側がunresolved / inconsistentならholdを維持する。複数official factsは個別に比較する。これは新しいwinner/merge policyではない。
+- **Recognition identity proof:** `offeringId` は存在する一意なmatched Offeringと一意なexplicit `offeringRelations`、全Mapping edgeの一意な制度ownerの一致を必要とする。joined `Offering.curriculumCourseId` だけでは証明しない。legacy `courseId` は一意な `legacyCourseRelations` の単一exact候補を使い、現在残るannual membersの矛盾も拒否する。`mappingId` は一意なMapping/制度ownerによる補助照合のみで、単独authorityに昇格させない。供給された全IDの解決先が一致しなければ拒否し、候補の任意選択・名称一致/不一致・normalized/fuzzy/prefix/substring match・認定credits値をidentity proofに使わない。年度Offeringをhistorical official authorityへ昇格させない。
 - **Unallocated recognition:** `totalCredits - recognizedCreditBreakdownTotal()` の余りだけを該当入学routeのoverall referenceへ加える。内訳をtotalと二重加算せず、余りを任意の要件bucketへ配分しない。
 - **Admission / schooling equivalent:** profileの全体S equivalentはS referenceで消費し、外国語固有S equivalentは外国語cardの条件。自動推測しない。official S側にも、通常allocationではfirst_year/unknown以外のrouteで全体S equivalentが明示0でない場合にSをnullとする保守的guardがある。H19/H43はfirst_year以外で明示0を要求し、専門認定が1件でもあれば全contributionを保留する。認定prefillも利用者の保存が必要。
 
-共通認定はCards中心、専門認定はcalculation-items経由でStructured/Cardsにも届く。この非対称性とrecognized overlapは現行の制限である。
+共通認定はCards中心、専門認定はcalculation-items経由でStructured/Cardsにも届く。H14はoverlap guardだけを局所化し、synthetic recognized PlannerItem、既存itemsによるdedupe、official aggregate数量、その他のspecial/partial/method等のguardは維持する。H20のschooling recognition overlapは未解決で、新しいS dedupe/budget policyを導入しない。H19/H43共有guardも専門認定が1件でもあれば閉じたまま。通常allocationが復活した結果の既存S算入と、held-S contributionは区別する。
+
+根拠: [recognition identity projection](../../src/planner/recognizedProfessionalIdentity.ts)、[official overlap guard](../../src/planner/officialGraduationFacts.ts)、[synthetic items / consumers](../../src/planner/graduationProgress.ts)。
 
 ### Special official facts と Planner専用配分
 
@@ -284,7 +287,7 @@ Planner側にはrepeatableの回数/単位上限、史学演習の利用者確�
 - current curriculum（2026）中心。Offeringは年度データだがhistorical authorityではなく、historical / multi-year authorityは未完成。`CurriculumVersion` / `CurriculumPlacement` は未導入。入学年度だけで適用課程を決定しない。
 - legacy Course / courseId、recognition、schooling、guidance等の経路が併存する。全consumerが単一identity/allocatorへ統合済みではない。
 - **H43は限定実装:** 通常科目の安全なheld positive Sをglobal referenceだけへ独立算入する。earned/composition不明、制度identity/metadata/数量不整合、特殊family、method制約、認定重複懸念等は非算入。外国語completion、Law S8、arbitrary Structured Sへのpositive contributionは追加していない。
-- **H19は限定実装:** exact Law13名称の安全な明示positive Sをglobal S30へ算入し、Law S8からは除外する。unsafe identity/Mapping/quantity、S=nullの推定、public/special一般、認定重複解決は含まない。H14（専門認定overlap）/H20（transfer schooling equivalent）/H58（public global S）等は未解決のまま。
+- **H19は限定実装:** exact Law13名称の安全な明示positive Sをglobal S30へ算入し、Law S8からは除外する。unsafe identity/Mapping/quantity、S=nullの推定、public/special一般、認定重複解決は含まない。H14はordinary professional overlapのsafe disjoint subsetのみ局所化し、H19/H43の認定guardは解除しない。H20（transfer schooling equivalent）/H58（public global S）等は未解決のまま。
 - recognition/special remainderは未完。recognized overlap、duplicate official rows、特殊family、非単調再配分、unsupported conditions等の保留が残る。
 - **H01–H66 final re-auditは未完。** 過去inventoryとfollow-upは履歴として読む。本書の事実照合は、それら全項目の再実装/解消を意味しない。
 - `graduationCheckComplete=false` のまま部分判定を提供する。本sliceのscope前提として、Public Betaにmulti-year対応は必須ではない。

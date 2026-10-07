@@ -13,6 +13,7 @@ import { deriveImportedAchievements } from '../src/planner/importedAchievementCa
 import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
 import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
+import { resolveRecognizedProfessionalCurriculumIdentity } from '../src/planner/recognizedProfessionalIdentity.ts';
 import { unresolvedOfficialImpact, officialImpactsRequirement } from '../src/planner/unresolvedOfficialImpact.ts';
 import { unresolvedSchoolingImpact } from '../src/planner/unresolvedSchoolingImpact.ts';
 import { heldOfficialSchoolingContributions } from '../src/planner/heldOfficialSchooling.ts';
@@ -25,6 +26,34 @@ import { matchImportedCurriculumCourse } from '../src/planner/curriculumImportMa
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
+
+test('H14 pre-fix reproduction: disjoint exact recognition counts official A and recognized B once', () => {
+  const x = h14Fixture();
+  const f = x.build();
+  const facts = deriveOfficialGraduationFacts(x.rows, [], f, x.scope, x.profile);
+  const p = x.progress(f);
+  assert.deepEqual({ allocations: facts.allocations.length, diagnostics: facts.facts[0].diagnostics,
+    professional: professional(p).earned, overall: overall(p) },
+  { allocations: 1, diagnostics: [], professional: 8, overall: 8 });
+  assert.equal(p.importedContributionCount, 1);
+  assert.equal(professional(p).details[0].earned, 2);
+});
+
+function h14Fixture() {
+  const x = h41Fixture();
+  x.a = { course: x.course, mapping: x.mapping, offering: x.offering };
+  x.b = x.add('recognition-B', '専門教育', null, '選択必修', 4, 'correspondence', '別制度科目B', x.scope);
+  x.c = x.add('recognition-C', '専門教育', null, '選択必修', 4, 'correspondence', '別制度科目C', x.scope);
+  for (const entry of [x.a, x.b, x.c]) x.f.curriculum.legacyCourseRelations.push({
+    legacyCourseId: entry.offering.courseId, curriculumCourseId: entry.course.id,
+    candidateCurriculumCourseIds: [entry.course.id],
+  });
+  x.recognize = entry => ({ id: `recognition-${entry.course.id}`, offeringId: entry.offering.id,
+    courseId: entry.offering.courseId, mappingId: entry.mapping.mappingId, name: entry.offering.name, credits: 4 });
+  x.profile.recognizedCredits.professionalCourses = [x.recognize(x.b)];
+  x.rows = [x.official(x.a, 4, 2)];
+  return x;
+}
 
 test('H19 pre-fix reproduction: exact Law marker retains global S2 without Law S8 or ordinary changes', () => {
   const x = fixture();
@@ -3761,4 +3790,281 @@ test('H19 explicit exemption/additional zero preserves positive S without treati
   assert.equal(h42S(x.progress()).earned, 2);
   x.row.schoolingCreditsTotal = null;
   assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [null, 'unknown']);
+});
+
+// H14: catalog-valid positive fixtures; malformed relation cases mutate only after attach.
+const h14Facts = (x, f = x.build()) => deriveOfficialGraduationFacts(x.rows, x.records, f, x.scope, x.profile);
+const h14Recognition = x => x.profile.recognizedCredits.professionalCourses;
+const h14Held = (x, f = x.build()) => {
+  const result = h14Facts(x, f);
+  assert.equal(result.allocations.length, 0);
+  assert.ok(result.facts[0].diagnostics.includes('recognized_overlap'));
+  return result;
+};
+for (const mode of ['offering', 'legacy', 'all']) test(`H14 exact ${mode} identity projects through explicit relations`, () => {
+  const x = h14Fixture(), row = h14Recognition(x)[0];
+  if (mode === 'offering') { row.courseId = null; row.mappingId = null; }
+  if (mode === 'legacy') { row.offeringId = null; row.mappingId = null; }
+  const f = x.build();
+  assert.deepEqual(resolveRecognizedProfessionalCurriculumIdentity(row, f), { kind: 'resolved', curriculumCourseId: x.b.course.id });
+  assert.equal(h14Facts(x, f).allocations.length, 1);
+});
+for (const mode of ['offering', 'legacy', 'all']) test(`H14 same Course ${mode} stays held and contributes at most once`, () => {
+  const x = h14Fixture(), row = x.recognize(x.a);
+  if (mode === 'offering') { row.courseId = null; row.mappingId = null; }
+  if (mode === 'legacy') { row.offeringId = null; row.mappingId = null; }
+  x.profile.recognizedCredits.professionalCourses = [row];
+  h14Held(x);
+  const p = x.progress();
+  assert.equal(p.importedContributionCount, 0);
+  assert.equal(professional(p).earned, mode === 'legacy' ? 0 : 4);
+  assert.equal(overall(p), mode === 'legacy' ? null : 4);
+});
+for (const [mode, allocated, total] of [['B/C', 1, 12], ['B/A', 0, 8], ['B/unknown', 0, 4]]) test(`H14 all recognized comparable ${mode}`, () => {
+  const x = h14Fixture();
+  h14Recognition(x).push(mode === 'B/C' ? x.recognize(x.c) : mode === 'B/A' ? x.recognize(x.a)
+    : { id: 'unknown', offeringId: null, courseId: null, mappingId: null, name: '別名', credits: 4 });
+  assert.equal(h14Facts(x).allocations.length, allocated);
+  assert.equal(overall(x.progress()), total);
+  if (!allocated) h14Held(x);
+  const before = x.progress(); h14Recognition(x).reverse();
+  assert.deepEqual(x.progress(), before);
+});
+for (const name of ['監査科目', '全く異なる科目名']) test(`H14 name-only ${name} is never identity proof`, () => {
+  const x = h14Fixture();
+  x.profile.recognizedCredits.professionalCourses = [{ id: 'name-only', offeringId: null, courseId: null, mappingId: null, name, credits: 4 }];
+  h14Held(x);
+});
+test('H14 misleading recognition name cannot override exact disjoint or same identity', () => {
+  const x = h14Fixture(); h14Recognition(x)[0].name = x.a.course.canonicalName;
+  assert.equal(h14Facts(x).allocations.length, 1); assert.equal(overall(x.progress()), 8);
+  x.profile.recognizedCredits.professionalCourses = [{ ...x.recognize(x.a), name: '明確に異なる表示名' }];
+  h14Held(x); assert.equal(overall(x.progress()), 4);
+});
+const h14BrokenRelations = [
+  ['missing offering', (x, f, r) => { r.offeringId = 'missing'; }],
+  ['unknown legacy', (x, f, r) => { r.courseId = 'missing'; }],
+  ['mapping alone', (x, f, r) => { r.offeringId = null; r.courseId = null; }],
+  ['missing annual relation', (x, f) => { f.curriculum.offeringRelations = f.curriculum.offeringRelations.filter(r => r.offeringId !== x.b.offering.id); }],
+  ['ambiguous annual relation', (x, f) => { const r = f.curriculum.offeringRelations.find(r => r.offeringId === x.b.offering.id); r.curriculumCourseId = null; r.candidateCurriculumCourseIds.push(x.a.course.id); }],
+  ['duplicate annual relation', (x, f) => { f.curriculum.offeringRelations.push({ ...f.curriculum.offeringRelations.find(r => r.offeringId === x.b.offering.id) }); }],
+  ['stale joined id', (x, f) => { f.offerings.find(o => o.id === x.b.offering.id).curriculumCourseId = x.a.course.id; }],
+  ['stale annual mapping', (x, f) => { f.offerings.find(o => o.id === x.b.offering.id).mappingIds = [x.a.mapping.mappingId]; }],
+  ['duplicate offering', (x, f) => { f.offerings.push({ ...f.offerings.find(o => o.id === x.b.offering.id) }); }],
+  ['unmatched offering', (x, f) => { f.offerings.find(o => o.id === x.b.offering.id).resolutionStatus = 'manual_review'; }],
+  ['missing legacy relation', (x, f) => { f.curriculum.legacyCourseRelations = f.curriculum.legacyCourseRelations.filter(r => r.legacyCourseId !== x.b.offering.courseId); }],
+  ['ambiguous legacy relation', (x, f) => { const r = f.curriculum.legacyCourseRelations.find(r => r.legacyCourseId === x.b.offering.courseId); r.curriculumCourseId = null; r.candidateCurriculumCourseIds.push(x.a.course.id); }],
+  ['duplicate legacy relation', (x, f) => { f.curriculum.legacyCourseRelations.push({ ...f.curriculum.legacyCourseRelations.find(r => r.legacyCourseId === x.b.offering.courseId) }); }],
+  ['unknown Mapping', (x, f, r) => { r.mappingId = 'missing'; }],
+  ['conflicting courseId', (x, f, r) => { r.courseId = x.a.offering.courseId; }],
+  ['conflicting mappingId', (x, f, r) => { r.mappingId = x.a.mapping.mappingId; }],
+  ['duplicate Mapping', (x, f) => { f.mappings.push({ ...x.b.mapping }); }],
+  ['duplicate owner', (x, f) => { f.curriculum.courses.push({ ...x.b.course, id: 'duplicate-owner' }); }],
+  ['duplicate Course ID', (x, f) => { f.curriculum.courses.push({ ...x.b.course, mappingIds: [x.c.mapping.mappingId] }); }],
+  ['missing Course', (x, f) => { f.curriculum.courses = f.curriculum.courses.filter(c => c.id !== x.b.course.id); }],
+  ['missing Course edge', (x, f) => { f.curriculum.courses.find(c => c.id === x.b.course.id).mappingIds.push('missing'); }],
+  ['duplicate Course edge', (x, f) => { f.curriculum.courses.find(c => c.id === x.b.course.id).mappingIds.push(x.b.mapping.mappingId); }],
+  ['empty candidates', (x, f) => { f.curriculum.offeringRelations.find(r => r.offeringId === x.b.offering.id).candidateCurriculumCourseIds = []; }],
+  ['duplicate candidates', (x, f) => { f.curriculum.offeringRelations.find(r => r.offeringId === x.b.offering.id).candidateCurriculumCourseIds.push(x.b.course.id); }],
+  ['inconsistent candidates', (x, f) => { f.curriculum.offeringRelations.find(r => r.offeringId === x.b.offering.id).candidateCurriculumCourseIds = [x.a.course.id]; }],
+  ['legacy member conflict', (x, f) => { f.offerings.find(o => o.id === x.c.offering.id).courseId = x.b.offering.courseId; }],
+  ['future source', (x, f) => { f.curriculum.source = 'future'; }],
+  ['future schema', (x, f) => { f.curriculum.schemaVersion = 2; }],
+];
+for (const [label, change] of h14BrokenRelations) test(`H14 unsafe recognition ${label} holds every professional fact`, () => {
+  const x = h14Fixture(), f = x.build(), row = h14Recognition(x)[0]; change(x, f, row);
+  assert.equal(resolveRecognizedProfessionalCurriculumIdentity(row, f).kind, 'unresolved');
+  x.rows.push(x.official(x.c, 4, 0));
+  const result = h14Held(x, f);
+  assert.ok(result.facts.every(fact => fact.diagnostics.includes('recognized_overlap')));
+});
+for (const same of [false, true]) test(`H14 per-fact localization with two official Courses same=${same}`, () => {
+  const x = h14Fixture(); x.rows.push(x.official(x.c, 4, 0));
+  if (same) x.profile.recognizedCredits.professionalCourses = [x.recognize(x.a)];
+  const result = h14Facts(x);
+  assert.deepEqual(result.allocations.map(a => a.fact.curriculumCourseId).sort(), (same ? [x.c.course.id] : [x.a.course.id, x.c.course.id]).sort());
+  assert.equal(overall(x.progress()), same ? 8 : 12);
+  assert.equal(professional(x.progress()).details[0].earned, same ? 2 : 3);
+});
+test('H14 released allocation reaches structured ordinary/completion/S, cards and reference once', () => {
+  const x = h14Fixture();
+  const ordinary = x.requirement('h14-ordinary', { curriculum_category: '専門教育' });
+  const full = x.requirement('h14-full', { curriculum_category: '専門教育' }, { full_course_credits_required: true, min_courses: 2 });
+  const count = x.requirement('h14-count', { curriculum_category: '専門教育' }, null, 'min_courses');
+  const s = x.requirement('h14-s', { course_name: x.a.course.canonicalName }, null, 'min_schooling_credits');
+  const p = x.progress();
+  for (const [rule, expected] of [[ordinary, 8], [full, 8], [count, 2], [s, 2]]) assert.equal(p.requirements.find(r => r.requirementId === rule.id).earned, expected);
+  assert.equal(h31Card(p, 'professional-law-total').earned, 8);
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 2);
+  assert.equal(p.referenceProgress[1].earned, 2);
+  assert.equal(h31Card(p, 'group-foreign').status, 'unsatisfied');
+  assert.equal(p.graduationCheckComplete, false);
+});
+test('H14 Law overflow counts released A and recognition B in exclusive buckets', () => {
+  const x = h14Fixture();
+  for (let i = 0; i < 7; i++) {
+    const entry = x.add(`h14-full-${i}`, '専門教育', null, '選択必修', 4, 'correspondence', `完成${i}`, x.scope);
+    x.rows.push(x.official(entry, 4, 0));
+  }
+  const p = x.progress();
+  assert.equal(professional(p).earned, 32);
+  assert.equal(professional(p).details[0].earned, 9);
+  assert.equal(h31Card(p, 'professional-law-elective').earned, 4);
+  assert.equal(h31Card(p, 'professional-law-total').earned, 36);
+  assert.equal(overall(p), 36);
+});
+
+const h14OfficialGuards = [
+  ['special', x => { x.a.course.canonicalName = '基礎特講'; }],
+  ['repeatable', x => { x.a.course.canonicalName = '法律学演習'; }],
+  ['public', x => { x.a.mapping.requirementType = '公開科目'; }],
+  ['partial outside H12', x => { x.rows[0].earnedCreditsTotal = 1; }],
+  ['H12 S0', x => { x.rows[0].earnedCreditsTotal = 2; x.rows[0].schoolingCreditsTotal = 0; }],
+  ['duplicate official', x => { x.rows.push({ ...x.rows[0], id: 'another-source' }); }],
+  ['mapping conflict', x => { const m = { ...x.a.mapping, mappingId: 'conflict', requirementType: '選択' }; x.f.mappings.push(m); x.a.course.mappingIds.push(m.mappingId); }],
+  ['legacy curriculum', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }],
+  ['unknown curriculum', x => { x.profile.curriculumApplicability = 'unknown'; }],
+  ['unsafe composition', x => { x.rows[0].compositionCredits = 8; }],
+  ['unsafe Mapping field', x => { x.a.mapping.field = 'unsafe'; }],
+  ['exemption', x => { x.rows[0].recognizedExemption = 1; }],
+  ['additional', x => { x.rows[0].additionalEnrollment = 1; }],
+  ['media evidence', x => { x.a.mapping.mediaOnly = true; }],
+  ['schooling evidence', x => { x.a.mapping.schoolingOnly = true; }],
+  ['official duplicate owner', x => { x.f.curriculum.courses.push({ ...x.a.course, id: 'other-owner' }); }],
+];
+for (const [label, change] of h14OfficialGuards) test(`H14 disjoint recognition cannot bypass ${label}`, () => {
+  const x = h14Fixture(); x.build(); change(x);
+  assert.equal(resolveRecognizedProfessionalCurriculumIdentity(h14Recognition(x)[0], x.f).kind, 'resolved');
+  assert.equal(h14Facts(x, x.f).allocations.length, 0);
+});
+test('H14 H12 safe partial remains completed0 and cannot spend recognition as a completion', () => {
+  const x = h14Fixture(); x.rows[0].earnedCreditsTotal = 2;
+  const result = h14Facts(x), p = x.progress();
+  assert.deepEqual(result.allocations.map(a => [a.credits, a.completedCredits, a.schoolingCredits]), [[2, 0, 2]]);
+  assert.equal(professional(p).details[0].earned, 1);
+  assert.equal(overall(p), 4);
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 2);
+});
+test('H14 official aggregate alone owns quantity despite components40 annual99 recognition7', () => {
+  const x = h14Fixture(); x.a.offering.credits = 99; h14Recognition(x)[0].credits = 7;
+  x.records = [{ id: 'component40', source: 'hosei_import', sourceCourseId: x.rows[0].id, method: 'schooling', rawTerm: '夏', credits: 40 }];
+  const f = x.build(), inputs = { f, rows: x.rows, records: x.records, profile: x.profile, items: x.items };
+  const snapshot = structuredClone(inputs); deepFreeze(inputs);
+  assert.equal(graduationProfileValidationError(x.profile), null);
+  const result = h14Facts(x, f), p = x.progress(f);
+  assert.deepEqual(result.allocations.map(a => [a.credits, a.completedCredits, a.schoolingCredits]), [[4, 4, 2]]);
+  assert.equal(overall(p), 8);
+  assert.deepEqual(inputs, snapshot);
+  assert.equal(initialState().schemaVersion, 22);
+});
+for (const status of ['earned', 'planned', 'in_progress', 'waiting']) test(`H14 existing recognition Planner item ${status} keeps synthetic dedupe semantics`, () => {
+  const x = h14Fixture(); x.items = [item(x.b.offering, status)];
+  const snapshot = structuredClone(x.items), p = x.progress();
+  assert.equal(overall(p), status === 'earned' ? 8 : 4);
+  assert.equal(professional(p).planned, status === 'planned' ? 4 : 0);
+  assert.equal(professional(p).inProgress, status === 'in_progress' ? 4 : 0);
+  assert.deepEqual(x.items, snapshot);
+});
+test('H14 earned official duplicate and separate recognition do not duplicate either Course', () => {
+  const x = h14Fixture(); x.items = [item(x.a.offering, 'earned'), item(x.b.offering, 'earned')];
+  assert.equal(overall(x.progress()), 8);
+  assert.equal(professional(x.progress()).details[0].earned, 2);
+  assert.equal(x.items.length, 2);
+});
+test('H14 same official/recognition with existing earned item preserves conservative existing loss boundary', () => {
+  const x = h14Fixture(); x.profile.recognizedCredits.professionalCourses = [x.recognize(x.a)];
+  x.items = [item(x.a.offering, 'earned')];
+  h14Held(x);
+  // Existing official-priority removal happens before recognition synthesis,
+  // whose original-items dedupe still suppresses the same earned item.
+  assert.equal(professional(x.progress()).earned, 0);
+  assert.equal(x.items[0].status, 'earned');
+});
+test('H14 H19 guard stays closed even after ordinary disjoint release', () => {
+  const x = h14Fixture(); x.a.course.canonicalName = 'データサイエンス入門A';
+  const f = x.build(), result = h14Facts(x, f), p = x.progress(f);
+  assert.equal(result.allocations.length, 1);
+  assert.equal(result.allocations[0].schoolingCredits, null);
+  assert.deepEqual(lawExcludedOfficialSchoolingContributions(result, x.rows, [], f, x.scope, x.profile), []);
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
+  assert.deepEqual([p.referenceProgress[1].earned, p.referenceProgress[1].status], [null, 'unknown']);
+});
+test('H14 H43 guard stays closed for held partial with safe disjoint recognition', () => {
+  const x = h14Fixture(); x.rows[0].earnedCreditsTotal = 1;
+  x.rows[0].schoolingCreditsTotal = 1;
+  const f = x.build(), result = h14Facts(x, f);
+  assert.equal(result.allocations.length, 0);
+  assert.deepEqual(heldOfficialSchoolingContributions(result, x.rows, [], f, x.scope, x.profile), []);
+  assert.equal(x.progress(f).referenceProgress[1].earned, null);
+});
+for (const s of [null, 2]) test(`H14 H20 transfer S equivalent ${s} retains normal S hold`, () => {
+  const x = h14Fixture(); x.profile.admissionType = 'other_transfer'; x.profile.recognizedCredits.schoolingEquivalentCredits = s;
+  const result = h14Facts(x), p = x.progress();
+  assert.equal(result.allocations[0].credits, 4);
+  assert.equal(result.allocations[0].schoolingCredits, null);
+  assert.equal(p.referenceProgress[1].earned, s);
+  assert.equal(p.referenceProgress[1].status, 'unknown');
+});
+test('H14 recognition S and normal official S use existing separate consumers once', () => {
+  const x = h14Fixture(); x.b.offering.method = 'schooling';
+  const p = x.progress();
+  assert.equal(overall(p), 8);
+  assert.equal(p.referenceProgress[1].earned, 6);
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 6);
+});
+test('H14 official annual Offering may disappear without becoming historical authority', () => {
+  const x = h14Fixture(), f = x.build(), before = h14Facts(x, f);
+  f.offerings = f.offerings.filter(o => o.id !== x.a.offering.id);
+  assert.deepEqual(h14Facts(x, f), before);
+  assert.equal(overall(x.progress(f)), 8);
+});
+test('H14 legacy-only exact crosswalk survives absent annual members without synthesizing recognition', () => {
+  const x = h14Fixture(), f = x.build(), r = h14Recognition(x)[0];
+  r.offeringId = null; r.mappingId = null;
+  f.offerings = f.offerings.filter(o => o.courseId !== r.courseId);
+  assert.deepEqual(resolveRecognizedProfessionalCurriculumIdentity(r, f), { kind: 'resolved', curriculumCourseId: x.b.course.id });
+  assert.equal(overall(x.progress(f)), 4);
+});
+
+test('H14 equivalent Mapping edges share one identity without choosing a candidate', () => {
+  const x = h14Fixture();
+  const m = { ...x.b.mapping, mappingId: '14141414-1414-4141-8141-000000000001' };
+  x.f.mappings.push(m); x.b.course.mappingIds.push(m.mappingId); x.b.offering.mappingIds.push(m.mappingId);
+  h14Recognition(x)[0].mappingId = m.mappingId;
+  assert.deepEqual(resolveRecognizedProfessionalCurriculumIdentity(h14Recognition(x)[0], x.build()), { kind: 'resolved', curriculumCourseId: x.b.course.id });
+  assert.equal(overall(x.progress()), 8);
+});
+test('H14 same identity has no duplicate structured credit or completion', () => {
+  const x = h14Fixture(); x.profile.recognizedCredits.professionalCourses = [x.recognize(x.a)];
+  const credit = x.requirement('h14-same-credit', { curriculum_category: '専門教育' }, { full_course_credits_required: true });
+  const count = x.requirement('h14-same-count', { curriculum_category: '専門教育' }, null, 'min_courses');
+  const p = x.progress();
+  assert.equal(p.requirements.find(r => r.requirementId === credit.id).earned, 4);
+  assert.equal(p.requirements.find(r => r.requirementId === count.id).earned, 1);
+  assert.equal(professional(p).details[0].earned, 1);
+  assert.equal(overall(p), 4);
+});
+for (const department of ['法律学科', '日本文学科', '史学科', '地理学科', '経済学科', '商業学科']) test(`H14 real catalog UI-produced recognition ${department} compares institutional Courses`, () => {
+  const x = fixture(department); x.f = catalog;
+  const eligible = catalog.offerings.flatMap(offering => {
+    const mappings = offering.mappingIds.flatMap(id => catalog.mappings.find(m => m.mappingId === id) ?? [])
+      .filter(m => m.scopeId === x.scope && m.category === '専門教育');
+    if (offering.resolutionStatus !== 'matched' || offering.credits === null || mappings.length !== 1
+      || mappings[0].curriculumCredits === null || mappings[0].curriculumCredits > offering.credits
+      || offering.name === '卒業論文' || /史学演習|史特講|歴史資料学/.test(offering.name)) return [];
+    const r = { id: offering.id, offeringId: offering.id, courseId: offering.courseId, mappingId: mappings[0].mappingId, name: offering.name, credits: offering.credits };
+    const resolved = resolveRecognizedProfessionalCurriculumIdentity(r, catalog);
+    if (resolved.kind !== 'resolved') return [];
+    const course = catalog.curriculum.courses.find(c => c.id === resolved.curriculumCourseId);
+    const row = { ...x.row, curriculumCourseId: course.id, candidateCurriculumCourseIds: [course.id], rawName: course.canonicalName,
+      compositionCredits: course.curriculumCredits, earnedCreditsTotal: course.curriculumCredits, schoolingCreditsTotal: 0 };
+    return deriveOfficialGraduationFacts([row], [], catalog, x.scope, x.profile).allocations.length ? [{ r, row }] : [];
+  });
+  assert.ok(eligible.length >= 2);
+  const a = eligible[0], b = eligible.find(e => e.row.curriculumCourseId !== a.row.curriculumCourseId);
+  assert.ok(b);
+  x.profile.recognizedCredits.professionalCourses = [b.r];
+  assert.equal(deriveOfficialGraduationFacts([a.row], [], catalog, x.scope, x.profile).allocations.length, 1);
+  x.profile.recognizedCredits.professionalCourses = [a.r];
+  assert.equal(deriveOfficialGraduationFacts([a.row], [], catalog, x.scope, x.profile).allocations.length, 0);
 });
