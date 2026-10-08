@@ -20,8 +20,11 @@ export function safePositiveOfficialSchooling(
   fact: OfficialGraduationFact, rows: ImportedCourseAchievement[], records: ImportedStudyRecord[],
   catalog: PlannerCatalog, scopeId: string, profile: GraduationProfile,
 ) {
+  // H20 separates the profile's global S budget from normal source-row S.
+  // Professional recognition overlap remains held here, including disjoint
+  // H14 identities: H14's release applies only to ordinary allocations.
   if ((profile.recognizedCredits.professionalCourses?.length ?? 0) > 0
-    || (profile.admissionType !== 'first_year' && profile.recognizedCredits.schoolingEquivalentCredits !== 0)
+    || (profile.admissionType === 'unknown' && profile.recognizedCredits.schoolingEquivalentCredits !== 0)
     || fact.sourceRows.length !== 1 || fact.sourceRowIds.length !== 1) return null;
   const sources = rows.filter(row => row.id === fact.sourceRowIds[0]);
   const row = sources[0];

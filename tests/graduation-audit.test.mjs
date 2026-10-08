@@ -27,6 +27,64 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
 
+// H20 production-level reproductions intentionally precede the production fix.
+function h20Profile(x, recognizedS) {
+  x.profile.admissionType = 'other_transfer';
+  x.profile.recognizedCredits.totalCredits = 8;
+  x.profile.recognizedCredits.schoolingEquivalentCredits = recognizedS;
+  assert.equal(graduationProfileValidationError(x.profile), null);
+  return x;
+}
+function h20Normal(recognizedS, officialS = 2) {
+  const x = h20Profile(h41Fixture(), recognizedS);
+  x.rows = [x.official(x, 4, officialS)];
+  return x;
+}
+for (const [label, recognizedS, officialS, expected, status] of [
+  ['positive recognition plus normal S2', 2, 2, 4, 'partial'],
+  ['unknown recognition plus normal S2', null, 2, 2, 'unknown'],
+  ['zero recognition plus normal S2', 0, 2, 2, 'partial'],
+  ['positive recognition plus normal S0', 2, 0, 2, 'partial'],
+]) test(`H20 reproduction: ${label}`, () => {
+  const x = h20Normal(recognizedS, officialS), input = x.build();
+  const facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+  assert.deepEqual(facts.allocations.map(a => [a.credits, a.completedCredits, a.schoolingCredits]), [[4, 4, officialS]]);
+  assert.deepEqual(facts.facts[0].diagnostics, []);
+  const p = x.progress(input), s = h42S(p);
+  assert.deepEqual([s.earned, s.status, s.recognizedCredits, s.target], [expected, status, recognizedS, 30]);
+  assert.equal(professional(p).earned, 4);
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, officialS);
+  if (recognizedS === null) assert.match(s.reason, /認定スクーリング相当単位が未入力/);
+  else assert.equal(s.reason, null);
+});
+test('H20 reproduction: synthetic recognition owns ordinary4 but never Offering schooling4', () => {
+  const x = h20Profile(h14Fixture(), 2); x.rows = []; x.b.offering.method = 'schooling';
+  const rule = x.requirement('h20-synthetic-S', { course_name: x.b.course.canonicalName }, null, 'min_schooling_credits'); rule.value = 2;
+  const input = x.build(), p = x.progress(input);
+  assert.equal(professional(p).earned, 4);
+  assert.deepEqual([h42S(p).earned, h42S(p).status], [2, 'partial']);
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
+  const s = p.requirements.find(r => r.requirementId === rule.id);
+  assert.deepEqual([s.earned, s.status], [0, 'unsatisfied']);
+});
+for (const source of ['H19', 'H43']) for (const recognizedS of [null, 0, 2]) {
+  test(`H20 reproduction: ${source} normal S2 coexists with recognized S${recognizedS}`, () => {
+    const x = h20Profile(source === 'H19' ? h19Fixture() : h43Fixture(), recognizedS);
+    const p = x.progress(), evidence = source === 'H19' ? h19Evidence(x) : h43Evidence(x);
+    assert.equal(evidence.contributions.length, 1);
+    assert.equal(evidence.contributions[0].schoolingCredits, 2);
+    assert.equal(evidence.impact.globalReferenceUnknown, false);
+    assert.deepEqual([h42S(p).earned, h42S(p).status, h42S(p).recognizedCredits],
+      [2 + (recognizedS ?? 0), recognizedS === null ? 'unknown' : 'partial', recognizedS]);
+    if (source === 'H19') assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
+    else {
+      assert.equal(evidence.official.allocations.length, 0);
+      assert.equal(p.importedContributionCount, 0);
+      assert.equal(h31Card(p, 'professional-required-elective').earned, 0);
+    }
+  });
+}
+
 test('H14 pre-fix reproduction: disjoint exact recognition counts official A and recognized B once', () => {
   const x = h14Fixture();
   const f = x.build();
@@ -473,15 +531,15 @@ test('official metadata: absent row composition uses agreeing Course and Mapping
   assert.equal(overall(run(x)), 4);
 });
 
-test('official schooling: Law exclusion keeps consumer allocation null while recognition still holds global S', () => {
+test('official schooling: H20 Law exclusion keeps consumer allocation null while normal S coexists with recognition', () => {
   const x = fixture(); x.course.canonicalName = '情報学入門';
   assert.equal(facts(x).facts[0].schoolingEvidence.credits, 2);
   assert.equal(facts(x).allocations[0].schoolingCredits, null);
   assert.deepEqual([run(x).referenceProgress[1].earned, run(x).referenceProgress[1].status], [2, 'partial']);
   x.course.canonicalName = '監査科目';
   x.profile.admissionType = 'transfer_third_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 15;
-  assert.equal(facts(x).allocations[0].schoolingCredits, null);
-  assert.equal(run(x).referenceProgress[1].status, 'unknown');
+  assert.equal(facts(x).allocations[0].schoolingCredits, 2);
+  assert.deepEqual([run(x).referenceProgress[1].earned, run(x).referenceProgress[1].status], [17, 'partial']);
 });
 
 test('official thesis: manual ThesisProgress stays authoritative and official thesis adds no credit', () => {
@@ -829,7 +887,10 @@ for (const guard of ['legacy', 'special', 'repeatable', 'recognition', 'addition
     if (guard === 'schooling_exclusion') x.course.canonicalName = '情報学入門';
     if (guard === 'schooling_recognition') { x.profile.admissionType = 'transfer_third_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 15; }
     const result = mediaFacts(x);
-    if (guard.startsWith('schooling_')) {
+    if (guard === 'schooling_recognition') {
+      assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, 2);
+      assert.deepEqual(result.facts[0].diagnostics, []);
+    } else if (guard.startsWith('schooling_')) {
       assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, null);
       assert.ok(result.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'));
     } else assert.equal(result.allocations.length, 0);
@@ -962,17 +1023,17 @@ for (const rawTerm of ['夏', 'メ']) test(`official schooling priority: ordinar
   assert.deepEqual(progress.importedWarnings, []);
 });
 
-test('official schooling priority: positive official value still obeys law and recognition guards', () => {
+test('official schooling priority: H20 positive official value retains law exclusion and independent recognition budget', () => {
   for (const guard of ['law', 'recognition']) {
     const x = mediaFixture(); x.row.schoolingCreditsTotal = 1;
     if (guard === 'law') x.course.canonicalName = '情報学入門';
     else { x.profile.admissionType = 'transfer_third_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 15; }
     const records = [mediaRecord(x)], result = mediaFacts(x, records);
-    assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, null);
+    assert.equal(result.allocations[0].credits, 2); assert.equal(result.allocations[0].schoolingCredits, guard === 'law' ? null : 1);
     assert.equal(result.facts[0].schoolingEvidence.credits, 1);
     assert.equal(result.facts[0].schoolingEvidence.source, 'official_row');
     assert.equal(result.facts[0].diagnostics.includes('media_schooling_credits_conflict'), false);
-    assert.deepEqual(run(x, [], records).importedWarnings.map(n => n.kind), ['schooling_confirmation']);
+    assert.deepEqual(run(x, [], records).importedWarnings.map(n => n.kind), guard === 'law' ? ['schooling_confirmation'] : []);
   }
 });
 
@@ -1005,7 +1066,7 @@ for (const language of ['english', 'german', 'french']) {
       assert.match(reference.reason, /一般教育の認定情報が未確認/); // H37, independent of foreign S.
       // The global recognition breakdown is independently unknown; foreign4 never supplies S4/S2.
       assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).status, h38SchoolingReference(p).target,
-        h38SchoolingReference(p).recognizedCredits], [null, 'unknown', 30, null]);
+        h38SchoolingReference(p).recognizedCredits], [0, 'unknown', 30, null]);
       assert.equal(p.graduationCheckComplete, false);
     });
   }
@@ -1030,7 +1091,7 @@ for (const credits of [0, 2, 4]) {
       const p = foreignRecognitionRun(x, [x.row]);
       assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [4, 'unknown']);
       assert.equal(overall(p), 4, 'recognition total/detail and official foreign credits are not summed again');
-      assert.equal(h38SchoolingReference(p).earned, null);
+      assert.equal(h38SchoolingReference(p).earned, 0);
       assert.equal(h38SchoolingReference(p).status, 'unknown');
       assert.deepEqual(p.importedWarnings, foreignRecognitionRun(baseline, [baseline.row]).importedWarnings,
         'official schooling warnings are unchanged');
@@ -1059,7 +1120,7 @@ for (const [mode, earned, status] of [['exempt', 0, 'satisfied'], ['unknown', nu
     const p = foreignRecognitionRun(x);
     assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [earned, status]);
     assert.equal(overall(p), 0);
-    assert.equal(h38SchoolingReference(p).earned, null);
+    assert.equal(h38SchoolingReference(p).earned, 0);
   });
 }
 
@@ -1081,7 +1142,7 @@ test('H38 retains ordinary4 with H36 target hold and H37 general recognition unr
   assert.deepEqual([foreignRecognitionCard(p).earned, foreignRecognitionCard(p).status], [4, 'unknown']);
   assert.deepEqual([p.referenceProgress[0].earned, p.referenceProgress[0].target, p.referenceProgress[0].status], [4, null, 'unknown']);
   assert.match(p.referenceProgress[0].reason, /卒業論文の選択が未定/);
-  assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).target, h38SchoolingReference(p).status], [null, 30, 'unknown']);
+  assert.deepEqual([h38SchoolingReference(p).earned, h38SchoolingReference(p).target, h38SchoolingReference(p).status], [0, 30, 'unknown']);
   assert.match(h38SchoolingReference(p).reason, /認定スクーリング相当単位が未入力/);
   const general = p.cards.find(c => c.requirementId === 'group-general');
   assert.deepEqual([general.earned, general.status], [0, 'unknown']);
@@ -1353,15 +1414,15 @@ test('H57 professional recognition overlap remains a separate later hold', () =>
   assert.ok(h57Held(x).facts[0].diagnostics.includes('recognized_overlap'));
 });
 
-test('H57 existing transfer schooling confirmation guard remains after the exception', () => {
+test('H57 H20 safe completed official schooling survives independent transfer recognition', () => {
   const x = h57Fixture(); x.profile.admissionType = 'transfer_second_year';
   for (const equivalent of [null, 7]) {
     x.profile.recognizedCredits.schoolingEquivalentCredits = equivalent;
     const result = facts(x);
     assert.equal(result.allocations[0].credits, 2);
-    assert.equal(result.allocations[0].schoolingCredits, null);
-    assert.ok(result.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'));
-    assert.ok(run(x).importedWarnings.some(w => w.kind === 'schooling_confirmation'));
+    assert.equal(result.allocations[0].schoolingCredits, x.row.schoolingCreditsTotal);
+    assert.equal(result.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'), false);
+    assert.equal(run(x).importedWarnings.some(w => w.kind === 'schooling_confirmation'), false);
   }
 });
 
@@ -1595,14 +1656,14 @@ test('H12 profile is required and zero/null recognition fields do not fabricate 
     assert.equal(h12Allocation(h12Facts(x)).completedCredits,0);
   }
 });
-test('H12 professional recognition and H20 schooling guards still apply after entry',()=>{
+test('H12 professional overlap remains held while H20 preserves normal schooling after entry',()=>{
   const x=h12Fixture(0);
   x.profile.recognizedCredits.professionalCourses=[{id:'recognition',offeringId:'other',credits:4}];
   assert.ok(h12Fact(h12Facts(x)).diagnostics.includes('recognized_overlap'));
   assert.equal(h12Facts(x).allocations.length,0);
   x.profile.recognizedCredits.professionalCourses=[];x.profile.admissionType='transfer_second_year';
   x.profile.recognizedCredits.schoolingEquivalentCredits=null;
-  assert.equal(h12Allocation(h12Facts(x)).schoolingCredits,null);
+  assert.equal(h12Allocation(h12Facts(x)).schoolingCredits,2);
   assert.match(h12Card(h12Progress(x),'elective').note,/部分修得 0単位/);
 });
 test('H12 different eligible Mapping signatures remain conflicting',()=>{
@@ -1791,7 +1852,7 @@ for (const admission of ['transfer_second_year', 'bachelor_admission']) {
     const p = h36Progress(x);
     assert.deepEqual(h36ReferenceValues(p, 'overall'), [4, null, 'unknown', 'unknown', h36Reason]);
     const s = h36ReferenceValues(p, 'schooling');
-    assert.deepEqual(s.slice(0, 4), [null, 30, 'unknown', 'unknown']);
+    assert.deepEqual(s.slice(0, 4), [2, 30, 'unknown', 'unknown']);
     assert.match(s[4], /認定スクーリング相当単位が未入力/);
     assert.equal(p.referenceProgress[0].exemptionCredits, null);
     assert.equal(p.graduationCheckComplete, false);
@@ -2072,7 +2133,9 @@ test('H31/H38 recognition overlay retains recognized foreign4/Snull and never co
   const row = x.add('recognized-target', '外国語', '英語', '選択必修'); x.set(row);
   let p = x.calc(); assert.equal(h31Card(p, 'group-foreign').earned, 4); assert.equal(h31Card(p, 'group-foreign').status, 'unknown');
   assert.match(h31Card(p, 'group-foreign').reason, /スクーリング相当認定単位が未確認/);
-  assert.equal(p.referenceProgress[1].earned, null);
+  assert.equal(p.referenceProgress[1].earned, 4);
+  assert.equal(p.referenceProgress[1].recognizedCredits, null);
+  assert.equal(p.referenceProgress[1].status, 'unknown');
   x.profile.recognizedCredits.foreignLanguage.schoolingEquivalentCredits = 2;
   p = x.calc(); assert.equal(h31Card(p, 'group-foreign').earned, 4); assert.equal(h31Card(p, 'group-foreign').status, 'unknown');
   assert.match(h31Card(p, 'group-foreign').reason, /対応関係を確認中/);
@@ -3386,9 +3449,15 @@ for (const [label, mutate] of [
   ['professional recognition', x => { x.profile.recognizedCredits.professionalCourses = [{ id: 'h43-recognition', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 2 }]; }],
   ['transfer recognized S', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 2; }],
   ['transfer unknown S', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = null; }],
-]) test(`H43 excludes ${label}`, () => {
+]) test(`H43 ${label.startsWith('transfer ') ? 'H20 coexistence' : 'excludes'} ${label}`, () => {
   const x = h43Fixture(), input = x.build(); mutate(x);
   const { contributions, impact } = h43Evidence(x, input);
+  if (label.startsWith('transfer ')) {
+    assert.equal(contributions.length, 1); assert.equal(impact.globalReferenceUnknown, false);
+    const s = h42S(x.progress(input));
+    assert.deepEqual([s.earned, s.status], label === 'transfer recognized S' ? [4, 'partial'] : [null, 'unknown']);
+    return; // Missing all recognition inputs still holds the reference prerequisite.
+  }
   assert.equal(contributions.length, 0); assert.equal(impact.globalReferenceUnknown, true);
   // Recognition may independently contribute; H43 must not release its hold.
   assert.equal(h42S(x.progress(input)).status, 'unknown');
@@ -3487,7 +3556,7 @@ test('H43 recognized_overlap remains held and recognition schooling is never add
   const input = x.build(), { official, contributions } = h43Evidence(x, input);
   assert.ok(official.facts[0].diagnostics.includes('recognized_overlap'));
   assert.equal(official.allocations.length, 0); assert.equal(contributions.length, 0);
-  assert.deepEqual([h42S(x.progress(input)).earned, h42S(x.progress(input)).status], [4, 'unknown']);
+  assert.deepEqual([h42S(x.progress(input)).earned, h42S(x.progress(input)).status], [null, 'unknown']);
 });
 test('H43 null source S is not inferred from even all-media components', () => {
   const x = h43Fixture(); x.rows[0].schoolingCreditsTotal = null;
@@ -3606,8 +3675,14 @@ for (const [label, mutate] of [
   ['transfer equivalent positive', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 2; }],
   ['transfer equivalent unknown', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = null; }],
   ['unknown admission equivalent', x => { x.profile.admissionType = 'unknown'; }],
-]) test(`H19 rejects ${label}`, () => {
+]) test(`H19 ${label.startsWith('transfer equivalent') ? 'H20 coexistence' : 'rejects'} ${label}`, () => {
   const x = h19Fixture(); mutate(x);
+  if (label.startsWith('transfer equivalent')) {
+    assert.equal(h19Evidence(x).contributions.length, 1);
+    const s = h42S(x.progress());
+    assert.deepEqual([s.earned, s.status], label.endsWith('positive') ? [4, 'partial'] : [null, 'unknown']);
+    return;
+  }
   assert.equal(h19Evidence(x).contributions.length, 0);
   assert.equal(h42S(x.progress()).status, 'unknown');
 });
@@ -3727,12 +3802,12 @@ test('H19 normal allocated S plus H43 plus H19 is exclusive despite source and P
   official.allocations.find(a => a.fact === h19[0].fact).schoolingCredits = 2;
   assert.equal(lawExcludedOfficialSchoolingContributions(official, x.rows, [], input, x.scope, x.profile, h43).length, 0);
 });
-test('H19 recognition path alone may contribute schooling but official S is held', () => {
+test('H19 H20 synthetic recognition cannot supply S while official overlap is held', () => {
   const x = h19Fixture(); x.offering.method = 'schooling';
   x.profile.recognizedCredits.professionalCourses = [{ id: 'recognition', offeringId: x.offering.id, courseId: x.offering.courseId,
     mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 4 }];
   assert.equal(h19Evidence(x).contributions.length, 0);
-  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [4, 'unknown']);
+  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [null, 'unknown']);
   assert.equal(h31Card(x.progress(), 'professional-law-schooling').earned, 0);
 });
 test('H19 transfer explicit equivalent zero permits safe official S without adding recognition', () => {
@@ -3781,8 +3856,8 @@ for (const name of ['データサイエンス入門A', '総合特講']) test(`H1
 test('H19 transfer equivalent is retained once without official or Planner duplicate', () => {
   const x = h19Fixture(); x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 2;
   x.offering.method = 'schooling'; x.items = [item(x.offering, 'earned')];
-  assert.equal(h19Evidence(x).contributions.length, 0);
-  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [2, 'unknown']);
+  assert.equal(h19Evidence(x).contributions.length, 1);
+  assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [4, 'partial']);
   assert.equal(h31Card(x.progress(), 'professional-law-schooling').earned, 0);
 });
 test('H19 explicit exemption/additional zero preserves positive S without treating null S as zero', () => {
@@ -3997,20 +4072,20 @@ test('H14 H43 guard stays closed for held partial with safe disjoint recognition
   assert.deepEqual(heldOfficialSchoolingContributions(result, x.rows, [], f, x.scope, x.profile), []);
   assert.equal(x.progress(f).referenceProgress[1].earned, null);
 });
-for (const s of [null, 2]) test(`H14 H20 transfer S equivalent ${s} retains normal S hold`, () => {
+for (const s of [null, 2]) test(`H14 H20 transfer S equivalent ${s} retains normal S independently`, () => {
   const x = h14Fixture(); x.profile.admissionType = 'other_transfer'; x.profile.recognizedCredits.schoolingEquivalentCredits = s;
   const result = h14Facts(x), p = x.progress();
   assert.equal(result.allocations[0].credits, 4);
-  assert.equal(result.allocations[0].schoolingCredits, null);
-  assert.equal(p.referenceProgress[1].earned, s);
-  assert.equal(p.referenceProgress[1].status, 'unknown');
+  assert.equal(result.allocations[0].schoolingCredits, 2);
+  assert.equal(p.referenceProgress[1].earned, 2 + (s ?? 0));
+  assert.equal(p.referenceProgress[1].status, s === null ? 'unknown' : 'partial');
 });
 test('H14 recognition S and normal official S use existing separate consumers once', () => {
   const x = h14Fixture(); x.b.offering.method = 'schooling';
   const p = x.progress();
   assert.equal(overall(p), 8);
-  assert.equal(p.referenceProgress[1].earned, 6);
-  assert.equal(h31Card(p, 'professional-law-schooling').earned, 6);
+  assert.equal(p.referenceProgress[1].earned, 2);
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 2);
 });
 test('H14 official annual Offering may disappear without becoming historical authority', () => {
   const x = h14Fixture(), f = x.build(), before = h14Facts(x, f);
@@ -4068,3 +4143,230 @@ for (const department of ['法律学科', '日本文学科', '史学科', '地�
   x.profile.recognizedCredits.professionalCourses = [a.r];
   assert.equal(deriveOfficialGraduationFacts([a.row], [], catalog, x.scope, x.profile).allocations.length, 0);
 });
+
+// H20 source / consumer matrix. Aggregate recognition is global-only.
+for (const recognizedS of [null, 0, 2]) for (const officialS of [null, 0, 2]) {
+  test(`H20 global official S${officialS} and recognition S${recognizedS} keep independent axes`, () => {
+    const x = h20Normal(recognizedS, officialS), p = x.progress(), s = h42S(p);
+    const known = (officialS ?? 0) + (recognizedS ?? 0);
+    assert.deepEqual([s.earned, s.status, s.recognizedCredits],
+      [officialS === null && known === 0 ? null : known, officialS === null || recognizedS === null ? 'unknown' : 'partial', recognizedS]);
+    assert.equal(professional(p).earned, 4);
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, officialS ?? 0);
+  });
+}
+for (const recognizedS of [null, 0, 2]) for (const method of ['correspondence', 'schooling']) {
+  test(`H20 synthetic professional ${method} recognition S${recognizedS} cannot enter any S consumer`, () => {
+    const x = h20Profile(h14Fixture(), recognizedS); x.b.offering.method = method;
+    const ordinary = x.requirement('h20-ordinary', { course_name: x.b.course.canonicalName }); ordinary.value = 4;
+    const recognized = x.requirement('h20-recognized-S', { course_name: x.b.course.canonicalName }, null, 'min_schooling_credits'); recognized.value = 2;
+    const normal = x.requirement('h20-normal-S', { course_name: x.a.course.canonicalName }, null, 'min_schooling_credits'); normal.value = 2;
+    const p = x.progress(), get = r => p.requirements.find(c => c.requirementId === r.id);
+    assert.deepEqual([get(ordinary).earned, get(ordinary).status], [4, 'satisfied']);
+    assert.deepEqual([get(recognized).earned, get(recognized).status], [0, 'unsatisfied']);
+    assert.deepEqual([get(normal).earned, get(normal).status], [2, 'satisfied']);
+    assert.equal(professional(p).earned, 8); assert.equal(overall(p), 12); // profile's unallocated4 remains ordinary-only
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, 2);
+    assert.deepEqual([h42S(p).earned, h42S(p).status], [2 + (recognizedS ?? 0), recognizedS === null ? 'unknown' : 'partial']);
+  });
+}
+for (const recognizedS of [null, 0, 2]) for (const learnerStatus of ['earned', 'planned', 'in_progress', 'waiting']) {
+  test(`H20 learner ${learnerStatus} schooling remains distinct from synthetic recognition S${recognizedS}`, () => {
+    const x = h20Profile(h14Fixture(), recognizedS); x.b.offering.method = 'schooling';
+    x.items = [item(x.b.offering, learnerStatus)];
+    const p = x.progress();
+    assert.equal(professional(p).earned, learnerStatus === 'earned' ? 8 : 4);
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, 2 + (learnerStatus === 'earned' ? 4 : 0));
+    assert.equal(h42S(p).earned, 2 + (learnerStatus === 'earned' ? 4 : 0) + (recognizedS ?? 0));
+    assert.equal(h42S(p).recognizedCredits, recognizedS);
+  });
+}
+for (const recognizedS of [null, 0, 2]) test(`H20 normal Planner plus official plus recognition S${recognizedS} owns each source once`, () => {
+  const x = h20Normal(recognizedS), learner = x.add('h20-learner', '専門教育', null, '選択', 4, 'schooling', '独立履修', x.scope);
+  x.offering.method = 'schooling';
+  x.items = [item(learner.offering, 'earned'), item(x.offering, 'earned')];
+  x.rows.push(structuredClone(x.rows[0]));
+  const p = x.progress();
+  assert.equal(h42S(p).earned, 6 + (recognizedS ?? 0));
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 6);
+  assert.equal(p.importedContributionCount, 1);
+  assert.equal(h42S(p).status, recognizedS === null ? 'unknown' : 'partial');
+});
+for (const recognizedS of [null, 0, 2]) test(`H20 H19 H43 allocation accounted sets with recognition S${recognizedS} are disjoint`, () => {
+  const x = h20Normal(recognizedS);
+  const excluded = x.add('h20-law13', '専門教育', null, '選択', 4, 'schooling', '情報学入門', x.scope);
+  const held = x.add('h20-held', '外国語', '英語', '選択必修');
+  const edge = { ...held.mapping, mappingId: '20202020-2020-4020-8020-000000000001', field: '独語' };
+  x.f.mappings.push(edge); held.course.mappingIds.push(edge.mappingId);
+  x.rows.push(x.official(excluded, 4, 2), x.official(held, 4, 2));
+  x.rows.push(...structuredClone(x.rows));
+  x.items = [x.offering, excluded.offering, held.offering].map(o => item(o, 'earned'));
+  const input = x.build(), facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+  const h43 = heldOfficialSchoolingContributions(facts, x.rows, [], input, x.scope, x.profile);
+  const h19 = lawExcludedOfficialSchoolingContributions(facts, x.rows, [], input, x.scope, x.profile, h43);
+  const ids = [...facts.allocations.filter(a => a.schoolingCredits !== null), ...h43, ...h19].flatMap(a => a.fact.sourceRowIds);
+  assert.equal(ids.length, 3); assert.equal(new Set(ids).size, 3);
+  assert.deepEqual([h43.length, h19.length], [1, 1]);
+  assert.equal(lawExcludedOfficialSchoolingContributions(facts, x.rows, [], input, x.scope, x.profile, [...h43, ...h19]).length, 0);
+  const p = x.progress(input);
+  assert.equal(h42S(p).earned, 6 + (recognizedS ?? 0));
+  assert.equal(h31Card(p, 'professional-law-schooling').earned, 2);
+  assert.equal(h42Language(p, '英語').schooling, 0); assert.equal(h42Language(p, '独語').schooling, 0);
+  assert.equal(h42S(p).status, recognizedS === null ? 'unknown' : 'partial');
+});
+for (const recognizedS of [null, 0, 2]) for (const officialS of [null, 2]) {
+  test(`H20 foreign ordinary O4/S${officialS} cannot borrow global recognized S${recognizedS}`, () => {
+    const x = h20Profile(h41Fixture(), recognizedS), foreign = x.add('h20-language', '外国語', '英語', '選択必修');
+    x.rows = [x.official(foreign, 4, officialS)];
+    const p = x.progress(), c = h31Card(p, 'group-foreign');
+    assert.deepEqual([c.earned, c.status], [4, officialS === null ? 'unknown' : 'satisfied']);
+    assert.equal(h42Language(p, '英語').schooling, officialS ?? 0);
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
+  });
+}
+for (const recognizedS of [null, 0, 2]) for (const foreignS of [null, 0, 1, 2]) {
+  test(`H20 H38 language-specific S${foreignS} is independent from global recognition S${recognizedS}`, () => {
+    const x = h20Normal(recognizedS);
+    x.profile.recognizedCredits.foreignLanguage = { mode: 'recognized', credits: 4, language: 'english', schoolingEquivalentCredits: foreignS };
+    const p = x.progress(), c = h31Card(p, 'group-foreign');
+    assert.deepEqual([c.earned, c.status], [4, foreignS === null ? 'unknown' : foreignS < 2 ? 'unsatisfied' : 'satisfied']);
+    assert.equal(h42S(p).earned, 2 + (recognizedS ?? 0));
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, 2);
+    if (foreignS === null) assert.match(c.reason, /スクーリング相当認定単位が未確認/);
+  });
+}
+for (const recognizedS of [null, 0, 2]) for (const target of [2, 4]) {
+  test(`H20 structured S${target} with genuine target uncertainty retains lower bound and recognition S${recognizedS}`, () => {
+    const x = h20Normal(recognizedS), extra = x.add('h20-unknown', '専門教育', null, '選択必修', 4, 'correspondence', '不明S科目', x.scope);
+    const rule = x.requirement('h20-structured', { curriculum_category: '専門教育' }, null, 'min_schooling_credits'); rule.value = target;
+    const named = x.requirement('h20-named', { course_name: x.course.canonicalName }, null, 'min_schooling_credits'); named.value = 4;
+    x.rows.push(x.official(extra, 4, null));
+    const p = x.progress(), r = p.requirements.find(c => c.requirementId === rule.id), n = p.requirements.find(c => c.requirementId === named.id);
+    assert.deepEqual([r.earned, r.status], [2, target === 2 ? 'satisfied' : 'unknown']);
+    assert.deepEqual([n.earned, n.status], [2, 'unsatisfied']);
+    assert.equal(h42S(p).earned, 2 + (recognizedS ?? 0)); assert.equal(h42S(p).status, 'unknown');
+  });
+}
+for (const source of ['H19', 'H43']) for (const recognizedS of [null, 2]) {
+  test(`H20 ${source} never feeds structured or foreign S with recognition S${recognizedS}`, () => {
+    const x = h20Profile(h41Fixture(source === 'H19' ? '法律学科' : '日本文学科'), recognizedS);
+    if (source === 'H19') x.course.canonicalName = '情報学入門';
+    x.rows = [x.official(x, source === 'H19' ? 4 : 2, 2)];
+    const rule = x.requirement('h20-global-only', { course_name: x.course.canonicalName }, null, 'min_schooling_credits'); rule.value = 2;
+    const p = x.progress(), r = p.requirements.find(c => c.requirementId === rule.id);
+    assert.deepEqual([r.earned, r.status], [0, 'unknown']);
+    assert.equal(h42S(p).earned, 2 + (recognizedS ?? 0));
+    assert.equal(h42Language(p, '英語').schooling, 0);
+    if (source === 'H19') assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
+    else assert.equal(p.importedContributionCount, 0);
+  });
+}
+for (const recognizedS of [null, 2]) for (const guard of ['negative S', 'S above earned', 'S above composition', 'media conflict', 'recognizedExemption', 'additionalEnrollment', 'duplicate', 'identity', 'method evidence']) {
+  test(`H20 unsafe official ${guard} remains conservative with recognition S${recognizedS}`, () => {
+    const x = h20Normal(recognizedS), row = x.rows[0];
+    if (guard === 'negative S') row.schoolingCreditsTotal = -1;
+    if (guard === 'S above earned') row.schoolingCreditsTotal = 3, row.earnedCreditsTotal = 2;
+    if (guard === 'S above composition') row.schoolingCreditsTotal = 5;
+    if (guard === 'media conflict') { row.schoolingCreditsTotal = 0; x.records = [mediaRecord(x, { sourceCourseId: row.id })]; }
+    if (guard === 'recognizedExemption') row.recognizedExemption = 2;
+    if (guard === 'additionalEnrollment') row.additionalEnrollment = 2;
+    if (guard === 'duplicate') x.rows.push({ ...row, id: 'h20-other-source' });
+    if (guard === 'identity') row.curriculumMatch = 'unmatched', row.curriculumCourseId = null;
+    if (guard === 'method evidence') x.mapping.mediaOnly = true;
+    const input = x.build(), facts = deriveOfficialGraduationFacts(x.rows, x.records, input, x.scope, x.profile);
+    assert.equal(facts.allocations.reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0), 0);
+    assert.deepEqual(heldOfficialSchoolingContributions(facts, x.rows, x.records, input, x.scope, x.profile), []);
+    const p = x.progress(input);
+    assert.deepEqual([h42S(p).earned, h42S(p).status], [recognizedS === null ? null : recognizedS, 'unknown']);
+    if (['recognizedExemption', 'additionalEnrollment'].includes(guard)) assert.equal(facts.allocations.length, 0);
+  });
+}
+for (const mode of ['none', 'disjoint', 'same', 'unresolved', 'inconsistent']) {
+  test(`H20 H14 ${mode} preserves ordinary identity boundary with positive recognition S`, () => {
+    const x = h20Profile(h14Fixture(), 2);
+    if (mode === 'none') x.profile.recognizedCredits.professionalCourses = [];
+    if (mode === 'same') x.profile.recognizedCredits.professionalCourses = [x.recognize(x.a)];
+    if (mode === 'unresolved') x.profile.recognizedCredits.professionalCourses[0].offeringId = 'missing';
+    if (mode === 'inconsistent') x.profile.recognizedCredits.professionalCourses[0].courseId = x.a.offering.courseId;
+    const input = x.build(), facts = h14Facts(x, input), p = x.progress(input);
+    const safe = ['none', 'disjoint'].includes(mode);
+    assert.equal(facts.allocations.length, safe ? 1 : 0);
+    assert.equal(facts.facts[0].diagnostics.includes('recognized_overlap'), !safe);
+    assert.equal(professional(p).earned, mode === 'disjoint' ? 8 : mode === 'unresolved' ? 0 : 4);
+    assert.equal(h42S(p).earned, safe ? 4 : 2);
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, safe ? 2 : 0);
+  });
+}
+test('H20 frozen inputs keep source authority and no persisted bookkeeping', () => {
+  const x = h20Profile(h14Fixture(), null); x.b.offering.method = 'schooling';
+  const input = x.build(); input.offerings.find(o => o.id === x.offering.id).credits = 99;
+  x.items = [item(x.offering, 'earned')];
+  x.records = [mediaRecord(x, { sourceCourseId: x.rows[0].id, credits: 40, rawTerm: '夏' })];
+  const args = [x.items, input, x.scope, [], 'not_selected', x.records, x.rows, x.profile];
+  const before = structuredClone(args), previous = calculateGraduationProgress(...args), saved = structuredClone(previous);
+  deepFreeze(args); deepFreeze(previous);
+  const p = calculateGraduationProgress(...args);
+  assert.deepEqual(args, before); assert.deepEqual(previous, saved); assert.deepEqual(p, previous);
+  assert.equal(h42S(p).earned, 2); assert.equal(h42S(p).recognizedCredits, null); assert.equal(h42S(p).status, 'unknown');
+  assert.equal(professional(p).earned, 8);
+  assert.equal(initialState().schemaVersion, 22); assert.equal(p.graduationCheckComplete, false);
+  assert.equal(input.metadata.sourceLinksReverified, false);
+});
+for (const name of LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026) for (const recognizedS of [null, 2]) {
+  test(`H20 H19 exact ${name} plus recognition S${recognizedS} never enters Law S8`, () => {
+    const x = h20Profile(h19Fixture(name), recognizedS); x.rows.push(structuredClone(x.row));
+    const e = h19Evidence(x), p = x.progress();
+    assert.deepEqual([e.held.length, e.contributions.length], [0, 1]);
+    assert.equal(h42S(p).earned, 2 + (recognizedS ?? 0));
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
+  });
+}
+for (const source of ['H19', 'H43']) test(`H20 ${source} conflicting repeated source ID never chooses another S snapshot`, () => {
+  const x = h20Profile(source === 'H19' ? h19Fixture() : h43Fixture(), 2);
+  x.rows.push({ ...x.rows[0], schoolingCreditsTotal: 1 });
+  for (const rows of [x.rows, x.rows.slice().reverse()]) {
+    x.rows = rows;
+    const e = source === 'H19' ? h19Evidence(x) : h43Evidence(x);
+    assert.equal(e.contributions.length, 0);
+    assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [2, 'unknown']);
+  }
+});
+for (const route of ['first_year', 'transfer_second_year', 'transfer_third_year', 'bachelor_admission', 'other_transfer', 'hosei_internal_transfer']) {
+  for (const recognizedS of [null, 0, 2]) test(`H20 no schooling evidence route ${route} recognition S${recognizedS} fabricates no normal S`, () => {
+    const x = h20Profile(h14Fixture(), recognizedS); x.profile.admissionType = route; x.rows = [];
+    // An annual schooling method on a synthetic item is still no attendance evidence.
+    x.b.offering.method = 'schooling';
+    const p = x.progress(), s = h42S(p);
+    assert.equal(professional(p).earned, 4);
+    assert.equal(s.earned, route === 'first_year' ? 0 : recognizedS ?? 0);
+    assert.equal(s.recognizedCredits, route === 'first_year' ? 0 : recognizedS);
+    assert.equal(s.status, route !== 'first_year' && recognizedS === null ? 'unknown' : 'partial');
+    assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
+  });
+}
+test('H20 synthetic History recognition cannot prove actual overview schooling attendance', () => {
+  const program = catalog.programs.find(p => p.department === '史学科');
+  const offerings = ['日本史概説', '東洋史概説', '西洋史概説'].map(name => catalog.offerings.find(o => o.name.startsWith(name)
+    && o.method === 'schooling' && !o.name.includes('メディア') && o.resolutionStatus === 'matched'));
+  assert.ok(offerings.every(Boolean));
+  const profile = structuredClone(fixture('史学科').profile);
+  profile.recognizedCredits.professionalCourses = offerings.map((o, i) => ({ id: `h20-history-${i}`, offeringId: o.id,
+    courseId: o.courseId, mappingId: o.mappingIds[0], name: o.name, credits: o.credits }));
+  const recognized = calculateGraduationProgress([], catalog, program.scopeId, [], 'not_selected', [], [], profile);
+  const learner = calculateGraduationProgress(offerings.map(o => item(o, 'earned')), catalog, program.scopeId, [], 'not_selected', [], [], profile);
+  assert.equal(recognized.historySchoolingDiagnostic.overviewSchoolingCompletions, 0);
+  assert.equal(recognized.historySchoolingDiagnostic.hasAllFiveSchoolingRequiredCourses, false);
+  assert.equal(learner.historySchoolingDiagnostic.overviewSchoolingCompletions, 3);
+  assert.equal(h42S(recognized).earned, 0);
+});
+for (const curriculum of ['unknown', 'legacy_or_transition']) for (const recognizedS of [null, 2]) {
+  test(`H20 curriculum ${curriculum} preserves prior reference and ordinary holds S${recognizedS}`, () => {
+    const x = h20Normal(recognizedS); x.profile.curriculumApplicability = curriculum;
+    const input = x.build(), facts = h14Facts(x, input), p = x.progress(input);
+    assert.deepEqual([h42S(p).earned, h42S(p).target, h42S(p).status], [null, null, 'unknown']);
+    if (curriculum === 'unknown') {
+      assert.deepEqual(facts.allocations.map(a => [a.credits, a.schoolingCredits]), [[4, null]]);
+      assert.ok(facts.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'));
+    } else assert.equal(facts.allocations.length, 0);
+  });
+}

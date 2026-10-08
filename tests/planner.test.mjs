@@ -3000,7 +3000,9 @@ test('reference totals accept official transfer recognition including zero, neve
   assert.equal(importedOnly[1].earned, null, 'legacy identity cannot prove a schooling allocation');
   assert.equal(importedOnly[1].status, 'unknown');
   const missingSchooling = calculateGraduationProgress([], catalog, scope, [], 'undecided', [], [], { ...profile, recognizedCredits: { totalCredits: 10, schoolingEquivalentCredits: null } }).referenceProgress[1];
-  assert.equal(missingSchooling.earned, null);
+  assert.equal(missingSchooling.earned, 0, 'H20 retains the known lower bound without confirming recognition');
+  assert.equal(missingSchooling.recognizedCredits, null);
+  assert.equal(missingSchooling.status, 'unknown');
   assert.match(missingSchooling.reason, /認定スクーリング相当/);
 });
 
@@ -3015,7 +3017,10 @@ test('official second-year, third-year, and bachelor recognition scenarios prese
       const progress = calculateGraduationProgress([], catalog, program.scopeId, [], 'selected', [], [], profile);
       const general = progress.cards.find(card => card.requirementId === 'group-general');
       assert.ok(general && (route === 'bachelor_admission' ? general.status === 'satisfied' : general.earned === (route === 'transfer_second_year' ? 24 : 36)));
-      assert.equal(progress.referenceProgress.find(row => row.id === 'schooling-reference-progress')?.earned, schooling);
+      const schoolingReference = progress.referenceProgress.find(row => row.id === 'schooling-reference-progress');
+      assert.equal(schoolingReference?.earned, schooling ?? 0);
+      assert.equal(schoolingReference?.recognizedCredits, schooling);
+      assert.equal(schoolingReference?.status, schooling === null ? 'unknown' : 'partial');
       assert.equal(progress.cards.find(card => card.requirementId === 'group-foreign')?.status === 'satisfied', route === 'bachelor_admission');
       assert.equal(progress.cards.find(card => card.requirementId === 'group-physical')?.status === 'satisfied', route === 'bachelor_admission');
     }

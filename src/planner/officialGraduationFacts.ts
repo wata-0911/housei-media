@@ -237,9 +237,14 @@ export function deriveOfficialGraduationFacts(
     const schoolingConflict = mediaEarned && row.schoolingCreditsTotal === 0;
     if (schoolingConflict) fact.diagnostics.push('media_schooling_credits_conflict');
     if (row.earnedCreditsTotal === 0) schooling = 0;
+    // H20: this normal row has passed identity/overlap, exemption, additional
+    // enrollment and method guards. In the confirmed current curriculum,
+    // profile recognized S owns a separate budget. Preserve the prior hold for
+    // an unconfirmed curriculum; H20 does not establish curriculum applicability.
     else if (schoolingConflict || !validCredits(schooling) || schooling > row.earnedCreditsTotal || schooling > composition
       || (department === '法律学科' && LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(course.canonicalName))
-      || (profile && profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown'
+      || (profile && profile.curriculumApplicability !== 'current_2026'
+        && profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown'
         && profile.recognizedCredits.schoolingEquivalentCredits !== 0)) {
       schooling = null; fact.diagnostics.push('schooling_evidence_requires_confirmation');
     }
