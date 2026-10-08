@@ -59,7 +59,7 @@ S の分冊 `shiori202646-61.pdf` は再取得できなかったが、全体PDF�
 |G9|dedupは exact Courseが存在するだけで同Course Planner earnedを除く（公式値null/0でも）。source linkの一致でも除く|この公式優先policyを維持。ただしG1でofficialまで落ちると寄与が両方なくなる。nullを0に確定しない|
 |G10|planned/in_progress/waitingはdedupから残る。現 evaluator がprojectionへ足すのはplanned/in_progressだけ|waiting保持とwaiting投影は別。future projectionの意味をテストで固定する|
 |G11|専門認定は `RecognizedProfessionalCourse.offeringId` から仮のearned PlannerItemを作る。入力creditsを使わずOffering.creditsを使用。imported virtual idをcatalogOfferingsから引くdedupは失敗し得る|認定2がOffering4扱い、officialと認定の重複、plannedが認定を抑制する危険。正確な認定factは別sliceで設計する|
-|G12|geography allocatorは「Offeringは不可分」とする。現地研究aggregate4を1行で渡すと2+2に分配できずdiscardし得る。史学のimportはearnedOrder=null|既存のattempt allocatorへofficial aggregateをそのまま渡してはいけない。repeat/sequence/transferは追加証拠がない限りunknown|
+|G12|geography allocatorは「Offeringは不可分」とする。現地研究aggregate4を1行で渡すと2+2に分配できずdiscardし得る。史学のimportはearnedOrder=null|既存のattmpt allocatorへofficial aggregateをそのまま渡してはいけない。repeat/sequence/transferは追加証拠がない限りunknown|
 |G13|複数official rowが同exact Courseを指す場合、deriveはrow間dedupしない。source fingerprintは内容/occurrenceも含む|別修得・重複snapshotの区別が必要。Courseで無条件sumもmaxも不可。次sliceは衝突として保持|
 |G14|Course identityがambiguousでも、legacy courseIdで1templateを得ると算入され、警告も出ない|Dを必ず保留する契約になっていない。公式fact入口でexact identityを必須とし、legacy経路での格上げを禁止|
 
@@ -67,7 +67,7 @@ S の分冊 `shiori202646-61.pdf` は再取得できなかったが、全体PDF�
 
 ### CourseProgress と Graduation の dedup policy
 
-CourseProgress は official に source-linked したattemptのみ重複を抑え、別の明示earned attemptは表示・進捗に加算できる。Graduation はより保守的で、exact official Course があれば同Courseの全Planner earnedを追加加算しない。`courseCreditContribution` はCourseProgress/annual用で、現卒業allocatorではOffering.creditsを使用する。保存済みPlannerItemを削除する操作ではなく計算入力のfilterである。
+CourseProgress は official に source-linked した履修状況のみ重複を抑え、別の明示earned 履修状況は表示・進捗に加算できる。Graduation はより保守的で、exact official Course があれば同Courseの全Planner earnedを追加加算しない。`courseCreditContribution` はCourseProgress/annual用で、現卒業allocatorではOffering.creditsを使用する。保存済みPlannerItemを削除する操作ではなく計算入力のfilterである。
 
 ### schooling の証拠契約
 

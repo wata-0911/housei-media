@@ -10,8 +10,8 @@ export default function CurriculumCourseList(props: CurriculumCourseListProps) {
   return <section id="curriculum-course-list" tabIndex={-1} aria-labelledby="planned-heading" className="min-w-0 border border-gray-200 bg-white">
     <div className="p-5 sm:p-7">
       <h2 id="planned-heading" className="text-xl text-[#002255]">履修・修得一覧 <span className="text-sm">制度科目 {courses.length}件</span></h2>
-      <p className="mt-2 text-sm text-gray-600">2026の制度科目ごとに、成績表の公式実績と履修attemptを分けて表示します。科目構成単位の進捗は卒業所要単位への算入とは別です。予定込みには結果待ちも含みます。</p>
-      <p className="mt-1 text-sm text-gray-600">履修学年・計画年度・時期は各attemptで記録します。最終評価は進捗や修得状態を自動変更しません。</p>
+      <p className="mt-2 text-sm text-gray-600">2026の制度科目ごとに、成績表の公式実績と履修状況を分けて表示します。科目構成単位の進捗は卒業所要単位への算入とは別です。予定込みには結果待ちも含みます。</p>
+      <p className="mt-1 text-sm text-gray-600">履修学年・計画年度・時期は各履修状況で記録します。最終評価は進捗や修得状態を自動変更しません。</p>
     </div>
     {empty && <p className="px-5 pb-7 text-sm text-gray-600">科目を検索して、履修計画に追加してください。</p>}
     {courses.map(course => <CurriculumCourseCard key={course.curriculumCourse.id} course={course} editor={props} />)}
