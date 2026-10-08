@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - main
+      - dev
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -15,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -23,22 +29,30 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        id: install
         run: npm ci
 
+      # Run all checks after installation, preserving each failure and the job result.
       - name: Type check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run typecheck
 
       - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run lint
 
       - name: Planner tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:planner
 
       - name: Extension parser and handoff tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:extension
 
       - name: Bookmarklet parity and transport tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:bookmarklet
 
       - name: Build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build
