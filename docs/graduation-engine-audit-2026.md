@@ -67,7 +67,7 @@ S の分冊 `shiori202646-61.pdf` は再取得できなかったが、全体PDF�
 
 ### CourseProgress と Graduation の dedup policy
 
-CourseProgress は official に source-linked したattemptのみ重複を抑え、別の明示earned attemptは表示・進捗に加算できる。Graduation はより保守的で、exact official Course があれば同Courseの全Planner earnedを追加加算しない。`courseCreditContribution` はCourseProgress/annual用で、現卒業allocatorではOffering.creditsを使用する。保存済みPlannerItemを削除する操作ではなく計算入力のfilterである。
+CourseProgress は official に source-linked した履修状況のみ重複を抑え、別の明示earned 履修状況は表示・進捗に加算できる。Graduation はより保守的で、exact official Course があれば同Courseの全Planner earnedを追加加算しない。`courseCreditContribution` はCourseProgress/annual用で、現卒業allocatorではOffering.creditsを使用する。保存済みPlannerItemを削除する操作ではなく計算入力のfilterである。
 
 ### schooling の証拠契約
 

@@ -15,8 +15,8 @@ export default function PlannerAttemptChild({ attempt, editor, contributions }: 
   const { plannerItem: item, offering, progress } = attempt;
   const evaluation = attempt.evaluation ?? { offeringId: item.offeringId, finalGrade: null, reportGrade: null, schoolingGrade: null };
   const correspondence = offering ? progress.correspondence ?? progressForCorrespondence(offering, {}) : null;
-  return <article data-attempt-id={item.offeringId} aria-label={`履修attempt ${offering?.name ?? item.offeringId}`} className="min-w-0 rounded-sm border border-gray-200 p-4">
-    <h4 className="break-words font-medium text-[#002255]">履修attempt — {offering ? `${offering.academicYear} ${offeringFormLabel(offering)} / ${offering.name}` : `開講情報なし / ${item.offeringId}`}</h4>
+  return <article data-attempt-id={item.offeringId} aria-label={`履修状況 ${offering?.name ?? item.offeringId}`} className="min-w-0 rounded-sm border border-gray-200 p-4">
+    <h4 className="break-words font-medium text-[#002255]">履修状況 — {offering ? `${offering.academicYear} ${offeringFormLabel(offering)} / ${offering.name}` : `開講情報なし / ${item.offeringId}`}</h4>
     {offering && <><FuturePlanNotice item={item} offering={offering} /><ClassificationLabel value={editor.classify(offering)} /></>}
     <p className="mt-2 text-sm">{statusLabels[item.status]} / 計画 {item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {item.studyYear === null ? '学年未設定' : `${item.studyYear}年`} / {item.plannedTerm ?? '時期未設定'}</p>
     <p className="mt-1 text-sm">開講 {offering?.credits ?? '未確認'}単位</p>
@@ -28,7 +28,7 @@ export default function PlannerAttemptChild({ attempt, editor, contributions }: 
     {offering && <p className="mt-2 text-sm">{progressSummaryForOffering(item, offering, progress.correspondence ? { [item.offeringId]: progress.correspondence } : {}, progress.mediaSchooling ? { [item.offeringId]: progress.mediaSchooling } : {})}</p>}
     <label className="mt-3 block max-w-xs text-sm">最終評価<GradeSelect label={`${offering?.name ?? item.offeringId}の最終評価`} value={evaluation.finalGrade} disabled={editor.disabled} onChange={finalGrade => editor.onChangeEvaluation(item.offeringId, { ...evaluation, finalGrade })} /></label>
     <details className="mt-3">
-      <summary className="cursor-pointer text-sm">履修attemptの詳細・編集</summary>
+      <summary className="cursor-pointer text-sm">履修状況の詳細・編集</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs">計画年度<YearInput value={item.plannedYear} disabled={editor.disabled} onChange={plannedYear => editor.onChange(item.offeringId, { plannedYear })} /></label>
         <label className="text-xs">履修学年<StudyYearSelect value={item.studyYear} disabled={editor.disabled} onChange={studyYear => editor.onChange(item.offeringId, { studyYear })} /></label>
@@ -44,6 +44,6 @@ export default function PlannerAttemptChild({ attempt, editor, contributions }: 
       {offering && isMediaSchooling(offering) && <button type="button" onClick={editor.onOpenMedia} className="mt-3 text-sm underline">メディア進捗で編集</button>}
       {(!offering || (progress.correspondence && offering.method !== 'correspondence') || (progress.mediaSchooling && !isMediaSchooling(offering))) && <SavedAttemptProgress progress={progress} />}
     </details>
-    <button type="button" disabled={editor.disabled} onClick={() => editor.onRemove(item.offeringId)} className="mt-3 text-sm text-red-700 underline disabled:opacity-50">履修attemptを削除</button>
+    <button type="button" disabled={editor.disabled} onClick={() => editor.onRemove(item.offeringId)} className="mt-3 text-sm text-red-700 underline disabled:opacity-50">履修状況を削除</button>
   </article>;
 }

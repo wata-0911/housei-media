@@ -101,7 +101,7 @@ test('UI: repeatable official16 plus independent earned2 retains18 without norma
   const course = catalog.curriculum.courses.find(c => c.canonicalName.startsWith('基礎特講'));
   const opening = catalog.offerings.find(o => o.curriculumCourseId === course.id);
   const markup = html(state({ importedCourseAchievements: [official({ curriculumCourseId: course.id, candidateCurriculumCourseIds: [course.id], compositionCredits: course.curriculumCredits, earnedCreditsTotal: 16 })], items: [item(opening, 'earned', { courseCreditContribution: 2 })] }));
-  assert.match(markup, /修得: 18単位 · 反復履修可能科目/); assert.doesNotMatch(markup, /修得: 18 \/|完成後の再履修/); assert.match(markup, /履修attemptの詳細・編集/);
+  assert.match(markup, /修得: 18単位 · 反復履修可能科目/); assert.doesNotMatch(markup, /修得: 18 \/|完成後の再履修/); assert.match(markup, /履修状況の詳細・編集/);
 });
 test('UI callbacks: status/year/studyYear/term/order and grades route by offeringId, not Course id', () => {
   const calls = []; const grades = [];

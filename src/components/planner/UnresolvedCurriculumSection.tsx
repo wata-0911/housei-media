@@ -11,7 +11,7 @@ export default function UnresolvedCurriculumSection({ editor }: { editor: Curric
   };
   return <section aria-labelledby="unresolved-curriculum-heading" className="min-w-0 border-t border-gray-200 p-4 sm:p-6">
     <h3 id="unresolved-curriculum-heading" className="font-medium text-[#002255]">制度科目との対応未確認（{editor.view.unresolved.length}件）</h3>
-    <p className="mt-2 text-sm text-gray-600">公式実績と履修attemptを保持しています。成績表の科目行はここで開講を検索し、照合先を確認できます。</p>
+    <p className="mt-2 text-sm text-gray-600">公式実績と履修状況を保持しています。成績表の科目行はここで開講を検索し、照合先を確認できます。</p>
     <div className="mt-4 space-y-4">{editor.view.unresolved.map(entry => <div key={entry.kind === 'official' ? `official:${entry.official.achievement.id}` : `attempt:${entry.attempt.plannerItem.offeringId}`} data-unresolved-kind={entry.kind}>
       <p className="mb-2 text-sm text-amber-900">{entry.reason}</p>
       {entry.kind === 'official' ? <>
