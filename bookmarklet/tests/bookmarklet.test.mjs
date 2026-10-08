@@ -176,10 +176,10 @@ test('existing importPreview yields exactly the same preview from clipboard JSON
   assert.deepEqual(actualPreview, importPreview(expected, []));
 });
 
-test('Planner renders generated code as inert text with both methods and the existing JSON import UI', () => {
+test('Planner renders generated Bookmarklet code as inert text with the existing JSON import UI and no unpublished Chrome extension guidance', () => {
   const html = renderToStaticMarkup(createElement(GradeImportPanel, { offerings: [], plannedItems: [], existing: [], disabled: false, onApply: () => true }));
   assert.match(html, /Bookmarkletのコードをコピー/);
-  assert.match(html, /Chrome拡張/);
+  assert.doesNotMatch(html, /Chrome拡張/);
   assert.match(html, /読み込み・検証/);
   assert.match(html, /手動コピー用コード/);
   assert.doesNotMatch(html, /href="javascript:|<script/);
