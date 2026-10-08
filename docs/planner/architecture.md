@@ -311,3 +311,11 @@ Planner側にはrepeatableの回数/単位上限、史学演習の利用者確�
 - 本書は基準commitのcurrent implementationを記録する。将来のmigration、cloud保存、認証、multi-year、UIを確定する文書ではない。既存のfuture design資料も現行機能の証明には使わない。
 
 根拠: [current types](../../src/planner/plannerCatalog.ts)、[official guards](../../src/planner/officialGraduationFacts.ts)、[H42 boundary](../../src/planner/unresolvedSchoolingImpact.ts)、[既存監査inventory / follow-up](../graduation-false-unknown-audit-2026.md)。
+
+## H21 research / implementation — recognizedExemption semantics — 2026-10-08
+
+Research-only at exact base `b747e47efdbcd9a499787a05de3a44557c263b82`; production behavior is unchanged. The [H21 research section](../graduation-false-unknown-audit-2026.md#h21-research--implementation--recognizedexemption-semantics--2026-10-08) records sources, model comparison, characterization and evidence needed to reopen the boundary.
+
+The public 2026 guide printed p.133 / PDF p.135 defines admission recognition and shows R12/E12 and R2/E2 in the same sample rows. Printed p.31 / PDF p.33 permits a C4 course with recognition2 to acquire the remaining2, but does not specify whether a later Web row's E is2 or4. Therefore neither `earned + recognizedExemption` nor a universal row/profile dedupe rule is proven. Bachelor exemption is distinct and exempt general education is omitted from the sample notice; the numeric column must not automatically be interpreted as a waiver amount.
+
+`earnedCreditsTotal` remains the unmodified official source aggregate authority. Positive `recognizedExemption` still holds the whole ordinary fact and fails `safePositiveOfficialSchooling()`. H14's exact Course comparison cannot prove recognition-event/aggregate-budget disjointness. No profile subtraction, maximum, merge, implicit dedupe, completion equation or S inference is added. H20 source separation and H19/H43 global-only boundaries remain in force; additionalEnrollment is unchanged. Case E0 retains H41's existing known-zero reference treatment even when its fact is held; this does not establish completion. Import/Source/CourseProgress presentation and thesis-guidance calculations are separate consumers, not permission to bypass the graduation hold. `graduationCheckComplete=false` remains unchanged.
