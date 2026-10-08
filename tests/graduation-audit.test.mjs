@@ -11,7 +11,9 @@ import { catalog } from '../src/planner/catalog.ts';
 import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
 import { deriveImportedAchievements } from '../src/planner/importedAchievementCalculations.ts';
 import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
-import { importedEarnedCreditsTotal, importPreview } from '../src/planner/gradeImportApply.ts';
+import { importedEarnedCreditsTotal, importPreview, applyImport } from '../src/planner/gradeImportApply.ts';
+import { parseHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
+import { extractRows } from '../shared/grade-import/extractor.js';
 import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
 import { resolveRecognizedProfessionalCurriculumIdentity } from '../src/planner/recognizedProfessionalIdentity.ts';
 import { unresolvedOfficialImpact, officialImpactsRequirement } from '../src/planner/unresolvedOfficialImpact.ts';
@@ -4368,5 +4370,138 @@ for (const curriculum of ['unknown', 'legacy_or_transition']) for (const recogni
       assert.deepEqual(facts.allocations.map(a => [a.credits, a.schoolingCredits]), [[4, null]]);
       assert.ok(facts.facts[0].diagnostics.includes('schooling_evidence_requires_confirmation'));
     } else assert.equal(facts.allocations.length, 0);
+  });
+}
+
+// H21 research-only characterizations. Synthetic states are NOT assertions that
+// the university permits these combinations. See the dated evidence matrix.
+const h21Quantities = [
+  ['case1', 2, 2, 0], ['case2', 2, 2, 2],
+  ['case3', 4, 0, 0], ['case4', 2, 4, 2],
+];
+for (const [label, recognition, earned, schooling] of h21Quantities) {
+  test(`H21 ${label}: DOM through apply preserves separate quantities and holds graduation`, () => {
+    const x = fixture();
+    const cells = Array(24).fill('');
+    Object.assign(cells, { 1: x.course.canonicalName, 2: '4', 3: '0',
+      4: String(recognition), 5: String(earned), 6: String(schooling),
+      11: '2026/07/01', 12: '40', 13: 'A' });
+    const dom = { querySelectorAll: () => cells.map(textContent => ({ textContent, classList: { contains: () => false } })) };
+    const payload = { schemaVersion: 1, source: 'hosei_web_learning_grade_table',
+      capturedAt: '2026-10-08T00:00:00Z', courses: extractRows([dom]) };
+    const before = structuredClone(payload); deepFreeze(payload);
+    const parsed = parseHoseiGradeImportV1(payload);
+    assert.deepEqual(parsed, payload);
+    const units = importPreview(parsed, x.f.offerings, [], [], { curriculum: x.f.curriculum, mappings: x.f.mappings });
+    const state = applyImport(initialState(), units, x.f.offerings);
+    assert.equal(state.importedCourseAchievements.length, 1);
+    const row = state.importedCourseAchievements[0];
+    const values = r => [r.compositionCredits, r.recognizedExemption, r.earnedCreditsTotal, r.schoolingCreditsTotal, r.additionalEnrollment];
+    assert.deepEqual(values(units[0].sourceCourse), [4, recognition, earned, schooling, 0]);
+    assert.deepEqual(values(row), [4, recognition, earned, schooling, 0]);
+    assert.equal(importedEarnedCreditsTotal([row]), earned, 'component40 and recognition never reconstruct earned');
+    const f = deriveOfficialGraduationFacts([row], state.importedStudyRecords, x.f, x.scope, x.profile);
+    assert.equal(f.allocations.length, 0);
+    assert.equal(f.facts[0].allocation.kind, 'unknown');
+    assert.equal(f.facts[0].earnedCreditsTotal, earned);
+    const p = calculateGraduationProgress(state.items, x.f, x.scope, [], 'not_selected', state.importedStudyRecords, [row], x.profile);
+    assert.equal(p.importedContributionCount, 0);
+    assert.equal(overall(p), 0, 'auto-created earned Planner item cannot bypass official hold');
+    // H41's all-zero fact does not imply a missing positive ordinary increment.
+    // The fact itself is still held; recognition is never used as completion.
+    assert.equal(p.referenceProgress[0].status, earned === 0 ? 'partial' : 'unknown');
+    assert.deepEqual(payload, before);
+  });
+}
+for (const mode of ['total', 'individual', 'same', 'disjoint', 'unresolved', 'none']) {
+  for (const recognizedS of [null, 0, 2]) test(`H21 cases5-8 profile=${mode} S=${recognizedS}: no second budget`, () => {
+    const x = h14Fixture(); x.rows[0].recognizedExemption = 2;
+    x.profile.admissionType = 'other_transfer';
+    x.profile.recognizedCredits.schoolingEquivalentCredits = recognizedS;
+    x.profile.recognizedCredits.professionalCourses = mode === 'same' ? [x.recognize(x.a)]
+      : mode === 'disjoint' ? [x.recognize(x.b)] : mode === 'unresolved'
+        ? [{ id: 'h21-unresolved', name: x.a.course.canonicalName, offeringId: null, courseId: null, mappingId: null, credits: 4 }] : [];
+    x.profile.recognizedCredits.totalCredits = mode === 'none' ? null : 4;
+    if (mode === 'individual') x.profile.recognizedCredits.general.humanities = { mode: 'recognized', credits: 4 };
+    if (mode === 'none') x.profile.admissionType = 'first_year';
+    assert.equal(graduationProfileValidationError(x.profile), null);
+    const input = x.build(), snapshot = structuredClone({ input, rows: x.rows, profile: x.profile });
+    deepFreeze(input); deepFreeze(x.rows); deepFreeze(x.profile);
+    const f = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+    assert.equal(f.allocations.length, 0);
+    assert.equal(f.facts[0].earnedCreditsTotal, 4);
+    assert.equal(heldOfficialSchoolingContributions(f, x.rows, [], input, x.scope, x.profile).length, 0);
+    const p = x.progress(input), without = x.progress(input, []);
+    assert.equal(p.importedContributionCount, 0);
+    assert.equal(overall(p), overall(without));
+    assert.equal(professional(p).earned, professional(without).earned);
+    assert.equal(p.referenceProgress[0].status, 'unknown');
+    assert.deepEqual({ input, rows: x.rows, profile: x.profile }, snapshot);
+  });
+}
+for (const department of ['法律学科', '日本文学科', '史学科', '地理学科', '経済学科', '商業学科']) {
+  for (const curriculum of ['current_2026', 'unknown', 'legacy_or_transition']) {
+    for (const [recognition, additional] of [[null, null], [0, 0], [0, 2], [2, null]]) {
+      test(`H21 controls ${department}/${curriculum} R${recognition}/additional${additional}`, () => {
+        const x = fixture(department); x.profile.curriculumApplicability = curriculum;
+        x.row.recognizedExemption = recognition; x.row.additionalEnrollment = additional;
+        const snapshot = structuredClone(x); deepFreeze(x);
+        const f = deriveOfficialGraduationFacts([x.row], [], x.f, x.scope, x.profile);
+        const held = curriculum === 'legacy_or_transition' || recognition > 0 || additional > 0;
+        assert.equal(f.allocations.length, held ? 0 : 1);
+        if (!held) assert.deepEqual(f.allocations.map(a => [a.credits, a.completedCredits, a.schoolingCredits]), [[4, 4, 2]]);
+        assert.equal(f.facts[0].earnedCreditsTotal, 4);
+        const p = run(x);
+        assert.equal(p.importedContributionCount, held ? 0 : 1);
+        assert.deepEqual(x, snapshot);
+      });
+    }
+  }
+}
+for (const source of ['H19', 'H43']) test(`H21 positive recognition closes ${source} global-only S`, () => {
+  const x = source === 'H19' ? h19Fixture() : h43Fixture();
+  x.rows[0].recognizedExemption = 2;
+  const e = source === 'H19' ? h19Evidence(x) : h43Evidence(x);
+  assert.equal(e.contributions.length, 0);
+  assert.equal(e.official.allocations.length, 0);
+  assert.equal(x.progress().importedContributionCount, 0);
+});
+for (const route of ['first_year', 'transfer_second_year', 'transfer_third_year', 'other_transfer', 'hosei_internal_transfer', 'bachelor_admission']) {
+  test(`H21 route ${route}: positive recognized row remains held without guessing provenance`, () => {
+    const x = fixture(); x.profile.admissionType = route; x.row.recognizedExemption = 2;
+    const f = deriveOfficialGraduationFacts([x.row], [], x.f, x.scope, x.profile);
+    assert.equal(f.allocations.length, 0);
+    assert.equal(run(x).referenceProgress[0].status, 'unknown');
+  });
+}
+test('H21 duplicate positive recognized rows are not summed or chosen', () => {
+  const x = fixture(); x.row.recognizedExemption = 2;
+  const rows = [x.row, { ...x.row, id: 'h21-other', earnedCreditsTotal: 2 }];
+  const f = deriveOfficialGraduationFacts(rows, [], x.f, x.scope, x.profile);
+  assert.equal(f.allocations.length, 0);
+  assert.equal(f.facts[0].earnedCreditsTotal, null);
+  assert.ok(f.facts[0].diagnostics.includes('duplicate_official_rows'));
+});
+for (const [label, composition, recognition, earned, schooling] of [
+  ['public aggregate example', '', '12', '12', ''],
+  ['public physical example', '2', '2', '2', ''],
+  ['public foreign example', '1', '2', '2', '2'],
+  ['public transfer S-only example', '', '', '', '13'],
+]) test(`H21 ${label}: public printed p133 quantities are retained without an additive rule`, () => {
+  const cells = Array(24).fill('');
+  Object.assign(cells, { 1: '匿名の公式見本行', 2: composition, 4: recognition, 5: earned, 6: schooling });
+  const payload = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-08T00:00:00Z', courses: extractRows([cells]) };
+  const row = importPreview(payload, [])[0].sourceCourse;
+  const number = raw => raw === '' ? null : Number(raw);
+  assert.deepEqual([row.compositionCredits, row.recognizedExemption, row.earnedCreditsTotal, row.schoolingCreditsTotal],
+    [composition, recognition, earned, schooling].map(number));
+});
+for (const field of ['recognizedExemption', 'additionalEnrollment', 'earnedCredits', 'schoolingCredits']) {
+  for (const value of [-1, Infinity, NaN, '2']) test(`H21 invalid contract ${field} ${String(value)} is rejected before preview`, () => {
+    const cells = Array(24).fill(''); cells[1] = '合成検証科目'; cells[2] = '4';
+    const payload = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-08T00:00:00Z', courses: extractRows([cells]) };
+    payload.courses[0][field].value = value; deepFreeze(payload);
+    assert.equal(parseHoseiGradeImportV1(payload), null);
+    assert.throws(() => importPreview(payload, []), /contract v1/);
   });
 }

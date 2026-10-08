@@ -926,3 +926,131 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 
 - Findings: 検査したH20変更に残存P1=0/P2=0/P3=0。課程unknown過剰解放はレビュー中のP2として修正済み。これはengine全体やhistorical H01–H66のfinding解消を意味しない。
 - Remaining limitations: H21 recognizedExemptionの制度意味・認定ordinary overlap、additionalEnrollmentの解釈、専門認定の既存Offering数量依存、既存earned itemが認定syntheticを抑制する保守的境界、legacy/unknown curriculum、public/special/repeatable等の未対応範囲は残す。H19/H43の専門認定guardはH14でdisjointでも閉じたまま。卒業engine全体の完成は主張しない。
+
+## H21 research / implementation — recognizedExemption semantics — 2026-10-08
+
+### Decision and exact baseline
+
+**Outcome A: research/tests only. Model D for a general row/accounting contract; limited B-like evidence in the public notice example, and C for bachelor general-education exemption. Keep the production H21 guard.** No production calculation, schema, storage, import contract, profile shape, catalog, or previous assertion is changed. This is a positive research result: relaxing the guard cannot yet be justified by an exact accounting/provenance rule.
+
+Repository `wata-0911/housei-media`; dedicated clean clone, `git fetch origin`, exact `origin/dev = b747e47efdbcd9a499787a05de3a44557c263b82` (PR #100, H20), detached checkout and clean status checked before creating `feature/graduation-h21-recognized-exemption-boundary`. No other checkout/stash modified; no reset/rebase/cherry-pick/clean/history rewrite/push/PR/merge. Earlier audit inventory above remains historical and unchanged.
+
+### Official evidence inspected
+
+Read repository documents first: this audit, `graduation-engine-audit-2026.md`, `planner/architecture.md`, and `grade-import-contract.md`. Public sources only; no authenticated university pages or personal grades. Search results were discovery only, never evidence. The PDF was downloaded from the official URL and rendered with PDFium because text extraction does not reliably preserve the Japanese table. The public sample is an institutional example, not a learner fixture.
+
+| Source | Exact location inspected | What it establishes / limit |
+|---|---|---|
+| [2026 学習のしおり](https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026.pdf#page=135) | printed **133 / PDF 135**, whole rendered page and enlarged table | 認定・免除 is the total of credits recognized on transfer admission. Bachelor general education is omitted because it is exempt. 修得単位 includes quantities not eligible for graduation (incomplete composition, teaching/qualification courses). S is schooling credit; transfer S recognition has its own named row. |
+| Same PDF | printed **29 / PDF 31** | Admission recognition table: blanket, individual, bachelor exemption, route-specific S caps; fully recognized courses generally cannot be taken again except permitted repeatable courses. |
+| Same PDF | printed **30–32 / PDF 32–34**, **42 / PDF 44**, **45 / PDF 47**, **68 / PDF 70** | Composition and graduation eligibility differ from displayed earned. **p.31 explicitly allows C4 with admission recognition2 to acquire the remaining2** using the C2 study methods. It does not specify the resulting numeric Web-grade row. p.32 has an S-only situation; p.45(e) excludes repeat earned after fulfillment/recognition/exemption from ordinary graduation totals while allowing S. |
+| Same PDF | printed **135 / PDF 137** | Open University recognition is a separate process, with eligible credits classified as general education/other and schooling, subject to cap/exclusions. This does not define the grade-table recognition field for that process. |
+| [卒業必要要件](https://www.tsukyo.hosei.ac.jp/system/requirements/) | graduation and schooling sections, HTML (no page numbers) | 124/128 overall, 30 S, course-group and exclusion rules. No row-level recognition arithmetic. |
+| [編入学者の単位認定](https://www.tsukyo.hosei.ac.jp/admission/accreditations/) | recognition table and footnotes, HTML | Admission route and prior institution affect blanket/individual/exempt treatment and S recognition. No link to application profile entries. |
+| [単位認定navi](https://www.tsukyo.hosei.ac.jp/accreditation-navi/) | 用語, HTML | Blanket recognition is field-based; individual recognition names a course and R evaluation; exemption removes the course from required study and omits course details in certificates. These are not interchangeable accounting facts. |
+| [出願 FAQ](https://www.tsukyo.hosei.ac.jp/faq/100-2) | 編入学時の単位認定, especially 学士入学 / すでに認定された科目 | Confirms exemption and recognition distinctions, but sometimes uses recognition/exemption wording together. It does not prove numeric serialization of either in the Web table. |
+
+PDF: 248 pages; SHA-256 `bb7fee419cec0f9d421b1d206947cf8fb1facb69992d685352817f756d19c4a5`, identical to the previously documented public edition. PDF page numbers here are one-based. The observed p.133 header has historical/sample study dates: do not treat its example as exhaustive current-course metadata or a Web DOM specification.
+
+### Evidence matrix: facts, repository behavior, inference, unknowns
+
+| Question / axis | Source-proven fact | Repository behavior | Inference / unresolved boundary |
+|---|---|---|---|
+| What is 認定・免除? | p.133 explains admission recognition; bachelor exempt general education is not displayed. | Numeric/null field; no route, recognition-kind, or provenance tag on the row. | The name does **not** identify a universal waiver-credit quantity. Other recognition processes are not defined by this column description. |
+| Included in earned, or additional? | Sample field-recognition rows show **R12/E12**, physical course **C2/R2/E2**, foreign **C1/R2/E2/S2**. | `earnedCreditsTotal` copies 修得 alone, not a sum. | B-like duplication is visible in these examples. Universal B is not proven; universal additive A is unsafe. Raw field equation for partial recognition plus later study remains unknown. |
+| Both positive? | **Yes**, directly in those public sample rows. p.31 also permits partial recognition followed by remaining study. | Contract permits independent nonnegative finite fields. | Positivity does not establish that E is new ordinary study independent of R. Cases C4/R2/E2 and C4/R2/E4 cannot be selected as the correct representation from these sources. |
+| Graduation earned credit / waiver? | Recognition can fulfill admission requirements; bachelor general education is exempt/omitted, not evidence of newly earned credits. Displayed earned itself may be ineligible. | Profile exempt contributes earned0 and lowers bachelor overall reference target by42; confirmed profile recognition follows existing rules. | No source authorizes adding row R to E toward 124/128 or treating a waiver as a second earned budget. Do not generalize the repository target representation into an official raw-column contract. |
+| Composition completion? | p.31 proves recognition2 plus remaining acquisition2 can fulfill C4 institutionally; pp.42/45 require composition completion in principle. | H21 row is held even when E=C. Other eligible rows use E>=C; CourseProgress presentation has its own completion calculation. | **Institutional learning rule is not `row.E + row.R >= row.C`**: E may already contain recognized credits. No safe formula for these fields is established. |
+| Schooling independent? | S has its own column; the sample has a separate transfer S13 row and also foreign R2/E2/S2. | Positive R blocks ordinary allocation and `safePositiveOfficialSchooling`, so cannot enter H19/H43 global S. H20 separates eligible normal S, actual Planner S, profile global S, synthetic ordinary recognition and global-only S. | Separate columns do not prove disjoint budgets. R does not create S. Neither universal inclusion nor disjointness between a recognized row S and profile S is proven. |
+| Profile overlap? | Official sources describe institution recognition; they do not describe this application's profile or source IDs. | Profile is separately entered/confirmed; no row-to-recognition-document join exists. H14 resolves exact professional Course identities only. | Same underlying recognition can plausibly be entered twice. Same Course is not proof of the event/quantity relationship; disjoint professional Course does not prove row R is disjoint from aggregate/field/S profile budgets. |
+| Per-row proof? | No public sample ties a Web row, recognition notice and this profile entry to the same institutional fact. | No recognition event/document identifier in the existing import/profile shape. | Cannot subtract, max, merge, dedupe or choose a budget numerically. Exact institutional provenance is required; names and equal quantities are insufficient. |
+| additionalEnrollment | p.133 says separate course-registration application quantity, e.g. teacher-license study. | Own copied field and own conservative guard. | Does not establish graduation-earned quantity; unchanged and outside H21. |
+
+Models evaluated without selecting one in advance:
+
+- **A (additive)**: institutionally recognition and later required study can combine (p.31); this does **not** prove the raw field sum. Sample R12/E12 would become24 if blindly added. Rejected as a general field rule.
+- **B (included)**: strongly supported for the displayed admission-recognition examples; recognition appears in both columns without ordinary component records. Insufficient to generalize to every course/route/partial-recognition Web row or to prove graduation eligibility.
+- **C (waiver/completion only)**: supported for bachelor general-education exemption as a requirement treatment. It cannot describe all numeric recognition rows, which have positive earned in the sample.
+- **D (varies / insufficient evidence)**: selected for the general implementation boundary. In particular, the paper notice example does not prove live Web column/accounting equivalence, row-to-profile provenance, or later partial-recognition serialization. No production relaxation follows from these sources.
+
+### Producer-to-consumer trace (current code, not official policy)
+
+1. `shared/grade-import/extractor.js` is the shared source for the generated Extension extractor and Bookmarklet. It reads logical DOM cells after removing `line_y_label`; exactly24 cells are required. Zero-based cells2/3/4/5/6 map independently to C/additional/R/E/S. Numeric parsing trims whitespace/NBSP, removes one leading `*`, accepts decimal nonnegative numeric text, otherwise null; raw is retained in the contract. No credit arithmetic or recognition-kind interpretation occurs. Category rows supply category context only.
+2. Bookmarklet `serialize.ts` snapshots and validates transport; Extension capture/background/handoff/bridge passes the same payload. `gradeImportContract.ts` checks finite nonnegative/null values and deep-projects an allowlist. It does not validate cross-column equations or official institutional validity. A structurally accepted combination is not a proven real state.
+3. `gradeImportApply.ts` parser → `importPreview` → `sourceCourseFor` copies `.value` independently to `ImportedCourseAchievement`. Component records copy aggregates as evidence; component40 cannot change official E2. Preview displays E/S/C, not all R/additional values. Applying copies row values, reconciles source updates, and may create a linked earned Planner item from positive official E. `sourceAggregateComplete` uses E>=C for an import helper, not R+E. Official priority excludes that item from graduation even when the row is held.
+4. `storage.ts` legacy migration and `importedAchievementCalculations.ts` legacy fallback copy an existing component's aggregate; they do not sum components or R. The row schema validates quantities; this audit adds no migration. Identity repair/management does not rewrite R/E/S. `importedEarnedCreditsTotal` is a display sum over official rows, not a reconstruction of one row or a graduation verdict.
+5. `officialGraduationFacts.ts` preserves source E/S evidence, groups exact Course rows, holds different duplicate rows, then applies metadata/special/H21/additional/H14/method gates. Positive R → `special_rule_evidence_required`, no allocation. `globalOfficialSchooling.ts` independently requires R and additional to be null/0. H19/H43 cannot bypass it.
+6. `graduationProgress.ts` feeds eligible allocations into ordinary/completion/S requirements, cards and references. Profile common recognition is applied separately, professional recognition uses existing synthetic items, total-minus-breakdown is an existing profile-only unallocated amount. None of these operations reconciles profile with row R. H20 synthetic items do not supply S; positive R's unresolved evaluation remains held (except existing H41 zero-budget/consumer localization).
+7. Other consumers inspected: `annualPlan.ts`, `curriculumCourseProgress.ts`, `unifiedCourseView.ts`, `importedAchievementCalculations.ts`, `importedAchievementManagement.ts`, `importedAchievementRepair.ts`, `thesisGuidance.ts`, and all UI hits (`GradeImportPanel`, `ImportedSourceDetails`, `ImportedAchievements`, `OfficialAchievementChild`, `ImportedStudyRecordEditor`, `PlannedCourseList`, `MediaSchoolingProgress`, `CategorySummary`, `CurriculumCourseProgress`). They display/use E/S aggregates or preserve fields, not R+E. **Some do perform semantic interpretation** (earned status, CourseProgress completion, annual quantities, separate thesis-guidance credits); these are not graduation allocation authority and are not claimed repaired by H21. Guidance separately combines recognition under its own eligibility rules; this research does not certify its cross-source overlap.
+
+### Pre-change characterization and validity classification
+
+All new cases run against unchanged production. No case below is classified invalid by official contract just because it conflicts with an assumed equation. Numeric-invalid values are invalid by the **repository import contract**, not an inferred university rule. Existing fixtures with R values are test data, not institutional evidence.
+
+| Requested case | Classification | Observed production result |
+|---|---|---|
+| 1 C4/R2/E2/S0 | Structurally possible; semantics unknown | E2 preserved; ordinary allocation held; no R-created completion. |
+| 2 C4/R2/E2/S2 | Structurally possible; semantics unknown | Same hold, S is not released through H43. |
+| 3 C4/R4/E0/S0 | Structurally possible; semantics unknown | E0 preserved, fact held. Existing H41 all-zero ordinary reference is partial0, **not unknown and not satisfied**; this does not recognize completion. |
+| 4 C4/R2/E4/S2 | Structurally possible; semantics unknown | E4 preserved; full-looking E does not bypass H21. |
+| 5 positive R + profile total/individual | Synthetic regression-only provenance combination | No official increment on top of profile; affected evaluation remains unknown. |
+| 6 positive R + same professional Course | Synthetic regression-only provenance combination | Official held; no second ordinary budget. |
+| 7 positive R + disjoint professional Course | Synthetic regression-only provenance combination | H14 disjoint identity does not prove the R budget; H21 remains held. |
+| 8 positive R + no profile recognition | Synthetic regression-only, absence of profile not evidence of disjointness | Row held, official aggregate retained. |
+| 9 R null/0 | Synthetic controls consistent with ordinary no-recognition rows | Existing non-recognition eligibility unchanged; six departments and three curriculum modes. |
+| 10 additional positive | Synthetic regression-only | Independent additional guard remains. Null/0 controls preserved. |
+| Public p.133 R12/E12, C2/R2/E2, C1/R2/E2/S2, transfer S13-only | Source-proven valid **published notice examples**, not proof of matching current Web identities | Numeric import preservation tests only; no synthetic current Course allocation invented for the examples. |
+
+First characterization run: 102/103 passed; the new test incorrectly expected unknown for case3; reading H41 showed the established zero-budget reference rule, so the characterization was corrected without changing production or old assertions. Later malformed-input tests initially expected an empty preview; the existing API throws on invalid contract, and the new tests now assert that rejection. These were new-test expectation corrections, not production fixes or weakened existing tests.
+
+### Required evidence to reopen H21
+
+Minimum evidence is **not a complete personal transcript or login access**. A public university-authored Web example/specification or a voluntarily provided sanitized extract plus authoritative explanation must establish:
+
+- Same applicable curriculum, admission/recognition route, exact institutional Course/field identity and recognition kind; preserve column headings and only C/additional/R/E/S plus relevant component-method/credit cells. Remove name, student number, address, birthdate, login URLs/tokens and unrelated courses.
+- For partial recognition, paired snapshots (recognition2 before and remaining2 after acquisition in a C4 course) and the university's explanation of whether E changes2→4 or0→2; identify whether S includes admitted S. Values alone cannot prove arithmetic or rule out a transcription error.
+- Corresponding sanitized recognition-result line(s), total/field/professional/S budgets, and an exact stable anonymized institutional event/line cross-reference to the row and the intended profile entries. A shared Course name, matching number or user guess is not sufficient provenance. Include the separate transfer S recognition line when relevant.
+- An authoritative statement of how the recognized/completed course contributes to graduation totals, and whether paper notice and current Web columns are equivalent for that route. Distinguish bachelor exemption, blanket recognition, individual recognition and post-entry recognition such as Open University.
+
+No personal evidence was accessed or requested during this task. H14's exact-evidence principle is reused, not its resolver as a substitute for missing recognition-event semantics.
+
+### Validation and differential
+
+Validation results are recorded below after running the final test revision. `scripts/audit-h21-differential.mjs` archives the exact base into a new scratch directory, runs the whole graduation audit corpus with separate base/current modules, and compares **entire** facts and graduation-progress outputs with `deepStrictEqual` on independently frozen cloned inputs. It does not normalize away quantities/status/reasons or permit any intentional differential. Existing H14/H20/H19/H43/H38/H37/H36/H41/H42 tests supply their original assertions; the new H21 matrix adds six departments × current/unknown/legacy × R/additional controls, routes, profile overlaps, duplicate sources and import preservation. No skips, deleted assertions, or production differences are intended.
+
+### Self-review before commit
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | Exact meaning of R? | p.133: admission recognition total; bachelor exempt general education omitted. Not a universal credit-bearing waiver field. |
+| 2 | Included in E? | Public sample supports inclusion for its recognition rows; universal Web rule unresolved. |
+| 3 | Both positive on a valid row? | Yes, public sample R12/E12 and R2/E2. Exact C4 test combinations not proven. |
+| 4 | Graduation earned contribution? | Recognition can meet institutional requirements, but R is not an authorized extra increment; displayed E is not automatically graduation eligible. |
+| 5 | Completion contribution? | Institutionally yes for partial recognition plus remaining study (p.31); no proven R+E field equation. |
+| 6 | Schooling contribution? | Recognition can include S; explicit S and transfer-S rows exist. Never infer S from R; profile/row overlap unresolved. |
+| 7 | Can overlap profile? | Potentially the same institutional fact; cannot assume disjoint. |
+| 8 | Proven per row/Course? | No. Course identity alone lacks event/budget provenance. |
+| 9 | Any quantity counted twice after this slice? | H21 positive rows produce no additional allocation/S budget in tested scenarios; no calculation changed. This is not certification of all engine/guidance paths. |
+| 10 | Added R to earned? | No. |
+| 11 | Reconstructed official aggregate? | No. E remains copied source authority, including zero/null. |
+| 12 | H20 source separation? | Preserved; normal official, actual Planner, global profile S, synthetic ordinary and H19/H43 sources stay distinct. |
+| 13 | H14/H19/H43 guards? | Preserved, original tests and explicit H21 closure checks. |
+| 14 | additionalEnrollment? | Unchanged; independently held. |
+| 15 | Curriculum boundaries? | current/unknown/legacy behavior unchanged, tested across six departments. |
+| 16 | Inputs immutable? | Frozen-input output comparison and input deep equality; no state mutation introduced. |
+| 17 | Schema/storage/import/profile shape? | All unchanged. |
+| 18 | Every production relaxation backed by evidence? | No relaxation made; insufficient evidence is documented. |
+
+Findings: **P1 safety boundary retained**, rather than a discovered new false-credit implementation: unconditional R+E or presumed row/profile disjointness risks duplicate credit/authority violation. **P2 retained limitation:** eligible ordinary/S lower bounds may be suppressed by the broad positive-R hold; public evidence does not yet prove a safe release. **P3:** no new minor issue identified in this change. Historical findings and separate guidance/recognition limitations are not closed. `graduationCheckComplete=false`, `sourceLinksReverified=false`, schema22 remain unchanged; the engine is not complete.
+
+Final validation (final source/test revision):
+
+- H21 targeted: **123/123 PASS**, failures0/skips0. Added123 tests; original1609 Planner tests/assertions retained.
+- `npm run test:planner`: **1732/1732 PASS**, failures0/skips0.
+- H14/H20/H19/H43/H42/H41/H38/H37/H36 plus official/recognition/schooling/curriculum union across all test files: **1052/1052 PASS**, failures0/skips0.
+- `npm run test:extension`: **54/54 PASS**; `npm run test:bookmarklet`: **168/168 PASS**, both failures0/skips0; generated import artifact check PASS.
+- `npm run typecheck`, `npm run lint` (including final differential helper), working diff whitespace check PASS. Production is byte-unchanged, and previous documentation is verified as an exact prefix of each appended document.
+- `scripts/audit-graduation-engine.mjs`: successful; full JSON output is deep-equal (also byte-equal) to the exact base.
+- Historical `scripts/audit-graduation-false-unknown.mjs`: **17/20 PASS, 3 FAIL, skips0 on BOTH exact base and branch**. Same failed assertions: H19 old global-S hold, H20 old recognition blanket/S0 hold, H38 old unknown-S reference expectation. These are pre-existing expectations superseded by the current engine tests; the historical helper is intentionally unchanged. This validation exception is reported, not hidden or converted to skips.
+- Docs/tests-only validation is the selected gate; a production build is not required for Outcome A. No production check is claimed to have run when it did not.
+- Final exact-base differential: **1215/1215 audit corpus tests PASS**, failures0/skips0; **1833 complete progress outputs + 1623 complete fact results = 3456 deep-equal comparisons**, with frozen base/current inputs unchanged. Intentional differentials: **none**. Earlier comparison already matched all3456 results but had16 new-test invalid-preview expectation failures; the final rerun uses the corrected rejection assertions and passes in full.
