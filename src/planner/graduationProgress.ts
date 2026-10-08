@@ -191,6 +191,13 @@ function evaluateStatus(type: StructuredRequirement['ruleType'], earned: number,
 
 const OFFICIAL_SCHOOLING_REASON = '公式実績のスクーリング算入条件が未確認です';
 
+/** Calculation-only source ownership, never a persisted PlannerItem flag.
+ * ordinary includes synthetic professional recognition for existing credit
+ * allocation. schooling contains only actual learner items after official
+ * priority exclusion. Annual recognition Offerings cannot prove recognized S.
+ */
+type CalculationItems = { ordinary: PlannerItem[]; schooling: PlannerItem[] };
+
 function evaluateStructured(
   requirement: StructuredRequirement,
   items: PlannerItem[],
@@ -308,10 +315,11 @@ function withoutThesisCondition(requirement: StructuredRequirement): StructuredR
 }
 
 function groupedCards(
-  items: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[],
+  sources: CalculationItems, offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[],
   impact: UnresolvedEarnedImpact,
   official: OfficialAllocationInput[],
 ): ProgressCard[] {
+  const items = sources.ordinary, schoolingItems = new Set(sources.schooling);
   type Totals = { earned: number; inProgress: number; planned: number; schooling: number };
   const empty = (): Totals => ({ earned: 0, inProgress: 0, planned: 0, schooling: 0 });
   const general = empty();
@@ -330,7 +338,7 @@ function groupedCards(
     const add = (totals: Totals) => {
       if (item.status === 'earned') {
         totals.earned += offering.credits!;
-        if (offering.method === 'schooling') totals.schooling += offering.credits!;
+        if (schoolingItems.has(item) && offering.method === 'schooling') totals.schooling += offering.credits!;
       } else if (item.status === 'in_progress') totals.inProgress += offering.credits!;
       else if (item.status === 'planned') totals.planned += offering.credits!;
     };
@@ -425,14 +433,15 @@ function groupedCards(
   return [generalCard, foreignCard, physicalCard];
 }
 
-function historySeminarCards(items: PlannerItem[], offerings: Map<string, Offering>): ProgressCard[] {
+function historySeminarCards(sources: CalculationItems, offerings: Map<string, Offering>): ProgressCard[] {
+  const items = sources.ordinary;
   const seminars = items.filter(item => item.status === 'earned' && isHistorySeminar(offerings.get(item.offeringId)));
   const ordered = seminars.filter(item => item.earnedOrder !== null);
   const assignedAll = ordered.length === 4;
   const orderKnown = validHistorySeminarOrders(items, offerings) && (assignedAll || seminars.every(item => item.earnedOrder !== null));
   const reason = orderKnown ? null : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
   const creditsFor = (orders: number[]) => ordered.filter(item => orders.includes(item.earnedOrder!)).reduce((sum, item) => sum + (offerings.get(item.offeringId)?.credits ?? 0), 0);
-  const { hasAllFiveSchoolingRequiredCourses } = historySchoolingDiagnostic(items, offerings);
+  const { hasAllFiveSchoolingRequiredCourses } = historySchoolingDiagnostic(sources.schooling, offerings);
   const required = creditsFor(hasAllFiveSchoolingRequiredCourses ? [1] : [1, 2]);
   const elective = creditsFor(hasAllFiveSchoolingRequiredCourses ? [2, 3, 4] : [3, 4]);
   const details = ordered.map(item => {
@@ -627,10 +636,11 @@ function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
  * Keep their transfer rules here rather than showing every source rule as a card.
  */
 function professionalCards(
-  items: PlannerItem[], catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>,
+  sources: CalculationItems, catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>,
   eligibleMappings: (offering: Offering) => Mapping[], impact: UnresolvedEarnedImpact, publicCourseCredits: number, thesisSelection: ThesisSelection, thesisStatus: ThesisProgress['status'],
   official: OfficialAllocationInput[],
 ): ProgressCard[] {
+  const items = sources.ordinary, schoolingItems = new Set(sources.schooling);
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId);
   if (!program || !['日本文学科', '史学科', '地理学科', '法律学科', '経済学科', '商業学科'].includes(program.department ?? '')) return [];
   const buckets = new Map<string, Totals>();
@@ -730,7 +740,7 @@ function professionalCards(
     };
     if (item.status === 'earned') {
       entry.earned += offering.credits;
-      if (offering.method === 'schooling') entry.earnedSchooling += offering.credits;
+      if (schoolingItems.has(item) && offering.method === 'schooling') entry.earnedSchooling += offering.credits;
     }
     else if (item.status === 'in_progress') entry.inProgress += offering.credits;
     else if (item.status === 'planned') entry.planned += offering.credits;
@@ -895,7 +905,7 @@ function professionalCards(
     const ordered = seminars.filter(item => item.earnedOrder !== null);
     const orderKnown = validHistorySeminarOrders(items, offerings) && (ordered.length === 4 || seminars.every(item => item.earnedOrder !== null));
     const orderReason = orderKnown ? baseReason : '修得済み史学演習の修得順が未確定です。公式の1〜4を順に記録してください。';
-    const { hasAllFiveSchoolingRequiredCourses } = historySchoolingDiagnostic(items, offerings);
+    const { hasAllFiveSchoolingRequiredCourses } = historySchoolingDiagnostic(sources.schooling, offerings);
     for (const item of ordered) {
       const offering = offerings.get(item.offeringId)!;
       const target = item.earnedOrder === 1 || (item.earnedOrder === 2 && !hasAllFiveSchoolingRequiredCourses)
@@ -983,7 +993,7 @@ function professionalCards(
         make('professional-law-total', '専門教育：合計', total, totalTarget, totalTarget !== null && total.earned >= totalTarget, undefined, '選択必修・選択の卒業算入見込み合計です。', baseReason)]),
       (() => {
         const schooling = emptyTotals();
-        for (const item of items) {
+        for (const item of sources.schooling) {
           if (item.status !== 'earned') continue;
           const offering = offerings.get(item.offeringId);
           if (!offering || offering.method !== 'schooling' || offering.credits === null || offering.resolutionStatus !== 'matched') continue;
@@ -1128,7 +1138,7 @@ function countedOverallCredits(cards: ProgressCard[], department: string | null)
 }
 
 /**
- * Count mapped Planner/recognition schooling components. Official row evidence
+ * Count actual learner Planner schooling only. Official row evidence
  * is composed separately below, with no dependence on annual method. This is an actual-attendance
  * reference: unlike graduation buckets, a two-credit partial schooling is kept.
  */
@@ -1154,7 +1164,7 @@ function countedSchoolingCredits(items: PlannerItem[], offerings: Map<string, Of
   return { credits: [...byCourse.values()].reduce((sum, entry) => sum + Math.min(entry.schooling, entry.earned, entry.curriculumCredits), 0), uncertain };
 }
 
-function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], program: { department: string | null }, profile: GraduationProfile, thesisSelection: ThesisSelection): ReferenceProgress[] {
+function referenceProgress(cards: ProgressCard[], schoolingItems: PlannerItem[], offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[], program: { department: string | null }, profile: GraduationProfile, thesisSelection: ThesisSelection): ReferenceProgress[] {
   const prerequisiteReason = referencePrerequisiteReason(profile);
   // H36: optional law thesis selection holds the overall target/evaluation,
   // not known earned quantities or the independent global schooling target.
@@ -1169,7 +1179,7 @@ function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[
   // The legacy total may add only the explicitly unallocated remainder.
   const recognizedTotal = creditBearingRoute ? (profile.recognizedCredits.totalCredits ?? detailedRecognized) : 0;
   const overallEarned = countedOverallCredits(cards, program.department) + (unallocated ?? 0);
-  const schooling = countedSchoolingCredits(calculationItems, offerings, eligibleMappings, program.department);
+  const schooling = countedSchoolingCredits(schoolingItems, offerings, eligibleMappings, program.department);
   const schoolingRecognized = profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' ? profile.recognizedCredits.schoolingEquivalentCredits : 0;
   const schoolingReason = prerequisiteReason ?? (profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && schoolingRecognized === null
     ? '編入学の認定スクーリング相当単位が未入力です。0としては扱いません。'
@@ -1182,7 +1192,9 @@ function referenceProgress(cards: ProgressCard[], calculationItems: PlannerItem[
   });
   return [
     make('overall-reference-progress', bachelor ? '卒業対象単位（参考）' : '全体所要単位（参考）', prerequisiteReason ? null : overallEarned, bachelor && target !== null ? target - 42 : target, recognizedTotal, overallReason, exemptionCredits),
-    make('schooling-reference-progress', 'スクーリング（参考）', prerequisiteReason || schoolingRecognized === null ? null : schooling.credits + schoolingRecognized, prerequisiteReason ? null : 30, schoolingRecognized, schoolingReason),
+    // Unknown recognition contributes no *known* increment, but remains null in
+    // recognizedCredits and holds status/reason. Preserve normal S lower bounds.
+    make('schooling-reference-progress', 'スクーリング（参考）', prerequisiteReason ? null : schooling.credits + (schoolingRecognized ?? 0), prerequisiteReason ? null : 30, schoolingRecognized, schoolingReason),
   ];
 }
 
@@ -1293,12 +1305,13 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     existingCourseIds.add(key);
     return [{ offeringId: offering.id, status: 'earned' as const, plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null }];
   });
-  const calculationItems = [...plannerItems, ...recognizedItems];
+  const calculationItems: CalculationItems = { ordinary: [...plannerItems, ...recognizedItems], schooling: plannerItems };
   const offerings = catalogOfferings;
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));
   const eligibleMappings = (offering: Offering) => resolve(offering).filter(mapping => mapping.scopeId === scopeId || commonScopes.has(mapping.scopeId));
-  const impact = unresolvedEarnedImpact(calculationItems, catalog, scopeId);
+  const impact = unresolvedEarnedImpact(calculationItems.ordinary, catalog, scopeId);
+  const plannerSchoolingImpact = unresolvedEarnedImpact(calculationItems.schooling, catalog, scopeId);
   const requirements = requirementsForScope(catalog, scopeId)
     .filter(requirement => !(requirement.status === 'structured'
       && REFERENCE_ONLY_REQUIREMENT_RULES.has(requirement.ruleId)))
@@ -1308,7 +1321,9 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     const condition = thesisCondition(requirement, currentSelection);
     if (condition === 'inactive') return [];
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
-      return [evaluateStructured(withoutThesisCondition(requirement), calculationItems, offerings, eligibleMappings, impact, official.allocations, officialImpact, schoolingImpact)];
+      const schooling = requirement.ruleType === 'min_schooling_credits';
+      return [evaluateStructured(withoutThesisCondition(requirement), schooling ? calculationItems.schooling : calculationItems.ordinary,
+        offerings, eligibleMappings, schooling ? plannerSchoolingImpact : impact, official.allocations, officialImpact, schoolingImpact)];
     });
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
@@ -1349,7 +1364,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       card.reason ??= UNRESOLVED_EARNED_REASON;
     }
   }
-  cards.push(...literaturePartialExceptionCard(calculationItems, catalog, scopeId, offerings, eligibleMappings, cards));
+  cards.push(...literaturePartialExceptionCard(calculationItems.schooling, catalog, scopeId, offerings, eligibleMappings, cards));
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId)!;
   // Preserve known allocations as a partial lower bound, and keep unresolved source budgets visible.
   const officialReason = `公式実績の算入を保留しています: ${[...new Set(heldFacts.flatMap(f => 'reason' in f.allocation ? [f.allocation.reason] : []))].join(' / ') || 'curriculum_identity_unresolved'}`;
@@ -1385,7 +1400,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
   const thesisPage = thesisCreditsForDepartment(program.department) === 8 ? ({ '日本文学科': 49, '史学科': 52, '地理学科': 54 } as Record<string, number>)[program.department ?? ''] : ({ '法律学科': 46, '経済学科': 57, '商業学科': 59 } as Record<string, number>)[program.department ?? ''];
   const coveredCards = cards.map(card => withCoverage(card, card.ruleType === 'thesis_progress' ? thesisPage : catalog.requirements.find(rule => rule.id === card.requirementId)?.sourcePage));
-  const reference = referenceProgress(coveredCards, calculationItems, offerings, eligibleMappings, program, profile, currentSelection);
+  const reference = referenceProgress(coveredCards, calculationItems.schooling, offerings, eligibleMappings, program, profile, currentSelection);
   const generalRecognitionUnknown = coveredCards.some(card => card.requirementId === 'group-general'
     && card.reason?.startsWith(GENERAL_RECOGNITION_UNKNOWN_REASON));
   for (const row of reference) {
@@ -1434,6 +1449,6 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     importedWarnings,
     importedContributionCount: official.allocations.filter(a => a.credits > 0).length,
     referenceProgress: reference,
-    historySchoolingDiagnostic: scopeId === HISTORY_SCOPE_ID ? historySchoolingDiagnostic(calculationItems, offerings) : null,
+    historySchoolingDiagnostic: scopeId === HISTORY_SCOPE_ID ? historySchoolingDiagnostic(calculationItems.schooling, offerings) : null,
   };
 }

@@ -884,3 +884,45 @@ structured142、unsupported40、condition組合せ30。raw allowlist不一致43�
 - Validation: typecheck/lint/build/diff-check PASS。buildのgrade-import artifact checkとcatalog checkもPASS。chunk-size warningは同baseのbuildでも再現する既存warningのみ。
 - Independent self-review: actual diff・呼出順・85 targeted・96 differentialから、全認定比較条件、same/unresolved/inconsistent保留、非重複の個別release、名前/数量非使用、official aggregate、consumer単回算入、H19/H43/H20、前後のguard、no-recognition不変、schema/storage/profile/import非変更の14項目を再確認。H14変更に残存するP1=0/P2=0/P3=0。
 - Remaining boundaries: H20 schooling recognition overlap、H21公式行recognizedExemption欄の意味・ordinaryとの重複、recognitionのOffering数量依存、legacy/current institutional identityの全面統合、existing itemsとの保守的dedupeは未解決の別範囲。mapping-only/name-only/不明なrelationは意図したhold。`graduationCheckComplete=false`、`sourceLinksReverified=false`、schemaVersion22を維持。卒業エンジン全体の完成を意味しない。過去監査本文は変更せず、本節を末尾へ追記した。
+
+## H20 implementation — recognized schooling budget / ordinary schooling separation — 2026-10-08
+
+- Exact base / Git safety: 専用clean cloneで `git fetch origin` 後の `origin/dev = 3d79f463929de282c29578aae99d6280a491ca2b`（Merge pull request #94 / H14）を照合し、`feature/graduation-h20-schooling-recognition-separation` を作成。既存checkout/worktree/stashを変更せず、push/PR/merge/history rewriteは行わない。本節以前の全byteを履歴として保存する。
+- Pre-fix reproduction: production変更前に11件を追加し、8 FAIL / 3 PASSを確認。失敗は認定S2＋通常公式O4/S2、認定Snull＋同S2、認定S2＋公式S0、synthetic専門認定のannual schooling4二重計上、H19/H43各々の認定Snull/2共存。認定S0の通常/H19/H43対照3件は既にPASS。syntheticの通常認定4は既知だが、profile/UI producerにper-course認定S quantityは存在しないことを確認した。
+- Source/budget model: A=通常official allocationsのsource S、B=official優先除外後の実Planner履修S、C=profileのglobal schoolingEquivalentCredits、D=通常認定を表すsynthetic professional items、E=H19/H43 global-only S。globalはA+B+C+Eを各一回とし、DからSは推定しない。`CalculationItems.ordinary` はBのitems＋D、`.schooling` はBのitemsだけを持つローカルtype。persisted flag、profile shape、storage/migrationは追加しない。
+- Implemented safe subset: current_2026のnormal official allocationでは、既存identity/duplicate/Mapping/metadata/special/H14/recognizedExemption/additionalEnrollment/method guard通過後、認定S量がnull/positiveであることだけを理由にそのSをnullにしない。公式S0は確定0、S2は既知2。invalid S、S>earned/composition、media conflict、Law13 exclusion等は従来どおり。課程unknown/legacyの従来guardを維持する。base differentialで課程unknownの過剰解放12件を検出し、current_2026に限定して修正した。
+- Recognized global budget: non-first-yearの確認済みrouteでCをglobal referenceだけに一度加算する。C=nullは `recognizedCredits=null / status=unknown` と未入力reasonを保持し、通常S6ならearned6、known部分0ならlower bound0を表示する。nullを認定0へ変えない。reference prerequisite不足や別のgenuine official S uncertaintyによる既知量0→nullは保持。C=0は確定0、C>0は既知increment。CをLaw S8、外国語、named Structured S、特定professional Courseへ配分しない。
+- Synthetic boundary: Dは既存のordinary credit/completion/classification経路に残すが、global countedSchoolingCredits、Law S8、grouped CardsのS quantity、Structured min_schooling_credits、そのPlanner uncertainty入力から外す。S依存のcalligraphy/Law partial判定で使うearnedSchooling、Historyの実schooling diagnosticとfive-course証拠、文学部partial候補にもDのannual methodを使わない。制度bucketのordinary認定配分一般を再設計するsliceではない。
+- Double-count prevention: official-priorityのexact Course/source-link earned除外、既存itemsと認定items間のlegacy Course/Offering dedupe、H14 overlap policyは変更なし。H43はordinary allocationsのsource IDsを除外、H19はS既知allocation＋H43＋既accounted IDsを除外する。normal allocation S2＋H43 S2＋H19 S2＋認定S2は8、Law S8はnormal2のみ。official入力反復とPlanner earned重複でも変わらず、H19/H43の矛盾する同一source-ID snapshotは拒否。max/sumによる重複解決、認定値の推測減算、name inferenceは追加しない。
+- H19/H43 boundary: shared proofの確認済みrouteに対するaggregate-recognition blanketだけを解除。専門認定が1件でもある場合のoverlap guard（H14でexact disjointでも閉じる）、入学区分unknownの既存guard、source quantities/Mapping証明は維持。H19はexact13名称・Law scopeのみでglobal S30へ一度、Law S8へ0。H43はordinary allocationを解放せずglobal referenceだけへ一度。いずれもsource S=nullから推定しない。
+- H42/H38/H14 boundary: H42のconsumer別candidate集合・global fallback・単調な既知minimum充足を変更しない。global contributionはglobalReferenceUnknownだけを解消し、foreign/Law/Structured positive allocationに戻さない。H38 foreign認定O4とlanguage-specific Snull/0/1/2のstatus/reasonは不変。global lower bound表示だけを更新した。H14 resolverは無変更で、none/disjoint/same/unresolved/inconsistentのordinary結果をbaseと比較。H36 Law thesis target / H37 ordinary認定unknownも別軸のまま。
+- Regression / differential: `tests/graduation-audit.test.mjs` に147件追加。H20 targeted158/158（既存H20関連を含む）、関連union939/939（全Planner test filesを対象にH20/schooling/recognition/H14/H19/H43/H42/H38/H36/H37/official/profileの大文字小文字非区別union）、Planner全体1609/1609、fail/skip0。既存testsを削除/skipせず、H20旧仕様を期待するschooling assertionだけ更新。`tests/planner.test.mjs` の2件もknown lower bound0へ更新し、recognizedCredits=null/status=unknownのassertを追加した。
+- Differential details: exact base archiveとcurrent moduleへ同じfrozen入力を渡して231/231 PASS。6学科×first_year/transfer S0×16 cases=192件で卒業結果とfacts全体deep-equal。空/normal full/S0/Snull/O0/Onull/partial/duplicate/H21/additional/legacy/unknown/official-duplicate Planner/Planner schooling/correspondence/plannedを含む。H14 none/disjoint/same/unresolved/inconsistent×認定Snull/0/2の15件でordinary全consumer・allocation数量が同値。6学科×認定Snull/2×legacy/unknownの24件で全結果/facts同値。変更対象のS軸は別途production回帰で新契約を確認する。
+- Validation: typecheck/lint/build PASS。build内grade-import artifact/catalog checks PASS。500kB超chunk warningは同じbase buildで再現済み（PlannerPage 1434.19kB→1434.62kB、同じwarningのみ）。working diff-checkとstaged diff-checkをcommit前に実施し、commit後 `git diff origin/dev...HEAD --check` を確認する。
+- Invariants: schemaVersion22、graduationCheckComplete=false、sourceLinksReverified=false。official ordinary quantity正本はImportedCourseAchievement.earnedCreditsTotal。component40/annual99でもofficial O4/S2、frozen catalog/profile/items/rows/records/previous resultは不変。schema/storage/profile/import apply/contract/trust boundary/UIは変更なし。
+
+独立self-review（実際のproduction/test diffと呼出経路を再読して確認）:
+
+| # | Question | Answer / evidence |
+|---|---|---|
+| 1 | recognized Sの二重加算はあるか | なし。Cはglobal referenceの一箇所のみ、Dはschooling入力外。A/B/Eのsource所有も排他的。 |
+| 2 | syntheticがannual Offering.methodからSを推定するか | しない。S quantity/qualificationの入力は実Plannerのみ。ordinary認定分類は既存経路を維持。 |
+| 3 | aggregate認定SをLaw S8へ割当てるか | しない。実Planner＋eligible official Sのみ。 |
+| 4 | aggregate認定Sを外国語Sへ割当てるか | しない。言語別の既存profile fieldは独立した明示条件。 |
+| 5 | aggregate認定Sで任意Structured Sを充足するか | しない。対象の通常Sのみで評価。 |
+| 6 | positive認定S下でnormal official Sを保持するか | はい。safe current_2026のS2＋認定2=global4、ordinary O4は不変。 |
+| 7 | null認定S下でnormal Sの既知下限を保持するか | はい。通常2/6を残し、recognizedCredits=null/status unknown。 |
+| 8 | 認定S0はknown zeroか | はい。通常S2へ追加0、recognition由来holdなし。 |
+| 9 | H19/H43と認定Sの共存・非重複 | はい。source-ID accounted setsとnormal/Planner重複回帰で確認。 |
+| 10 | H19はLaw S8除外か | はい。全13名称×認定Snull/2も0を検証。 |
+| 11 | H43はglobal-onlyか | はい。ordinary allocationはheld、foreign/Law/Structuredへ加算しない。 |
+| 12 | H42局所化は維持か | はい。helper無変更。named target未知と既知minimum充足を回帰検証。 |
+| 13 | H38は意図したlower-bound表示以外不変か | はい。認定O4/Snull/0/1/2の言語別status/reasonを保持。 |
+| 14 | H14 ordinaryは不変か | はい。resolver無変更、none/disjoint/same/unresolved/inconsistent differential15件。 |
+| 15 | H21 recognizedExemption>0はheldか | はい。通常/S contributionとも解除しない。 |
+| 16 | official aggregate authorityは不変か | はい。component/Offeringは公式aggregateを増やさない。 |
+| 17 | schema/storage/profile/import/trust boundaryは不変か | はい。変更ファイルは計算3、tests2、docs2のみ。 |
+| 18 | source inputsはimmutableか | はい。frozen入力とprevious resultのdeep equalityを確認。 |
+
+- Findings: 検査したH20変更に残存P1=0/P2=0/P3=0。課程unknown過剰解放はレビュー中のP2として修正済み。これはengine全体やhistorical H01–H66のfinding解消を意味しない。
+- Remaining limitations: H21 recognizedExemptionの制度意味・認定ordinary overlap、additionalEnrollmentの解釈、専門認定の既存Offering数量依存、既存earned itemが認定syntheticを抑制する保守的境界、legacy/unknown curriculum、public/special/repeatable等の未対応範囲は残す。H19/H43の専門認定guardはH14でdisjointでも閉じたまま。卒業engine全体の完成は主張しない。
