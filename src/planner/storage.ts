@@ -9,6 +9,8 @@ import { recoverImportedAnnualMatches } from './curriculumIdentityValidation';
 export const STORAGE_KEY = 'hosei-planner:v1';
 export const BACKUP_KEY = `${STORAGE_KEY}:recovery`;
 export const initialState = (): PlannerState => ({ schemaVersion: 22, selectedScopeId: null, thesisSelection: 'undecided', thesisProgressByScope: {}, thesisGuidanceByScope: {}, items: [], publicCourses: [], todos: [], mediaSchoolingProgress: {}, courseEvaluations: {}, correspondenceProgress: {}, importedStudyRecords: [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() });
+// Historical/missing applicability is not consent to the new-user default.
+const restoredGraduationProfile = (): GraduationProfile => ({ ...initialGraduationProfile(), curriculumApplicability: 'unknown' });
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export type LoadResult = { state: PlannerState; raw: string | null; error: string | null; recognitionWarning?: string | null; recoveredRecognitionRaw?: GraduationProfile | null; invalidRecognitionPaths?: string[] };
 
@@ -97,7 +99,7 @@ export function loadState(store: Store, catalog: PlannerCatalog): LoadResult {
     // so no recognition/import shadow is lost.
     const curriculumState = migrateCurriculumState(normalizeThesisProgressState((migrated.schemaVersion === 21 || migrated.schemaVersion === 22 ? migrated : {
       ...migrated, schemaVersion: 21, thesisGuidanceByScope: {},
-      graduationProfile: { ...initialGraduationProfile(), ...(migrated.graduationProfile as object), recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...((migrated.graduationProfile as Record<string, unknown> | undefined)?.recognizedCredits as object) } },
+      graduationProfile: { ...restoredGraduationProfile(), ...(migrated.graduationProfile as object), recognizedCredits: { ...restoredGraduationProfile().recognizedCredits, ...((migrated.graduationProfile as Record<string, unknown> | undefined)?.recognizedCredits as object) } },
     }) as PlannerState, catalog), catalog);
     const state = migrated.schemaVersion === 22 ? recoverImportedAnnualMatches(curriculumState, catalog) : curriculumState;
     const profile = recoverRecognitionProfile((state as PlannerState).graduationProfile);
@@ -141,22 +143,22 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
   if (v7.schemaVersion === 20) {
     const prior = typeof v7.graduationProfile === 'object' && v7.graduationProfile !== null ? v7.graduationProfile as Record<string, unknown> : {};
     const recognized = typeof prior.recognizedCredits === 'object' && prior.recognizedCredits !== null ? prior.recognizedCredits as Record<string, unknown> : {};
-    return { ...v7, schemaVersion: 21, graduationProfile: { ...initialGraduationProfile(), ...prior, recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...recognized, openUniversityCredits: null } } };
+    return { ...v7, schemaVersion: 21, graduationProfile: { ...restoredGraduationProfile(), ...prior, recognizedCredits: { ...restoredGraduationProfile().recognizedCredits, ...recognized, openUniversityCredits: null } } };
   }
-  if (v7.schemaVersion === 19) return { ...v7, schemaVersion: 20, thesisGuidanceByScope: {}, graduationProfile: { ...initialGraduationProfile(), ...(v7.graduationProfile as object) } };
+  if (v7.schemaVersion === 19) return { ...v7, schemaVersion: 20, thesisGuidanceByScope: {}, graduationProfile: { ...restoredGraduationProfile(), ...(v7.graduationProfile as object) } };
   if (v7.schemaVersion === 18) {
     const prior = typeof v7.graduationProfile === 'object' && v7.graduationProfile !== null ? v7.graduationProfile as Record<string, unknown> : {};
     const recognized = typeof prior.recognizedCredits === 'object' && prior.recognizedCredits !== null ? prior.recognizedCredits as Record<string, unknown> : {};
-    return { ...v7, schemaVersion: 19, graduationProfile: { ...initialGraduationProfile(), ...prior, admissionType: prior.admissionType === 'transfer' ? 'other_transfer' : prior.admissionType, recognizedCredits: { ...initialGraduationProfile().recognizedCredits, ...recognized } } };
+    return { ...v7, schemaVersion: 19, graduationProfile: { ...restoredGraduationProfile(), ...prior, admissionType: prior.admissionType === 'transfer' ? 'other_transfer' : prior.admissionType, recognizedCredits: { ...restoredGraduationProfile().recognizedCredits, ...recognized } } };
   }
   if (v7.schemaVersion === 17) return { ...v7, schemaVersion: 19, thesisProgressByScope: typeof v7.selectedScopeId === 'string' ? { [v7.selectedScopeId]: { selection: v7.thesisSelection === 'selected' || v7.thesisSelection === 'not_selected' ? v7.thesisSelection : 'undecided', status: 'not_started' } } : {} };
   if (v7.schemaVersion === 16) return { ...v7, schemaVersion: 19, thesisProgressByScope: {} };
   const legacyThesisProgress = typeof v7.selectedScopeId === 'string' ? { [v7.selectedScopeId]: { selection: v7.thesisSelection === 'selected' || v7.thesisSelection === 'not_selected' ? v7.thesisSelection : 'undecided', status: 'not_started' } } : {};
-  if (v7.schemaVersion === 15) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, graduationProfile: initialGraduationProfile() };
-  if (v7.schemaVersion === 14) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
-  if (v7.schemaVersion === 13) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
-  if (v7.schemaVersion === 12) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
-  if (v7.schemaVersion === 11) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedCourseAchievements: Array.isArray(v7.importedCourseAchievements) ? v7.importedCourseAchievements.map(row => typeof row === 'object' && row !== null && !Array.isArray(row) ? { ...row as Record<string, unknown>, selectionSource: (row as Record<string, unknown>).selectedOfferingId ? 'auto' : 'none' } : row) : [] } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
+  if (v7.schemaVersion === 15) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, graduationProfile: restoredGraduationProfile() };
+  if (v7.schemaVersion === 14) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: restoredGraduationProfile() };
+  if (v7.schemaVersion === 13) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: restoredGraduationProfile() };
+  if (v7.schemaVersion === 12) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14 } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: restoredGraduationProfile() };
+  if (v7.schemaVersion === 11) return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedCourseAchievements: Array.isArray(v7.importedCourseAchievements) ? v7.importedCourseAchievements.map(row => typeof row === 'object' && row !== null && !Array.isArray(row) ? { ...row as Record<string, unknown>, selectionSource: (row as Record<string, unknown>).selectedOfferingId ? 'auto' : 'none' } : row) : [] } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: restoredGraduationProfile() };
   if (v7.schemaVersion === 10) {
     const records = Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords as Record<string, unknown>[] : [];
     const rows = new Map<string, Record<string, unknown>>();
@@ -165,9 +167,9 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
       if (!id || rows.has(id) || typeof record.earnedCreditsTotal !== 'number') continue;
       rows.set(id, { id, fingerprint: `migrated:${id}`, source: 'hosei_import', rawName: record.rawName, categoryRaw: null, capturedAt: typeof record.capturedAt === 'string' ? record.capturedAt : '', earnedCreditsTotal: record.earnedCreditsTotal, schoolingCreditsTotal: record.schoolingCreditsTotal ?? null, compositionCredits: record.compositionCredits ?? null, recognizedExemption: record.recognizedExemption ?? null, additionalEnrollment: record.additionalEnrollment ?? null, academicYear: record.academicYear ?? null, yearSource: record.yearSource ?? 'unknown', courseId: null, selectedOfferingId: record.offeringId ?? null, match: record.match ?? 'unmatched', candidateOfferingIds: [] });
     }
-    return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedStudyRecords: records, importedCourseAchievements: [...rows.values()].map(row => ({ ...row, selectionSource: row.selectedOfferingId ? 'auto' : 'none' })) } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
+    return { ...repairImportedAchievements({ ...v7, schemaVersion: 14, importedStudyRecords: records, importedCourseAchievements: [...rows.values()].map(row => ({ ...row, selectionSource: row.selectedOfferingId ? 'auto' : 'none' })) } as unknown as PlannerState, catalog).state, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedCourseUserMeta: {}, graduationProfile: restoredGraduationProfile() };
   }
-  if (v7.schemaVersion === 9) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedStudyRecords: Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords : [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: initialGraduationProfile() };
+  if (v7.schemaVersion === 9) return { ...v7, schemaVersion: 19, thesisProgressByScope: legacyThesisProgress, importedStudyRecords: Array.isArray(v7.importedStudyRecords) ? v7.importedStudyRecords : [], importedCourseAchievements: [], importedCourseUserMeta: {}, graduationProfile: restoredGraduationProfile() };
   if (v7.schemaVersion === 8) return {
     ...v7,
     schemaVersion: 19,
@@ -175,7 +177,7 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
     importedStudyRecords: [],
     importedCourseAchievements: [],
     importedCourseUserMeta: {},
-    graduationProfile: initialGraduationProfile(),
+    graduationProfile: restoredGraduationProfile(),
     mediaSchoolingProgress: typeof v7.mediaSchoolingProgress === 'object' && v7.mediaSchoolingProgress !== null && !Array.isArray(v7.mediaSchoolingProgress)
       ? Object.fromEntries(Object.entries(v7.mediaSchoolingProgress).map(([id, progress]) => [id, typeof progress === 'object' && progress !== null && !Array.isArray(progress) ? { ...progress as Record<string, unknown>, assessments: [] } : progress]))
       : v7.mediaSchoolingProgress,
@@ -197,7 +199,7 @@ function migrateState(value: unknown, catalog: PlannerCatalog): unknown {
     importedStudyRecords: [],
     importedCourseAchievements: [],
     importedCourseUserMeta: {},
-    graduationProfile: initialGraduationProfile(),
+    graduationProfile: restoredGraduationProfile(),
     mediaSchoolingProgress: typeof v7.mediaSchoolingProgress === 'object' && v7.mediaSchoolingProgress !== null && !Array.isArray(v7.mediaSchoolingProgress)
       ? Object.fromEntries(Object.entries(v7.mediaSchoolingProgress).map(([id, progress]) => [id, typeof progress === 'object' && progress !== null && !Array.isArray(progress) ? { ...progress as Record<string, unknown>, assessments: [] } : progress]))
       : v7.mediaSchoolingProgress,

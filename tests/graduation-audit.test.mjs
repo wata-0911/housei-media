@@ -99,8 +99,18 @@ test('H14 pre-fix reproduction: disjoint exact recognition counts official A and
   assert.equal(professional(p).details[0].earned, 2);
 });
 
+// Entrance-recognition audits must use a route where that source is active.
+// First-year stale values are covered separately by the #57 regression matrix.
+function withEntranceRecognition(x) {
+  x.profile.admissionType = 'other_transfer';
+  x.profile.recognizedCredits.schoolingEquivalentCredits = 0;
+  for (const key of ['humanities', 'social', 'natural']) x.profile.recognizedCredits.general[key] = { mode: 'none', credits: null };
+  x.profile.recognizedCredits.foreignLanguage.mode = 'none';
+  x.profile.recognizedCredits.physicalEducation.mode = 'none';
+  return x;
+}
 function h14Fixture() {
-  const x = h41Fixture();
+  const x = withEntranceRecognition(h41Fixture());
   x.a = { course: x.course, mapping: x.mapping, offering: x.offering };
   x.b = x.add('recognition-B', '専門教育', null, '選択必修', 4, 'correspondence', '別制度科目B', x.scope);
   x.c = x.add('recognition-C', '専門教育', null, '選択必修', 4, 'correspondence', '別制度科目C', x.scope);
@@ -430,7 +440,7 @@ test('official facts: legacy curriculum and recognized overlap are held separate
   const x = fixture(); x.profile.curriculumApplicability = 'legacy_or_transition';
   assert.equal(facts(x).facts[0].allocation.reason, 'special_rule_evidence_required');
   x.profile.curriculumApplicability = 'current_2026';
-  x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: x.offering.id, credits: 4 }];
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: x.offering.id, credits: 4 }];
   assert.ok(facts(x).facts[0].diagnostics.includes('recognized_overlap'));
   assert.equal(facts(x).allocations.length, 0);
 });
@@ -884,7 +894,7 @@ for (const guard of ['legacy', 'special', 'repeatable', 'recognition', 'addition
     if (guard === 'repeatable') x.course.canonicalName = '総合特講';
     if (guard === 'recognition') x.row.recognizedExemption = 2;
     if (guard === 'additional') x.row.additionalEnrollment = 2;
-    if (guard === 'recognized_overlap') x.profile.recognizedCredits.professionalCourses = [{ id: 'r', offeringId: x.offering.id, credits: 2 }];
+    if (guard === 'recognized_overlap') { withEntranceRecognition(x); x.profile.recognizedCredits.professionalCourses = [{ id: 'r', offeringId: x.offering.id, credits: 2 }]; }
     if (guard === 'out_of_scope') x.mapping.scopeId = 'other-scope';
     if (guard === 'schooling_exclusion') x.course.canonicalName = '情報学入門';
     if (guard === 'schooling_recognition') { x.profile.admissionType = 'transfer_third_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 15; }
@@ -1241,7 +1251,7 @@ for (const [label, change] of [
   ['schooling-only mapping', x => { x.mapping.schoolingOnly = true; }],
   ['media-only mapping', x => { x.mapping.mediaOnly = true; }],
   ['unknown official composition', x => { x.row.compositionCredits = null; }],
-  ['recognized professional overlap', x => { x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: 'unrelated', credits: 4 }]; }],
+  ['recognized professional overlap', x => { withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: 'unrelated', credits: 4 }]; }],
 ]) {
   test(`H60 excludes ${label} from the safe exception`, () => { const x = h60Fixture(); change(x); h60Held(x); });
 }
@@ -1412,7 +1422,7 @@ test('H57 zero/null recognition fields are safe only with complete current offic
 
 test('H57 professional recognition overlap remains a separate later hold', () => {
   const x = h57Fixture();
-  x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized-unrelated', offeringId: 'unrelated', credits: 2 }];
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'recognized-unrelated', offeringId: 'unrelated', credits: 2 }];
   assert.ok(h57Held(x).facts[0].diagnostics.includes('recognized_overlap'));
 });
 
@@ -1660,10 +1670,10 @@ test('H12 profile is required and zero/null recognition fields do not fabricate 
 });
 test('H12 professional overlap remains held while H20 preserves normal schooling after entry',()=>{
   const x=h12Fixture(0);
-  x.profile.recognizedCredits.professionalCourses=[{id:'recognition',offeringId:'other',credits:4}];
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses=[{id:'recognition',offeringId:'other',credits:4}];
   assert.ok(h12Fact(h12Facts(x)).diagnostics.includes('recognized_overlap'));
   assert.equal(h12Facts(x).allocations.length,0);
-  x.profile.recognizedCredits.professionalCourses=[];x.profile.admissionType='transfer_second_year';
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses=[];x.profile.admissionType='transfer_second_year';
   x.profile.recognizedCredits.schoolingEquivalentCredits=null;
   assert.equal(h12Allocation(h12Facts(x)).schoolingCredits,2);
   assert.match(h12Card(h12Progress(x),'elective').note,/部分修得 0単位/);
@@ -1834,7 +1844,7 @@ const h36Guards = [
   ['legacy', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }, /旧課程・経過措置/],
   ['admission unknown', x => { x.profile.admissionType = 'unknown'; }, /入学区分が未入力/],
   ['transfer recognition missing', x => { x.profile.admissionType = 'transfer_second_year'; }, /編入学の認定単位/],
-  ['invalid recognition', x => { x.profile.recognizedCredits.totalCredits = -1; }, /認定単位の入力/],
+  ['invalid recognition', x => { withEntranceRecognition(x).profile.recognizedCredits.totalCredits = -1; }, /認定単位の入力/],
 ];
 for (const [label, setup, reason] of h36Guards) test(`H36 preserves reference-wide ${label} guard`, () => {
   const x = fixture(); setup(x);
@@ -2863,7 +2873,7 @@ test('H41 geography and history structured dependencies include transferred fiel
 
 test('H41/H14 recognition overlap retains global fallback because cross-Course deduplication is unresolved', () => {
   const x = h41Fixture(); x.rows = [x.official(x, 4)];
-  x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: null, credits: 4 }];
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: null, credits: 4 }];
   const input = x.build(), facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile).facts;
   assert.ok(facts[0].diagnostics.includes('recognized_overlap'));
   assert.equal(unresolvedOfficialImpact(facts, false, input, x.scope, x.profile).globalUnknown, true);
@@ -3448,7 +3458,7 @@ for (const [label, mutate] of [
   ['negative exemption', x => { x.rows[0].recognizedExemption = -1; }],
   ['legacy curriculum', x => { x.profile.curriculumApplicability = 'legacy_or_transition'; }],
   ['unknown curriculum', x => { x.profile.curriculumApplicability = 'unknown'; }],
-  ['professional recognition', x => { x.profile.recognizedCredits.professionalCourses = [{ id: 'h43-recognition', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 2 }]; }],
+  ['professional recognition', x => { withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'h43-recognition', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 2 }]; }],
   ['transfer recognized S', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 2; }],
   ['transfer unknown S', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = null; }],
 ]) test(`H43 ${label.startsWith('transfer ') ? 'H20 coexistence' : 'excludes'} ${label}`, () => {
@@ -3554,7 +3564,7 @@ test('H43 frozen authority preserves official aggregate despite component40 and 
 
 test('H43 recognized_overlap remains held and recognition schooling is never added twice', () => {
   const x = h43Fixture(); x.rows[0].earnedCreditsTotal = 4; x.offering.method = 'schooling';
-  x.profile.recognizedCredits.professionalCourses = [{ id: 'h43-recognition', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 4 }];
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'h43-recognition', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 4 }];
   const input = x.build(), { official, contributions } = h43Evidence(x, input);
   assert.ok(official.facts[0].diagnostics.includes('recognized_overlap'));
   assert.equal(official.allocations.length, 0); assert.equal(contributions.length, 0);
@@ -3672,8 +3682,8 @@ for (const [label, mutate] of [
   ['additional enrollment', x => { x.row.additionalEnrollment = 1; }],
   ['invalid exemption', x => { x.row.recognizedExemption = -1; }],
   ['invalid additional enrollment', x => { x.row.additionalEnrollment = NaN; }],
-  ['professional recognition overlap', x => { x.profile.recognizedCredits.professionalCourses = [{ id: 'recognition', offeringId: x.offering.id, credits: 4 }]; }],
-  ['identity unknown recognition', x => { x.profile.recognizedCredits.professionalCourses = [{ id: 'recognition', offeringId: null, credits: 4 }]; }],
+  ['professional recognition overlap', x => { withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'recognition', offeringId: x.offering.id, credits: 4 }]; }],
+  ['identity unknown recognition', x => { withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'recognition', offeringId: null, credits: 4 }]; }],
   ['transfer equivalent positive', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = 2; }],
   ['transfer equivalent unknown', x => { x.profile.admissionType = 'transfer_second_year'; x.profile.recognizedCredits.schoolingEquivalentCredits = null; }],
   ['unknown admission equivalent', x => { x.profile.admissionType = 'unknown'; }],
@@ -3806,7 +3816,7 @@ test('H19 normal allocated S plus H43 plus H19 is exclusive despite source and P
 });
 test('H19 H20 synthetic recognition cannot supply S while official overlap is held', () => {
   const x = h19Fixture(); x.offering.method = 'schooling';
-  x.profile.recognizedCredits.professionalCourses = [{ id: 'recognition', offeringId: x.offering.id, courseId: x.offering.courseId,
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'recognition', offeringId: x.offering.id, courseId: x.offering.courseId,
     mappingId: x.mapping.mappingId, name: x.course.canonicalName, credits: 4 }];
   assert.equal(h19Evidence(x).contributions.length, 0);
   assert.deepEqual([h42S(x.progress()).earned, h42S(x.progress()).status], [null, 'unknown']);
@@ -3890,7 +3900,7 @@ for (const mode of ['offering', 'legacy', 'all']) test(`H14 same Course ${mode} 
   const x = h14Fixture(), row = x.recognize(x.a);
   if (mode === 'offering') { row.courseId = null; row.mappingId = null; }
   if (mode === 'legacy') { row.offeringId = null; row.mappingId = null; }
-  x.profile.recognizedCredits.professionalCourses = [row];
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [row];
   h14Held(x);
   const p = x.progress();
   assert.equal(p.importedContributionCount, 0);
@@ -3909,7 +3919,7 @@ for (const [mode, allocated, total] of [['B/C', 1, 12], ['B/A', 0, 8], ['B/unkno
 });
 for (const name of ['監査科目', '全く異なる科目名']) test(`H14 name-only ${name} is never identity proof`, () => {
   const x = h14Fixture();
-  x.profile.recognizedCredits.professionalCourses = [{ id: 'name-only', offeringId: null, courseId: null, mappingId: null, name, credits: 4 }];
+  withEntranceRecognition(x).profile.recognizedCredits.professionalCourses = [{ id: 'name-only', offeringId: null, courseId: null, mappingId: null, name, credits: 4 }];
   h14Held(x);
 });
 test('H14 misleading recognition name cannot override exact disjoint or same identity', () => {
@@ -4122,7 +4132,7 @@ test('H14 same identity has no duplicate structured credit or completion', () =>
   assert.equal(overall(p), 4);
 });
 for (const department of ['法律学科', '日本文学科', '史学科', '地理学科', '経済学科', '商業学科']) test(`H14 real catalog UI-produced recognition ${department} compares institutional Courses`, () => {
-  const x = fixture(department); x.f = catalog;
+  const x = withEntranceRecognition(fixture(department)); x.f = catalog;
   const eligible = catalog.offerings.flatMap(offering => {
     const mappings = offering.mappingIds.flatMap(id => catalog.mappings.find(m => m.mappingId === id) ?? [])
       .filter(m => m.scopeId === x.scope && m.category === '専門教育');
@@ -4339,9 +4349,9 @@ for (const route of ['first_year', 'transfer_second_year', 'transfer_third_year'
     // An annual schooling method on a synthetic item is still no attendance evidence.
     x.b.offering.method = 'schooling';
     const p = x.progress(), s = h42S(p);
-    assert.equal(professional(p).earned, 4);
+    assert.equal(professional(p).earned, route === 'first_year' ? 0 : 4);
     assert.equal(s.earned, route === 'first_year' ? 0 : recognizedS ?? 0);
-    assert.equal(s.recognizedCredits, route === 'first_year' ? 0 : recognizedS);
+    assert.equal(s.recognizedCredits, route === 'first_year' ? null : recognizedS);
     assert.equal(s.status, route !== 'first_year' && recognizedS === null ? 'unknown' : 'partial');
     assert.equal(h31Card(p, 'professional-law-schooling').earned, 0);
   });
@@ -4601,4 +4611,47 @@ test('special lecture supplement adds no cards, coverage entries, or unknown req
   assert.equal(after.unknownCount, before.unknownCount); assert.equal(after.evaluableCount, before.evaluableCount);
   assert.equal(after.graduationCheckComplete, false); assert.equal(x.f.metadata.sourceLinksReverified, false);
   assert.equal(initialState().schemaVersion, 22);
+});
+
+for (const mode of ['recognized', 'exempt']) test(`#57 stale ${mode} entrance fields are inert and the projection never mutates frozen data`, () => {
+  const x = h14Fixture(); x.profile.admissionType = 'first_year';
+  const referenceProfile = structuredClone(x.profile);
+  referenceProfile.recognizedCredits = initialState().graduationProfile.recognizedCredits;
+  x.profile.recognizedCredits.totalCredits = 42;
+  x.profile.recognizedCredits.schoolingEquivalentCredits = 15;
+  for (const key of ['humanities', 'social', 'natural']) x.profile.recognizedCredits.general[key] = { mode, credits: mode === 'recognized' ? 8 : null };
+  x.profile.recognizedCredits.foreignLanguage = { mode, credits: mode === 'recognized' ? 4 : null, language: mode === 'recognized' ? 'english' : 'unknown', schoolingEquivalentCredits: mode === 'recognized' ? 2 : null };
+  x.profile.recognizedCredits.physicalEducation = { mode, credits: mode === 'recognized' ? 2 : null };
+  x.profile.recognizedCredits.professionalCourses = [x.recognize(x.a), x.recognize(x.b)];
+  const input = x.build(), before = structuredClone({ input, rows: x.rows, profile: x.profile });
+  deepFreeze(input); deepFreeze(x.rows); deepFreeze(x.profile);
+  const expected = calculateGraduationProgress([], input, x.scope, [], 'not_selected', [], x.rows, referenceProfile);
+  assert.deepEqual(x.progress(input), expected);
+  assert.deepEqual(deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile), deriveOfficialGraduationFacts(x.rows, [], input, x.scope, referenceProfile));
+  assert.equal(overall(expected), 4); assert.equal(h42S(expected).earned, 2);
+  assert.deepEqual({ input, rows: x.rows, profile: x.profile }, before);
+});
+for (const source of ['normal', 'H19', 'H43']) for (const open of [null, 0, 4, 10]) test(`#57 ${source} official schooling plus Open University${open} counts each source once`, () => {
+  const x = source === 'normal' ? h41Fixture() : source === 'H19' ? h19Fixture() : h43Fixture();
+  x.profile.admissionType = 'first_year';
+  if (source === 'normal') x.rows = [x.official(x, 4, 2)];
+  x.profile.recognizedCredits.openUniversityCredits = open;
+  x.profile.recognizedCredits.schoolingEquivalentCredits = 15;
+  x.profile.recognizedCredits.professionalCourses = [{ id: 'dormant', offeringId: x.offering.id, courseId: x.offering.courseId, mappingId: x.mapping.mappingId, name: x.offering.name, credits: 4 }];
+  const before = x.progress();
+  const input = x.build ? x.build() : x.f;
+  const official = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+  const held = heldOfficialSchoolingContributions(official, x.rows, [], input, x.scope, x.profile);
+  const law = lawExcludedOfficialSchoolingContributions(official, x.rows, [], input, x.scope, x.profile, held);
+  assert.equal(official.allocations.reduce((n, a) => n + (a.schoolingCredits ?? 0), 0) + [...held, ...law].reduce((n, a) => n + a.schoolingCredits, 0), 2);
+  assert.equal(h42S(before).earned, 2 + (open ?? 0));
+  assert.equal(h31Card(before, 'group-general').earned, open ?? 0);
+  if (source === 'H43') {
+    assert.equal(official.allocations.length, 0);
+    assert.equal(before.referenceProgress[0].status, 'unknown');
+  } else assert.equal(h31Card(before, 'professional-law-schooling').earned, source === 'normal' ? 2 : 0);
+  x.rows.push(structuredClone(x.rows[0]));
+  assert.deepEqual(x.progress(), before, 'a repeated source cannot add recognition or official S twice');
+  if (source === 'H19') assert.equal(h19Evidence(x).contributions.length, 1);
+  if (source === 'H43') assert.equal(h43Evidence(x).contributions.length, 1);
 });

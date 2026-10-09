@@ -45,7 +45,7 @@ import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } 
 import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/importedAchievementCalculations.ts';
 import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
 import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
-import { graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from '../src/planner/graduationProfile.ts';
+import { effectiveRecognitionForAdmission, graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from '../src/planner/graduationProfile.ts';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
 import { annualCreditLimitReferences, annualCreditLimitStatus } from '../src/planner/annualPlan.ts';
 import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/thesisGuidance.ts';
@@ -2707,7 +2707,7 @@ test('v14 state migrates to v16 without dropping imports, selections, or saved p
   assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements.map(row => ({ ...row, curriculumCourseId: null, curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [], offeringMatch: 'unmatched' })));
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
   assert.deepEqual(loaded.state.importedCourseUserMeta, {});
-  assert.deepEqual(loaded.state.graduationProfile, initialGraduationProfile());
+  assert.deepEqual(loaded.state.graduationProfile, { ...initialGraduationProfile(), curriculumApplicability: 'unknown' });
 });
 
 test('v15 graduation profile migration preserves planner, imported, and media data while adding unknown/null prerequisites', () => {
@@ -2720,7 +2720,7 @@ test('v15 graduation profile migration preserves planner, imported, and media da
   assert.deepEqual(loaded.state.items, legacy.items);
   assert.deepEqual(loaded.state.mediaSchoolingProgress, legacy.mediaSchoolingProgress);
   assert.deepEqual(loaded.state.importedCourseAchievements, legacy.importedCourseAchievements.map(row => ({ ...row, curriculumCourseId: null, curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [], offeringMatch: 'unmatched' })));
-  assert.deepEqual(loaded.state.graduationProfile, initialGraduationProfile());
+  assert.deepEqual(loaded.state.graduationProfile, { ...initialGraduationProfile(), curriculumApplicability: 'unknown' });
 });
 
 test('graduation profile saves only internally consistent prerequisites and rejects invalid numeric input', () => {
@@ -2965,7 +2965,8 @@ test('foreign recognition validates its official schooling breakdown and prefill
 
 test('missing graduation profile prerequisites never completes graduation evaluation or breaks coverage', () => {
   const profile = initialGraduationProfile();
-  assert.deepEqual(missingGraduationProfilePrerequisites(profile), ['admission_year', 'admission_type', 'curriculum_applicability']);
+  assert.deepEqual(missingGraduationProfilePrerequisites(profile), ['admission_year', 'admission_type']);
+  assert.ok(missingGraduationProfilePrerequisites({ ...profile, curriculumApplicability: 'unknown' }).includes('curriculum_applicability'));
   const transfer = { ...profile, admissionType: 'other_transfer' };
   assert.ok(missingGraduationProfilePrerequisites(transfer).includes('recognized_credits'));
   const progress = calculateGraduationProgress([], catalog, catalog.programs[0].scopeId);
@@ -2986,7 +2987,7 @@ test('reference totals apply only explicit current-2026 profiles and keep the la
   assert.equal(refs(economics, { ...current, curriculumApplicability: 'legacy_or_transition' })[0].target, null);
   assert.equal(refs(economics, { ...current, admissionType: 'other_transfer' })[0].target, null);
   assert.equal(refs(economics, current)[1].target, 30);
-  assert.equal(refs(economics, current)[1].recognizedCredits, 0);
+  assert.equal(refs(economics, current)[1].recognizedCredits, null);
 });
 
 test('reference totals accept official transfer recognition including zero, never infer a missing schooling equivalent, and do not duplicate an imported identity', () => {
@@ -3254,7 +3255,8 @@ test('open university recognition migrates, recovers independently, and is rende
   assert.ok(recovered.invalidRecognitionPaths.includes('recognizedCredits.openUniversityCredits'));
   const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
   assert.match(source, /放送大学認定単位（一般教育・その他）/);
-  assert.match(source, /外国語・保健体育を除く。公式に認定された単位のみ入力/);
+  assert.match(source, /公式に認定された単位のみ入力/);
+  assert.match(source, /外国語・保健体育を除き、最大10単位/);
 });
 
 test('open university recognition counts only toward general total and never duplicates aggregate or guidance credit', () => {
@@ -4134,4 +4136,151 @@ test('special lecture general exemption cannot display pre-exemption credits as 
   assert.equal(lecture.counted, 0); assert.equal(lecture.earned, 4); assert.equal(lecture.remaining, null);
   assert.match(lecture.reason, /免除済み/);
   assert.equal(p.cards.find(c => c.requirementId === 'group-general').earned, 0);
+});
+
+// #57 / #98: raw persistence and calculation projections have separate contracts.
+function profileDefaultsView(profile) {
+  return renderToStaticMarkup(createElement(PlannerProfileTab, {
+    catalog, scopeId: catalog.programs.find(p => p.department === '法律学科').scopeId,
+    profile, disabled: false, thesis: { selection: 'not_selected', status: 'not_started' },
+    onScopeChange() {}, onProfileChange() {}, onThesisSelectionChange() {}, onThesisStatusChange() {},
+  }));
+}
+const defaultsProgress = state => calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses,
+  'not_selected', state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile);
+const defaultCard = (p, id) => p.cards.find(c => c.requirementId === id);
+const defaultReference = (p, id) => p.referenceProgress.find(c => c.id === `${id}-reference-progress`);
+
+test('#98 new profile and empty storage select current_2026 in state and rendered UI', () => {
+  const state = loadState(memoryStore(), catalog).state;
+  assert.equal(initialGraduationProfile().curriculumApplicability, 'current_2026');
+  assert.equal(state.graduationProfile.curriculumApplicability, 'current_2026');
+  assert.match(profileDefaultsView(state.graduationProfile), /value="current_2026" selected=""/);
+  assert.match(profileDefaultsView(state.graduationProfile), /旧課程・経過措置・個別適用/);
+  assert.equal(state.schemaVersion, 22);
+});
+for (const applicability of ['current_2026', 'legacy_or_transition', 'unknown']) {
+  for (const version of [16, 18, 19, 20, 21, 22]) test(`#98 saved ${applicability} schema${version} survives migration, save and scope change`, () => {
+    const state = { ...initialState(), schemaVersion: version, graduationProfile: { ...initialGraduationProfile(), admissionType: 'first_year', curriculumApplicability: applicability } };
+    const store = memoryStore(JSON.stringify(state));
+    const loaded = loadState(store, catalog);
+    assert.equal(loaded.error, null);
+    assert.equal(loaded.state.graduationProfile.curriculumApplicability, applicability);
+    const scope = catalog.programs.find(p => p.department === '経済学科').scopeId;
+    const changed = stateForScopeChange(loaded.state, catalog, scope);
+    const raw = saveState(store, changed, loaded.raw, catalog);
+    const again = loadState(memoryStore(raw), catalog);
+    assert.equal(again.error, null);
+    assert.equal(again.state.graduationProfile.curriculumApplicability, applicability);
+    assert.match(profileDefaultsView(again.state.graduationProfile), new RegExp(`value="${applicability}" selected=""`));
+    const p = defaultsProgress(again.state);
+    assert.equal(p.graduationCheckComplete, false);
+    assert.equal(defaultReference(p, 'overall').target, applicability === 'current_2026' ? 124 : null);
+  });
+}
+test('#98 older state without a profile restores unknown instead of the new-user default', () => {
+  for (const version of [7, 8, 9, 10, 11, 12, 13, 14, 15]) {
+    const state = { ...initialState(), schemaVersion: version }; delete state.graduationProfile;
+    const result = loadState(memoryStore(JSON.stringify(state)), catalog);
+    assert.equal(result.error, null);
+    assert.equal(result.state.graduationProfile.curriculumApplicability, 'unknown');
+  }
+});
+test('#57 first-year UI hides entrance fields but keeps applicability and optional Open University', () => {
+  const profile = { ...initialGraduationProfile(), admissionType: 'first_year' };
+  const html = profileDefaultsView(profile);
+  assert.match(html, /入学時の認定単位：なし/);
+  for (const label of ['外国語認定区分', '保健体育認定区分', '人文認定単位', '社会認定単位', '自然認定単位', '専門認定科目を検索', '認定単位のうちスクーリング相当']) assert.ok(!html.includes(`aria-label="${label}"`));
+  assert.match(html, /aria-label="適用課程"/);
+  assert.match(html, /<details class="[^"]*"><summary[^>]*>放送大学の認定単位（該当者のみ）/);
+  assert.match(html, /aria-label="放送大学認定単位（一般教育・その他）"[^>]*max="10"/);
+  assert.match(html, /未入力は認定済みの0単位を意味しません/);
+  assert.doesNotMatch(html, /公式標準値を適用して保存/);
+});
+for (const route of ['transfer_second_year', 'transfer_third_year', 'bachelor_admission', 'hosei_internal_transfer', 'other_transfer']) test(`#57 ${route} retains entrance controls and unknown safety`, () => {
+  const profile = { ...initialGraduationProfile(), admissionType: route };
+  const html = profileDefaultsView(profile);
+  assert.match(html, /外国語認定区分/); assert.match(html, /保健体育認定区分/);
+  assert.match(html, /人文認定単位/); assert.match(html, /専門認定科目を検索/);
+  assert.match(html, /認定単位のうちスクーリング相当/);
+  if (['transfer_second_year', 'transfer_third_year', 'bachelor_admission'].includes(route)) assert.match(html, /公式標準値を適用して保存/);
+  assert.strictEqual(effectiveRecognitionForAdmission(profile), profile.recognizedCredits);
+  const p = defaultsProgress({ ...initialState(), selectedScopeId: catalog.programs.find(p => p.department === '法律学科').scopeId, graduationProfile: profile });
+  assert.equal(defaultCard(p, 'group-general').status, 'unknown');
+  assert.equal(defaultCard(p, 'group-foreign').status, 'unknown');
+  assert.equal(defaultCard(p, 'group-physical').status, 'unknown');
+  assert.equal(defaultReference(p, 'schooling').status, 'unknown');
+});
+for (const open of [null, 0, 4, 10]) test(`#57 first-year Open University ${open}: raw roundtrip, projection and separate ordinary/S increments`, () => {
+  const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
+  const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_second_year' };
+  profile.recognizedCredits = { ...officialRecognitionPrefill('transfer_second_year'), openUniversityCredits: open,
+    totalCredits: 44, schoolingEquivalentCredits: 7,
+    foreignLanguage: { mode: 'recognized', credits: 4, language: 'english', schoolingEquivalentCredits: 2 },
+    physicalEducation: { mode: 'recognized', credits: 2 } };
+  const chosen = catalog.offerings.find(o => o.resolutionStatus === 'matched' && o.credits === 4 && o.name !== '卒業論文'
+    && o.mappingIds.some(id => catalog.mappings.some(m => m.mappingId === id && m.scopeId === scope && m.category === '専門教育' && m.requirementType === '選択必修' && m.curriculumCredits === 4)));
+  assert.ok(chosen);
+  const mapping = catalog.mappings.find(m => chosen.mappingIds.includes(m.mappingId) && m.scopeId === scope && m.category === '専門教育');
+  profile.recognizedCredits.professionalCourses = [{ id: 'saved-professional', offeringId: chosen.id, courseId: chosen.courseId, mappingId: mapping.mappingId, name: chosen.name, credits: 4 }];
+  const original = structuredClone(profile);
+  let state = { ...initialState(), selectedScopeId: scope, graduationProfile: profile };
+  const before = defaultsProgress(state);
+  assert.equal(defaultCard(before, 'group-general').earned, 24 + (open ?? 0));
+  assert.equal(defaultReference(before, 'overall').earned, 44);
+  const store = memoryStore(); let raw = saveState(store, state, null, catalog);
+  state = { ...state, graduationProfile: { ...profile, admissionType: 'first_year' } };
+  raw = saveState(store, state, raw, catalog);
+  let loaded = loadState(store, catalog); assert.equal(loaded.error, null);
+  assert.deepEqual(loaded.state.graduationProfile.recognizedCredits, original.recognizedCredits);
+  const effective = effectiveRecognitionForAdmission(loaded.state.graduationProfile);
+  assert.equal(effective.openUniversityCredits, open);
+  assert.equal(effective.general.humanities.mode, 'none');
+  assert.equal(effective.professionalCourses.length, 0);
+  for (const department of ['法律学科', '経済学科', '法律学科']) {
+    const nextScope = catalog.programs.find(p => p.department === department).scopeId;
+    state = stateForScopeChange(loaded.state, catalog, nextScope);
+    raw = saveState(store, state, raw, catalog);
+    loaded = loadState(store, catalog); assert.equal(loaded.error, null);
+    assert.deepEqual(loaded.state.graduationProfile.recognizedCredits, original.recognizedCredits);
+    const p = defaultsProgress(loaded.state);
+    assert.equal(defaultCard(p, 'group-general').earned, open ?? 0);
+    assert.deepEqual(defaultCard(p, 'group-general').details.map(d => d.earned), [0, 0, 0]);
+    assert.equal(defaultCard(p, 'group-foreign').earned, 0);
+    assert.equal(defaultCard(p, 'group-physical').earned, 0);
+    assert.equal(defaultReference(p, 'overall').earned, open ?? 0);
+    assert.equal(defaultReference(p, 'schooling').earned, open ?? 0);
+    assert.equal(defaultReference(p, 'schooling').recognizedCredits, open);
+    assert.equal(defaultReference(p, 'overall').recognizedCredits, open);
+    assert.equal(guidanceEligibilityCreditResult(loaded.state, catalog).credits, open ?? 0);
+    assert.equal(p.graduationCheckComplete, false);
+  }
+  state = { ...loaded.state, graduationProfile: { ...loaded.state.graduationProfile, admissionType: 'transfer_second_year' } };
+  raw = saveState(store, state, raw, catalog);
+  loaded = loadState(store, catalog);
+  assert.deepEqual(loaded.state.graduationProfile, original);
+  assert.deepEqual(defaultsProgress(loaded.state), before);
+  assert.deepEqual(profile, original);
+});
+test('#57 invalid Open University11 cannot save and recovery preserves raw evidence', () => {
+  const state = initialState(); state.graduationProfile.admissionType = 'first_year';
+  state.graduationProfile.recognizedCredits.openUniversityCredits = 11;
+  assert.match(graduationProfileValidationError(state.graduationProfile), /公式上限/);
+  assert.throws(() => saveState(memoryStore(), state, null, catalog));
+  const raw = JSON.stringify(state), loaded = loadState(memoryStore(raw), catalog);
+  assert.equal(loaded.raw, raw); assert.equal(loaded.error, null);
+  assert.equal(loaded.recoveredRecognitionRaw.recognizedCredits.openUniversityCredits, 11);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.openUniversityCredits, null);
+});
+test('#57 dormant aggregate/exemption cannot block editing first-year Open University', () => {
+  for (const entrance of [officialRecognitionPrefill('transfer_third_year'), { ...initialGraduationProfile().recognizedCredits, totalCredits: 0 }]) {
+    const state = initialState();
+    state.graduationProfile = { ...state.graduationProfile, admissionType: 'first_year', recognizedCredits: { ...entrance, openUniversityCredits: 4 } };
+    const snapshot = structuredClone(state.graduationProfile);
+    assert.equal(graduationProfileValidationError(snapshot), null);
+    const store = memoryStore(); saveState(store, state, null, catalog);
+    const loaded = loadState(store, catalog);
+    assert.equal(loaded.error, null); assert.equal(loaded.recognitionWarning, undefined);
+    assert.deepEqual(loaded.state.graduationProfile, snapshot);
+  }
 });

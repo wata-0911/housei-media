@@ -10,7 +10,7 @@ import type {
   ThesisProgress,
   GraduationProfile,
 } from './plannerCatalog';
-import { graduationProfileValidationError, hasCreditBearingRecognition, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from './graduationProfile';
+import { effectiveRecognitionForAdmission, graduationProfileValidationError, hasCreditBearingRecognition, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from './graduationProfile';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistoricalSources, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
@@ -1210,10 +1210,14 @@ function referenceProgress(cards: ProgressCard[], schoolingItems: PlannerItem[],
   const unallocated = creditBearingRoute ? unallocatedRecognizedCredits(profile.recognizedCredits) : 0;
   // Detailed recognition already appears in the category/professional cards.
   // The legacy total may add only the explicitly unallocated remainder.
-  const recognizedTotal = creditBearingRoute ? (profile.recognizedCredits.totalCredits ?? detailedRecognized) : 0;
+  const recognizedTotal = creditBearingRoute ? (profile.recognizedCredits.totalCredits ?? detailedRecognized) : profile.admissionType === 'first_year' ? profile.recognizedCredits.openUniversityCredits : 0;
   const overallEarned = countedOverallCredits(cards, program.department) + (unallocated ?? 0);
   const schooling = countedSchoolingCredits(schoolingItems, offerings, eligibleMappings, program.department);
-  const schoolingRecognized = profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' ? profile.recognizedCredits.schoolingEquivalentCredits : 0;
+  // First-year Open University recognition counts globally as S as well as
+  // general education. Never add it to a transfer aggregate: its provenance
+  // does not establish whether that aggregate already includes these credits.
+  const schoolingRecognized = profile.admissionType === 'first_year' ? profile.recognizedCredits.openUniversityCredits
+    : profile.admissionType !== 'unknown' ? profile.recognizedCredits.schoolingEquivalentCredits : 0;
   const schoolingReason = prerequisiteReason ?? (profile.admissionType !== 'first_year' && profile.admissionType !== 'unknown' && schoolingRecognized === null
     ? '編入学の認定スクーリング相当単位が未入力です。0としては扱いません。'
     : schooling.uncertain ? '一部の修得済み科目はスクーリング算入先を一意に確認できないため、含めていません。' : null);
@@ -1303,6 +1307,7 @@ function literaturePartialExceptionCard(items: PlannerItem[], catalog: PlannerCa
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
 export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, openUniversityCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
+  profile = { ...profile, recognizedCredits: effectiveRecognitionForAdmission(profile) };
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
     return {
