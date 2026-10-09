@@ -1,3 +1,6 @@
+import PlannerPage from '../src/pages/PlannerPage.tsx';
+import ThesisGuidance from '../src/components/planner/ThesisGuidance.tsx';
+import ProgramSettings from '../src/components/planner/ProgramSettings.tsx';
 import { plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
 import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
 import { GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
@@ -28,7 +31,7 @@ import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePubli
 import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
-import { setThesisProgressForScope, stateForScopeChange, supportsThesisSelection, thesisPolicyForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
+import { setThesisProgressForScope, shouldShowThesisGuidance, stateForScopeChange, supportsThesisSelection, thesisPolicyForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
 import { addAssessment, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaSharePresentation, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/mediaSchooling.ts';
 import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, usesLegacyReportEvaluation } from '../src/planner/courseEvaluations.ts';
 import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/correspondenceProgress.ts';
@@ -3891,3 +3894,141 @@ test('backfill: saved snapshot undo restores pre-backfill official facts and exi
   saveState(store, before, nextRaw, catalog);
   assert.deepEqual(loadState(store, catalog).state, undoSnapshot);
 });
+
+
+// #54: render the real page from persisted state so the parent visibility gate is exercised.
+function thesisPageMarkup(state) {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { localStorage: memoryStore(JSON.stringify(state)) } });
+  try { return renderToStaticMarkup(createElement(PlannerPage)); }
+  finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else delete globalThis.window;
+  }
+}
+const thesisPrograms = catalog.programs.filter(program => ['法律学科', '経済学科', '商業学科', '日本文学科', '史学科', '地理学科'].includes(program.department));
+for (const program of thesisPrograms) for (const selection of ['selected', 'not_selected', 'undecided']) {
+  test(`#54 guidance visibility ${program.department}/${program.course ?? ''}/${selection}`, () => {
+    const required = ['日本文学科', '史学科', '地理学科'].includes(program.department);
+    // Deliberately inconsistent required state must pass through existing load normalization.
+    const state = { ...initialState(), selectedScopeId: program.scopeId,
+      thesisSelection: selection === 'selected' ? 'not_selected' : 'selected',
+      thesisProgressByScope: { [program.scopeId]: { selection, status: 'planned' } } };
+    const snapshot = structuredClone(state);
+    assert.equal(shouldShowThesisGuidance(state, catalog, program.scopeId), required || selection === 'selected');
+    const html = thesisPageMarkup(state);
+    assert.equal(html.includes('卒論手続・事前指導（参考）'), required || selection === 'selected');
+    assert.equal(html.includes('type="date"'), required || selection === 'selected');
+    assert.equal(html.includes('aria-label="地理調査法リポート提出"'), program.department === '地理学科');
+    assert.deepEqual(state, snapshot, 'visibility is read-only');
+  });
+}
+test('#54 unknown and missing scopes never borrow the global thesis selection or another scope', () => {
+  const law = thesisPrograms.find(p => p.department === '法律学科').scopeId;
+  const economics = thesisPrograms.find(p => p.department === '経済学科').scopeId;
+  const state = setThesisProgressForScope(initialState(), catalog, law, { selection: 'selected' });
+  for (const scope of [null, 'unknown-scope', catalog.programs.find(p => p.isCommon).scopeId, economics]) {
+    assert.equal(shouldShowThesisGuidance(state, catalog, scope), false);
+  }
+});
+
+for (const program of thesisPrograms.filter(p => ['法律学科', '経済学科', '商業学科'].includes(p.department))) {
+  test(`#54 ${program.department} guidance inputs survive deselection, reload, scope switches and reselection`, () => {
+    const store = memoryStore();
+    let loaded = loadState(store, catalog);
+    const commit = state => {
+      loaded = saveRecoveredState(store, state, loaded, catalog);
+      loaded = loadState(store, catalog);
+      assert.equal(loaded.error, null);
+      assert.equal(loaded.state.schemaVersion, 22);
+      return loaded.state;
+    };
+    let state = commit(setThesisProgressForScope(stateForScopeChange(loaded.state, catalog, program.scopeId), catalog, program.scopeId, { selection: 'selected', status: 'earned' }));
+    // Use the actual status/date input handlers and the same scope-local update as PlannerPage.
+    const controls = node => {
+      if (!node || typeof node !== 'object') return [];
+      if (Array.isArray(node)) return node.flatMap(controls);
+      return [node, ...controls(node.props?.children)];
+    };
+    const edit = (predicate, value) => {
+      const tree = ThesisGuidance({ catalog, scopeId: program.scopeId, profile: state.graduationProfile,
+        progress: guidanceForScope(state, program.scopeId), eligibilityCredits: 100,
+        onChange: next => { state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [program.scopeId]: next } }); } });
+      const control = controls(tree).find(predicate);
+      assert.ok(control);
+      control.props.onChange({ target: { value } });
+    };
+    edit(node => node.type === 'select', 'passed');
+    edit(node => node.type === 'input' && node.props.type === 'date', '2026-04-15');
+    assert.deepEqual(guidanceForScope(state, program.scopeId).steps.general, { status: 'passed', passedOn: '2026-04-15' });
+    for (const other of thesisPrograms.filter(p => p.scopeId !== program.scopeId)) {
+      state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope,
+        [other.scopeId]: { steps: { general: { status: 'planned', passedOn: '2025-03-12' } }, geographyReportSubmitted: other.department === '地理学科' ? true : null } } });
+    }
+    const savedGuidance = structuredClone(state.thesisGuidanceByScope);
+    for (const selection of ['not_selected', 'undecided']) {
+      state = commit(setThesisProgressForScope(state, catalog, program.scopeId, { selection }));
+      assert.equal(thesisProgressForScope(state, catalog, program.scopeId).status, 'not_started', 'thesis credit status resets independently');
+      assert.doesNotMatch(thesisPageMarkup(state), /卒論手続・事前指導（参考）/);
+      assert.deepEqual(JSON.parse(store.getItem(STORAGE_KEY)).thesisGuidanceByScope, savedGuidance);
+      for (const other of thesisPrograms.filter(p => p.scopeId !== program.scopeId)) {
+        state = commit(stateForScopeChange(state, catalog, other.scopeId));
+        assert.deepEqual(guidanceForScope(state, other.scopeId), savedGuidance[other.scopeId]);
+      }
+      state = commit(stateForScopeChange(state, catalog, program.scopeId));
+      assert.equal(shouldShowThesisGuidance(state, catalog, program.scopeId), false);
+      state = commit(setThesisProgressForScope(state, catalog, program.scopeId, { selection: 'selected' }));
+      const html = thesisPageMarkup(state);
+      assert.match(html, /卒論手続・事前指導（参考）/);
+      assert.match(html, /<option value="passed" selected="">/);
+      assert.match(html, /<input[^>]*type="date"[^>]*value="2026-04-15"/);
+      assert.deepEqual(state.thesisGuidanceByScope, savedGuidance);
+      assert.equal(thesisProgressForScope(state, catalog, program.scopeId).status, 'not_started', 'guidance never restores earned thesis credits');
+    }
+  });
+}
+
+// #55 is independent of procedure visibility, and includes all three Japanese literature courses.
+for (const program of thesisPrograms) for (const selection of ['selected', 'not_selected', 'undecided']) {
+  test(`#55 thesis card ${program.department}/${program.course ?? ''}/${selection}`, () => {
+    const required = ['日本文学科', '史学科', '地理学科'].includes(program.department);
+    for (const status of ['not_started', 'planned', 'in_progress', 'earned']) {
+      const loaded = loadState(memoryStore(JSON.stringify({ ...initialState(), selectedScopeId: program.scopeId,
+        thesisSelection: selection, thesisProgressByScope: { [program.scopeId]: { selection, status } } })), catalog);
+      assert.equal(loaded.error, null);
+      const thesis = thesisProgressForScope(loaded.state, catalog, program.scopeId);
+      const progress = calculateGraduationProgress([], catalog, program.scopeId, [], thesis.selection, [], [], undefined, thesis);
+      const cards = progress.cards.filter(row => row.ruleType === 'thesis_progress');
+      assert.equal(cards.length, !required && selection === 'not_selected' ? 0 : 1);
+      if (cards.length) {
+        const card = cards[0];
+        assert.equal(card.target, thesisCreditsForDepartment(program.department));
+        const earned = (required || selection === 'selected') && status === 'earned';
+        assert.equal(card.earned, earned ? card.target : 0);
+        assert.equal(card.status, !required && selection === 'undecided' ? 'unknown' : earned ? 'satisfied' : 'unsatisfied');
+        if (!required && selection === 'undecided') assert.match(card.reason, /未定/);
+        assert.equal(card.inProgress, (required || selection === 'selected') && status === 'in_progress' ? card.target : 0);
+        assert.equal(card.planned, (required || selection === 'selected') && status === 'planned' ? card.target : 0);
+      }
+      const html = thesisPageMarkup(loaded.state);
+      assert.equal(html.includes('<h3 class="break-words font-medium text-[#002255]">卒業論文（'), cards.length === 1);
+      assert.equal(progress.graduationCheckComplete, false);
+      assert.equal(progress.unknownCount, progress.requirements.filter(row => row.status === 'unknown').length);
+      assert.equal(progress.evaluableCount + progress.unknownCount, progress.requirements.length);
+      assert.equal(progress.unknownReasons.reduce((sum, row) => sum + row.count, 0), progress.unknownCount);
+      assert.deepEqual(progress.coverageSummary, progress.cards.reduce((counts, row) => {
+        counts[row.coverageStatus] += 1; return counts;
+      }, { supported: 0, partial: 0, unknown: 0 }));
+      if (!required && selection === 'not_selected') {
+        const conditionalIds = catalog.requirements.filter(rule => rule.scopeId === program.scopeId && rule.conditions?.when?.thesis_selected === true).map(rule => rule.id);
+        assert.equal(progress.requirements.some(row => conditionalIds.includes(row.requirementId)), false);
+      }
+      if (required) {
+        const settings = renderToStaticMarkup(createElement(ProgramSettings, { catalog, scopeId: program.scopeId, thesis, disabled: false, onThesisSelectionChange() {}, onThesisStatusChange() {} }));
+        assert.doesNotMatch(settings, /name="thesis-selection"/);
+        assert.match(settings, /name="thesis-status"/);
+        assert.equal(thesis.selection, 'selected');
+      }
+    }
+  });
+}

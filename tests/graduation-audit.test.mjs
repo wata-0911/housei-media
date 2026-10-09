@@ -4505,3 +4505,45 @@ for (const field of ['recognizedExemption', 'additionalEnrollment', 'earnedCredi
     assert.throws(() => importPreview(payload, []), /contract v1/);
   });
 }
+
+
+for (const department of ['法律学科', '経済学科', '商業学科']) {
+  test(`#55 ${department}: omitted card preserves official O4/S2, requirements and non-thesis progress`, () => {
+    const x = fixture(department);
+    const calculate = selection => h36Progress(x, { selection, items: [item(x.offering, 'earned')] });
+    const snapshot = structuredClone(x);
+    const selected = calculate('selected'), omitted = calculate('not_selected'), undecided = calculate('undecided');
+    for (const p of [selected, omitted, undecided]) {
+      assert.equal(overall(p), 4, 'official authority suppresses the Planner duplicate once');
+      assert.deepEqual(h36ReferenceValues(p, 'schooling'), [2, 30, 'partial', 'partial', null]);
+      assert.equal(p.importedContributionCount, 1);
+      assert.deepEqual(p.importedWarnings, selected.importedWarnings);
+      assert.equal(p.graduationCheckComplete, false);
+    }
+    assert.equal(omitted.cards.some(c => c.ruleType === 'thesis_progress'), false);
+    assert.equal(selected.cards.find(c => c.ruleType === 'thesis_progress').status, 'unsatisfied');
+    assert.equal(undecided.cards.find(c => c.ruleType === 'thesis_progress').status, 'unknown');
+    const independent = p => p.cards.filter(c => c.ruleType !== 'thesis_progress'
+      && !(department === '法律学科' && ['professional-law-elective', 'professional-law-total'].includes(c.requirementId)));
+    assert.deepEqual(independent(omitted), independent(selected));
+    assert.deepEqual(independent(undecided), independent(selected));
+    const independentRequirements = p => p.requirements.filter(row => !catalog.requirements.find(rule => rule.id === row.requirementId)?.conditions?.when);
+    assert.deepEqual(independentRequirements(omitted), independentRequirements(selected));
+    if (department === '法律学科') {
+      for (const [p, elective, total, overallTarget] of [[selected, 50, 82, 124], [omitted, 54, 86, 128], [undecided, null, null, null]]) {
+        assert.equal(p.cards.find(c => c.requirementId === 'professional-law-elective').target, elective);
+        assert.equal(p.cards.find(c => c.requirementId === 'professional-law-total').target, total);
+        assert.equal(p.referenceProgress[0].target, overallTarget);
+      }
+      h36Assert(undecided, 4, 2);
+    } else {
+      assert.deepEqual(omitted.referenceProgress, selected.referenceProgress);
+      assert.deepEqual(undecided.referenceProgress, selected.referenceProgress);
+      const totalId = department === '経済学科' ? 'professional-economics-total' : 'professional-commerce-total';
+      assert.equal(omitted.cards.find(c => c.requirementId === totalId).target, 82);
+      assert.equal(omitted.referenceProgress[0].target, 124);
+    }
+    assert.deepEqual(x, snapshot);
+    assert.equal(catalog.metadata.sourceLinksReverified, false);
+  });
+}
