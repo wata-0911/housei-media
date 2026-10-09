@@ -328,3 +328,9 @@ The public 2026 guide printed p.133 / PDF p.135 defines admission recognition an
 公式held aggregateは行別参考値に留め、Plannerへの復活・算入への昇格・重複行の合算をしない。
 表示フィールドはallocation、status、coverage、unknown件数、保存schemaに影響しない。
 [公式根拠・表示契約・検証と既存制約](special-lecture-cap-visibility.md)を参照。
+
+## Issue #56: 確認事項の表示projection（2026-10-10）
+
+`unresolvedConditions.ts` は `GraduationProgress` を読み取り、利用者の操作、大学確認、実装/根拠不足、カードへの表示集約、他scope除外を分離する。`PlannerPage` がcatalog/選択scope/profile/公式行を渡す。`UnresolvedConditions` は操作数と個別保留数を別々に表示する。未知scope/reasonと動的な公式保留は保守的に残す。判定エンジン・永続state・unknownCount・coverageには書き戻さない。
+
+算入やsource authorityの正本は従来どおり。詳細・公式根拠・168ケースの変更前後は [Issue #56監査](../planner-unresolved-conditions-audit-2026.md) と [全発生経路](../planner-unresolved-conditions-inventory-2026.md) を参照。

@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "test:planner": "node --import tsx --test tests/planner.test.mjs tests/curriculum-foundation.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-model.test.mjs tests/curriculum-course-ui.test.mjs tests/component-provenance.test.mjs tests/graduation-audit.test.mjs tests/grade-import-privacy.test.mjs",
+    "test:planner": "node --import tsx --test tests/planner.test.mjs tests/curriculum-foundation.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-model.test.mjs tests/curriculum-course-ui.test.mjs tests/component-provenance.test.mjs tests/graduation-audit.test.mjs tests/grade-import-privacy.test.mjs tests/unresolved-conditions.test.mjs",
     "test:extension": "node --test extension/hosei-planner-import/tests/*.test.mjs",
     "build:extension-dev": "npm run check:grade-import && node scripts/build-extension-dev.mjs",
     "catalog:generate": "node --import tsx scripts/generate-curriculum-catalog.mts",
