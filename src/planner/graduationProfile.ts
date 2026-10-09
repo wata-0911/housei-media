@@ -17,7 +17,7 @@ export const initialGraduationProfile = (): GraduationProfile => ({
   currentStudyYear: null,
   admissionType: 'unknown',
   recognizedCredits: emptyRecognizedCredits(),
-  curriculumApplicability: 'unknown',
+  curriculumApplicability: 'current_2026',
 });
 
 export const emptyRecognizedCredits = () => ({
@@ -27,6 +27,27 @@ export const emptyRecognizedCredits = () => ({
   foreignLanguage: { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null },
   physicalEducation: { mode: 'unknown' as const, credits: null }, professionalCourses: [],
 });
+
+/** Calculation-only projection. Never persist this in place of the raw profile.
+ * First-year admission has no entrance recognition; in-study Open University
+ * recognition remains an independent, explicitly entered source (null stays null).
+ */
+export function effectiveRecognitionForAdmission(profile: GraduationProfile): GraduationProfile['recognizedCredits'] {
+  if (profile.admissionType !== 'first_year') return profile.recognizedCredits;
+  return {
+    ...emptyRecognizedCredits(),
+    totalCredits: null,
+    schoolingEquivalentCredits: 0,
+    openUniversityCredits: profile.recognizedCredits.openUniversityCredits ?? null,
+    general: {
+      humanities: { mode: 'none', credits: null },
+      social: { mode: 'none', credits: null },
+      natural: { mode: 'none', credits: null },
+    },
+    foreignLanguage: { mode: 'none', credits: null, language: 'unknown', schoolingEquivalentCredits: null },
+    physicalEducation: { mode: 'none', credits: null },
+  };
+}
 
 /** Explicit helper only: callers must still save the returned profile. */
 export function officialRecognitionPrefill(route: GraduationProfile['admissionType']) {
@@ -98,6 +119,9 @@ export function normalizeAdmissionYear(value: string): number | null {
 /** Returns a user-facing reason when profile values cannot safely be persisted together. */
 export function graduationProfileValidationError(profile: GraduationProfile): string | null {
   if (!profile.recognizedCredits?.general || !profile.recognizedCredits.foreignLanguage || !profile.recognizedCredits.physicalEducation || !Array.isArray(profile.recognizedCredits.professionalCourses)) return '認定単位の入力を確認してください。';
+  // Dormant entrance values must not block first-year Open University edits.
+  // Raw state stays intact; active transfer routes retain all existing checks.
+  profile = { ...profile, recognizedCredits: effectiveRecognitionForAdmission(profile) };
   if (profile.admissionYear !== null
     && (!Number.isInteger(profile.admissionYear) || profile.admissionYear < 1000 || profile.admissionYear > 9999)) {
     return '入学年度は4桁の西暦（1000〜9999）で入力してください。';

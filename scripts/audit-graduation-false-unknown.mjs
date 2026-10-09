@@ -67,7 +67,7 @@ test('H19 aligned: proven Law-excluded S counts once globally, never toward Law 
     y => { y.row.curriculumMatch = 'ambiguous'; },
     y => { y.course.mappingIds.push('missing-edge'); },
     y => { y.row.source = 'manual'; },
-    y => { y.profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: y.offering.id, credits: 2 }]; },
+    y => { y.profile.admissionType = 'other_transfer'; y.profile.recognizedCredits.professionalCourses = [{ id: 'recognized', offeringId: y.offering.id, credits: 2 }]; },
   ]) {
     const y = structuredClone(x); y.rows = [y.row]; mutate(y);
     const s = ref(progress(y), 'schooling');
@@ -101,6 +101,7 @@ test('H20 aligned: recognition and normal official S keep separate quantities an
 });
 test('H14: unrelated recognized course holds all professional facts', () => {
   const x = fixture();
+  x.profile.admissionType = 'other_transfer';
   x.profile.recognizedCredits.professionalCourses = [{ id: 'recognized-row', name: '別の認定科目',
     courseId: 'different-legacy', offeringId: null, mappingId: null, credits: 4 }];
   assert.equal(facts(x).facts[0].allocation.kind, 'unknown');

@@ -1,3 +1,4 @@
+import { effectiveRecognitionForAdmission } from './graduationProfile';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import type { CurriculumCourse, GraduationProfile, Mapping, PlannerCatalog } from './plannerCatalog';
 import { exactImportedCurriculumId } from './officialCourseCredits';
@@ -144,6 +145,7 @@ export function deriveOfficialGraduationFacts(
   rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], catalog: PlannerCatalog,
   selectedScopeId: string, profile?: GraduationProfile,
 ): DerivedOfficialGraduationFacts {
+  if (profile) profile = { ...profile, recognizedCredits: effectiveRecognitionForAdmission(profile) };
   const common = new Set(catalog.programs.filter(p => p.isCommon).map(p => p.scopeId));
   const department = catalog.programs.find(p => p.scopeId === selectedScopeId)?.department ?? null;
   const mappings = new Map(catalog.mappings.map(m => [m.mappingId, m]));

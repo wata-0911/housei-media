@@ -1,3 +1,4 @@
+import { effectiveRecognitionForAdmission } from './graduationProfile';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import type { GraduationProfile, PlannerCatalog } from './plannerCatalog';
 import { exactImportedCurriculumId } from './officialCourseCredits';
@@ -20,6 +21,7 @@ export function safePositiveOfficialSchooling(
   fact: OfficialGraduationFact, rows: ImportedCourseAchievement[], records: ImportedStudyRecord[],
   catalog: PlannerCatalog, scopeId: string, profile: GraduationProfile,
 ) {
+  profile = { ...profile, recognizedCredits: effectiveRecognitionForAdmission(profile) };
   // H20 separates the profile's global S budget from normal source-row S.
   // Professional recognition overlap remains held here, including disjoint
   // H14 identities: H14's release applies only to ordinary allocations.
