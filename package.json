@@ -20,6 +20,7 @@
     "test:bookmarklet": "npm run check:grade-import && node --import tsx --test bookmarklet/tests/*.test.mjs"
   },
   "dependencies": {
+    "@line/liff": "^2.31.2",
     "ajv": "^8.20.0",
     "framer-motion": "^12.38.0",
     "html-to-image": "^1.11.13",
