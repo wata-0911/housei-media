@@ -15,11 +15,11 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import QA from './pages/QA';
 import Contact from './pages/Contact';
-import Message from './pages/Message'; // 重複を削除し、1つにまとめました
+import Message from './pages/Message';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProfileCard from './pages/member';
 import NotFound from './pages/NotFound'
-
+import CalendarApprovePage from './pages/CalendarApprovePage';
 const PlannerPage = lazy(() => import('./pages/PlannerPage'));
 
 type PageMetaEntry = {
@@ -67,6 +67,10 @@ const pageMeta: Record<string, PageMetaEntry> = {
     title: '運営メンバー | 法政通信メディア',
     description:
       '法政通信メディアを運営するメンバーを紹介しています。',
+  },
+  '/calendar-approve': {
+    title: 'カレンダー承認 | 法政通信メディア',
+    description: '法政通信メディア運営メンバー専用ページ。',
   },
 };
 
@@ -154,6 +158,7 @@ export default function App() {
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/member" element={<ProfileCard />} />
             <Route path="*" element={<NotFound />} />
+            <Route path="/calendar-approve" element={<CalendarApprovePage />} />
           </Routes>
         </main>
 
