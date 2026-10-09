@@ -1203,11 +1203,8 @@ function thesisProgressCard(catalog: PlannerCatalog, scopeId: string, progress: 
   const policy = thesisPolicyForScope(catalog, scopeId);
   const credits = thesisCreditsForDepartment(program?.department ?? null);
   if (!program || !credits || policy === 'unknown') return [];
-  if (policy === 'optional' && progress.selection === 'not_selected') return [{
-    requirementId: `thesis-progress-${scopeId}`, label: '卒業論文（選択）', ruleType: 'thesis_progress', status: 'satisfied',
-    earned: 0, inProgress: 0, planned: 0, target: credits, unit: 'credits', reason: null,
-    note: '卒業論文を選択しない設定です。このカードの単位は卒業要件に要求せず、他の専門教育科目で必要単位を満たします。',
-  }];
+  // An optional thesis outside the learner's requirements is not an earned thesis.
+  if (policy === 'optional' && progress.selection === 'not_selected') return [];
   const selected = policy === 'required' || progress.selection === 'selected';
   if (!selected) return [{
     requirementId: `thesis-progress-${scopeId}`, label: '卒業論文（選択）', ruleType: 'thesis_progress', status: 'unknown',

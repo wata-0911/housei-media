@@ -3,9 +3,9 @@ import type { PlannerCatalog, PlannerState, ThesisProgress } from './plannerCata
 export type ThesisPolicy = 'required' | 'optional' | 'unknown';
 
 /**
- * Derive the policy only from structured, scope-local catalog evidence. A thesis
- * course with a stated credit requirement is mandatory; an optional policy needs
- * both official numeric branches. Everything else deliberately stays unknown.
+ * Department policies follow the audited 2026 thesis rules. Optional does not
+ * imply a numeric credit branch: only Law has official with/without targets.
+ * Unrecognized departments deliberately stay unknown.
  */
 export function thesisPolicyForScope(catalog: PlannerCatalog, scopeId: string | null): ThesisPolicy {
   if (scopeId === null) return 'unknown';
@@ -15,7 +15,7 @@ export function thesisPolicyForScope(catalog: PlannerCatalog, scopeId: string | 
   return 'unknown';
 }
 
-/** A choice is exposed only where the catalog contains both official branches. */
+/** Expose a choice only for departments audited as optional. */
 export function supportsThesisSelection(catalog: PlannerCatalog, scopeId: string | null) {
   return thesisPolicyForScope(catalog, scopeId) === 'optional';
 }
@@ -40,6 +40,12 @@ export function thesisProgressForScope(state: Pick<PlannerState, 'thesisSelectio
   const policy = thesisPolicyForScope(catalog, scopeId);
   const saved = scopeId === null ? undefined : state.thesisProgressByScope[scopeId];
   return normalizedProgress(policy, saved ?? (scopeId === null ? { selection: state.thesisSelection, status: 'not_started' } : defaultProgress(policy)));
+}
+
+/** Visibility only: hiding procedures must never clear independently saved guidance. */
+export function shouldShowThesisGuidance(state: Pick<PlannerState, 'thesisSelection' | 'thesisProgressByScope'>, catalog: PlannerCatalog, scopeId: string | null): boolean {
+  return thesisPolicyForScope(catalog, scopeId) !== 'unknown'
+    && thesisProgressForScope(state, catalog, scopeId).selection === 'selected';
 }
 
 /** A thesis decision belongs to the selected program and is never carried across programs. */
