@@ -14,6 +14,7 @@ import { graduationProfileValidationError, hasCreditBearingRecognition, recogniz
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistoricalSources, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
 import { repeatableRule } from './repeatableRules';
+import { specialLectureProgress, type SpecialLectureProgress } from './specialLectureProgress';
 import { allocateGeographyTransfers, geographyTransferKind, type GeographyTransferKind } from './geographyTransferRules';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
@@ -92,6 +93,7 @@ export type ProgressCard = RequirementProgress & {
   partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
   note?: string;
   repeatableCourses?: Array<{ label: string; earned: number; counted: number; limit: number; courses: number; limitCourses: number }>;
+  specialLectures?: SpecialLectureProgress[];
   publicCourse?: { earnedCourses: number; countedCourses: number; earnedCredits: number; countedCredits: number; excludedCredits: number; limitCourses: number; limitCredits: number };
 };
 
@@ -314,6 +316,9 @@ function withoutThesisCondition(requirement: StructuredRequirement): StructuredR
   return { ...requirement, conditions: Object.keys(conditions).length ? conditions : null };
 }
 
+const isBasicLecture = (offering: Offering) => offering.name === '基礎特講'
+  || offering.name.startsWith('基礎特講（') || offering.name.startsWith('基礎特講［');
+
 function groupedCards(
   sources: CalculationItems, offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[],
   impact: UnresolvedEarnedImpact,
@@ -326,6 +331,8 @@ function groupedCards(
   const fields = new Map(['人文', '社会', '自然'].map(field => [field, empty()]));
   const physical = empty();
   const basicLecture = empty();
+  const basicLectureCourses = new Set<string>();
+  const basicLectureLimit = 4;
   type CommonEntry = { mapping: Mapping; totals: Totals; canonicalName?: string };
   const commonEntries = new Map<string, CommonEntry>();
   const physicalEarned = new Set<string>();
@@ -346,9 +353,10 @@ function groupedCards(
     if (commonMappings.length) {
       // 学習のしおり p.45: 基礎特講 is countable only twice / four credits.
       // Keep its excess out of the common-education total while still reporting it.
-      if (offering.name === '基礎特講' || offering.name.startsWith('基礎特講（') || offering.name.startsWith('基礎特講［')) {
+      if (isBasicLecture(offering)) {
         add(basicLecture);
-        if (item.status === 'earned') general.earned += Math.max(0, Math.min(4, basicLecture.earned) - Math.min(4, basicLecture.earned - offering.credits));
+        if (item.status === 'earned') basicLectureCourses.add(offering.id);
+        if (item.status === 'earned') general.earned += Math.max(0, Math.min(basicLectureLimit, basicLecture.earned) - Math.min(basicLectureLimit, basicLecture.earned - offering.credits));
         else if (item.status === 'in_progress') general.inProgress += offering.credits;
         else if (item.status === 'planned') general.planned += offering.credits;
       } else {
@@ -420,7 +428,10 @@ function groupedCards(
   const generalDetails = [...fields].map(([field, totals]) => detail(field, field === '自然' ? { ...totals, earned: naturalCapped } : totals, 8));
   const generalCard = make('group-general', '一般教育', general, 36,
     general.earned >= 36 && fields.get('人文')!.earned >= 8 && fields.get('社会')!.earned >= 8 && naturalCapped >= 8, generalDetails,
-    `36単位のうち人文・社会・自然を各8単位以上。算入上限36単位。基礎特講は${Math.min(4, basicLecture.earned)} / 4単位（${basicLecture.earned > 4 ? `${basicLecture.earned - 4}単位は修得済みだが卒業算入外` : '2回まで算入'}）。`);
+    '36単位のうち人文・社会・自然を各8単位以上。算入上限36単位。');
+  generalCard.specialLectures = [specialLectureProgress({ label: '基礎特講', earned: basicLecture.earned,
+    counted: Math.min(basicLectureLimit, basicLecture.earned), limit: basicLectureLimit,
+    courses: basicLectureCourses.size, limitCourses: 2 })];
   const physicalCard = make('group-physical', '保健体育', physical, 2, physicalEarned.size > 0, undefined,
     '健康・スポーツ科学概論 または スポーツ総合演習を1科目。算入上限2単位');
   const candidates = [...languages].filter(([, totals]) => totals.earned >= 4 && totals.schooling >= 2);
@@ -839,6 +850,26 @@ function professionalCards(
   const overflowRuleReason = overflowRule === null
     ? '選択必修超過分を選択へ算入する公式ルールを安全に特定できません。'
     : baseReason;
+  const repeatableAllocations = [...repeatables.values()].map(repeat => ({ type: repeat.type,
+    progress: { label: repeat.name, earned: repeat.earned, counted: Math.min(repeat.earned, repeat.limit),
+      limit: repeat.limit, courses: repeat.courses.size, limitCourses: repeat.limitCourses } }));
+  const lectureRule = repeatableRule(program.department!, { name: '総合特講' } as Offering);
+  // Empty-plan display placement comes from institutional identity, never
+  // annual names/credits (official-only progress survives Offering removal).
+  const lectureMappingIds = new Set(catalog.curriculum?.courses.filter(course => course.canonicalName === '総合特講')
+    .flatMap(course => course.mappingIds) ?? []);
+  const lectureTypes = new Set(catalog.mappings.filter(mapping => lectureMappingIds.has(mapping.mappingId)
+    && mapping.scopeId === scopeId && mapping.category === '専門教育').map(mapping => mapping.requirementType));
+  for (const repeat of repeatableAllocations) if (repeat.progress.label === '総合特講') lectureTypes.add(repeat.type);
+  const lectureForCard = (id: string): SpecialLectureProgress[] => {
+    const type = id.endsWith('-required-elective') ? '選択必修'
+      : id.endsWith('-elective') || (['経済学科', '商業学科'].includes(program.department!) && id.endsWith('-total')) ? '選択' : null;
+    if (!lectureRule || !type || !lectureTypes.has(type)) return [];
+    const [, name, limit, limitCourses] = lectureRule;
+    const allocation = repeatableAllocations.find(repeat => repeat.type === type && repeat.progress.label === name)?.progress
+      ?? { label: name, earned: 0, counted: 0, limit, courses: 0, limitCourses };
+    return [specialLectureProgress(allocation, baseReason ?? (lectureTypes.size > 1 ? '総合特講の算入区分が複数あるため、残り枠は未確認です。' : null))];
+  };
   const make = (id: string, label: string, totals: Totals, target: number | null, satisfied: boolean,
     details?: ProgressCard['details'], note?: string, reason = baseReason): ProgressCard => {
     const affected = impactsCard(impact, id);
@@ -850,7 +881,8 @@ function professionalCards(
       earned: reason ? null : target === null ? totals.earned : Math.min(target, totals.earned), normalEarned: totals.earned,
       inProgress: totals.inProgress, planned: totals.planned, target, unit: 'credits',
       reason: reason ?? (affected ? UNRESOLVED_EARNED_REASON : null), details, note,
-      repeatableCourses: [...repeatables.values()].filter(repeat => repeat.type === label.split('：').at(-1)).map(repeat => ({ label: repeat.name, earned: repeat.earned, counted: Math.min(repeat.earned, repeat.limit), limit: repeat.limit, courses: repeat.courses.size, limitCourses: repeat.limitCourses })),
+      specialLectures: lectureForCard(id),
+      repeatableCourses: repeatableAllocations.filter(repeat => repeat.type === label.split('：').at(-1)).map(repeat => repeat.progress),
     };
   };
   const makeKnownUnknown = (id: string, label: string, totals: Totals, details: ProgressCard['details'] | undefined, note: string, reason: string) => ({
@@ -1090,6 +1122,7 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     const totalUnknown = knownTotal < 36 && fields.some(key => general[key].mode === 'unknown');
     const unknown = recognitionMayApply && !exempt && (fieldUnknown || totalUnknown);
     return { ...card, earned: exempt ? 0 : Math.min(card.target ?? 36, knownTotal), details,
+      specialLectures: exempt ? card.specialLectures?.map(lecture => ({ ...lecture, counted: 0, reason: '一般教育は免除済みのため、修得分を卒業単位へ算入しません。' })) : card.specialLectures,
       status: exempt || completed ? 'satisfied' : unknown ? 'unknown' : card.status,
       reason: unknown ? GENERAL_RECOGNITION_UNKNOWN_REASON : card.reason,
       note: `${card.note ?? ''}${exempt ? ' 学士入学等により一般教育は免除済み（修得単位には算入しません）。' : `${credited ? ' 公式認定単位を反映しています。' : ''}${openUniversity ? ` 放送大学認定 ${openUniversity}単位を一般教育（その他）に反映しています。` : ''}`}` };
@@ -1393,6 +1426,35 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       if (!schoolingImpact.lawProfessionalUnknown || (!schoolingImpact.globalUnknown && row.status === 'satisfied')) continue;
     } else continue;
     row.status = 'unknown'; row.reason = [row.reason, OFFICIAL_SCHOOLING_REASON].filter(Boolean).join('。');
+  }
+  for (const card of cards) {
+    // This supplement cannot affect allocation, coverage, or requirement unknowns.
+    // Retain broad H31/H41 holds where identity cannot be localized safely.
+    card.specialLectures = card.specialLectures?.map(lecture => {
+      const matchingFacts = official.facts.filter(fact => fact.canonicalName === lecture.label
+        && fact.allocation.kind === 'unknown'
+        && fact.candidateMappingIds.some(id => catalog.mappings.some(mapping => mapping.mappingId === id
+          && (lecture.label === '基礎特講' ? commonScopes.has(mapping.scopeId) && mapping.category === '一般教育'
+            : mapping.scopeId === scopeId && mapping.category === '専門教育'))));
+      const unresolved = impact.globalUnknown || officialImpact.globalUnknown
+        || impact.candidates.some(candidate => (candidate.canonicalName === null || candidate.canonicalName === lecture.label)
+          && candidate.mapping.category === (lecture.label === '基礎特講' ? '一般教育' : '専門教育'));
+      const incompleteInput = calculationItems.ordinary.some(item => {
+        const offering = offerings.get(item.offeringId);
+        if (item.status !== 'earned' || !offering || !(lecture.label === '基礎特講' ? isBasicLecture(offering)
+          : repeatableRule(program.department ?? '', offering)?.[1] === lecture.label)) return false;
+        return offering.credits === null || offering.resolutionStatus !== 'matched'
+          || !eligibleMappings(offering).some(mapping => mapping.curriculumCredits !== null
+            && (lecture.label === '基礎特講' ? mapping.category === '一般教育'
+              : mapping.category === '専門教育' && mapping.scopeId === scopeId));
+      });
+      const reason = profile.curriculumApplicability !== 'current_2026'
+        ? '2026年度現行課程の上限です。適用課程が未確認または対象外のため、残り枠は未確認です。'
+        : matchingFacts.length ? '公式実績は算入保留です。修得回数・算入条件を確認できないため、残り枠と超過は未確認です。'
+        : unresolved || incompleteInput ? '科目の対応関係・修得単位・算入条件に未確認の部分があるため、残り枠と超過は未確認です。'
+        : null;
+      return specialLectureProgress(lecture, reason ?? lecture.reason, matchingFacts);
+    });
   }
   const coveredRequirements = requirements.map(row => withCoverage(row, catalog.requirements.find(rule => rule.id === row.requirementId)?.sourcePage));
   const thesisPage = thesisCreditsForDepartment(program.department) === 8 ? ({ '日本文学科': 49, '史学科': 52, '地理学科': 54 } as Record<string, number>)[program.department ?? ''] : ({ '法律学科': 46, '経済学科': 57, '商業学科': 59 } as Record<string, number>)[program.department ?? ''];

@@ -1,3 +1,4 @@
+import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
 import PlannerPage from '../src/pages/PlannerPage.tsx';
 import ThesisGuidance from '../src/components/planner/ThesisGuidance.tsx';
 import ProgramSettings from '../src/components/planner/ProgramSettings.tsx';
@@ -1927,7 +1928,8 @@ test('2026 common, history, geography, and law special credit transfers follow t
   })) };
   const commonCard = calculateGraduationProgress(common.offerings.map(offering => item(offering.id, 'earned')), common, geoScope).cards.find(row => row.requirementId === 'group-general');
   assert.equal(commonCard.earned, 4);
-  assert.match(commonCard.note, /2単位は修得済みだが卒業算入外/);
+  // The former prose-only cap is now structured supplemental data.
+  assert.equal(commonCard.specialLectures[0].earned - commonCard.specialLectures[0].counted, 2);
 
   const history = professionalFixture('史学科', [['any', '選択']], [
     ['jp-correspondence', 4, ['any']], ['jp-schooling', 2, ['any'], 'schooling'],
@@ -4032,3 +4034,104 @@ for (const program of thesisPrograms) for (const selection of ['selected', 'not_
     }
   });
 }
+
+// #81/#82: display supplements consume existing allocation; no new requirement.
+const lectureProfile = () => ({ ...initialGraduationProfile(), admissionYear: 2026,
+  admissionType: 'first_year', curriculumApplicability: 'current_2026' });
+function lectureFixture(name, credits, department = '経済学科') {
+  const f = professionalFixture(department, [['lecture', '選択', null, 2], ['ordinary', '選択', null, 4]],
+    [...credits.map((value, n) => [`lecture-${n}`, value, ['lecture']]), ['ordinary', 4, ['ordinary']]]);
+  for (const o of f.catalog.offerings) { o.courseId = o.id; o.curriculumCourseId = null; if (o.id !== 'ordinary') o.name = `${name}［${o.id}］`; }
+  if (name === '基礎特講') for (const m of f.catalog.mappings) {
+    m.scopeId = catalog.programs.find(p => p.isCommon).scopeId;
+    m.category = '一般教育'; m.field = m.mappingId === 'ordinary' ? '人文' : null;
+  }
+  f.catalog.curriculum = { ...catalog.curriculum, courses: f.catalog.mappings.map(m => ({ id: `lecture-test:${m.mappingId}`,
+    canonicalName: m.mappingId === 'lecture' ? name : 'ordinary', curriculumCredits: m.curriculumCredits,
+    mappingIds: [m.mappingId], scopeIds: [m.scopeId] })) };
+  f.progress = (statuses = credits.map(() => 'earned'), extra = [], profile = lectureProfile()) =>
+    calculateGraduationProgress([...statuses.map((s, n) => item(`lecture-${n}`, s)), ...extra], f.catalog, f.scope, [], 'not_selected', [], [], profile);
+  f.lecture = p => p.cards.flatMap(c => c.specialLectures ?? []).find(l => l.label === name);
+  return f;
+}
+for (const [name, limit, attempts, amounts] of [
+  ['基礎特講', 4, 2, [0, 2, 4, 6]], ['総合特講', 16, 8, [0, 2, 8, 10, 16, 18]],
+]) for (const earned of amounts) test(`special lecture ${name}: earned ${earned}, cap and all display quantities`, () => {
+  const f = lectureFixture(name, Array(Math.max(1, earned / 2)).fill(2));
+  const statuses = Array(Math.max(1, earned / 2)).fill(earned === 0 ? 'planned' : 'earned');
+  const p = f.progress(statuses), l = f.lecture(p);
+  assert.deepEqual([l.limit, l.limitCourses, l.earnedTotal, l.earnedCourses, l.counted, l.remaining, l.excess, l.reason],
+    [limit, attempts, earned, earned / 2, Math.min(earned, limit), Math.max(0, limit - earned), Math.max(0, earned - limit), null]);
+  const html = renderToStaticMarkup(createElement(GraduationProgressUI, { progress: p }));
+  assert.match(html, new RegExp(`卒業算入上限：${limit}単位（${attempts}回）`));
+  for (const label of ['修得済み', '卒業算入', 'あと算入可能', '上限超過']) assert.ok(html.includes(`<dt>${label}</dt>`));
+  assert.match(html, /上限まで修得する必要はありません/);
+  const card = p.cards.find(c => c.specialLectures?.includes(l));
+  assert.equal(card.earned, Math.min(earned, limit));
+  assert.equal(p.graduationCheckComplete, false);
+});
+for (const name of ['基礎特講', '総合特講']) test(`special lecture ${name}: only earned, alongside ordinary course`, () => {
+  const f = lectureFixture(name, [2, 2, 2, 2, 2]);
+  const p = f.progress(['earned', 'planned', 'in_progress', 'failed', 'dropped'], [item('ordinary', 'earned')]);
+  const l = f.lecture(p), card = p.cards.find(c => c.specialLectures?.includes(l));
+  assert.equal(l.earnedTotal, 2); assert.equal(l.earnedCourses, 1); assert.equal(card.earned, 6);
+  if (name === '基礎特講') {
+    assert.equal(card.target, 36); assert.deepEqual(card.details.map(d => [d.label, d.earned, d.target]), [['人文', 4, 8], ['社会', 0, 8], ['自然', 0, 8]]);
+  }
+});
+for (const department of ['法律学科', '日本文学科', '史学科', '地理学科', '経済学科', '商業学科']) {
+  test(`special lecture 総合特講: ${department} uses its rule once, including empty plan`, () => {
+    const f = lectureFixture('総合特講', [2], department);
+    for (const statuses of [[], ['earned']]) {
+      const p = f.progress(statuses), lectures = p.cards.flatMap(c => c.specialLectures ?? []).filter(l => l.label === '総合特講');
+      assert.equal(lectures.length, 1); assert.equal(lectures[0].counted, statuses.length * 2);
+      assert.deepEqual([lectures[0].limit, lectures[0].limitCourses], [16, 8]);
+      const html = renderToStaticMarkup(createElement(GraduationProgressUI, { progress: p }));
+      assert.equal((html.match(/aria-label="総合特講の卒業算入状況"/g) ?? []).length, 1);
+    }
+  });
+}
+for (const [credits, remaining, excess] of [[Array(4).fill(4), 0, 0], [Array(8).fill(1), 0, 0], [Array(9).fill(2), 0, 2]]) {
+  test(`special lecture independent credit/count boundary: ${credits.length} attempts at ${credits[0]} credits`, () => {
+    const f = lectureFixture('総合特講', credits), l = f.lecture(f.progress());
+    assert.equal(l.earnedCourses, credits.length); assert.equal(l.remaining, remaining); assert.equal(l.excess, excess);
+    assert.equal(l.counted, Math.min(16, credits.reduce((sum, c) => sum + c, 0)));
+  });
+}
+test('special lecture count/credit mismatch preserves allocator and declines to assert remaining capacity', () => {
+  const f = lectureFixture('総合特講', Array(9).fill(1)), p = f.progress(), l = f.lecture(p);
+  assert.equal(l.counted, 9); assert.equal(l.remaining, null); assert.equal(l.excess, null);
+  assert.match(l.reason, /回数上限/); assert.equal(p.cards.find(c => c.specialLectures?.includes(l)).earned, 9);
+});
+for (const name of ['総合特講演習', '総合外国語特講', '経済学特講', '総合特講【類似】']) test(`special lecture does not misidentify ${name}`, () => {
+  const f = lectureFixture('総合特講', [2]); f.catalog.offerings[0].name = name;
+  assert.equal(f.lecture(f.progress()).earnedTotal, 0);
+});
+test('special lecture does not take another department mapping or unsupported department rule', () => {
+  const f = lectureFixture('総合特講', [2]);
+  f.catalog.mappings[0].scopeId = catalog.programs.find(p => p.department === '商業学科').scopeId;
+  assert.equal(f.lecture(f.progress()), undefined);
+  assert.equal(repeatableRule('対象外学科', { name: '総合特講' }), undefined);
+});
+for (const name of ['基礎特講', '総合特講']) for (const condition of ['unknownCredits', 'manual_review', 'unknown', 'legacy_or_transition']) {
+  test(`special lecture ${name}: ${condition} is not confirmed zero`, () => {
+    const f = lectureFixture(name, [2]), profile = lectureProfile();
+    if (condition === 'unknownCredits') f.catalog.offerings[0].credits = null;
+    else if (condition === 'manual_review') f.catalog.offerings[0].resolutionStatus = 'manual_review';
+    else profile.curriculumApplicability = condition;
+    const p = f.progress(['earned'], [], profile), l = f.lecture(p);
+    assert.equal(l.earnedTotal, null); assert.equal(l.remaining, null); assert.equal(l.excess, null); assert.ok(l.reason);
+    const html = renderToStaticMarkup(createElement(GraduationProgressUI, { progress: p }));
+    assert.match(html, /あと算入可能<\/dt><dd[^>]*>未確認/);
+    assert.match(html, /卒業算入（参考）/);
+  });
+}
+test('special lecture general exemption cannot display pre-exemption credits as counted', () => {
+  const f = lectureFixture('基礎特講', [2, 2]), profile = lectureProfile();
+  profile.admissionType = 'bachelor_admission';
+  for (const field of Object.values(profile.recognizedCredits.general)) field.mode = 'exempt';
+  const p = f.progress(['earned', 'earned'], [], profile), lecture = f.lecture(p);
+  assert.equal(lecture.counted, 0); assert.equal(lecture.earned, 4); assert.equal(lecture.remaining, null);
+  assert.match(lecture.reason, /免除済み/);
+  assert.equal(p.cards.find(c => c.requirementId === 'group-general').earned, 0);
+});

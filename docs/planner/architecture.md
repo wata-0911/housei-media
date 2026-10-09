@@ -319,3 +319,12 @@ Research-only at exact base `b747e47efdbcd9a499787a05de3a44557c263b82`; producti
 The public 2026 guide printed p.133 / PDF p.135 defines admission recognition and shows R12/E12 and R2/E2 in the same sample rows. Printed p.31 / PDF p.33 permits a C4 course with recognition2 to acquire the remaining2, but does not specify whether a later Web row's E is2 or4. Therefore neither `earned + recognizedExemption` nor a universal row/profile dedupe rule is proven. Bachelor exemption is distinct and exempt general education is omitted from the sample notice; the numeric column must not automatically be interpreted as a waiver amount.
 
 `earnedCreditsTotal` remains the unmodified official source aggregate authority. Positive `recognizedExemption` still holds the whole ordinary fact and fails `safePositiveOfficialSchooling()`. H14's exact Course comparison cannot prove recognition-event/aggregate-budget disjointness. No profile subtraction, maximum, merge, implicit dedupe, completion equation or S inference is added. H20 source separation and H19/H43 global-only boundaries remain in force; additionalEnrollment is unchanged. Case E0 retains H41's existing known-zero reference treatment even when its fact is held; this does not establish completion. Import/Source/CourseProgress presentation and thesis-guidance calculations are separate consumers, not permission to bypass the graduation hold. `graduationCheckComplete=false` remains unchanged.
+
+## 特講の算入上限補足（#81 / #82、2026-10-09）
+
+`ProgressCard.specialLectures` は既存の `groupedCards()` / `professionalCards()` の数量から
+作る表示専用projection。基礎特講2回・4単位、総合特講8回・16単位を既存カード内に表示する。
+`repeatableCourses` の既存値を再利用し、修得・算入・残り枠・超過と未確認を区別する。
+公式held aggregateは行別参考値に留め、Plannerへの復活・算入への昇格・重複行の合算をしない。
+表示フィールドはallocation、status、coverage、unknown件数、保存schemaに影響しない。
+[公式根拠・表示契約・検証と既存制約](special-lecture-cap-visibility.md)を参照。
