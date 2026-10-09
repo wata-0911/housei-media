@@ -77,13 +77,6 @@ export default function PlannerPage() {
   }, []);
 
   useEffect(() => {
-    if (directImport !== undefined) {
-      setActiveTab('annual');
-      setGradeImportOpen(true);
-    }
-  }, [directImport]);
-
-  useEffect(() => {
     const token = gradeHandoffToken(window.location.hash);
     if (!token) return;
     const receive = (event: MessageEvent) => {
@@ -91,6 +84,8 @@ export default function PlannerPage() {
       window.removeEventListener('message', receive);
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
       if (!event.data.ok) { setNotice('拡張機能から成績データを受信できませんでした。JSONを保存またはコピーして取り込めます。'); return; }
+      setActiveTab('annual');
+      setGradeImportOpen(true);
       setDirectImport(event.data.importData);
     };
     window.addEventListener('message', receive);
