@@ -1054,3 +1054,60 @@ Final validation (final source/test revision):
 - Historical `scripts/audit-graduation-false-unknown.mjs`: **17/20 PASS, 3 FAIL, skips0 on BOTH exact base and branch**. Same failed assertions: H19 old global-S hold, H20 old recognition blanket/S0 hold, H38 old unknown-S reference expectation. These are pre-existing expectations superseded by the current engine tests; the historical helper is intentionally unchanged. This validation exception is reported, not hidden or converted to skips.
 - Docs/tests-only validation is the selected gate; a production build is not required for Outcome A. No production check is claimed to have run when it did not.
 - Final exact-base differential: **1215/1215 audit corpus tests PASS**, failures0/skips0; **1833 complete progress outputs + 1623 complete fact results = 3456 deep-equal comparisons**, with frozen base/current inputs unchanged. Intentional differentials: **none**. Earlier comparison already matched all3456 results but had16 new-test invalid-preview expectation failures; the final rerun uses the corrected rejection assertions and passes in full.
+
+## Legacy audit alignment — H19 / H20 / H38 — 2026-10-09
+
+### Position and baseline
+
+**B: 継続的な現行behavior監査として整備する。** 元ヘッダーはd5c28e0のcharacterizationを示していたが、本書§2は「将来の実装修正で期待値を更新する対象」と定義しており、helperもH38/H36/H02等を既に更新している。凍結スナップショットには戻さず、実装済み契約と残存する保留の両方を検証する目的をヘッダーに明記した。未解決の挙動を望ましい恒久仕様とするものではない。
+
+この節より前の本文・66件inventory・分類/優先度の集計・当時の数量/評価・過去follow-upは全byteを保持する。特に2026-10-04のH38 follow-upのS参考値nullは当時の正しい記録であり、後日のH20による下限表示変更で過去を書き換えない。
+
+- Repository: `wata-0911/housei-media`。独立clean cloneで`git fetch origin dev`後、`origin/dev=f651e55b60d6ba13b775ce9c0f4f1c0267fe184f`から`test/graduation-legacy-audit-alignment`を作成。PR #103のmerge commitそのものであることと開始時cleanを確認。
+- 既存checkout/他Workセッション/未コミットの`public/schedule-calendar.png`は操作していない。main/devへコミットせず、reset/rebase/force-push/clean/cherry-pick/履歴改変なし。
+- 変更前にhelper、正式`tests/graduation-audit.test.mjs`、本書、`docs/planner/architecture.md`、facts/progress、H19/H43共有証明・contribution・H41/H42 identity/impact helper、実装履歴を照合。
+- 元コマンド`node --import tsx --test scripts/audit-graduation-false-unknown.mjs`を最新devで実行：**20件、PASS17 / FAIL3 / SKIP0**。従来報告と同じ3件を再現した。
+
+### Failure inventory and assertion evidence
+
+全fixtureは`current_2026`。C=composition、O=official earned aggregate、S=schooling。次表の数量は実入力・実出力であり、新しい制度ルールではない。
+
+| 項目 / 変更前テスト名 | 元入力 | 旧期待値 | 最新devの実際値 / 原因 | 対応・根拠 |
+|---|---|---|---|---|
+| H19: `law excluded name holds global S allocation too` | 法律・exact Course「データサイエンス入門A」、単独公式C2/O2/S2、同値の専門選必Mapping、first_year | allocation O2/Snull、global S earned=null | allocation O2/Snullは維持。失敗はglobal **2 != null**。専門S8の除外を全体S30にも適用した旧期待が残存 | `ddf025e7c2e6aac3927cbf00428618a93cc29042`、`lawExcludedOfficialSchoolingContributions()`と共有`safePositiveOfficialSchooling()`。global `[2, partial, target30]`、Law S8 `[0, unsatisfied]`を別assert。consumer allocation Snullは維持 |
+| H20: `unrelated transfer S recognition holds even explicit zero S` | transfer_second_year、通常公式C4/O4、profile全体認定S=null/7 × 公式S=0/2、ordinary認定totalは未入力 | 全4組のallocation S=null、O4 | 最初の組で**0 != null**。全4組ともallocation Sは入力どおり0/2、O4/completed4を維持。H20でcurrent_2026通常公式Sへの認定blanket holdを除去済み | `30de90282a9373f50a0b51b50df13e722e1c6770`、`deriveOfficialGraduationFacts()`のH20 guard、`CalculationItems`、`referenceProgress()`。S入力を保持するassertへ変更し、null/0/positive双方の境界も追加 |
+| H38: `recognized foreign4/Snull retains ordinary4 with schooling unknown` | transfer_second_year、公式行なし、英語認定O4/言語別Snull、全体認定Sもnull | foreign4/unknown、overall4、global S earned=null/status unknown | foreign4/unknown・overall4は維持。失敗はglobal **0 != null**。H38自身のordinary保持は有効だが、後続H20が既知部分の下限0を表示するよう変更 | H38 `5017d9790bd119b39ae4d0ec6fafeedb040580c4`＋H20 `30de902`。global earned0、recognizedCredits=null、status/coverageStatus unknown、target30、未入力reasonを同時assert。0は認定S確定0ではない |
+
+H20の元4組のallocation入力は維持し、全体進捗の追加検証だけclone上でordinary認定total=8を明示する。`graduationProfileValidationError()===null`を先に確認するため、認定total未入力による前提holdとS budget分離を混同しない。認定S=null/0/7 × 通常S=null/0/2を検証し、認定7＋通常2=global9、Law S8には通常2のみ、overallにはordinary4＋認定8=12のみを算入する。認定null＋通常2は下限2/unknown、認定null＋通常0は下限0/unknown。通常S自体がnullで既知S合計0ならearned=null/unknownのまま。元の認定値を0に書き換えず、`graduationCheckComplete=false`を維持する。
+
+H38では元fixtureのforeign4/unknown、overall4/unknownを維持する。さらに独立した公式O4/S2を併存させた場合のforeign4/unknown、overall8、global下限2/unknown/recognizedCredits=nullも検証する。言語別Snullと全体Snullをそれぞれ保持し、known quantityをunknownに置換せず、unknown evaluationを達成へ昇格させない。
+
+### Safety boundaries and formal regressions
+
+- H19のglobal算入は法律/current_2026、公式制度Course identity、単独公式source、全Mapping edge/owner/metadata、明示composition一致、有限`0 < S <= O <= C`、認定/追加履修・method conflict guardを満たす場合のみ。13名称は社会経済学A/B、経済政策論A/B、総合特講、情報学入門、総合外国語特講、スポーツ特講、データサイエンス入門A/B、データサイエンス応用基礎A/B/C。prefix/装飾名/public/他学科へ一般化せず、Law S8除外・ordinary/completion/H12 gateは維持。
+- helperにはH19の明示S0、Snull、S>C、反復source ID、ambiguous identity、欠落Mapping edge、非公式source、専門認定overlapの否定assertionを追加。正式回帰の`H19 exact …`/`H19 real catalog …`は13名称全件と実catalogのmethod証明を検証し、`H19 rejects …`群はunsafe identity/数量/metadata/ownerを網羅する。
+- H20は認定global budgetと通常公式Sを別sourceとして扱う。synthetic専門認定のannual Offering.methodからSを作らず、認定global SをLaw S8・外国語・任意Structured要件へ配分しない。正式回帰`H20 synthetic professional … cannot enter any S consumer`、`H20 H19 H43 allocation accounted sets … are disjoint`、unsafe/課程unknown/legacy matrixを維持。H19/H43は専門認定ありの場合に閉じたまま、allocation・H43・H19・認定の各sourceを一度だけ算入する。
+- H38の正式`H38 foreign recognition …`は3言語×Snull/0/1/2、official併存/cap、invalid認定、frozen inputsを検証。`H20 H38 language-specific …`は言語別とglobal認定Sの独立性、`H38 retains ordinary4 with H36 …`はknown下限0/unknownを既に保証しており、今回のhelper期待と一致する。
+- `tests/graduation-audit.test.mjs`は変更不要。正式回帰319件（test-name-pattern=`H19|H20|H38`）は変更前後ともPASS319 / FAIL0 / SKIP0。対象外のhelper17件と元の不変条件assertionも維持し、削除/skip/todo/失敗隠蔽なし。
+- 本番・Grade Import・UI・catalog・profile/storage/migration・schema・CI・Extension/Bookmarkletに差分なし。`schemaVersion=22`、`graduationCheckComplete=false`、`sourceLinksReverified=false`、`ImportedCourseAchievement.earnedCreditsTotal`正本、ordinary/schooling/completion独立性を維持する。
+
+### Validation and self-review
+
+ローカルNode.js **22.23.3** / npm **10.9.9**、独立cloneで`npm ci`。変更後の最終スクリプトについて以下を実行した。
+
+| 検証 | PASS | FAIL | SKIP |
+|---|---:|---:|---:|
+| 旧監査helper・変更前 | 17 | 3 | 0 |
+| 現行監査helper・変更後（全20件を保持） | 20 | 0 | 0 |
+| H19/H20/H38正式回帰・変更前 / 変更後 | 319 / 319 | 0 / 0 | 0 / 0 |
+| `npm run test:planner` | 1732 | 0 | 0 |
+| `npm run test:extension` | 54 | 0 | 0 |
+| `npm run test:bookmarklet` | 168 | 0 | 0 |
+| `npm run typecheck` / `npm run lint` / `npm run build` | 全て成功 | 0 | 該当なし |
+| `git diff --check` | 成功 | 0 | 該当なし |
+
+全テストcancelled/todoも0。build内grade-import生成物・catalog整合チェックも成功。既存Vite chunk-size警告と依存監査8件（moderate2/high6）は変更範囲外で、依存更新や警告抑制は行っていない。PR #103のCIは既存6チェックを実行し、このstandalone helperは含まない。CI設定/必須チェックを今回追加せず、helperは上記の独立コマンドで検証する。PRの実行結果はPR本文に記録する。
+
+セルフレビュー（実diff、production呼出経路、正式回帰、変更前後出力を再照合）：今回の変更に残存する **P1=0 / P2=0 / P3=0**。本番不具合は今回の3失敗原因としては発見せず、旧期待値の不一致のみを修正した。歴史本文は元ファイルの完全なprefix、helperの共通fixtureと対象外17件は元のまま、変更ファイルは指定2件のみであることを機械的に確認した。
+
+残る範囲は、H21のpositive認定行の制度意味/ordinary overlap、専門認定Offering数量依存、H19/H43の専門認定guard、課程unknown/legacy、public/special/repeatableの未対応境界、その他H-familyの過去finding。今回これらを解消済みとはせず、卒業要件エンジン全体の完成も主張しない。
