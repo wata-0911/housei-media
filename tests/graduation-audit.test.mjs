@@ -4547,3 +4547,58 @@ for (const department of ['法律学科', '経済学科', '商業学科']) {
     assert.equal(catalog.metadata.sourceLinksReverified, false);
   });
 }
+
+// #81/#82: official authority and H-family holds survive presentation supplements.
+for (const name of ['基礎特講', '総合特講']) for (const earned of [0, null, 6, 18]) {
+  test(`special lecture official ${name}/${earned}: aggregate stays separate and held Planner duplicate never counts`, () => {
+    const x = h41Fixture('経済学科');
+    const category = name === '基礎特講' ? '一般教育' : '専門教育';
+    const entry = x.add('lecture-official', category, null, '選択', 2, 'schooling', name, name === '基礎特講' ? x.common : x.scope);
+    x.rows = [x.official(entry, earned, 2)];
+    x.items = [item(entry.offering, 'earned'), item(x.offering, 'earned')];
+    const input = x.build(), p = x.progress(input), withoutDuplicate = x.progress(input, x.rows, [item(x.offering, 'earned')]);
+    assert.deepEqual(p, withoutDuplicate);
+    const facts = deriveOfficialGraduationFacts(x.rows, [], input, x.scope, x.profile);
+    assert.equal(facts.facts[0].allocation.kind, 'unknown'); assert.equal(facts.allocations.length, 0);
+    assert.equal(facts.facts[0].earnedCreditsTotal, earned); assert.equal(p.importedContributionCount, 0);
+    const lecture = p.cards.flatMap(c => c.specialLectures ?? []).find(l => l.label === name);
+    assert.equal(lecture.counted, 0); assert.equal(lecture.earned, 0);
+    assert.equal(lecture.earnedTotal, null); assert.equal(lecture.earnedCourses, null);
+    assert.equal(lecture.remaining, null); assert.equal(lecture.excess, null);
+    assert.deepEqual(lecture.officialRows.map(r => r.earned), [earned]);
+    assert.match(lecture.reason, /公式実績は算入保留/);
+    const html = renderToStaticMarkup(createElement(GraduationProgressUI, { progress: p }));
+    assert.ok(html.includes(`公式成績行の修得済み：${earned === null ? '未確認' : `${earned}単位`}`));
+    assert.match(html, /あと算入可能<\/dt><dd[^>]*>未確認/);
+    assert.equal(p.cards.find(c => c.requirementId === 'professional-economics-total').earned, 4, 'unrelated ordinary course is unchanged');
+  });
+}
+for (const name of ['基礎特講', '総合特講']) test(`special lecture official ${name}: duplicate source rows are displayed individually, never summed`, () => {
+  const x = h41Fixture('経済学科');
+  const entry = x.add('duplicate-lecture', name === '基礎特講' ? '一般教育' : '専門教育', null, '選択', 2, 'schooling', name, name === '基礎特講' ? x.common : x.scope);
+  const row = x.official(entry, 6, 2); x.rows = [row, { ...row, id: `${row.id}-other`, earnedCreditsTotal: 8 }];
+  const p = x.progress(), lecture = p.cards.flatMap(c => c.specialLectures ?? []).find(l => l.label === name);
+  assert.equal(lecture.earnedTotal, null); assert.equal(lecture.remaining, null); assert.equal(lecture.counted, 0);
+  assert.deepEqual(lecture.officialRows.map(r => r.earned), [6, 8]);
+  assert.equal(p.importedContributionCount, 0);
+});
+test('special lecture unresolved official identity cannot imply a confirmed empty cap', () => {
+  const x = h41Fixture(); x.rows = [{ ...x.official(x, null), curriculumCourseId: null, curriculumMatch: 'unmatched', candidateCurriculumCourseIds: [] }];
+  const p = x.progress();
+  for (const lecture of p.cards.flatMap(c => c.specialLectures ?? [])) {
+    assert.equal(lecture.remaining, null); assert.equal(lecture.earnedTotal, null); assert.ok(lecture.reason);
+  }
+  assert.equal(p.importedContributionCount, 0);
+});
+test('special lecture supplement adds no cards, coverage entries, or unknown requirements', () => {
+  const x = h41Fixture('経済学科');
+  const entry = x.add('lecture-safe', '専門教育', null, '選択', 2, 'schooling', '総合特講', x.scope);
+  const before = x.progress();
+  x.items = [item(entry.offering, 'earned')];
+  const after = x.progress();
+  assert.deepEqual(after.cards.map(c => c.requirementId), before.cards.map(c => c.requirementId));
+  assert.deepEqual(after.coverageSummary, before.coverageSummary);
+  assert.equal(after.unknownCount, before.unknownCount); assert.equal(after.evaluableCount, before.evaluableCount);
+  assert.equal(after.graduationCheckComplete, false); assert.equal(x.f.metadata.sourceLinksReverified, false);
+  assert.equal(initialState().schemaVersion, 22);
+});
