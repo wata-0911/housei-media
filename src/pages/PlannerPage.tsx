@@ -51,6 +51,7 @@ export default function PlannerPage() {
   const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
   const [undoImport, setUndoImport] = useState<PlannerState | null>(null);
   const [activeTab, setActiveTab] = useState<'annual' | 'media' | 'profile'>('annual');
+  const [gradeImportOpen, setGradeImportOpen] = useState(false);
   const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
@@ -74,6 +75,13 @@ export default function PlannerPage() {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  useEffect(() => {
+    if (directImport !== undefined) {
+      setActiveTab('annual');
+      setGradeImportOpen(true);
+    }
+  }, [directImport]);
 
   useEffect(() => {
     const token = gradeHandoffToken(window.location.hash);
@@ -239,11 +247,20 @@ export default function PlannerPage() {
       {activeTab === 'annual' && <div id="annual-panel" role="tabpanel" aria-labelledby="annual-tab" className="space-y-6">
         {profileNeedsAttention && <p className="border-l-4 border-sky-600 bg-sky-50 p-3 text-sm text-sky-900">卒業判定に必要なプロフィール設定があります。プロフィールタブで確認してください。</p>}
         <AnnualCreditLimitNotice rows={annualLimitRows} />
-        <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
         <CurriculumCourseList catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
-        <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         <PlannerExportActions presentation={exportPresentation} />
+        <details
+          open={gradeImportOpen}
+          onToggle={event => setGradeImportOpen(event.currentTarget.open)}
+          className="border border-gray-200 bg-white"
+        >
+          <summary className="cursor-pointer p-4 font-medium text-[#002255]">
+            成績データを取り込む
+          </summary>
+          <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
+        </details>
+        <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
