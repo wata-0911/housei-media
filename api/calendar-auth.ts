@@ -65,7 +65,7 @@ export default {
       if (!verifyResponse.ok) {
         const status =
           verifyResponse.status === 400 ||
-          verifyResponse.status === 401
+            verifyResponse.status === 401
             ? 401
             : 502;
 
@@ -111,12 +111,21 @@ export default {
         );
       }
 
+
       if (!memberResponse.ok) {
+        console.error('calendar-auth: LINE group member API failed', {
+          upstreamStatus: memberResponse.status,
+        });
+
         return reply(
-          { authorized: false, error: 'グループ所属を確認できませんでした' },
+          {
+            authorized: false,
+            error: 'グループ所属を確認できませんでした',
+          },
           502,
         );
       }
+
 
       const member: Json = await memberResponse.json();
 
