@@ -5,13 +5,6 @@ import type { MediaSharePresentationGroup, MediaShareGroup, MediaShareTemplate }
 
 type Props = { groups: MediaShareGroup[]; onClose: () => void };
 
-function download(dataUrl: string) {
-  const link = document.createElement('a');
-  link.download = 'メディアスクーリング進捗.png';
-  link.href = dataUrl;
-  link.click();
-}
-
 async function copyText(text: string) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
   const textarea = document.createElement('textarea');
@@ -45,6 +38,8 @@ export default function MediaProgressShareModal({ groups, onClose }: Props) {
   const [comment, setComment] = useState('');
   const [template, setTemplate] = useState<MediaShareTemplate>('progress');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [generatedFile, setGeneratedFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
   const post = mediaSharePost(groups, comment, template);
   const presentation = mediaSharePresentation(groups, template);
@@ -52,12 +47,72 @@ export default function MediaProgressShareModal({ groups, onClose }: Props) {
 
   async function handleDownload() {
     if (!cardRef.current) return;
-    setIsDownloading(true); setMessage('画像を準備しています…');
+
+    setGeneratedImage(null);
+    setGeneratedFile(null);
+    setIsDownloading(true);
+    setMessage('画像を準備しています…');
+
     try {
-      const dataUrl = await toPng(cardRef.current, { backgroundColor: '#fffaf3', pixelRatio: 2, cacheBust: true, skipFonts: true });
-      download(dataUrl); setMessage('画像をダウンロードしました。');
-    } catch { setMessage('画像を作成できませんでした。もう一度お試しください。'); } finally { setIsDownloading(false); }
+      const dataUrl = await toPng(cardRef.current, {
+        backgroundColor: '#fffaf3',
+        pixelRatio: 2,
+        cacheBust: true,
+        skipFonts: true,
+      });
+
+      const blob = await (await fetch(dataUrl)).blob();
+
+      if (blob.type !== 'image/png' || blob.size === 0) {
+        throw new Error('Invalid PNG');
+      }
+
+      const file = new File(
+        [blob],
+        'メディアスクーリング進捗.png',
+        { type: 'image/png' }
+      );
+
+      setGeneratedImage(dataUrl);
+      setGeneratedFile(file);
+      setMessage('PNGを生成しました。共有・保存ボタンから保存できます。');
+    } catch {
+      setMessage('画像を生成できませんでした。もう一度お試しください。');
+    } finally {
+      setIsDownloading(false);
+    }
   }
+
+  async function handleShare() {
+    if (!generatedFile) return;
+
+    if (
+      !navigator.share ||
+      !navigator.canShare?.({ files: [generatedFile] })
+    ) {
+      setMessage(
+        'このブラウザは画像共有に対応していません。表示された画像の長押し保存をお試しください。'
+      );
+      return;
+    }
+
+    try {
+      await navigator.share({ files: [generatedFile] });
+      setMessage('共有操作が終了しました。保存先をご確認ください。');
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        setMessage('共有をキャンセルしました。');
+      } else {
+        setMessage('画像を共有できませんでした。');
+      }
+    }
+  }
+
+  function invalidateGenerated() {
+    setGeneratedImage(null);
+    setGeneratedFile(null);
+  }
+
   async function handleCopy() {
     try { await copyText(post); setMessage('投稿文をコピーしました。'); } catch { setMessage('コピーできませんでした。投稿文を選択してコピーしてください。'); }
   }
@@ -70,9 +125,27 @@ export default function MediaProgressShareModal({ groups, onClose }: Props) {
     <section role="dialog" aria-modal="true" aria-labelledby="media-share-title" className="max-h-[94vh] w-full max-w-2xl overflow-y-auto bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-sm">
       <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-4 py-4 sm:px-6"><div><h2 id="media-share-title" className="text-lg font-medium text-[#002255]">メディア進捗を共有</h2><p className="mt-1 text-sm text-gray-600">年間履修計画にあるメディア科目をまとめて共有します。</p></div><button type="button" onClick={onClose} className="shrink-0 border border-gray-300 px-3 py-2 text-sm" aria-label="共有モーダルを閉じる">閉じる</button></div>
       <div className="space-y-6 p-4 sm:p-6">
-        <div><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium text-[#002255]">画像プレビュー</h3><button type="button" onClick={handleDownload} disabled={isDownloading} className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50">{isDownloading ? '画像を作成中…' : '画像をダウンロード'}</button></div>
-          <fieldset className="mb-4"><legend className="text-sm text-gray-700">共有テンプレ</legend><div className="mt-2 flex flex-wrap gap-2"><label className={`cursor-pointer border px-3 py-2 text-sm ${template === 'progress' ? 'border-[#002255] bg-[#eef4fb]' : 'border-gray-300'}`}><input className="mr-1.5" type="radio" name="media-share-template" checked={template === 'progress'} onChange={() => setTemplate('progress')} />進捗のみ</label><label className={`cursor-pointer border px-3 py-2 text-sm ${template === 'progress_with_assessments' ? 'border-[#002255] bg-[#eef4fb]' : 'border-gray-300'}`}><input className="mr-1.5" type="radio" name="media-share-template" checked={template === 'progress_with_assessments'} onChange={() => setTemplate('progress_with_assessments')} />進捗＋試験</label></div></fieldset>
-          <label className="mb-3 block text-sm text-gray-700">ひとこと（任意）<textarea value={comment} maxLength={280} rows={2} onChange={event => setComment(event.target.value)} placeholder="例: 少しずつ進めています" className="mt-1 w-full resize-y border border-gray-300 p-2" /></label>
+        <div><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium text-[#002255]">画像プレビュー</h3><button type="button" onClick={handleDownload} disabled={isDownloading} className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50">{isDownloading ? '画像を作成中…' : 'png生成テスト'}</button> {generatedFile && (
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={isDownloading}
+            className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
+          >
+            共有・保存
+          </button>
+        )}</div> {generatedImage && (
+          <div className="mt-4 border border-gray-200 bg-white p-3">
+            <p className="mb-2 text-sm text-gray-700">生成されたPNGの確認</p>
+            <img
+              src={generatedImage}
+              alt="生成されたメディア進捗画像"
+              className="w-full border border-gray-200"
+            />
+          </div>
+        )}
+          <fieldset className="mb-4" disabled={isDownloading}><legend className="text-sm text-gray-700">共有テンプレ</legend><div className="mt-2 flex flex-wrap gap-2"><label className={`cursor-pointer border px-3 py-2 text-sm ${template === 'progress' ? 'border-[#002255] bg-[#eef4fb]' : 'border-gray-300'}`}><input className="mr-1.5" type="radio" name="media-share-template" checked={template === 'progress'} onChange={() => {setTemplate('progress'); invalidateGenerated(); }} />進捗のみ</label><label className={`cursor-pointer border px-3 py-2 text-sm ${template === 'progress_with_assessments' ? 'border-[#002255] bg-[#eef4fb]' : 'border-gray-300'}`}><input className="mr-1.5" type="radio" name="media-share-template" checked={template === 'progress_with_assessments'} onChange={() => {setTemplate('progress_with_assessments'); invalidateGenerated(); }} />進捗＋試験</label></div></fieldset>
+          <label className="mb-3 block text-sm text-gray-700">ひとこと（任意）<textarea   disabled={isDownloading} value={comment} maxLength={280} rows={2} onChange={event => {setComment(event.target.value); invalidateGenerated();}} placeholder="例: 少しずつ進めています" className="mt-1 w-full resize-y border border-gray-300 p-2" /></label>
           <div className="overflow-hidden border border-[#d6c6af] bg-[#fffaf3]"><div ref={cardRef} className="bg-[#fffaf3] p-5 text-left text-[#18243b] sm:p-7"><p className="text-xs font-semibold tracking-[0.16em] text-[#a34700]">HOSEI TSUSHIN</p><h3 className="mt-2 text-xl font-semibold tracking-wide text-[#002255]">メディアスクーリング進捗</h3><div className="mt-5"><ProgressGroups groups={presentation} /></div>{comment.trim() && <p className="mt-5 whitespace-pre-wrap border-t border-[#dfd4c5] pt-3 text-sm leading-relaxed">{comment.trim()}</p>}<p className="mt-5 text-right text-xs text-gray-500">{date}</p></div></div>
         </div>
         <div className="border-t border-gray-200 pt-5"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium text-[#002255]">投稿文プレビュー</h3><div className="flex flex-wrap gap-2"><button type="button" onClick={handleXPost} className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">Xに投稿</button><button type="button" onClick={handleCopy} className="border border-[#002255] px-3 py-2 text-sm">投稿文をコピー</button></div></div><pre className="whitespace-pre-wrap break-words bg-gray-50 p-4 text-sm leading-relaxed text-gray-800">{post}</pre>{post.length > 280 && <p className="mt-2 text-sm text-amber-800">Xの文字数目安（280文字）を超えています。本文は省略していません。</p>}</div>
