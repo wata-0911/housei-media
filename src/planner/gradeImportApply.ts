@@ -30,20 +30,9 @@ export function academicYearFromDate(date: string | null): number | null {
   if (!year || !month || !day) return null;
   return month < 4 ? year - 1 : year;
 }
-export function inferredCorrespondenceYear(
-  course: HoseiGradeImportCourse,
-  capturedAt: string
-): { academicYear: number | null; date: string | null } {
-  const reportDates = course.reports
-    .map(report => report.date)
-    .filter((date): date is string => date !== null)
-    .sort();
-
-  const date =
-    course.creditExam.date ??
-    reportDates.at(-1) ??
-    capturedAt.slice(0, 10);
-
+export function inferredCorrespondenceYear(course: HoseiGradeImportCourse, capturedAt: string): { academicYear: number | null; date: string | null } {
+  const reportDates = course.reports.map(report => report.date).filter((date): date is string => date !== null).sort();
+  const date = course.creditExam.date ?? reportDates.at(-1) ?? capturedAt.slice(0, 10);
   return { academicYear: academicYearFromDate(date), date };
 }
 export function hasCorrespondenceEvidence(course: HoseiGradeImportCourse): boolean {
@@ -164,10 +153,8 @@ function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, occ
   const resolveComponent = (method: ImportMethod, academicYear: number | null) => {
     const resolution = match(course.rawName, method, offerings, academicYear);
     const offering = resolution.candidates[0];
-    return {
-      candidates: resolution.candidates, safeOffering: academicYear !== null && resolution.match === 'exact_unique'
-        && offering.resolutionStatus === 'matched' && offering.courseId !== null ? offering : null
-    };
+    return { candidates: resolution.candidates, safeOffering: academicYear !== null && resolution.match === 'exact_unique'
+      && offering.resolutionStatus === 'matched' && offering.courseId !== null ? offering : null };
   };
   const components = [];
   if (hasCorrespondenceEvidence(course)) components.push(resolveComponent('correspondence', inferredCorrespondenceYear(course, capturedAt).academicYear));
@@ -307,10 +294,8 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
       && !unresolvedSources.has([...sourceIds][0])
       && sourcesByOffering.get(id)?.size === 1
       && units.every(unit => unit.sourceCourse.earnedCreditsTotal !== null && unit.sourceCourse.earnedCreditsTotal > 0);
-    return {
-      ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
-      plannedTerm: terms.size === 1 ? [...terms][0] : null
-    };
+    return { ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
+      plannedTerm: terms.size === 1 ? [...terms][0] : null };
   });
 }
 

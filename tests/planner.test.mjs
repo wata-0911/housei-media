@@ -310,11 +310,9 @@ test('public course names are saved as real names and reject an empty title', ()
 test('2026 public-course limits are eight courses and sixteen credits for every documented department', () => {
   for (const department of ['日本文学科', '史学科', '地理学科', '法律学科', '経済学科', '商業学科']) {
     const scope = catalog.programs.find(program => program.department === department).scopeId;
-    assert.deepEqual(publicCourseLimitFor(catalog, scope), {
-      maxCredits: 16, maxCourses: 8, sourcePage: {
-        日本文学科: 48, 史学科: 53, 地理学科: 55, 法律学科: 47, 経済学科: 57, 商業学科: 59,
-      }[department]
-    });
+    assert.deepEqual(publicCourseLimitFor(catalog, scope), { maxCredits: 16, maxCourses: 8, sourcePage: {
+      日本文学科: 48, 史学科: 53, 地理学科: 55, 法律学科: 47, 経済学科: 57, 商業学科: 59,
+    }[department] });
   }
 });
 
@@ -506,19 +504,17 @@ test('grouped requirements use earned credits, one language, and one mapped offe
     ['english-duplicate', '外国語', '英語'], ['german', '外国語', '独語'],
   ].map(([mappingId, category, field]) => ({ ...base, mappingId, scopeId: common, category, field }));
   const offering = (id, name, credits, method, mappingIds) => ({ ...catalog.offerings[0], id, name, credits, method, mappingIds, resolutionStatus: 'matched' });
-  const fixture = {
-    ...catalog, mappings: maps, offerings: [
-      offering('literature', '文学', 4, 'correspondence', ['human']),
-      offering('general-other', 'その他科目', 28, 'correspondence', ['other']),
-      offering('health', '健康・スポーツ科学概論', 2, 'correspondence', ['physical']),
-      offering('sport', 'スポーツ総合演習（春期）', 2, 'schooling', ['physical']),
-      offering('english2', '英語2', 2, 'correspondence', ['english', 'english-duplicate']),
-      offering('englishS1', '英語S［1］', 1, 'schooling', ['english']),
-      offering('englishS2', '英語S［2］', 1, 'schooling', ['english']),
-      offering('german2', '独語2', 2, 'correspondence', ['german']),
-      offering('germanS', '独語S', 2, 'schooling', ['german']),
-    ]
-  };
+  const fixture = { ...catalog, mappings: maps, offerings: [
+    offering('literature', '文学', 4, 'correspondence', ['human']),
+    offering('general-other', 'その他科目', 28, 'correspondence', ['other']),
+    offering('health', '健康・スポーツ科学概論', 2, 'correspondence', ['physical']),
+    offering('sport', 'スポーツ総合演習（春期）', 2, 'schooling', ['physical']),
+    offering('english2', '英語2', 2, 'correspondence', ['english', 'english-duplicate']),
+    offering('englishS1', '英語S［1］', 1, 'schooling', ['english']),
+    offering('englishS2', '英語S［2］', 1, 'schooling', ['english']),
+    offering('german2', '独語2', 2, 'correspondence', ['german']),
+    offering('germanS', '独語S', 2, 'schooling', ['german']),
+  ] };
   const card = (items, id) => calculateGraduationProgress(items, fixture, scope).cards.find(row => row.requirementId === `group-${id}`);
   const empty = calculateGraduationProgress([], fixture, scope);
   assert.equal(empty.graduationCheckComplete, false);
@@ -661,10 +657,8 @@ test('recovery backs up exact original bytes; stale writes and recovery are reje
 });
 
 test('existing scope and todos survive state changes without adding todo UI', () => {
-  const state = {
-    ...initialState(), selectedScopeId: catalog.programs[0].scopeId,
-    todos: [{ id: first.id, offeringId: first.id, text: '保持する', done: false }], items: [item(first.id)]
-  };
+  const state = { ...initialState(), selectedScopeId: catalog.programs[0].scopeId,
+    todos: [{ id: first.id, offeringId: first.id, text: '保持する', done: false }], items: [item(first.id)] };
   assert.equal(validateState(state, catalog), true);
   const store = memoryStore();
   saveState(store, state, null, catalog);
@@ -950,11 +944,9 @@ test('cleanup preserves every field and UI classification of all 627 previously 
   for (const offering of outside) assert.deepEqual(offeringsById.get(offering.id), { ...offering, curriculumCourseId: curriculumCatalog.offeringRelations.find(relation => relation.offeringId === offering.id).curriculumCourseId });
 });
 
-const cleanupCatalog = {
-  ...catalog, offerings: catalog.offerings.map(o =>
-    (officialMappingOverrideLedger.overrides.some(entry => entry.offeringIds.includes(o.id)) || o.classCode === '35009')
-      ? rawOfferingsById.get(o.id) : o)
-};
+const cleanupCatalog = { ...catalog, offerings: catalog.offerings.map(o =>
+  (officialMappingOverrideLedger.overrides.some(entry => entry.offeringIds.includes(o.id)) || o.classCode === '35009')
+    ? rawOfferingsById.get(o.id) : o) };
 const cleanupOfferingsById = new Map(cleanupCatalog.offerings.map(o => [o.id, o]));
 
 test('audit covers exactly the 29 remaining offerings, and only the 18 safe decisions enter the ledger', () => {
@@ -1209,12 +1201,10 @@ test('historical-source cap is shared across earned, in-progress, and planned cr
 
 test('history seminar completion order is unique, consecutive, earned-only, and prior state versions migrate without inference', () => {
   const seminars = catalog.offerings.filter(o => /^史学演習（/.test(o.name));
-  const state = {
-    ...initialState(), items: [
-      { ...item(seminars[0].id, 'earned'), earnedOrder: 1 },
-      { ...item(seminars[1].id, 'earned'), earnedOrder: 2 },
-    ]
-  };
+  const state = { ...initialState(), items: [
+    { ...item(seminars[0].id, 'earned'), earnedOrder: 1 },
+    { ...item(seminars[1].id, 'earned'), earnedOrder: 2 },
+  ] };
   assert.equal(validateState(state, catalog), true);
   assert.equal(validateState({ ...state, items: [{ ...state.items[0], earnedOrder: 2 }, state.items[1]] }, catalog), false);
   assert.equal(validateState({ ...state, items: [{ ...state.items[0], earnedOrder: 1 }, { ...state.items[1], earnedOrder: 3 }] }, catalog), false);
@@ -1785,13 +1775,9 @@ test('official political science mappings count only for law and preserve earned
           const summary = summarizeCategories([item(offering.id, status)], catalog, lawScope).find(r => r.category === '専門教育');
           assert.equal(summary.earned, status === 'earned' ? 2 : 0);
           // Isolate mapping eligibility from the intentionally unsupported law DSL conditions.
-          const fixture = {
-            ...catalog, requirements: [{
-              id: 'law-category', ruleId: 'law-category',
-              scopeId: lawScope, sourcePage: 46, status: 'structured', ruleType: 'min_credits',
-              target: { curriculum_category: '専門教育', requirement_type: '選択' }, value: 54, unit: 'credits', conditions: null
-            }]
-          };
+          const fixture = { ...catalog, requirements: [{ id: 'law-category', ruleId: 'law-category',
+            scopeId: lawScope, sourcePage: 46, status: 'structured', ruleType: 'min_credits',
+            target: { curriculum_category: '専門教育', requirement_type: '選択' }, value: 54, unit: 'credits', conditions: null }] };
           const row = calculateGraduationProgress([item(offering.id, status)], fixture, lawScope).requirements[0];
           assert.equal(row.earned, status === 'earned' ? 2 : 0);
           assert.equal(row.planned, status === 'planned' ? 2 : 0);
@@ -1837,9 +1823,9 @@ function professionalFixture(department, mappingRows, offeringRows) {
             && requirement.target.curriculum_category === '専門教育'
             && (requirement.target.requirement_type === '選択必修'
               || requirement.target.requirement_type === undefined)))).map(requirement => ({
-                ...requirement,
-                conditions: structuredClone(requirement.conditions),
-              })),
+        ...requirement,
+        conditions: structuredClone(requirement.conditions),
+      })),
     },
   };
 }
@@ -2108,11 +2094,9 @@ test('2026 common, history, geography, and law special credit transfers follow t
   const commonScope = catalog.programs.find(program => program.isCommon).scopeId;
   const geoScope = catalog.programs.find(program => program.department === '地理学科').scopeId;
   const commonMap = { ...catalog.mappings[0], mappingId: 'basic', scopeId: commonScope, category: '一般教育', field: 'その他', requirementType: null };
-  const common = {
-    ...catalog, mappings: [commonMap], requirements: [], offerings: [1, 2, 3].map(n => ({
-      ...catalog.offerings[0], id: `basic-${n}`, name: `基礎特講（${n}）`, credits: 2, resolutionStatus: 'matched', mappingIds: ['basic'],
-    }))
-  };
+  const common = { ...catalog, mappings: [commonMap], requirements: [], offerings: [1, 2, 3].map(n => ({
+    ...catalog.offerings[0], id: `basic-${n}`, name: `基礎特講（${n}）`, credits: 2, resolutionStatus: 'matched', mappingIds: ['basic'],
+  })) };
   const commonCard = calculateGraduationProgress(common.offerings.map(offering => item(offering.id, 'earned')), common, geoScope).cards.find(row => row.requirementId === 'group-general');
   assert.equal(commonCard.earned, 4);
   // The former prose-only cap is now structured supplemental data.
@@ -2999,14 +2983,10 @@ test('recognition shadow survives unrelated and normal-profile saves until its o
 
 test('multiple invalid recognition fields recover and resolve one path at a time', () => {
   const original = initialGraduationProfile();
-  const profile = {
-    ...original, admissionYear: 2026, admissionType: 'transfer_second_year', curriculumApplicability: 'current_2026', recognizedCredits: {
-      ...original.recognizedCredits, totalCredits: 9924, schoolingEquivalentCredits: 999,
-      general: { ...original.recognizedCredits.general, humanities: { mode: 'recognized', credits: -1 } },
-      foreignLanguage: { mode: 'recognized', credits: -1, language: 'english', schoolingEquivalentCredits: 5 },
-      physicalEducation: { mode: 'recognized', credits: -2 }
-    }
-  };
+  const profile = { ...original, admissionYear: 2026, admissionType: 'transfer_second_year', curriculumApplicability: 'current_2026', recognizedCredits: { ...original.recognizedCredits, totalCredits: 9924, schoolingEquivalentCredits: 999,
+    general: { ...original.recognizedCredits.general, humanities: { mode: 'recognized', credits: -1 } },
+    foreignLanguage: { mode: 'recognized', credits: -1, language: 'english', schoolingEquivalentCredits: 5 },
+    physicalEducation: { mode: 'recognized', credits: -2 } } };
   const store = memoryStore(JSON.stringify({ ...initialState(), graduationProfile: profile }));
   let loaded = loadState(store, catalog);
   assert.equal(loaded.error, null);
@@ -3065,24 +3045,18 @@ test('recognition domain recovery never bypasses structural recovery locks', () 
 test('non-finite recognition numbers fail domain validation', () => {
   const original = initialGraduationProfile();
   for (const credits of [Infinity, -Infinity, NaN]) {
-    const profile = {
-      ...original, recognizedCredits: {
-        ...original.recognizedCredits,
-        foreignLanguage: { mode: 'recognized', credits, language: 'english', schoolingEquivalentCredits: null }
-      }
-    };
+    const profile = { ...original, recognizedCredits: { ...original.recognizedCredits,
+      foreignLanguage: { mode: 'recognized', credits, language: 'english', schoolingEquivalentCredits: null } } };
     assert.ok(graduationProfileValidationError(profile));
   }
 });
 
 test('out-of-range and inconsistent recognition combinations are isolated by field', () => {
   const original = initialGraduationProfile();
-  const recognizedCredits = {
-    ...original.recognizedCredits, totalCredits: 0,
+  const recognizedCredits = { ...original.recognizedCredits, totalCredits: 0,
     general: { ...original.recognizedCredits.general, humanities: { mode: 'recognized', credits: 8 } },
     foreignLanguage: { mode: 'recognized', credits: 5, language: 'english', schoolingEquivalentCredits: 3 },
-    physicalEducation: { mode: 'recognized', credits: 3 }
-  };
+    physicalEducation: { mode: 'recognized', credits: 3 } };
   const loaded = loadState(memoryStore(JSON.stringify({ ...initialState(), graduationProfile: { ...original, recognizedCredits } })), catalog);
   assert.equal(loaded.error, null);
   assert.ok(loaded.recognitionWarning);
@@ -3595,7 +3569,7 @@ test('planner desktop/mobile and progress screens show future references without
   const classify = createCreditClassifier(catalog, null);
   const media = catalog.offerings.find(isMediaSchooling);
   const correspondence = catalog.offerings.find(value => value.method === 'correspondence');
-  const noop = () => { };
+  const noop = () => {};
   for (const plannedYear of [2026, 2027, 2028]) {
     const items = [media, correspondence].map(offering => ({ ...item(offering.id), plannedYear }));
     const common = { items, offerings: offeringsById, disabled: false, onChange: noop };
@@ -3656,8 +3630,8 @@ test('profile tab gathers personal settings, keeps recovery warning visible, and
     profile: initialGraduationProfile(),
     disabled: false,
     recognitionWarning: warning,
-    onScopeChange: () => { },
-    onProfileChange: () => { },
+    onScopeChange: () => {},
+    onProfileChange: () => {},
   }));
   for (const label of ['基本情報', '所属学科', '入学年度', '現在の在学年次', '入学区分', '認定単位・卒業判定設定', '一般教育', '人文', '社会', '自然', '放送大学認定単位', '外国語', '保健体育', '専門教育の認定済み科目', 'アカウント・データ保存']) assert.match(html, new RegExp(label));
   assert.match(html, new RegExp(warning));
@@ -3926,7 +3900,7 @@ test('auto import: direct handoff and manual JSON use the same application behav
 test('auto import: desktop and mobile keep planner controls beside official imported status', () => {
   const offering = autoImportBaseOffering;
   const next = applyImport(initialState(), importPreview(autoImportData([autoImportCourse(offering.name)]), [offering]), [offering]);
-  const noop = () => { };
+  const noop = () => {};
   const html = renderToStaticMarkup(createElement(PlannedCourseList, { classify: createCreditClassifier(catalog, null), unifiedRows: createUnifiedCourseRows(next.items, next.importedCourseAchievements, offeringsById), publicCourses: [], offerings: offeringsById, correspondenceProgress: {}, mediaProgress: {}, evaluations: {}, importedUserMeta: {}, disabled: false, onChange: noop, onRemove: noop, onChangePublicCourse: noop, onRemovePublicCourse: noop, onChangeEvaluation: noop, onChangeCorrespondence: noop, onChangeImportedMeta: noop, onOpenMedia: noop }));
   assert.ok((html.match(/修得済み（成績表）/g) ?? []).length >= 2, 'official status appears on desktop and mobile');
   assert.ok((html.match(/>修得済み</g) ?? []).length >= 2, 'planner status stays visible on desktop and mobile');
@@ -3957,7 +3931,7 @@ function reimportPreview(data, offerings, state) {
   return importPreview(data, offerings, state.importedStudyRecords, state.importedCourseAchievements);
 }
 function renderImportActions(units, plannedItems, offerings, disabled = false) {
-  return renderToStaticMarkup(createElement(GradeImportApplyActions, { units, plannedItems, offerings, disabled, onApply: () => { } }));
+  return renderToStaticMarkup(createElement(GradeImportApplyActions, { units, plannedItems, offerings, disabled, onApply: () => {} }));
 }
 
 test('backfill: saved source and detail records are unchanged while one missing earned item is added', () => {
@@ -4123,11 +4097,9 @@ for (const program of thesisPrograms) for (const selection of ['selected', 'not_
   test(`#54 guidance visibility ${program.department}/${program.course ?? ''}/${selection}`, () => {
     const required = ['日本文学科', '史学科', '地理学科'].includes(program.department);
     // Deliberately inconsistent required state must pass through existing load normalization.
-    const state = {
-      ...initialState(), selectedScopeId: program.scopeId,
+    const state = { ...initialState(), selectedScopeId: program.scopeId,
       thesisSelection: selection === 'selected' ? 'not_selected' : 'selected',
-      thesisProgressByScope: { [program.scopeId]: { selection, status: 'planned' } }
-    };
+      thesisProgressByScope: { [program.scopeId]: { selection, status: 'planned' } } };
     const snapshot = structuredClone(state);
     assert.equal(shouldShowThesisGuidance(state, catalog, program.scopeId), required || selection === 'selected');
     const html = thesisPageMarkup(state);
@@ -4165,11 +4137,9 @@ for (const program of thesisPrograms.filter(p => ['法律学科', '経済学科'
       return [node, ...controls(node.props?.children)];
     };
     const edit = (predicate, value) => {
-      const tree = ThesisGuidance({
-        catalog, scopeId: program.scopeId, profile: state.graduationProfile,
+      const tree = ThesisGuidance({ catalog, scopeId: program.scopeId, profile: state.graduationProfile,
         progress: guidanceForScope(state, program.scopeId), eligibilityCredits: 100,
-        onChange: next => { state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [program.scopeId]: next } }); }
-      });
+        onChange: next => { state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [program.scopeId]: next } }); } });
       const control = controls(tree).find(predicate);
       assert.ok(control);
       control.props.onChange({ target: { value } });
@@ -4178,12 +4148,8 @@ for (const program of thesisPrograms.filter(p => ['法律学科', '経済学科'
     edit(node => node.type === 'input' && node.props.type === 'date', '2026-04-15');
     assert.deepEqual(guidanceForScope(state, program.scopeId).steps.general, { status: 'passed', passedOn: '2026-04-15' });
     for (const other of thesisPrograms.filter(p => p.scopeId !== program.scopeId)) {
-      state = commit({
-        ...state, thesisGuidanceByScope: {
-          ...state.thesisGuidanceByScope,
-          [other.scopeId]: { steps: { general: { status: 'planned', passedOn: '2025-03-12' } }, geographyReportSubmitted: other.department === '地理学科' ? true : null }
-        }
-      });
+      state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope,
+        [other.scopeId]: { steps: { general: { status: 'planned', passedOn: '2025-03-12' } }, geographyReportSubmitted: other.department === '地理学科' ? true : null } } });
     }
     const savedGuidance = structuredClone(state.thesisGuidanceByScope);
     for (const selection of ['not_selected', 'undecided']) {
@@ -4213,10 +4179,8 @@ for (const program of thesisPrograms) for (const selection of ['selected', 'not_
   test(`#55 thesis card ${program.department}/${program.course ?? ''}/${selection}`, () => {
     const required = ['日本文学科', '史学科', '地理学科'].includes(program.department);
     for (const status of ['not_started', 'planned', 'in_progress', 'earned']) {
-      const loaded = loadState(memoryStore(JSON.stringify({
-        ...initialState(), selectedScopeId: program.scopeId,
-        thesisSelection: selection, thesisProgressByScope: { [program.scopeId]: { selection, status } }
-      })), catalog);
+      const loaded = loadState(memoryStore(JSON.stringify({ ...initialState(), selectedScopeId: program.scopeId,
+        thesisSelection: selection, thesisProgressByScope: { [program.scopeId]: { selection, status } } })), catalog);
       assert.equal(loaded.error, null);
       const thesis = thesisProgressForScope(loaded.state, catalog, program.scopeId);
       const progress = calculateGraduationProgress([], catalog, program.scopeId, [], thesis.selection, [], [], undefined, thesis);
@@ -4246,7 +4210,7 @@ for (const program of thesisPrograms) for (const selection of ['selected', 'not_
         assert.equal(progress.requirements.some(row => conditionalIds.includes(row.requirementId)), false);
       }
       if (required) {
-        const settings = renderToStaticMarkup(createElement(ProgramSettings, { catalog, scopeId: program.scopeId, thesis, disabled: false, onThesisSelectionChange() { }, onThesisStatusChange() { } }));
+        const settings = renderToStaticMarkup(createElement(ProgramSettings, { catalog, scopeId: program.scopeId, thesis, disabled: false, onThesisSelectionChange() {}, onThesisStatusChange() {} }));
         assert.doesNotMatch(settings, /name="thesis-selection"/);
         assert.match(settings, /name="thesis-status"/);
         assert.equal(thesis.selection, 'selected');
@@ -4256,10 +4220,8 @@ for (const program of thesisPrograms) for (const selection of ['selected', 'not_
 }
 
 // #81/#82: display supplements consume existing allocation; no new requirement.
-const lectureProfile = () => ({
-  ...initialGraduationProfile(), admissionYear: 2026,
-  admissionType: 'first_year', curriculumApplicability: 'current_2026'
-});
+const lectureProfile = () => ({ ...initialGraduationProfile(), admissionYear: 2026,
+  admissionType: 'first_year', curriculumApplicability: 'current_2026' });
 function lectureFixture(name, credits, department = '経済学科') {
   const f = professionalFixture(department, [['lecture', '選択', null, 2], ['ordinary', '選択', null, 4]],
     [...credits.map((value, n) => [`lecture-${n}`, value, ['lecture']]), ['ordinary', 4, ['ordinary']]]);
@@ -4268,13 +4230,9 @@ function lectureFixture(name, credits, department = '経済学科') {
     m.scopeId = catalog.programs.find(p => p.isCommon).scopeId;
     m.category = '一般教育'; m.field = m.mappingId === 'ordinary' ? '人文' : null;
   }
-  f.catalog.curriculum = {
-    ...catalog.curriculum, courses: f.catalog.mappings.map(m => ({
-      id: `lecture-test:${m.mappingId}`,
-      canonicalName: m.mappingId === 'lecture' ? name : 'ordinary', curriculumCredits: m.curriculumCredits,
-      mappingIds: [m.mappingId], scopeIds: [m.scopeId]
-    }))
-  };
+  f.catalog.curriculum = { ...catalog.curriculum, courses: f.catalog.mappings.map(m => ({ id: `lecture-test:${m.mappingId}`,
+    canonicalName: m.mappingId === 'lecture' ? name : 'ordinary', curriculumCredits: m.curriculumCredits,
+    mappingIds: [m.mappingId], scopeIds: [m.scopeId] })) };
   f.progress = (statuses = credits.map(() => 'earned'), extra = [], profile = lectureProfile()) =>
     calculateGraduationProgress([...statuses.map((s, n) => item(`lecture-${n}`, s)), ...extra], f.catalog, f.scope, [], 'not_selected', [], [], profile);
   f.lecture = p => p.cards.flatMap(c => c.specialLectures ?? []).find(l => l.label === name);
@@ -4367,7 +4325,7 @@ function profileDefaultsView(profile) {
   return renderToStaticMarkup(createElement(PlannerProfileTab, {
     catalog, scopeId: catalog.programs.find(p => p.department === '法律学科').scopeId,
     profile, disabled: false, thesis: { selection: 'not_selected', status: 'not_started' },
-    onScopeChange() { }, onProfileChange() { }, onThesisSelectionChange() { }, onThesisStatusChange() { },
+    onScopeChange() {}, onProfileChange() {}, onThesisSelectionChange() {}, onThesisStatusChange() {},
   }));
 }
 const defaultsProgress = state => calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses,
@@ -4438,12 +4396,10 @@ for (const route of ['transfer_second_year', 'transfer_third_year', 'bachelor_ad
 for (const open of [null, 0, 4, 10]) test(`#57 first-year Open University ${open}: raw roundtrip, projection and separate ordinary/S increments`, () => {
   const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
   const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'transfer_second_year' };
-  profile.recognizedCredits = {
-    ...officialRecognitionPrefill('transfer_second_year'), openUniversityCredits: open,
+  profile.recognizedCredits = { ...officialRecognitionPrefill('transfer_second_year'), openUniversityCredits: open,
     totalCredits: 44, schoolingEquivalentCredits: 7,
     foreignLanguage: { mode: 'recognized', credits: 4, language: 'english', schoolingEquivalentCredits: 2 },
-    physicalEducation: { mode: 'recognized', credits: 2 }
-  };
+    physicalEducation: { mode: 'recognized', credits: 2 } };
   const chosen = catalog.offerings.find(o => o.resolutionStatus === 'matched' && o.credits === 4 && o.name !== '卒業論文'
     && o.mappingIds.some(id => catalog.mappings.some(m => m.mappingId === id && m.scopeId === scope && m.category === '専門教育' && m.requirementType === '選択必修' && m.curriculumCredits === 4)));
   assert.ok(chosen);
