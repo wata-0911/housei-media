@@ -17,9 +17,12 @@ export type ImportSelectionSource = 'none' | 'auto' | 'manual';
  * independently from its correspondence/schooling detail records. */
 export type ImportedCourseAchievement = Partial<CurriculumImportMatch> & { offeringMatch?: ImportMatch; id: string; fingerprint: string; source: 'hosei_import'; rawName: string; categoryRaw: string | null; capturedAt: string; earnedCreditsTotal: number | null; schoolingCreditsTotal: number | null; compositionCredits: number | null; recognizedExemption: number | null; additionalEnrollment: number | null; academicYear: number | null; yearSource: 'source' | 'inferred' | 'manual' | 'unknown'; courseId: string | null; selectedOfferingId: string | null; selectionSource: ImportSelectionSource; match: ImportMatch; candidateOfferingIds: string[] };
 /** A component is retained for display, while these optional fields preserve the
- * single source-course row.  Their absence identifies a v9 legacy record. */
+ * single source-course row. Their absence identifies a v9 legacy record.
+ * date is the learning evidence date: exam, otherwise latest report for correspondence;
+ * actual session date for schooling. It is not an exam-date field (use examDate).
+ * Legacy date/year values are retained on reimport, never reinterpreted as source facts. */
 export type ImportedStudyRecord = { id: string; fingerprint: string; source: 'hosei_import'; rawName: string; offeringId: string | null; match: ImportMatch; method: ImportMethod; academicYear: number | null; yearSource: 'source' | 'inferred' | 'manual' | 'unknown'; rawYear: string | null; term: string | null; rawTerm: string | null; date: string | null; credits: number | null; grade: string | null; reports?: HoseiGradeImportCourse['reports']; examGrade?: string | null; sourceCourseId?: string; earnedCreditsTotal?: number | null; schoolingCreditsTotal?: number | null; compositionCredits?: number | null; recognizedExemption?: number | null; additionalEnrollment?: number | null; examDate?: string | null; capturedAt?: string };
-export type ImportPreviewUnit = ImportedStudyRecord & { selected: boolean; candidates: Offering[]; duplicate: boolean; sourceCourse: ImportedCourseAchievement; sourceDuplicate: boolean; sourceExistingId: string | null; courseOnly?: boolean };
+export type ImportPreviewUnit = ImportedStudyRecord & { selected: boolean; candidates: Offering[]; duplicate: boolean; sourceCourse: ImportedCourseAchievement; sourceDuplicate: boolean; sourceExistingId: string | null; courseOnly?: boolean; sourceYearConflict?: boolean };
 
 export const normalizeImportName = (name: string) => name.trim().replace(/[\s\u3000]+/g, ' ');
 export function schoolingAcademicYear(raw: string | null): number | null { const n = raw?.trim(); if (!n || !/^\d{2}(?:\d{2})?$/.test(n)) return null; const value = Number(n); return n.length === 2 ? 2000 + value : value; }
@@ -30,20 +33,9 @@ export function academicYearFromDate(date: string | null): number | null {
   if (!year || !month || !day) return null;
   return month < 4 ? year - 1 : year;
 }
-export function inferredCorrespondenceYear(
-  course: HoseiGradeImportCourse,
-  capturedAt: string
-): { academicYear: number | null; date: string | null } {
-  const reportDates = course.reports
-    .map(report => report.date)
-    .filter((date): date is string => date !== null)
-    .sort();
-
-  const date =
-    course.creditExam.date ??
-    reportDates.at(-1) ??
-    capturedAt.slice(0, 10);
-
+export function inferredCorrespondenceYear(course: HoseiGradeImportCourse): { academicYear: number | null; date: string | null } {
+  const reportDates = course.reports.map(report => report.date).filter((date): date is string => date !== null).sort();
+  const date = course.creditExam.date ?? reportDates.at(-1) ?? null;
   return { academicYear: academicYearFromDate(date), date };
 }
 export function hasCorrespondenceEvidence(course: HoseiGradeImportCourse): boolean {
@@ -57,7 +49,7 @@ export function hasCorrespondenceEvidence(course: HoseiGradeImportCourse): boole
     || course.creditExam.pendingMarker;
 }
 export function importFingerprint(record: Omit<ImportedStudyRecord, 'id' | 'fingerprint' | 'source' | 'offeringId' | 'match'>): string { return JSON.stringify([record.rawName, record.method, record.rawYear, record.rawTerm, record.date, record.credits, record.grade, record.method === 'correspondence' ? record.reports?.map(x => x.raw) : null, record.examGrade ?? null]); }
-function match(name: string, method: ImportMethod, offerings: Offering[], academicYear?: number | null) { const candidates = offerings.filter(o => o.method === method && normalizeImportName(o.name) === normalizeImportName(name) && (academicYear == null || o.academicYear === academicYear)); return { candidates, match: candidates.length === 1 ? 'exact_unique' as const : candidates.length ? 'ambiguous' as const : 'unmatched' as const }; }
+function match(name: string, method: ImportMethod, offerings: Offering[], academicYear?: number | null) { const candidates = offerings.filter(o => o.method === method && normalizeImportName(o.name) === normalizeImportName(name) && (academicYear == null || o.academicYear === academicYear)); return { candidates, match: academicYear !== null && candidates.length === 1 ? 'exact_unique' as const : candidates.length ? 'ambiguous' as const : 'unmatched' as const }; }
 function sourceFingerprint(course: HoseiGradeImportCourse, occurrence: number) {
   const schoolings = course.schoolings.map(slot => [slot.rawYear, slot.rawTerm, slot.rawDate, slot.rawCredits, slot.rawGrade]);
   const reports = course.reports.map(report => [report.raw, report.status, report.date]);
@@ -154,7 +146,61 @@ export function importedExamDate(
   return date;
 }
 function sameSourceIdentity(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.fingerprint === b.fingerprint; }
-function sameSourceFacts(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.earnedCreditsTotal === b.earnedCreditsTotal && a.schoolingCreditsTotal === b.schoolingCreditsTotal && a.compositionCredits === b.compositionCredits && a.recognizedExemption === b.recognizedExemption && a.additionalEnrollment === b.additionalEnrollment && a.academicYear === b.academicYear; }
+// Derived/manual years are not official aggregate facts. Explicit source years
+// already belong to the unchanged source-v2 fingerprint.
+function sameSourceFacts(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.earnedCreditsTotal === b.earnedCreditsTotal && a.schoolingCreditsTotal === b.schoolingCreditsTotal && a.compositionCredits === b.compositionCredits && a.recognizedExemption === b.recognizedExemption && a.additionalEnrollment === b.additionalEnrollment; }
+
+type SourceEvidence = [string, string, string | null, string[][], unknown[][], unknown[], number];
+function sourceEvidence(source: ImportedCourseAchievement): SourceEvidence | null {
+  try {
+    const value = JSON.parse(source.fingerprint);
+    if (!Array.isArray(value) || value.length !== 7 || value[0] !== 'source-v2'
+      || value[1] !== normalizeImportName(source.rawName)
+      || value[2] !== (source.categoryRaw === null ? null : normalizeImportName(source.categoryRaw))
+      || !Array.isArray(value[3]) || value[3].length !== 2
+      || !value[3].every(slot => Array.isArray(slot) && slot.length === 5 && slot.every(field => typeof field === 'string'))
+      || !Array.isArray(value[4]) || value[4].length !== 4
+      || !value[4].every(report => Array.isArray(report) && report.length === 3 && typeof report[0] === 'string' && typeof report[1] === 'string' && (report[2] === null || typeof report[2] === 'string'))
+      || !Array.isArray(value[5]) || value[5].length !== 4 || !value[5].slice(0, 3).every(field => typeof field === 'string') || typeof value[5][3] !== 'boolean'
+      || !Number.isInteger(value[6]) || value[6] < 0) return null;
+    return value as SourceEvidence;
+  } catch { return null; }
+}
+
+/** A year may complete a native snapshot only when its other evidence survives.
+ * A name/category match or aggregate total alone is not a row identity. */
+function isSourceYearExtension(existing: ImportedCourseAchievement, incoming: ImportedCourseAchievement): boolean {
+  const old = sourceEvidence(existing); const next = sourceEvidence(incoming);
+  if (!old || !next || existing.fingerprint === incoming.fingerprint || !sameSourceFacts(existing, incoming)
+    || incoming.yearSource !== 'source' || incoming.academicYear === null
+    || old[6] !== 0 || next[6] !== 0
+    || ![0, 1, 2, 4, 5, 6].every(index => JSON.stringify(old[index]) === JSON.stringify(next[index]))) return false;
+  const years = new Set(next[3].map(slot => schoolingAcademicYear(slot[0])).filter(year => year !== null));
+  if (years.size !== 1 || !years.has(incoming.academicYear)
+    || next[3].some(slot => slot[0].trim() !== '' && schoolingAcademicYear(slot[0]) === null)
+    || !next[3].some((slot, index) => old[3][index][0] === '' && schoolingAcademicYear(slot[0]) !== null)) return false;
+  const anchored = old[3].some(slot => slot.some(field => field !== ''))
+    || old[4].some(report => report[0] !== '' || report[1] !== 'none' || report[2] !== null)
+    || old[5].some(field => field !== '' && field !== false);
+  return anchored && old[3].every((slot, index) => slot.every((field, column) => field === '' || field === next[3][index][column]));
+}
+
+function canConfirmSourceYear(existing: ImportedCourseAchievement, incoming: ImportedCourseAchievement): boolean {
+  return existing.academicYear === null && existing.yearSource === 'unknown' && isSourceYearExtension(existing, incoming);
+}
+
+/** Compare the native correspondence evidence, independently of other components
+ * and aggregates. No legacy date is promoted to a learning date or rewritten. */
+function sameUndatedComponent(old: ImportedStudyRecord, record: ImportedStudyRecord, source: ImportedCourseAchievement, existingSource?: ImportedCourseAchievement): boolean {
+  if (!existingSource || old.sourceCourseId !== existingSource.id || record.method !== 'correspondence' || record.date !== null
+    || old.fingerprint !== importFingerprint({ ...record, date: old.date })) return false;
+  try {
+    const previous: unknown = JSON.parse(existingSource.fingerprint);
+    const incoming = JSON.parse(source.fingerprint);
+    return Array.isArray(previous) && previous.length === 7 && previous[0] === 'source-v2'
+      && [0, 1, 2, 4, 5, 6].every(index => JSON.stringify(previous[index]) === JSON.stringify(incoming[index]));
+  } catch { return false; }
+}
 function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, occurrence: number, offerings: Offering[], context: ImportCurriculumContext): ImportedCourseAchievement {
   const candidates = offerings.filter(o => normalizeImportName(o.name) === normalizeImportName(course.rawName));
   const courseIds = new Set(candidates.filter(o => o.resolutionStatus === 'matched' && o.courseId !== null).map(o => o.courseId!));
@@ -164,28 +210,27 @@ function sourceCourseFor(course: HoseiGradeImportCourse, capturedAt: string, occ
   const resolveComponent = (method: ImportMethod, academicYear: number | null) => {
     const resolution = match(course.rawName, method, offerings, academicYear);
     const offering = resolution.candidates[0];
-    return {
-      candidates: resolution.candidates, safeOffering: academicYear !== null && resolution.match === 'exact_unique'
-        && offering.resolutionStatus === 'matched' && offering.courseId !== null ? offering : null
-    };
+    return { candidates: resolution.candidates, safeOffering: academicYear !== null && resolution.match === 'exact_unique'
+      && offering.resolutionStatus === 'matched' && offering.courseId !== null ? offering : null };
   };
   const components = [];
-  if (hasCorrespondenceEvidence(course)) components.push(resolveComponent('correspondence', inferredCorrespondenceYear(course, capturedAt).academicYear));
+  if (hasCorrespondenceEvidence(course)) components.push(resolveComponent('correspondence', inferredCorrespondenceYear(course).academicYear));
   for (const slot of course.schoolings) {
     if (!slot.rawYear && !slot.rawTerm && !slot.rawDate && !slot.rawCredits && !slot.rawGrade) continue;
-    const year = schoolingAcademicYear(slot.year) ?? schoolingAcademicYear(slot.rawYear) ?? academicYearFromDate(slot.date ?? capturedAt.slice(0, 10));
+    const year = schoolingAcademicYear(slot.year) ?? schoolingAcademicYear(slot.rawYear) ?? academicYearFromDate(slot.date);
     components.push(resolveComponent('schooling', year));
   }
-  // Preserve the existing course-only fallback when no component is present.
+  // Course identity alone supplies no evidence of a particular year's opening.
   const openingCandidates = components.length ? components.flatMap(component => component.candidates) : candidates;
   const safeOpenings = new Map(components.flatMap(component => component.safeOffering ? [[component.safeOffering.id, component.safeOffering] as const] : []));
   const selectedOffering = components.length
     ? components.every(component => component.safeOffering !== null) && safeOpenings.size === 1 ? [...safeOpenings.values()][0] : null
-    : candidates.length === 1 && candidates[0].resolutionStatus === 'matched' && candidates[0].courseId !== null ? candidates[0] : null;
+    : null;
   const curriculumMatch = matchImportedCurriculumCourse(course, offerings, context.curriculum, context.mappings);
   const schooling = course.schoolings.find(slot => slot.rawYear || slot.rawTerm || slot.rawDate || slot.rawCredits || slot.rawGrade);
-  const sourceYear = schooling ? schoolingAcademicYear(schooling.year) ?? schoolingAcademicYear(schooling.rawYear) : null;
-  const inferred = sourceYear ?? (schooling ? academicYearFromDate(schooling.date ?? capturedAt.slice(0, 10)) : inferredCorrespondenceYear(course, capturedAt).academicYear);
+  const sourceYears = new Set(course.schoolings.flatMap(slot => [schoolingAcademicYear(slot.year), schoolingAcademicYear(slot.rawYear)]).filter(year => year !== null));
+  const sourceYear = sourceYears.size === 1 ? [...sourceYears][0] : null;
+  const inferred = sourceYears.size > 1 ? null : sourceYear ?? (schooling ? academicYearFromDate(schooling.date) : inferredCorrespondenceYear(course).academicYear);
   return { id: crypto.randomUUID(), fingerprint: sourceFingerprint(course, occurrence), source: 'hosei_import', rawName: course.rawName, categoryRaw: course.categoryRaw, capturedAt, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, academicYear: inferred, yearSource: sourceYear !== null ? 'source' : inferred !== null ? 'inferred' : 'unknown', ...curriculumMatch, offeringMatch: selectedOffering ? 'exact_unique' : openingCandidates.length ? 'ambiguous' : 'unmatched', courseId, selectedOfferingId: selectedOffering?.id ?? null, selectionSource: selectedOffering ? 'auto' : 'none', match: courseId ? 'exact_unique' : candidates.length ? 'ambiguous' : 'unmatched', candidateOfferingIds: candidates.map(candidate => candidate.id) };
 }
 export function importPreview(value: unknown, offerings: Offering[], existing: ImportedStudyRecord[] = [], existingCourses: ImportedCourseAchievement[] = [], context: ImportCurriculumContext = defaultCurriculumContext): ImportPreviewUnit[] {
@@ -205,26 +250,36 @@ export function importPreview(value: unknown, offerings: Offering[], existing: I
     const exactExisting = existingCourses.find(value => sameSourceIdentity(value, sourceCourse));
     const legacyMatches = existingCourses.filter(value => normalizeImportName(value.rawName) === normalizeImportName(sourceCourse.rawName) && value.categoryRaw === sourceCourse.categoryRaw);
     const existingCourse = exactExisting ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined);
-    const sourceDuplicate = existingCourse !== undefined && sameSourceFacts(existingCourse, sourceCourse);
+    const sourceDuplicate = existingCourse !== undefined && sameSourceFacts(existingCourse, sourceCourse) && !canConfirmSourceYear(existingCourse, sourceCourse);
+    const previousEvidence = existingCourse && sourceEvidence(existingCourse);
+    const hasExplicitYear = course.schoolings.some(slot => schoolingAcademicYear(slot.year) !== null || schoolingAcademicYear(slot.rawYear) !== null)
+      || previousEvidence?.[3].some(slot => schoolingAcademicYear(slot[0]) !== null);
+    const changedYearEvidence = hasExplicitYear && (!previousEvidence || course.schoolings.some((slot, index) => slot.rawYear !== previousEvidence[3][index][0]));
+    // Content occurrence numbers cannot match changed rows in a same-name group.
+    // Hold these rows in preview rather than merging by name or counting a new row.
+    const sourceYearConflict = !exactExisting && legacyMatches.length > 0 && changedYearEvidence
+      && (legacyMatches.length !== 1
+        || data.courses.filter(row => normalizeImportName(row.rawName) === normalizeImportName(course.rawName) && row.categoryRaw === course.categoryRaw).length !== 1
+        || !existingCourse || !isSourceYearExtension(existingCourse, sourceCourse));
     const aggregate = { sourceCourseId, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, capturedAt: data.capturedAt };
     if (hasCorrespondenceEvidence(course)) {
-      const inferred = inferredCorrespondenceYear(course, data.capturedAt);
+      const inferred = inferredCorrespondenceYear(course);
       const correspondence = match(course.rawName, 'correspondence', offerings, inferred.academicYear);
       const base = { rawName: course.rawName, method: 'correspondence' as const, academicYear: inferred.academicYear, yearSource: inferred.academicYear === null ? 'unknown' as const : 'inferred' as const, rawYear: null, term: null, rawTerm: null, date: course.creditExam.date ?? inferred.date, examDate: course.creditExam.date, credits: course.creditExam.credits, grade: course.creditExam.grade, reports: course.reports, examGrade: course.creditExam.grade, ...aggregate };
       const record = { ...base, id: crypto.randomUUID(), source: 'hosei_import' as const, offeringId: correspondence.match === 'exact_unique' ? correspondence.candidates[0].id : null, match: correspondence.match };
-      const fingerprint = importFingerprint(record); const duplicate = existing.some(x => x.fingerprint === fingerprint); rows.push({ ...record, fingerprint, candidates: correspondence.candidates, duplicate, sourceCourse, sourceDuplicate, sourceExistingId: existingCourse?.id ?? null, selected: !sourceDuplicate });
+      const fingerprint = importFingerprint(record); const duplicate = existing.some(x => x.fingerprint === fingerprint || sameUndatedComponent(x, { ...record, fingerprint }, sourceCourse, existingCourse)); rows.push({ ...record, fingerprint, candidates: correspondence.candidates, duplicate, sourceCourse, sourceDuplicate, sourceExistingId: existingCourse?.id ?? null, selected: !sourceDuplicate });
     }
     course.schoolings.forEach((slot, index) => {
       if (!slot.rawYear && !slot.rawTerm && !slot.rawDate && !slot.rawCredits && !slot.rawGrade) return;
       const sourceYear = schoolingAcademicYear(slot.year) ?? schoolingAcademicYear(slot.rawYear);
-      const inferredYear = sourceYear ?? academicYearFromDate(slot.date ?? data.capturedAt.slice(0, 10));
+      const inferredYear = sourceYear ?? academicYearFromDate(slot.date);
       const result = match(course.rawName, 'schooling', offerings, inferredYear);
       const candidate = { rawName: course.rawName, method: 'schooling' as const, academicYear: inferredYear, yearSource: sourceYear !== null ? 'source' as const : inferredYear !== null ? 'inferred' as const : 'unknown' as const, rawYear: slot.rawYear || null, term: slot.term, rawTerm: slot.rawTerm || null, date: slot.date, credits: slot.credits, grade: slot.grade, ...aggregate };
       const record = { ...candidate, id: crypto.randomUUID(), source: 'hosei_import' as const, offeringId: result.match === 'exact_unique' ? result.candidates[0].id : null, match: result.match };
       const fingerprint = `${importFingerprint(record)}:${index}`; const duplicate = existing.some(x => x.fingerprint === fingerprint); rows.push({ ...record, fingerprint, candidates: result.candidates, duplicate, sourceCourse, sourceDuplicate, sourceExistingId: existingCourse?.id ?? null, selected: !sourceDuplicate });
     });
     if (!hasCorrespondenceEvidence(course) && !course.schoolings.some(slot => slot.rawYear || slot.rawTerm || slot.rawDate || slot.rawCredits || slot.rawGrade)) {
-      const result = match(course.rawName, 'correspondence', offerings);
+      const result = match(course.rawName, 'correspondence', offerings, null);
       const record = { id: crypto.randomUUID(), fingerprint: `course-only:${sourceCourse.fingerprint}`, source: 'hosei_import' as const, rawName: course.rawName, offeringId: null, match: result.match, method: 'correspondence' as const, academicYear: sourceCourse.academicYear, yearSource: sourceCourse.yearSource, rawYear: null, term: null, rawTerm: null, date: null, credits: null, grade: null, ...aggregate };
       rows.push({ ...record, candidates: result.candidates, duplicate: false, sourceCourse, sourceDuplicate, sourceExistingId: existingCourse?.id ?? null, selected: !sourceDuplicate, courseOnly: true });
     }
@@ -236,11 +291,15 @@ export function importPreview(value: unknown, offerings: Offering[], existing: I
       && components.some(unit => !unit.duplicate && !unit.courseOnly)) {
       for (const unit of components) { unit.sourceDuplicate = false; unit.selected = true; }
     }
+    if (sourceYearConflict) {
+      for (const unit of components) { unit.sourceYearConflict = true; unit.sourceExistingId = null; unit.sourceDuplicate = false; unit.selected = false; }
+    }
   }
   return rows;
 }
 /** Stage B retains the strict offering matcher. A course match never picks a representative opening. */
 export function autoPlannerOfferingIdForImport(unit: ImportPreviewUnit, offerings: Offering[]): string | null {
+  if (unit.sourceYearConflict || unit.academicYear === null) return null;
   const candidates = unit.courseOnly
     ? offerings.filter(offering => normalizeImportName(offering.name) === normalizeImportName(unit.rawName))
     : match(unit.rawName, unit.method, offerings).candidates;
@@ -307,10 +366,8 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
       && !unresolvedSources.has([...sourceIds][0])
       && sourcesByOffering.get(id)?.size === 1
       && units.every(unit => unit.sourceCourse.earnedCreditsTotal !== null && unit.sourceCourse.earnedCreditsTotal > 0);
-    return {
-      ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
-      plannedTerm: terms.size === 1 ? [...terms][0] : null
-    };
+    return { ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
+      plannedTerm: terms.size === 1 ? [...terms][0] : null };
   });
 }
 
@@ -345,7 +402,7 @@ function reconcileStudyRecords(existing: ImportedStudyRecord[], additions: Impor
 }
 
 export function applyImport(state: PlannerState, units: ImportPreviewUnit[], offerings: Offering[]): PlannerState {
-  const selected = units.filter(unit => unit.selected && !unit.sourceDuplicate);
+  const selected = units.filter(unit => unit.selected && !unit.sourceDuplicate && !unit.sourceYearConflict);
   const plannerAdditions = autoPlannerItemsForImport(units, state.items, offerings);
   // Preserve the official arrays (and the whole state for a complete no-op).
   if (selected.length === 0) return plannerAdditions.length > 0
@@ -363,7 +420,7 @@ export function applyImport(state: PlannerState, units: ImportPreviewUnit[], off
     grade: unit.grade, ...(unit.reports ? { reports: unit.reports } : {}), ...(unit.examGrade !== undefined ? { examGrade: unit.examGrade } : {}),
     sourceCourseId: sourceIdFor.get(unit.sourceCourseId!) ?? unit.sourceCourseId, earnedCreditsTotal: unit.earnedCreditsTotal, schoolingCreditsTotal: unit.schoolingCreditsTotal, compositionCredits: unit.compositionCredits, recognizedExemption: unit.recognizedExemption, additionalEnrollment: unit.additionalEnrollment, capturedAt: unit.capturedAt,
   }));
-  const rows = state.importedCourseAchievements.map(existing => { const update = sourceUpdates.get(existing.id); if (!update) return existing; return { ...existing, ...update, id: existing.id, ...(existing.selectionSource === 'manual' ? { courseId: existing.courseId, match: existing.match, curriculumCourseId: existing.curriculumCourseId, curriculumMatch: existing.curriculumMatch, candidateCurriculumCourseIds: existing.candidateCurriculumCourseIds, offeringMatch: existing.offeringMatch } : {}), selectedOfferingId: existing.selectionSource === 'manual' ? existing.selectedOfferingId : update.selectedOfferingId, selectionSource: existing.selectionSource === 'manual' ? 'manual' : update.selectionSource }; });
+  const rows = state.importedCourseAchievements.map(existing => { const update = sourceUpdates.get(existing.id); if (!update) return existing; const confirmYear = canConfirmSourceYear(existing, update); return { ...existing, ...update, id: existing.id, academicYear: confirmYear ? update.academicYear : existing.academicYear, yearSource: confirmYear ? update.yearSource : existing.yearSource, ...(existing.selectionSource === 'manual' ? { courseId: existing.courseId, match: existing.match, curriculumCourseId: existing.curriculumCourseId, curriculumMatch: existing.curriculumMatch, candidateCurriculumCourseIds: existing.candidateCurriculumCourseIds, offeringMatch: existing.offeringMatch, candidateOfferingIds: existing.candidateOfferingIds } : {}), selectedOfferingId: existing.selectionSource === 'manual' ? existing.selectedOfferingId : update.selectedOfferingId, selectionSource: existing.selectionSource === 'manual' ? 'manual' : update.selectionSource }; });
   const allIncoming = units.filter(unit => !unit.courseOnly).map(unit => ({ ...unit, sourceCourseId: unit.sourceExistingId ?? unit.sourceCourse.id }));
   return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: reconcileStudyRecords(state.importedStudyRecords, additions, allIncoming), importedCourseAchievements: [...rows, ...sourceAdditions] };
 }
