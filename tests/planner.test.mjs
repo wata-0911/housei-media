@@ -57,6 +57,71 @@ import {
   shareMediaPng,
   shareResultMessage,
 } from '../src/planner/mediaImageExport.ts';
+import {
+  currentPng,
+  preparePngData,
+} from '../src/planner/pngExport.ts';
+
+test('planner PNG becomes stale when presentation changes', () => {
+  const presentation = {
+    affiliation: '商業学科',
+    rows: [{ title: '簿記論', statusLabel: '計画中' }],
+  };
+
+  const date = '2026-10-10';
+  const key = JSON.stringify([presentation, date]);
+
+  const generated = {
+    key,
+    dataUrl: 'data:image/png;base64,test',
+    file: { name: 'planner.png' },
+  };
+
+  assert.equal(currentPng(generated, key), generated);
+
+  const updated = structuredClone(presentation);
+  updated.rows[0].statusLabel = '履修中';
+
+  const newKey = JSON.stringify([updated, date]);
+
+  assert.equal(currentPng(generated, newKey), null);
+
+  // 内容が同じなら有効なまま。
+  assert.equal(
+    currentPng(
+      generated,
+      JSON.stringify([structuredClone(presentation), date])
+    ),
+    generated
+  );
+});
+
+test('shared PNG generator preserves options and validates PNG', async () => {
+  const node = {};
+
+  const renderer = async (receivedNode, options) => {
+    assert.equal(receivedNode, node);
+    assert.equal(options.pixelRatio, 2);
+    assert.equal(options.backgroundColor, '#fffaf3');
+    assert.equal(options.cacheBust, true);
+    assert.equal(options.skipFonts, true);
+
+    return 'data:image/png;base64,test';
+  };
+
+  const reader = async () => ({
+    ok: true,
+    blob: async () => new Blob(
+      ['png'],
+      { type: 'image/png' }
+    ),
+  });
+
+  const result = await preparePngData(node, renderer, reader);
+
+  assert.equal(result.blob.type, 'image/png');
+  assert.ok(result.blob.size > 0);
+});
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
