@@ -1,4 +1,6 @@
 import type { GraduationProgress as Progress } from '../../planner/graduationProgress';
+import UnresolvedConditions from './UnresolvedConditions';
+import { projectUnresolvedConditions, type ConditionContext } from '../../planner/unresolvedConditions';
 import type { SpecialLectureProgress } from '../../planner/specialLectureProgress';
 import { UNKNOWN_REASON_CATEGORY_LABEL } from '../../planner/graduationSources';
 
@@ -37,9 +39,9 @@ function SpecialLectureSupplement({ lecture }: { lecture: SpecialLectureProgress
   </section>;
 }
 
-export default function GraduationProgress({ progress }: { progress: Progress }) {
+export default function GraduationProgress({ progress, context, onOpenProfile }: { progress: Progress; context?: ConditionContext; onOpenProfile?: () => void }) {
   const evaluated = progress.cards;
-  const unknown = progress.requirements.filter(row => row.status === 'unknown');
+  const conditions = projectUnresolvedConditions(progress, context);
   return <section aria-labelledby="graduation-progress-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="graduation-progress-heading" className="text-xl text-[#002255]">卒業要件の部分進捗</h2>
     <p className="mt-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed">一部要件のみ自動判定しています。卒業可否を保証しません。</p>
@@ -82,13 +84,8 @@ export default function GraduationProgress({ progress }: { progress: Progress })
         {row.note && <p className="mt-2 break-words text-xs leading-relaxed text-gray-600">{row.note}</p>}
       </article>)}
     </div>
-    <details className="mt-6 border border-gray-200 bg-slate-50 p-4">
-      <summary className="cursor-pointer font-medium text-[#002255]">確認が必要な条件：{unknown.length}件</summary>
-      <ul className="mt-3 space-y-2 text-sm">
-        {progress.unknownReasons.map(item => <li key={item.reason} className="break-words"><p>{item.reason}：{item.count}件</p>{item.labels.length > 0 && <p className="mt-1 text-xs leading-relaxed text-gray-600">対象例：{item.labels.join('、')}</p>}</li>)}
-      </ul>
-    </details>
+    <UnresolvedConditions projection={conditions} onOpenProfile={onOpenProfile} />
     <p className="mt-3 text-xs text-gray-600">判定範囲：判定済み {progress.coverageSummary.supported}件 / 部分対応 {progress.coverageSummary.partial}件 / 未判定 {progress.coverageSummary.unknown}件</p>
-    <p className="mt-1 text-xs text-gray-600">個別ルールの自動評価 {progress.evaluableCount}件 / 判定保留 {progress.unknownCount}件</p>
+    <p className="mt-1 text-xs text-gray-600">エンジンの個別ルール：自動評価 {progress.evaluableCount}件 / 判定保留 {progress.unknownCount}件</p>
   </section>;
 }
