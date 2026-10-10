@@ -33,7 +33,7 @@ import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/
 import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
 import { setThesisProgressForScope, shouldShowThesisGuidance, stateForScopeChange, supportsThesisSelection, thesisPolicyForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
-import { addAssessment, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaSharePresentation, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/mediaSchooling.ts';
+import { addAssessment, completeVideosThroughLesson, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaSharePresentation, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/mediaSchooling.ts';
 import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, usesLegacyReportEvaluation } from '../src/planner/courseEvaluations.ts';
 import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/correspondenceProgress.ts';
 import { correspondenceRequirementFor, structuredRequirementCount } from '../src/planner/correspondenceRequirements.ts';
@@ -1198,6 +1198,103 @@ test('media progress stores independent toggles, calculates rate, safely limits 
   const removed = { ...state, items: [] };
   const readded = { ...removed, items: [item(media.id)] };
   assert.deepEqual(readded.mediaSchoolingProgress[media.id].assessments, [{ id: 'midterm', type: 'midterm', label: '中間試験', scheduledDate: '2026-07-20', completed: false }]);
+});
+
+test('bulk video completion marks only videos through the selected lesson and preserves other media progress', () => {
+  const course = {
+    offeringId: 'media-1', totalLessons: 14,
+    lessons: [
+      { lesson: 3, videoCompleted: false, testCompleted: true },
+      { lesson: 5, videoCompleted: true, testCompleted: false },
+      { lesson: 8, videoCompleted: true, testCompleted: true },
+      { lesson: 10, videoCompleted: false, testCompleted: true },
+    ],
+    assessments: [{ id: 'final', type: 'final', label: '期末試験', scheduledDate: '2026-08-01', completed: false }],
+  };
+  const completed = completeVideosThroughLesson(course, 5);
+  assert.ok(completed);
+  assert.notEqual(completed, course);
+  assert.deepEqual(completed.lessons, [
+    { lesson: 1, videoCompleted: true, testCompleted: false },
+    { lesson: 2, videoCompleted: true, testCompleted: false },
+    { lesson: 3, videoCompleted: true, testCompleted: true },
+    { lesson: 4, videoCompleted: true, testCompleted: false },
+    { lesson: 5, videoCompleted: true, testCompleted: false },
+    { lesson: 8, videoCompleted: true, testCompleted: true },
+    { lesson: 10, videoCompleted: false, testCompleted: true },
+  ]);
+  assert.equal(completed.totalLessons, 14);
+  assert.deepEqual(completed.assessments, course.assessments);
+  assert.deepEqual(mediaProgressSummary(completed), { video: 6, test: 3, percent: 32 });
+  assert.deepEqual(course.lessons, [
+    { lesson: 3, videoCompleted: false, testCompleted: true },
+    { lesson: 5, videoCompleted: true, testCompleted: false },
+    { lesson: 8, videoCompleted: true, testCompleted: true },
+    { lesson: 10, videoCompleted: false, testCompleted: true },
+  ], 'the original progress is not mutated');
+});
+
+test('bulk video completion supports boundaries, is repeatable without duplicates, and rejects unavailable lessons', () => {
+  const course = { offeringId: 'media-1', totalLessons: 14, lessons: [], assessments: [] };
+  const first = completeVideosThroughLesson(course, 1);
+  assert.ok(first);
+  const last = completeVideosThroughLesson(first, 14);
+  assert.ok(last);
+  const repeated = completeVideosThroughLesson(last, 14);
+  assert.ok(repeated);
+  assert.deepEqual(first.lessons, [{ lesson: 1, videoCompleted: true, testCompleted: false }]);
+  assert.equal(last.lessons.length, 14);
+  assert.equal(mediaProgressSummary(last).percent, 50);
+  assert.deepEqual(repeated.lessons, last.lessons);
+  assert.equal(new Set(repeated.lessons.map(lesson => lesson.lesson)).size, 14);
+  assert.equal(completeVideosThroughLesson({ ...course, totalLessons: null }, 1), null);
+  assert.equal(completeVideosThroughLesson({ ...course, totalLessons: 0 }, 1), null);
+  assert.equal(completeVideosThroughLesson(course, 0), null);
+  assert.equal(completeVideosThroughLesson(course, 15), null);
+  assert.equal(completeVideosThroughLesson(course, 1.5), null);
+});
+
+test('video checkbox bulk-on preserves later videos, while individual unchecks affect only their lesson', () => {
+  const course = {
+    offeringId: 'media-1', totalLessons: 14,
+    lessons: [
+      { lesson: 6, videoCompleted: false, testCompleted: true },
+      { lesson: 8, videoCompleted: true, testCompleted: false },
+    ],
+    assessments: [{ id: 'midterm', type: 'midterm', label: '中間試験', scheduledDate: null, completed: false }],
+  };
+  const throughSix = completeVideosThroughLesson(course, 6);
+  assert.ok(throughSix);
+  assert.deepEqual(throughSix.lessons.map(lesson => lesson.lesson), [1, 2, 3, 4, 5, 6, 8]);
+  assert.equal(throughSix.lessons.find(lesson => lesson.lesson === 8)?.videoCompleted, true, 'a later completed video is retained');
+  assert.equal(throughSix.lessons.find(lesson => lesson.lesson === 6)?.testCompleted, true, 'tests are retained');
+
+  const withoutSix = toggleLesson(throughSix, 6, 'videoCompleted');
+  assert.equal(withoutSix.lessons.find(lesson => lesson.lesson === 6)?.videoCompleted, false);
+  assert.equal(withoutSix.lessons.find(lesson => lesson.lesson === 5)?.videoCompleted, true);
+  assert.equal(withoutSix.lessons.find(lesson => lesson.lesson === 8)?.videoCompleted, true);
+
+  const withoutThree = toggleLesson(withoutSix, 3, 'videoCompleted');
+  const restoredThree = completeVideosThroughLesson(withoutThree, 3);
+  assert.ok(restoredThree);
+  assert.equal(restoredThree.lessons.find(lesson => lesson.lesson === 3)?.videoCompleted, true);
+  assert.equal(restoredThree.lessons.find(lesson => lesson.lesson === 4)?.videoCompleted, true);
+  assert.equal(restoredThree.lessons.find(lesson => lesson.lesson === 6)?.videoCompleted, false);
+  assert.deepEqual(restoredThree.assessments, course.assessments);
+  assert.equal(new Set(restoredThree.lessons.map(lesson => lesson.lesson)).size, restoredThree.lessons.length);
+});
+
+test('media video checkbox bulk guidance appears only after total lessons are set, without the former bulk controls', () => {
+  const media = catalog.offerings.find(isMediaSchooling);
+  const noop = () => {};
+  const props = { items: [item(media.id)], offerings: offeringsById, importedAchievements: [], importedManaged: [], importedPending: [], disabled: false, onChange: noop, onResolveImportedMedia: noop };
+  const configured = renderToStaticMarkup(createElement(MediaSchoolingProgress, { ...props, progress: { [media.id]: { offeringId: media.id, totalLessons: 6, lessons: [], assessments: [] } } }));
+  const unconfigured = renderToStaticMarkup(createElement(MediaSchoolingProgress, { ...props, progress: {} }));
+  assert.match(configured, /動画にチェックを入れると、その回まで一括で視聴済みになります。外す場合はその回のみ解除されます。/);
+  assert.doesNotMatch(configured, /動画を第/);
+  assert.doesNotMatch(configured, />適用<\/button>/);
+  assert.doesNotMatch(unconfigured, /動画にチェックを入れると/);
+  assert.doesNotMatch(unconfigured, /type="checkbox"/);
 });
 
 test('media share view model groups current media plan items, preserves order, and omits orphan/non-media data', () => {

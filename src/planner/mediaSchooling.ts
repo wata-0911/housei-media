@@ -31,6 +31,23 @@ export function toggleLesson(course: MediaCourseProgress, lesson: number, field:
   return { ...course, lessons };
 }
 
+/** Marks videos through the selected lesson as complete without changing tests or assessments. */
+export function completeVideosThroughLesson(course: MediaCourseProgress, throughLesson: number): MediaCourseProgress | null {
+  if (course.totalLessons === null || !Number.isInteger(course.totalLessons) || course.totalLessons < 1 || !Number.isInteger(throughLesson) || throughLesson < 1 || throughLesson > course.totalLessons) return null;
+  const lessonsByNumber = new Map<number, MediaLessonProgress>();
+  for (const lesson of course.lessons) {
+    const current = lessonsByNumber.get(lesson.lesson);
+    lessonsByNumber.set(lesson.lesson, current
+      ? { ...lesson, videoCompleted: current.videoCompleted || lesson.videoCompleted, testCompleted: current.testCompleted || lesson.testCompleted }
+      : lesson);
+  }
+  for (let lesson = 1; lesson <= throughLesson; lesson += 1) {
+    const current = lessonsByNumber.get(lesson);
+    lessonsByNumber.set(lesson, { lesson, videoCompleted: true, testCompleted: current?.testCompleted ?? false });
+  }
+  return { ...course, lessons: [...lessonsByNumber.values()].sort((a, b) => a.lesson - b.lesson) };
+}
+
 export function assessmentLabel(assessment: MediaAssessment): string {
   if (assessment.type === 'midterm') return '中間試験';
   if (assessment.type === 'final') return '期末試験';
