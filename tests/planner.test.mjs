@@ -3440,6 +3440,17 @@ test('planner exposes annual, media, and profile as accessible responsive tabs w
   assert.doesNotMatch(program, /所属を選択してください|profile-program-scope/);
 });
 
+test('#118 opening the profile from an unresolved condition scrolls and focuses only after the profile panel renders', () => {
+  const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
+  assert.match(page, /useLayoutEffect/);
+  assert.match(page, /profileNavigationRequested\.current = true/);
+  assert.match(page, /profilePanel\.scrollIntoView\(\{ block: 'start' \}\)/);
+  assert.match(page, /profilePanel\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(page, /ref=\{profilePanelRef\}.*tabIndex=\{-1\}.*scroll-mt-24/s);
+  assert.match(page, /onOpenProfile=\{openProfileFromCondition\}/);
+  assert.doesNotMatch(page, /profileNavigationRequested[\s\S]*setTimeout/);
+});
+
 test('profile tab gathers personal settings, keeps recovery warning visible, and only reserves future account UI', () => {
   const warning = '保存済みの認定情報に無効な値があります。確認・修正してください。';
   const html = renderToStaticMarkup(createElement(PlannerProfileTab, {
