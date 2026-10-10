@@ -1370,7 +1370,7 @@ test('video checkbox bulk-on preserves later videos, while individual unchecks a
 
 test('media video checkbox bulk guidance appears only after total lessons are set, without the former bulk controls', () => {
   const media = catalog.offerings.find(isMediaSchooling);
-  const noop = () => {};
+  const noop = () => { };
   const props = { items: [item(media.id)], offerings: offeringsById, importedAchievements: [], importedManaged: [], importedPending: [], disabled: false, onChange: noop, onResolveImportedMedia: noop };
   const configured = renderToStaticMarkup(createElement(MediaSchoolingProgress, { ...props, progress: { [media.id]: { offeringId: media.id, totalLessons: 6, lessons: [], assessments: [] } } }));
   const unconfigured = renderToStaticMarkup(createElement(MediaSchoolingProgress, { ...props, progress: {} }));
@@ -1399,7 +1399,7 @@ test('media share view model groups current media plan items, preserves order, a
   assert.deepEqual(groups.map(group => [group.totalVideoCompleted, group.totalTestCompleted, group.totalLessons, group.courses[0].videoDone, group.courses[0].testDone]), [[2, 2, 2, true, true], [3, 1, 3, true, false]]);
   const post = mediaSharePost(groups, 'あと少し');
   assert.match(post, /前期メディア進捗/);
-  assert.ok(post.includes(`・${firstTerm.name}  動画 2/2 ✅・テスト 2/2 ✅`));
+  assert.ok(post.includes(`・${firstTerm.name}\n動画 2/2 ✅・テスト 2/2 ✅`));
   assert.match(post, /動画トータル  3\/3/);
   assert.match(post, /テストトータル  1\/3/);
   assert.match(post, /\n\nあと少し$/);
@@ -1421,7 +1421,7 @@ test('media share includes imported current Media, deduplicates its offering, an
 
   const combined = mediaShareViewModel([item(firstTerm.id)], offeringsById, progress, [{ offering: firstTerm, name: '重複する取込名' }, { offering: secondTerm, name: '成績表由来の後期メディア' }]);
   assert.deepEqual(combined.map(group => group.courses.map(course => course.name)), [[firstTerm.name], ['成績表由来の後期メディア']]);
-  assert.match(mediaSharePost(combined), /成績表由来の後期メディア  動画 1\/3・テスト 1\/3/);
+  assert.match(mediaSharePost(combined), /成績表由来の後期メディア\n動画 1\/3・テスト 1\/3/);
 });
 
 test('media share keeps the established progress template and derives both text and PNG data from the selected presentation', () => {
@@ -1443,7 +1443,10 @@ test('media share keeps the established progress template and derives both text 
     orphan: { offeringId: 'orphan', totalLessons: 14, lessons: [], assessments: [{ id: 'hidden', type: 'midterm', label: '中間試験', scheduledDate: '2026-01-01', completed: true }] },
   });
   const existing = mediaSharePost(groups, 'あと少し');
-  assert.equal(existing, `${firstTerm.deliveryCategory}進捗\n・${firstTerm.name}  動画 14/14 ✅・テスト 14/14 ✅\n動画トータル  14/14\nテストトータル  14/14\n\n${secondTerm.deliveryCategory}進捗\n・${secondTerm.name}  動画 1/15・テスト 0/15\n動画トータル  1/15\nテストトータル  0/15\n\nあと少し`);
+  assert.equal(
+    existing,
+    `${firstTerm.deliveryCategory}進捗\n・${firstTerm.name}\n動画 14/14 ✅・テスト 14/14 ✅\n動画トータル  14/14\nテストトータル  14/14\n\n${secondTerm.deliveryCategory}進捗\n・${secondTerm.name}\n動画 1/15・テスト 0/15\n動画トータル  1/15\nテストトータル  0/15\n\nあと少し`
+  );
   assert.deepEqual(mediaSharePresentation(groups, 'progress').flatMap(group => group.courses.map(course => course.assessmentLines)), [[], []]);
 
   const withAssessments = mediaSharePresentation(groups, 'progress_with_assessments');
@@ -1472,7 +1475,7 @@ test('media share does not invent a category denominator when any course has no 
   });
   assert.equal(groups[0].totalLessons, null);
   const post = mediaSharePost(groups);
-  assert.ok(post.includes(`・${media[1].name}  動画 1回・テスト 0回（全回数未設定）`));
+  assert.ok(post.includes(`・${media[1].name}\n動画 1回・テスト 0回（全回数未設定）`));
   assert.match(post, /全回数未設定の科目あり/);
   assert.doesNotMatch(post, /トータル  2\/3/);
   assert.equal(mediaSharePost(groups, '', 'progress_with_assessments'), post);
@@ -1496,7 +1499,7 @@ test('media share preserves both completion counts without denominators for unco
     [media.id]: { offeringId: media.id, totalLessons: null, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: true }, { lesson: 2, videoCompleted: true, testCompleted: false }] },
   });
   const post = mediaSharePost(groups);
-  assert.ok(post.includes(`・${media.name}  動画 2回・テスト 1回（全回数未設定）`));
+  assert.ok(post.includes(`・${media.name}\n動画 2回・テスト 1回（全回数未設定）`));
   assert.doesNotMatch(post, /動画 2\/|テスト 1\//);
 });
 

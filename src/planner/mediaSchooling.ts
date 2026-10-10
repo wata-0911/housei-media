@@ -146,10 +146,14 @@ export function mediaSharePost(groups: MediaShareGroup[], comment = '', template
   const lines = presentation.flatMap((group, index) => [
     ...(index === 0 ? [] : ['']), `${group.deliveryCategory}進捗`,
     ...group.courses.flatMap(course => [
+      `・${course.name}`,
       course.totalLessons === null
-        ? `・${course.name}  動画 ${course.videoCompletedCount}回・テスト ${course.testCompletedCount}回（全回数未設定）`
-        : `・${course.name}  動画 ${course.videoCompletedCount}/${course.totalLessons}${course.videoDone ? ' ✅' : ''}・テスト ${course.testCompletedCount}/${course.totalLessons}${course.testDone ? ' ✅' : ''}`,
-      ...course.assessmentLines.map(assessment => `  ${assessment.label}  ${assessment.date}  ${assessment.completed ? '実施済み ✅' : '未実施'}`),
+        ? `動画 ${course.videoCompletedCount}回・テスト ${course.testCompletedCount}回（全回数未設定）`
+        : `動画 ${course.videoCompletedCount}/${course.totalLessons}${course.videoDone ? ' ✅' : ''}・テスト ${course.testCompletedCount}/${course.totalLessons}${course.testDone ? ' ✅' : ''}`,
+      ...course.assessmentLines.map(
+        assessment =>
+          `  ${assessment.label}  ${assessment.date}  ${assessment.completed ? '実施済み ✅' : '未実施'}`
+      ),
     ]),
     ...(group.totalLessons === null ? ['全回数未設定の科目あり'] : [`動画トータル  ${group.totalVideoCompleted}/${group.totalLessons}`, `テストトータル  ${group.totalTestCompleted}/${group.totalLessons}`]),
   ]);
