@@ -51,6 +51,13 @@ import { effectiveRecognitionForAdmission, graduationProfileValidationError, ini
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
 import { annualCreditLimitReferences, annualCreditLimitStatus } from '../src/planner/annualPlan.ts';
 import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/thesisGuidance.ts';
+import {
+  mediaPngKey,
+  currentMediaPng,
+  prepareMediaPngData,
+  shareMediaPng,
+  shareResultMessage,
+} from '../src/planner/mediaImageExport.ts';
 
 function memoryStore(raw = null) {
   const values = new Map(raw === null ? [] : [[STORAGE_KEY, raw]]);
@@ -61,6 +68,177 @@ const publicCourse = (id, status = 'planned', title = `公開科目 ${id}`) => (
 const first = catalog.offerings[0];
 const rawCatalog = JSON.parse(readFileSync(new URL('../src/data/planner_catalog_2026.json', import.meta.url), 'utf8'));
 const rawOfferingsById = new Map(rawCatalog.offerings.map(offering => [offering.id, offering]));
+
+test('media PNG becomes invalid when rendered progress changes', () => {
+  const presentation = [{
+    deliveryCategory: '前期メディア',
+    courses: [{
+      name: '生物学２',
+      videoCompletedCount: 7,
+      testCompletedCount: 7,
+      totalLessons: 14,
+      videoDone: false,
+      testDone: false,
+      assessmentLines: [],
+    }],
+    totalVideoCompleted: 7,
+    totalTestCompleted: 7,
+    totalLessons: 14,
+    unconfiguredCourses: 0,
+  }];
+
+  const oldKey = mediaPngKey(presentation, '', '2026年10月10日');
+  const generated = {
+    key: oldKey,
+    dataUrl: 'data:image/png;base64,test',
+    file: { name: 'test.png' },
+  };
+
+  assert.equal(currentMediaPng(generated, oldKey), generated);
+
+  const updated = structuredClone(presentation);
+  updated[0].courses[0].videoCompletedCount = 8;
+  updated[0].totalVideoCompleted = 8;
+
+  const newKey = mediaPngKey(updated, '', '2026年10月10日');
+
+  assert.notEqual(newKey, oldKey);
+  assert.equal(currentMediaPng(generated, newKey), null);
+
+  // 同じ内容を再生成しただけなら、無効化しない。
+  assert.equal(
+    mediaPngKey(structuredClone(presentation), '', '2026年10月10日'),
+    oldKey
+  );
+
+  // コメント・日付・表示する試験情報の変更も検知する。
+  assert.notEqual(
+    mediaPngKey(presentation, '更新', '2026年10月10日'),
+    oldKey
+  );
+  assert.notEqual(
+    mediaPngKey(presentation, '', '2026年10月11日'),
+    oldKey
+  );
+
+  const withAssessment = structuredClone(presentation);
+  withAssessment[0].courses[0].assessmentLines.push({
+    label: '中間試験',
+    date: '2026/10/20',
+    completed: false,
+  });
+  assert.notEqual(
+    mediaPngKey(withAssessment, '', '2026年10月10日'),
+    oldKey
+  );
+});
+test('media PNG generation validates renderer output', async () => {
+  const node = {};
+  const dataUrl = 'data:image/png;base64,cG5n';
+
+  const render = async (receivedNode, options) => {
+    assert.equal(receivedNode, node);
+    assert.equal(options.pixelRatio, 2);
+    assert.equal(options.backgroundColor, '#fffaf3');
+    return dataUrl;
+  };
+
+  const read = async receivedUrl => {
+    assert.equal(receivedUrl, dataUrl);
+    return {
+      ok: true,
+      blob: async () => new Blob(['png'], { type: 'image/png' }),
+    };
+  };
+
+  const result = await prepareMediaPngData(node, render, read);
+
+  assert.equal(result.dataUrl, dataUrl);
+  assert.equal(result.blob.type, 'image/png');
+  assert.ok(result.blob.size > 0);
+
+  await assert.rejects(
+    prepareMediaPngData(node, render, async () => ({
+      ok: true,
+      blob: async () => new Blob([], { type: 'image/png' }),
+    })),
+    /Invalid PNG/
+  );
+
+  await assert.rejects(
+    prepareMediaPngData(node, render, async () => ({
+      ok: true,
+      blob: async () => new Blob(['text'], { type: 'text/plain' }),
+    })),
+    /Invalid PNG/
+  );
+});
+test('media image share reports outcomes without claiming a saved file', async () => {
+  const file = { name: 'test.png' };
+
+  const shared = await shareMediaPng(file, {
+    canShare: () => true,
+    share: async data => {
+      assert.equal(data.files[0], file);
+    },
+  });
+
+  assert.equal(shared, 'completed');
+  assert.equal(
+    shareResultMessage(shared),
+    '共有操作が終了しました。保存先をご確認ください。'
+  );
+  assert.doesNotMatch(
+    shareResultMessage(shared),
+    /保存しました|保存完了|ダウンロードしました/
+  );
+
+  const unsupported = await shareMediaPng(file, {
+    canShare: () => false,
+    share: async () => {
+      assert.fail('share must not be called');
+    },
+  });
+
+  assert.equal(unsupported, 'unsupported');
+  assert.match(shareResultMessage(unsupported), /利用できません/);
+
+  const cancelled = await shareMediaPng(file, {
+    canShare: () => true,
+    share: async () => {
+      const error = new Error('cancel');
+      error.name = 'AbortError';
+      throw error;
+    },
+  });
+
+  assert.equal(cancelled, 'cancelled');
+
+  const failed = await shareMediaPng(file, {
+    canShare: () => true,
+    share: async () => {
+      throw new Error('share failed');
+    },
+  });
+
+  assert.equal(failed, 'failed');
+});
+
+test('media share handles canShare exceptions', async () => {
+  const result = await shareMediaPng(
+    { name: 'test.png' },
+    {
+      canShare: () => {
+        throw new Error('Not supported');
+      },
+      share: async () => {
+        assert.fail('share must not be called');
+      },
+    }
+  );
+
+  assert.equal(result, 'unsupported');
+});
 
 test('exam date: legacy source-v2 restores actual exam date only', () => {
   const source = {
