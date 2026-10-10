@@ -1,5 +1,5 @@
 import { deriveCurriculumCourseProgress } from '../planner/curriculumCourseProgress';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import CourseSearch from '../components/planner/CourseSearch';
 import CurriculumCourseList from '../components/planner/CurriculumCourseList';
 import CategorySummary from '../components/planner/CategorySummary';
@@ -53,6 +53,8 @@ export default function PlannerPage() {
   const [activeTab, setActiveTab] = useState<'annual' | 'media' | 'profile'>('annual');
   const [gradeImportOpen, setGradeImportOpen] = useState(false);
   const [directImport, setDirectImport] = useState<unknown | undefined>(undefined);
+  const profilePanelRef = useRef<HTMLDivElement>(null);
+  const profileNavigationRequested = useRef(false);
   const state = loaded.state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
   const thesisProgress = thesisProgressForScope(state, catalog, state.selectedScopeId);
@@ -74,6 +76,20 @@ export default function PlannerPage() {
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (activeTab !== 'profile' || !profileNavigationRequested.current) return;
+    const profilePanel = profilePanelRef.current;
+    if (!profilePanel) return;
+    profileNavigationRequested.current = false;
+    profilePanel.scrollIntoView({ block: 'start' });
+    profilePanel.focus({ preventScroll: true });
+  }, [activeTab]);
+
+  const openProfileFromCondition = useCallback(() => {
+    profileNavigationRequested.current = true;
+    setActiveTab('profile');
   }, []);
 
   useEffect(() => {
@@ -257,12 +273,12 @@ export default function PlannerPage() {
         </details>
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
-        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={() => setActiveTab('profile')} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
+        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab">
         <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />
       </div>}
-      {activeTab === 'profile' && <div id="profile-panel" role="tabpanel" aria-labelledby="profile-tab">
+      {activeTab === 'profile' && <div ref={profilePanelRef} id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" tabIndex={-1} className="scroll-mt-24">
         <PlannerProfileTab
           catalog={catalog}
           scopeId={state.selectedScopeId}

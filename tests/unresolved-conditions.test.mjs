@@ -53,6 +53,15 @@ test('empty UI and internal unknown with zero learner actions do not claim compl
   assert.match(s, /卒業可否を保証しません/);
 });
 
+test('learner conditions are expanded initially while automatic conditions remain collapsible', () => {
+  const s = cases.find(scenario => project(scenario).learner.length > 0 && project(scenario).automatic.length > 0);
+  assert.ok(s);
+  const rendered = html(s);
+  assert.match(rendered, /<details open="" aria-label="確認が必要な条件"/);
+  assert.match(rendered, /<details aria-label="自動判定できない条件"/);
+  assert.doesNotMatch(rendered, /<details open="" aria-label="自動判定できない条件"/);
+});
+
 test('scope audit excludes proven other courses only; unknown scope is conservative', () => {
   const q = project(base); const other = catalog.requirements.find(r => r.ruleId === 'history_overview_exam');
   assert.ok(q.excluded.some(r => r.requirementId === other.id));

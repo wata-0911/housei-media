@@ -17,7 +17,7 @@ function Condition({ condition, onOpenProfile }: { condition: UnresolvedConditio
 
 export default function UnresolvedConditions({ projection, onOpenProfile }: { projection: ConditionProjection; onOpenProfile?: () => void }) {
   return <div className="mt-6 min-w-0 space-y-3">
-    {projection.learner.length > 0 && <details aria-label="確認が必要な条件" className="min-w-0 border border-amber-200 bg-amber-50 p-4">
+    {projection.learner.length > 0 && <details open aria-label="確認が必要な条件" className="min-w-0 border border-amber-200 bg-amber-50 p-4">
       <summary className="cursor-pointer font-medium text-[#002255]">確認が必要な条件：{projection.learner.length}件</summary>
       <p className="mt-2 text-xs leading-relaxed text-gray-600">件数は入力・選択・照合の操作単位です。同じ操作に関係する要件・カード・参考進捗をまとめています。</p>
       <ul className="mt-3 space-y-3">{projection.learner.map(condition => <Condition key={condition.id} condition={condition} onOpenProfile={onOpenProfile} />)}</ul>
