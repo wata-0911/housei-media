@@ -6,6 +6,7 @@ import { plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourse
 import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
 import { GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
 import { importedExamDate } from '../src/planner/gradeImportApply.ts';
+import ImportedSourceDetails from '../src/components/planner/ImportedSourceDetails.tsx';
 import MediaSchoolingProgress from '../src/components/planner/MediaSchoolingProgress.tsx';
 import CorrespondenceProgress from '../src/components/planner/CorrespondenceProgress.tsx';
 import CourseEvaluations from '../src/components/planner/CourseEvaluations.tsx';
@@ -41,7 +42,7 @@ import { correspondenceRequirementFor, structuredRequirementCount } from '../src
 import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planTable.ts';
 import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
 import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
-import { academicYearFromDate, applyImport, autoPlannerOfferingIdForImport, groupImportedAchievements, hasCorrespondenceEvidence, importedEarnedCreditsTotal, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
+import { academicYearFromDate, applyImport, autoPlannerOfferingIdForImport, groupImportedAchievements, hasCorrespondenceEvidence, importedEarnedCreditsTotal, importFingerprint, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
 import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
 import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/importedAchievementCalculations.ts';
 import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
@@ -2457,13 +2458,13 @@ test('grade import skips empty correspondence and infers schooling years without
   assert.equal(importPreview(data, offerings, next.importedStudyRecords).every(row => row.duplicate), true);
 });
 
-test('grade import keeps pending correspondence and uses date or capture date for schooling inference', () => {
+test('grade import keeps pending correspondence and uses only actual dates for schooling inference', () => {
   const emptyReports = Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null }));
   const course = { rawName: '年度推定', categoryRaw: null, compositionCredits: { raw: '', value: null }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '', value: null }, schoolingCredits: { raw: '', value: null }, reports: emptyReports, creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: true }, schoolings: [{ rawYear: '', rawTerm: '冬', rawDate: '26/01/26', rawCredits: '2', rawGrade: 'A', year: null, term: '冬', date: '2026-01-26', credits: 2, grade: 'A' }, { rawYear: '', rawTerm: '夏', rawDate: '', rawCredits: '2', rawGrade: 'A', year: null, term: '夏', date: null, credits: 2, grade: 'A' }] };
   const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-07-01T00:00:00.000Z', courses: [course] };
   const preview = importPreview(data, []);
   assert.equal(hasCorrespondenceEvidence(course), true);
-  assert.deepEqual(preview.map(unit => [unit.method, unit.academicYear, unit.yearSource]), [['correspondence', 2026, 'inferred'], ['schooling', 2025, 'inferred'], ['schooling', 2026, 'inferred']]);
+  assert.deepEqual(preview.map(unit => [unit.method, unit.academicYear, unit.yearSource]), [['correspondence', null, 'unknown'], ['schooling', 2025, 'inferred'], ['schooling', null, 'unknown']]);
   const explicit = { ...course, schoolings: [{ ...course.schoolings[0], rawYear: '25', year: '25', date: '2026-07-01' }, course.schoolings[1]] };
   const explicitPreview = importPreview({ ...data, courses: [explicit] }, []);
   assert.deepEqual(explicitPreview.find(unit => unit.method === 'schooling') && [explicitPreview.find(unit => unit.method === 'schooling').academicYear, explicitPreview.find(unit => unit.method === 'schooling').yearSource], [2025, 'source']);
@@ -2477,7 +2478,7 @@ test('grade import infers academic years and selects every non-duplicate compone
   const preview = importPreview(data, offerings);
   assert.deepEqual(preview.filter(unit => unit.method === 'correspondence').map(unit => [unit.rawName, unit.academicYear, unit.yearSource, unit.selected]), [['一致', 2026, 'inferred', true], ['曖昧', 2025, 'inferred', true], ['未一致', 2025, 'inferred', true]]);
   assert.equal(academicYearFromDate('2026-03-31'), 2025); assert.equal(academicYearFromDate('2026-04-01'), 2026);
-  assert.deepEqual(inferredCorrespondenceYear(makeCourse('x', null, ['2026-01-01', '2026-04-01']), data.capturedAt), { academicYear: 2026, date: '2026-04-01' });
+  assert.deepEqual(inferredCorrespondenceYear(makeCourse('x', null, ['2026-01-01', '2026-04-01'])), { academicYear: 2026, date: '2026-04-01' });
   const applied = applyImport(initialState(), preview, offerings); const duplicatePreview = importPreview(data, offerings, applied.importedStudyRecords, applied.importedCourseAchievements);
   assert.ok(duplicatePreview.every(unit => unit.duplicate && !unit.selected));
   assert.equal(applied.items.length, 0); assert.equal(Object.keys(applied.courseEvaluations).length, 0);
@@ -3781,14 +3782,15 @@ test('auto import: method can uniquely identify a component despite multiple cou
   assert.equal(applyImport(initialState(), units, offerings).items[0].offeringId, 'auto-exact');
 });
 
-test('auto import: course-only rows require one offering across every method', () => {
+test('auto import: course-only rows cannot identify an annual offering without year evidence', () => {
   const data = autoImportData([autoImportCourse(autoImportOfferings[0].name, { creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false } })]);
   for (const method of ['correspondence', 'schooling']) {
     const offerings = [{ ...autoImportOfferings[0], method }];
     const units = importPreview(data, offerings);
     assert.equal(units[0].courseOnly, true);
+    assert.equal(units[0].sourceCourse.selectedOfferingId, null);
     const next = applyImport(initialState(), units, offerings);
-    assert.equal(next.items.length, 1);
+    assert.equal(next.items.length, 0);
     assert.equal(next.importedCourseAchievements.length, 1);
     assert.equal(next.importedStudyRecords.length, 0);
     const multiple = [...offerings, { ...offerings[0], id: 'other-method', method: method === 'schooling' ? 'correspondence' : 'schooling' }];
@@ -3816,7 +3818,10 @@ test('auto import: year and term prefill require explicit compatible and consist
   assert.deepEqual([run([slot, slot]).plannedYear, run([slot, slot]).plannedTerm], [2026, '前期']);
   const conflicting = run([slot, { ...slot, rawYear: '26', year: '26', rawTerm: '後期', term: '後期' }]);
   assert.deepEqual([conflicting.plannedYear, conflicting.plannedTerm], [2026, null]);
-  const inferred = run([{ ...slot, rawYear: '', year: null, rawTerm: '夏', term: '夏' }, { ...slot, rawYear: '', year: null, rawTerm: '夏', term: '夏' }]);
+  const undated = { ...slot, rawYear: '', year: null, rawTerm: '夏', term: '夏' };
+  assert.equal(run([undated, undated]), undefined, 'capture date alone cannot backfill a plan');
+  const dated = { ...undated, rawDate: '2026/07/01', date: '2026-07-01' };
+  const inferred = run([dated, dated]);
   assert.deepEqual([inferred.plannedYear, inferred.plannedTerm], [null, null]);
   const preview = importPreview(data([slot, slot]), offerings).map(unit => ({ ...unit, academicYear: 2027, yearSource: 'manual', term: '後期' }));
   const manual = applyImport(initialState(), preview, offerings).items[0];
@@ -4020,8 +4025,8 @@ for (const credits of [2, 4]) test(`backfill: duplicate components and course-on
     const preview = reimportPreview(data, offerings, legacy);
     assert.ok(preview.every(unit => unit.sourceDuplicate));
     const next = applyImport(legacy, preview, offerings);
-    if (credits === 4 && courses.length > 1) {
-      assert.equal(next, legacy, 'completed competing/unresolved sources do not backfill');
+    if (courses[0] === courseOnly || (credits === 4 && courses.length > 1)) {
+      assert.equal(next, legacy, 'undated or completed competing/unresolved sources do not backfill');
       assert.deepEqual(next.items, []);
       assert.match(renderImportActions(preview, legacy.items, offerings), /<button[^>]*disabled=""/);
       continue;
@@ -4465,4 +4470,260 @@ test('#57 dormant aggregate/exemption cannot block editing first-year Open Unive
     assert.equal(loaded.error, null); assert.equal(loaded.recognitionWarning, undefined);
     assert.deepEqual(loaded.state.graduationProfile, snapshot);
   }
+});
+
+// #61/#117 use the same complete contract-v1 fixture and persistence path as imports.
+function dateIntegrityData(examDate = null, reportDates = []) {
+  const course = autoImportCourse('日付検証科目');
+  return autoImportData([{
+    ...course,
+    creditExam: { ...course.creditExam, rawDate: examDate?.replaceAll('-', '/') ?? '', date: examDate },
+    reports: course.reports.map((report, index) => reportDates[index]
+      ? { raw: `○${reportDates[index].replaceAll('-', '/')}`, status: 'passed', date: reportDates[index] } : report),
+  }]);
+}
+function persistedImport(state) {
+  const store = memoryStore();
+  const raw = saveState(store, state, null, catalog);
+  const loaded = loadState(store, catalog);
+  assert.equal(loaded.error, null);
+  assert.equal(loaded.raw, raw);
+  assert.deepEqual(loaded.state, state);
+  assert.equal(loaded.state.schemaVersion, 22);
+  return loaded.state;
+}
+function importedDatesHtml(state) {
+  return renderToStaticMarkup(createElement(ImportedSourceDetails, {
+    achievements: state.importedCourseAchievements, records: state.importedStudyRecords, offerings: offeringsById,
+  }));
+}
+for (const [label, examDate, reportDates, year, evidenceDate] of [
+  ['exam and report', '2025-10-05', ['2025-10-09'], 2025, '2025-10-05'],
+  ['exam only', '2025-10-05', [], 2025, '2025-10-05'],
+  ['report only', null, ['2025-10-09'], 2025, '2025-10-09'],
+  ['capture only', null, [], null, null],
+]) test(`exam date persistence: ${label} survives JSON -> preview -> apply -> save -> load -> display`, () => {
+  const data = JSON.parse(JSON.stringify(dateIntegrityData(examDate, reportDates)));
+  assert.equal(isHoseiGradeImportV1(data), true);
+  const preview = importPreview(data, []);
+  const next = persistedImport(applyImport(initialState(), preview, []));
+  const [record] = next.importedStudyRecords;
+  const [source] = next.importedCourseAchievements;
+  assert.equal(record.examDate, examDate);
+  assert.equal(record.date, evidenceDate);
+  assert.equal(record.academicYear, year);
+  assert.equal(record.yearSource, year === null ? 'unknown' : 'inferred');
+  assert.equal(source.academicYear, year);
+  assert.equal(source.yearSource, record.yearSource);
+  assert.equal(record.capturedAt, data.capturedAt);
+  assert.equal(source.capturedAt, data.capturedAt);
+  assert.equal(record.sourceCourseId, source.id);
+  assert.equal(importedExamDate(record, source), examDate);
+  const html = importedDatesHtml(next);
+  assert.ok(html.includes(`試験日: ${examDate ?? '未確認'}`));
+  assert.ok(!html.includes(data.capturedAt.slice(0, 10)));
+  if (reportDates.length) assert.ok(html.includes(`リポート 1: ○${reportDates[0].replaceAll('-', '/')} / ${reportDates[0]}`));
+  if (year === null) assert.match(html, /年度未確認/);
+  const duplicate = importPreview(data, [], next.importedStudyRecords, next.importedCourseAchievements);
+  assert.ok(duplicate.every(unit => unit.duplicate && unit.sourceDuplicate && !unit.selected));
+  const repeated = persistedImport(applyImport(next, duplicate, []));
+  assert.deepEqual(repeated, next);
+  assert.equal(repeated.importedCourseAchievements.length, 1);
+  assert.equal(repeated.importedStudyRecords.length, 1);
+  assert.equal(importedEarnedCreditsTotal(repeated.importedCourseAchievements), 4);
+});
+
+test('exam date persistence: explicit null never restores a fingerprint exam after reload', () => {
+  const next = applyImport(initialState(), importPreview(dateIntegrityData('2025-10-05'), []), []);
+  next.importedStudyRecords[0].examDate = null;
+  const restored = persistedImport(next);
+  assert.equal(restored.importedStudyRecords[0].examDate, null);
+  assert.equal(importedExamDate(restored.importedStudyRecords[0], restored.importedCourseAchievements[0]), null);
+  assert.match(importedDatesHtml(restored), /試験日: 未確認/);
+});
+
+for (const examDate of ['2025-10-05', null]) test(`exam date persistence: legacy missing examDate loads with ${examDate ?? 'report only'}`, () => {
+  const next = applyImport(initialState(), importPreview(dateIntegrityData(examDate, ['2025-10-09']), []), []);
+  delete next.importedStudyRecords[0].examDate;
+  const restored = persistedImport(next);
+  assert.equal(Object.hasOwn(restored.importedStudyRecords[0], 'examDate'), false);
+  assert.equal(importedExamDate(restored.importedStudyRecords[0], restored.importedCourseAchievements[0]), examDate);
+  assert.ok(importedDatesHtml(restored).includes(`試験日: ${examDate ?? '未確認'}`));
+});
+
+for (const [label, examDate, reportDates, year] of [
+  ['exam wins over later-year report', '2025-10-05', ['2026-04-01'], 2025],
+  ['exam wins over earlier-year report', '2026-04-01', ['2025-03-31'], 2026],
+  ['latest report before April', null, ['2025-04-01', '2026-03-31', '2025-10-05'], 2025],
+  ['latest report from April', null, ['2026-04-01', '2026-03-31'], 2026],
+  ['March exam', '2026-03-31', [], 2025],
+  ['April exam', '2026-04-01', [], 2026],
+  ['no evidence', null, [], null],
+]) test(`date integrity: ${label} ignores capture year`, () => {
+  const data = dateIntegrityData(examDate, reportDates);
+  for (const capturedAt of ['2026-10-10T00:00:00.000Z', '2030-03-31T00:00:00.000Z']) {
+    const [unit] = importPreview({ ...data, capturedAt }, []);
+    assert.equal(unit.academicYear, year);
+    assert.equal(unit.sourceCourse.academicYear, year);
+    assert.equal(unit.yearSource, year === null ? 'unknown' : 'inferred');
+  }
+});
+
+for (const [label, patch, year, source] of [
+  ['explicit year', { rawYear: '25', year: '25', rawDate: '2026/07/01', date: '2026-07-01' }, 2025, 'source'],
+  ['raw explicit year', { rawYear: '2025' }, 2025, 'source'],
+  ['March date', { rawDate: '2026/03/31', date: '2026-03-31' }, 2025, 'inferred'],
+  ['April date', { rawDate: '2026/04/01', date: '2026-04-01' }, 2026, 'inferred'],
+  ['unknown year and date', {}, null, 'unknown'],
+]) test(`date integrity: schooling ${label} uses source evidence only`, () => {
+  const slots = emptyGradeSchoolings();
+  slots[0] = { ...slots[0], rawTerm: '冬', term: '冬', rawCredits: '2', credits: 2, ...patch };
+  const course = autoImportCourse('年度検証スクーリング', {
+    creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: slots,
+  });
+  const data = { ...autoImportData([course]), capturedAt: '2030-10-10T00:00:00.000Z' };
+  const [unit] = importPreview(data, []);
+  assert.equal(unit.method, 'schooling');
+  assert.deepEqual([unit.academicYear, unit.yearSource, unit.date], [year, source, patch.date ?? null]);
+  assert.deepEqual([unit.sourceCourse.academicYear, unit.sourceCourse.yearSource], [year, source]);
+  const state = persistedImport(applyImport(initialState(), [unit], []));
+  assert.equal(importedExamDate(state.importedStudyRecords[0], state.importedCourseAchievements[0]), null);
+});
+
+for (const method of ['correspondence', 'schooling']) test(`date integrity: unknown ${method} year never becomes an exact opening or automatic plan`, () => {
+  const data = dateIntegrityData();
+  if (method === 'schooling') {
+    data.courses[0].creditExam = { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false };
+    data.courses[0].schoolings[0] = { ...emptyGradeSchoolings()[0], rawCredits: '4', credits: 4 };
+  }
+  const candidate = { ...autoImportBaseOffering, method, name: data.courses[0].rawName };
+  for (const offerings of [[], [candidate], [candidate, { ...candidate, id: 'other-year', academicYear: 2025 }]]) {
+    const [unit] = importPreview(data, offerings);
+    assert.equal(unit.academicYear, null);
+    assert.equal(unit.offeringId, null);
+    assert.equal(unit.match, offerings.length ? 'ambiguous' : 'unmatched');
+    assert.equal(unit.sourceCourse.selectedOfferingId, null);
+    assert.equal(unit.sourceCourse.offeringMatch, offerings.length ? 'ambiguous' : 'unmatched');
+    assert.equal(autoPlannerOfferingIdForImport(unit, offerings), null);
+    const state = applyImport(initialState(), [unit], offerings);
+    assert.deepEqual(state.items, []);
+    assert.equal(importedEarnedCreditsTotal(state.importedCourseAchievements), 4);
+  }
+});
+
+// Reproduce a pre-#117 source-v2 record, including its capture-derived component fingerprint.
+function legacyCaptureState(data, manual = false) {
+  const state = applyImport(initialState(), importPreview(data, []), []);
+  const source = state.importedCourseAchievements[0];
+  const record = state.importedStudyRecords[0];
+  source.academicYear = 2026; source.yearSource = 'inferred';
+  record.academicYear = 2026; record.yearSource = 'inferred'; record.date = data.capturedAt.slice(0, 10);
+  record.fingerprint = importFingerprint(record);
+  delete record.examDate;
+  if (manual) {
+    source.academicYear = 2024; source.yearSource = 'manual'; source.selectionSource = 'manual';
+    source.courseId = autoImportBaseOffering.courseId; source.selectedOfferingId = autoImportBaseOffering.id;
+    source.match = 'exact_unique'; source.candidateOfferingIds = [autoImportBaseOffering.id];
+    record.academicYear = 2023; record.yearSource = 'manual'; record.term = '冬'; record.offeringId = autoImportBaseOffering.id;
+  }
+  return state;
+}
+for (const manual of [false, true]) test(`date integrity: source-v2 reimport retains ${manual ? 'manual' : 'legacy capture-derived'} years, IDs and unchanged components`, () => {
+  const data = dateIntegrityData();
+  const before = persistedImport(legacyCaptureState(data, manual));
+  const snapshot = structuredClone(before);
+  const expectedFingerprint = JSON.stringify(['source-v2', data.courses[0].rawName, null,
+    [['', '', '', '', ''], ['', '', '', '', '']], Array.from({ length: 4 }, () => ['', 'none', null]), ['', '4', 'S', false], 0]);
+  assert.equal(before.importedCourseAchievements[0].fingerprint, expectedFingerprint);
+  for (const capturedAt of [data.capturedAt, '2030-10-10T00:00:00.000Z']) {
+    const [unit] = importPreview({ ...data, capturedAt }, [], before.importedStudyRecords, before.importedCourseAchievements);
+    assert.equal(unit.academicYear, null);
+    assert.equal(unit.sourceCourse.fingerprint, expectedFingerprint);
+    assert.equal(unit.sourceExistingId, before.importedCourseAchievements[0].id);
+    assert.equal(unit.sourceDuplicate, true);
+    assert.equal(unit.duplicate, true);
+    assert.equal(unit.selected, false);
+    assert.equal(applyImport(before, [unit], []), before);
+  }
+  // A real aggregate change updates the same official source, not its unchanged detail.
+  const updated = structuredClone(data);
+  updated.courses[0].earnedCredits = { raw: '2', value: 2 };
+  const preview = importPreview(updated, [], before.importedStudyRecords, before.importedCourseAchievements);
+  assert.equal(preview[0].sourceDuplicate, false);
+  assert.equal(preview[0].duplicate, true);
+  const after = persistedImport(applyImport(before, preview, []));
+  assert.equal(after.importedCourseAchievements.length, 1);
+  assert.deepEqual(after.importedStudyRecords, before.importedStudyRecords);
+  assert.equal(after.importedStudyRecords[0].sourceCourseId, after.importedCourseAchievements[0].id);
+  assert.deepEqual(after.importedCourseAchievements[0], { ...before.importedCourseAchievements[0], earnedCreditsTotal: 2 });
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 2);
+  assert.deepEqual(before, snapshot);
+});
+
+test('date integrity: capture-only change preserves new unknown records and repeated source occurrences', () => {
+  const data = dateIntegrityData();
+  data.courses.push(structuredClone(data.courses[0]));
+  const before = persistedImport(applyImport(initialState(), importPreview(data, []), []));
+  assert.equal(before.importedCourseAchievements.length, 2);
+  assert.equal(before.importedStudyRecords.length, 2);
+  assert.notEqual(before.importedCourseAchievements[0].fingerprint, before.importedCourseAchievements[1].fingerprint);
+  const preview = importPreview({ ...data, capturedAt: '2030-10-10T00:00:00.000Z' }, [], before.importedStudyRecords, before.importedCourseAchievements);
+  assert.deepEqual(preview.map(unit => unit.sourceExistingId), before.importedCourseAchievements.map(row => row.id));
+  assert.equal(applyImport(before, preview, []), before);
+  assert.equal(importedEarnedCreditsTotal(before.importedCourseAchievements), 8);
+  assert.deepEqual(before.importedStudyRecords.map(record => record.sourceCourseId), before.importedCourseAchievements.map(row => row.id));
+});
+
+test('date integrity: duplicate reimport does not resurrect intentionally removed details', () => {
+  const data = dateIntegrityData();
+  const state = legacyCaptureState(data);
+  state.importedStudyRecords = [];
+  const preview = importPreview(data, [], [], state.importedCourseAchievements);
+  assert.equal(preview[0].sourceDuplicate, true);
+  assert.equal(applyImport(state, preview, []), state);
+});
+
+test('date integrity: a later explicit schooling year precedes inferred source-row dates', () => {
+  const data = dateIntegrityData('2026-07-01');
+  data.courses[0].schoolings = [
+    { ...emptyGradeSchoolings()[0], rawDate: '2026/04/01', date: '2026-04-01' },
+    { ...emptyGradeSchoolings()[0], rawYear: '25', year: '25', rawCredits: '2', credits: 2 },
+  ];
+  const preview = importPreview(data, []);
+  assert.deepEqual(preview.map(unit => unit.academicYear), [2026, 2026, 2025]);
+  assert.equal(preview[0].sourceCourse.academicYear, 2025);
+  assert.equal(preview[0].sourceCourse.yearSource, 'source');
+});
+
+test('date integrity: adding schooling retains an unchanged legacy undated correspondence component', () => {
+  const data = dateIntegrityData();
+  const before = legacyCaptureState(data, true);
+  data.courses[0].schoolings[0] = { ...emptyGradeSchoolings()[0], rawYear: '25', year: '25', rawCredits: '2', credits: 2 };
+  const preview = importPreview(data, [], before.importedStudyRecords, before.importedCourseAchievements);
+  assert.deepEqual(preview.map(unit => unit.duplicate), [true, false]);
+  assert.ok(preview.every(unit => unit.selected && !unit.sourceDuplicate));
+  const after = persistedImport(applyImport(before, preview, []));
+  assert.equal(after.importedCourseAchievements.length, 1);
+  assert.equal(after.importedStudyRecords.length, 2);
+  assert.deepEqual(after.importedStudyRecords[0], before.importedStudyRecords[0]);
+  assert.equal(after.importedStudyRecords[1].sourceCourseId, before.importedCourseAchievements[0].id);
+  assert.equal(after.importedCourseAchievements[0].academicYear, 2024);
+  assert.equal(after.importedCourseAchievements[0].selectedOfferingId, before.importedCourseAchievements[0].selectedOfferingId);
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
+});
+
+test('date integrity: changed correspondence evidence is not suppressed by the legacy date compatibility check', () => {
+  const data = dateIntegrityData();
+  const before = legacyCaptureState(data);
+  data.courses[0].creditExam.rawGrade = 'A'; data.courses[0].creditExam.grade = 'A';
+  const preview = importPreview(data, [], before.importedStudyRecords, before.importedCourseAchievements);
+  assert.equal(preview[0].duplicate, false);
+  assert.equal(preview[0].sourceDuplicate, false);
+  const after = applyImport(before, preview, []);
+  assert.equal(after.importedCourseAchievements.length, 1);
+  assert.equal(after.importedStudyRecords.length, 2, 'undated changed evidence remains append-only');
+  assert.deepEqual(after.importedStudyRecords[0], before.importedStudyRecords[0]);
+  assert.equal(after.importedStudyRecords[1].date, null);
+  assert.equal(after.importedStudyRecords[1].grade, 'A');
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
 });
