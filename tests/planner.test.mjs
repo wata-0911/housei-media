@@ -4,7 +4,7 @@ import ThesisGuidance from '../src/components/planner/ThesisGuidance.tsx';
 import ProgramSettings from '../src/components/planner/ProgramSettings.tsx';
 import { plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
 import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
-import { GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
+import { GradeImportApplyActions, GradeImportPreviewUnit } from '../src/components/planner/GradeImportPanel.tsx';
 import { importedExamDate } from '../src/planner/gradeImportApply.ts';
 import ImportedSourceDetails from '../src/components/planner/ImportedSourceDetails.tsx';
 import MediaSchoolingProgress from '../src/components/planner/MediaSchoolingProgress.tsx';
@@ -4907,4 +4907,190 @@ test('date integrity: changed correspondence evidence is not suppressed by the l
   assert.equal(after.importedStudyRecords[1].date, null);
   assert.equal(after.importedStudyRecords[1].grade, 'A');
   assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
+});
+
+test('source year confirmation: additive explicit year confirms an unknown official row without duplicating credits or details', () => {
+  const data = dateIntegrityData();
+  const before = persistedImport(applyImport(initialState(), importPreview(data, []), []));
+  const snapshot = structuredClone(before);
+  assert.equal(before.importedCourseAchievements[0].academicYear, null);
+  data.courses[0].schoolings[0] = { ...emptyGradeSchoolings()[0], rawYear: '25', year: '25', rawCredits: '2', credits: 2 };
+  const preview = reimportPreview(data, [], before);
+  assert.ok(preview.every(unit => unit.sourceExistingId === before.importedCourseAchievements[0].id && !unit.sourceDuplicate));
+  const after = persistedImport(applyImport(before, preview, []));
+  assert.equal(after.importedCourseAchievements.length, 1);
+  assert.equal(after.importedCourseAchievements[0].id, before.importedCourseAchievements[0].id);
+  assert.equal(after.importedCourseAchievements[0].academicYear, 2025);
+  assert.equal(after.importedCourseAchievements[0].yearSource, 'source');
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
+  assert.equal(after.importedStudyRecords.length, 2);
+  assert.deepEqual(after.importedStudyRecords[0], before.importedStudyRecords[0]);
+  assert.ok(after.importedStudyRecords.every(record => record.sourceCourseId === after.importedCourseAchievements[0].id));
+  assert.equal(applyImport(after, reimportPreview(data, [], after), []), after);
+  assert.deepEqual(before, snapshot);
+});
+
+function sourceYearData(year = '25') {
+  const data = dateIntegrityData();
+  data.courses[0].schoolings[0] = { ...emptyGradeSchoolings()[0], rawYear: year, year, rawCredits: '2', credits: 2 };
+  return data;
+}
+
+for (const capturedAt of ['2026-10-02T00:00:00.000Z', '2030-10-10T00:00:00.000Z']) {
+  test(`source year confirmation: unknown reimport at ${capturedAt} preserves the complete saved state`, () => {
+    const data = dateIntegrityData();
+    const before = persistedImport(applyImport(initialState(), importPreview(data, []), []));
+    const preview = reimportPreview({ ...data, capturedAt }, [], before);
+    assert.ok(preview.every(unit => unit.sourceDuplicate && !unit.selected && !unit.sourceYearConflict));
+    assert.equal(applyImport(before, preview, []), before);
+    assert.equal(before.importedCourseAchievements[0].yearSource, 'unknown');
+  });
+}
+
+for (const [year, yearSource] of [[2024, 'manual'], [null, 'manual'], [2026, 'inferred'], [null, 'unknown']]) {
+  test(`source year confirmation: preserves ${yearSource}/${year} context and manual association candidates`, () => {
+    const before = applyImport(initialState(), importPreview(dateIntegrityData(), []), []);
+    const source = before.importedCourseAchievements[0];
+    Object.assign(source, { academicYear: year, yearSource, selectionSource: 'manual', courseId: autoImportBaseOffering.courseId,
+      selectedOfferingId: autoImportBaseOffering.id, match: 'exact_unique', offeringMatch: 'ambiguous',
+      candidateOfferingIds: [autoImportBaseOffering.id], curriculumCourseId: autoImportBaseOffering.curriculumCourseId,
+      curriculumMatch: 'exact_unique', candidateCurriculumCourseIds: [autoImportBaseOffering.curriculumCourseId] });
+    const snapshot = structuredClone(before);
+    const data = sourceYearData();
+    const after = persistedImport(applyImport(before, reimportPreview(data, [], before), []));
+    const updated = after.importedCourseAchievements[0];
+    const confirmsUnknown = year === null && yearSource === 'unknown';
+    assert.equal(updated.academicYear, confirmsUnknown ? 2025 : year);
+    assert.equal(updated.yearSource, confirmsUnknown ? 'source' : yearSource);
+    for (const key of ['id', 'selectionSource', 'courseId', 'selectedOfferingId', 'match', 'offeringMatch', 'candidateOfferingIds',
+      'curriculumCourseId', 'curriculumMatch', 'candidateCurriculumCourseIds']) assert.deepEqual(updated[key], source[key], key);
+    assert.deepEqual(after.importedStudyRecords[0], before.importedStudyRecords[0]);
+    assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
+    assert.deepEqual(before, snapshot);
+  });
+}
+
+test('source year confirmation: a source update is selected even when all incoming components already exist', () => {
+  const before = applyImport(initialState(), importPreview(dateIntegrityData(), []), []);
+  const data = sourceYearData();
+  const imported = applyImport(initialState(), importPreview(data, []), []);
+  before.importedStudyRecords.push({ ...imported.importedStudyRecords[1], sourceCourseId: before.importedCourseAchievements[0].id });
+  const preview = reimportPreview(data, [], before);
+  assert.ok(preview.every(unit => unit.duplicate && !unit.sourceDuplicate && unit.selected));
+  const after = applyImport(before, preview, []);
+  assert.equal(after.importedCourseAchievements[0].academicYear, 2025);
+  assert.deepEqual(after.importedStudyRecords, before.importedStudyRecords);
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
+});
+
+test('source year confirmation: capture-only change after confirmation is still a complete no-op', () => {
+  const before = applyImport(initialState(), importPreview(dateIntegrityData(), []), []);
+  const data = sourceYearData();
+  const confirmed = persistedImport(applyImport(before, reimportPreview(data, [], before), []));
+  const preview = reimportPreview({ ...data, capturedAt: '2030-10-10T00:00:00.000Z' }, [], confirmed);
+  assert.equal(applyImport(confirmed, preview, []), confirmed);
+});
+
+function assertSourceYearHeld(before, data) {
+  const snapshot = structuredClone(before);
+  // Even a unique opening cannot make an ambiguous source update safe.
+  const offerings = [{ ...autoImportBaseOffering, id: 'year-confirmation-schooling', name: data.courses[0].rawName, method: 'schooling', academicYear: 2025 }];
+  const preview = reimportPreview(data, offerings, before);
+  const held = preview.filter(unit => unit.sourceYearConflict);
+  assert.ok(held.length > 0);
+  assert.ok(held.every(unit => !unit.selected && !unit.sourceDuplicate && unit.sourceExistingId === null));
+  assert.equal(applyImport(before, preview, offerings), before);
+  assert.equal(applyImport(before, preview.map(unit => ({ ...unit, selected: true })), offerings), before, 'reselecting a held row cannot write it');
+  assert.equal(importedEarnedCreditsTotal(before.importedCourseAchievements), importedEarnedCreditsTotal(snapshot.importedCourseAchievements));
+  assert.deepEqual(before, snapshot);
+  const html = renderToStaticMarkup(createElement(GradeImportPreviewUnit, { unit: held[0], onChange: () => {} }));
+  assert.match(html, /取り込みを保留/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*disabled=""/);
+  assert.match(renderImportActions(held.map(unit => ({ ...unit, selected: true })), [], offerings), /<button[^>]*disabled=""/);
+  return preview;
+}
+
+for (const year of ['24', '']) test(`source year confirmation: correcting an explicit year to ${year || 'missing'} holds the row instead of rewriting or adding official credits`, () => {
+  const before = persistedImport(applyImport(initialState(), importPreview(sourceYearData(), []), []));
+  assertSourceYearHeld(before, sourceYearData(year));
+  assert.equal(before.importedCourseAchievements[0].academicYear, 2025);
+  assert.equal(before.importedStudyRecords.length, 2);
+});
+
+test('source year confirmation: conflicting explicit years never select a representative official year', () => {
+  const data = sourceYearData();
+  data.courses[0].schoolings[1] = { ...data.courses[0].schoolings[0], rawYear: '24', year: '24' };
+  const fresh = persistedImport(applyImport(initialState(), importPreview(data, []), []));
+  assert.equal(fresh.importedCourseAchievements[0].academicYear, null);
+  assert.equal(fresh.importedCourseAchievements[0].yearSource, 'unknown');
+  assert.equal(importedEarnedCreditsTotal(fresh.importedCourseAchievements), 4);
+  assert.deepEqual(fresh.importedStudyRecords.filter(record => record.method === 'schooling').map(record => record.academicYear), [2025, 2024]);
+  assert.equal(applyImport(fresh, reimportPreview(data, [], fresh), []), fresh);
+  const before = applyImport(initialState(), importPreview(dateIntegrityData(), []), []);
+  assertSourceYearHeld(before, data);
+});
+
+for (const ambiguity of ['saved rows', 'incoming rows', 'changed report', 'changed total', 'no component evidence', 'legacy fingerprint', 'malformed fingerprint', 'raw/parsed year conflict', 'unparseable prior year']) {
+  test(`source year confirmation: ${ambiguity} cannot prove the same source row`, () => {
+    const first = dateIntegrityData();
+    if (ambiguity === 'saved rows') first.courses.push(structuredClone(first.courses[0]));
+    if (ambiguity === 'no component evidence') first.courses[0].creditExam = { rawDate: '', date: null, rawCredits: '', credits: null, rawGrade: '', grade: null, pendingMarker: false };
+    if (ambiguity === 'unparseable prior year') first.courses[0].schoolings[1] = { ...emptyGradeSchoolings()[0], rawYear: '年度不明' };
+    const before = applyImport(initialState(), importPreview(first, []), []);
+    const data = sourceYearData();
+    if (ambiguity === 'no component evidence') data.courses[0].creditExam = first.courses[0].creditExam;
+    if (ambiguity === 'incoming rows') data.courses.push(structuredClone(data.courses[0]));
+    if (ambiguity === 'changed report') data.courses[0].reports[0] = { raw: '○2025/10/09', status: 'passed', date: '2025-10-09' };
+    if (ambiguity === 'changed total') data.courses[0].earnedCredits = { raw: '6', value: 6 };
+    if (ambiguity === 'legacy fingerprint') before.importedCourseAchievements[0].fingerprint = 'legacy';
+    if (ambiguity === 'malformed fingerprint') before.importedCourseAchievements[0].fingerprint = JSON.stringify(['source-v2', first.courses[0].rawName, null, [], [], [], 0]);
+    if (ambiguity === 'raw/parsed year conflict') data.courses[0].schoolings[0].year = '24';
+    if (ambiguity === 'unparseable prior year') data.courses[0].schoolings[1] = first.courses[0].schoolings[1];
+    assertSourceYearHeld(before, data);
+  });
+}
+
+test('source year confirmation: an existing schooling slot gains a year while unchanged components retain their IDs', () => {
+  const data = sourceYearData('');
+  const before = persistedImport(applyImport(initialState(), importPreview(data, []), []));
+  const updated = sourceYearData();
+  const preview = reimportPreview(updated, [], before);
+  const after = persistedImport(applyImport(before, preview, []));
+  assert.equal(after.importedCourseAchievements[0].id, before.importedCourseAchievements[0].id);
+  assert.equal(after.importedCourseAchievements[0].academicYear, 2025);
+  assert.equal(after.importedCourseAchievements[0].yearSource, 'source');
+  assert.deepEqual(after.importedStudyRecords.slice(0, 2), before.importedStudyRecords, 'undated history stays append-only under the existing reconciliation rules');
+  assert.equal(after.importedStudyRecords.length, 3);
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
+  assert.equal(applyImport(after, reimportPreview(updated, [], after), []), after);
+});
+
+test('source year confirmation: matching explicit years in both slots do not conflict', () => {
+  const before = applyImport(initialState(), importPreview(dateIntegrityData(), []), []);
+  const data = sourceYearData();
+  data.courses[0].schoolings[1] = { ...data.courses[0].schoolings[0], rawYear: '2025', year: '2025' };
+  const after = persistedImport(applyImport(before, reimportPreview(data, [], before), []));
+  assert.equal(after.importedCourseAchievements[0].academicYear, 2025);
+  assert.equal(after.importedCourseAchievements[0].yearSource, 'source');
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
+});
+
+test('source year confirmation: a held row cannot interfere with another safe source update', () => {
+  const first = dateIntegrityData();
+  first.courses.push({ ...structuredClone(first.courses[0]), rawName: '別の年度検証科目' });
+  const before = persistedImport(applyImport(initialState(), importPreview(first, []), []));
+  const incoming = sourceYearData();
+  incoming.courses.push({ ...structuredClone(incoming.courses[0]), rawName: first.courses[1].rawName });
+  incoming.courses[0].creditExam.rawGrade = 'A'; incoming.courses[0].creditExam.grade = 'A';
+  const preview = reimportPreview(incoming, [], before);
+  assert.ok(preview.filter(unit => unit.rawName === first.courses[0].rawName).every(unit => unit.sourceYearConflict));
+  const after = persistedImport(applyImport(before, preview, []));
+  assert.deepEqual(after.importedCourseAchievements[0], before.importedCourseAchievements[0]);
+  assert.equal(after.importedCourseAchievements[1].id, before.importedCourseAchievements[1].id);
+  assert.equal(after.importedCourseAchievements[1].academicYear, 2025);
+  assert.equal(after.importedCourseAchievements.length, 2);
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 8);
+  assert.deepEqual(after.importedStudyRecords.slice(0, 2), before.importedStudyRecords);
+  assert.equal(after.importedStudyRecords.length, 3);
+  assert.equal(after.importedStudyRecords[2].sourceCourseId, before.importedCourseAchievements[1].id);
 });
