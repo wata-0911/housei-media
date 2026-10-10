@@ -22,7 +22,6 @@ const statusLabels: Record<PlannerItem['status'], string> = { planned: '計画�
 
 function CourseCard({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: MediaCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
   const [draft, setDraft] = useState(saved.totalLessons?.toString() ?? '');
-  const [bulkThroughLesson, setBulkThroughLesson] = useState('1');
   const [error, setError] = useState('');
   const summary = mediaProgressSummary(saved);
   const saveTotal = () => {
@@ -41,11 +40,10 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     const assessment: MediaAssessment = { id: crypto.randomUUID(), type: 'midterm', label: '中間試験', scheduledDate: null, completed: false };
     onChange(item.offeringId, addAssessment(saved, assessment));
   };
-  const selectedBulkThroughLesson = saved.totalLessons !== null && Number(bulkThroughLesson) >= 1 && Number(bulkThroughLesson) <= saved.totalLessons
-    ? Number(bulkThroughLesson)
-    : 1;
-  const completeVideosThroughSelectedLesson = () => {
-    const next = completeVideosThroughLesson(saved, selectedBulkThroughLesson);
+  const changeVideo = (lesson: number, checked: boolean) => {
+    const next = checked
+      ? completeVideosThroughLesson(saved, lesson)
+      : toggleLesson(saved, lesson, 'videoCompleted');
     if (next !== null) onChange(item.offeringId, next);
   };
   return <article className="border border-gray-200 bg-white p-4 sm:p-6 min-w-0">
@@ -63,16 +61,12 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     <div className="mt-4 grid grid-cols-3 gap-2 text-sm"><p>動画 {saved.totalLessons === null ? `${summary.video}/—` : `${summary.video}/${saved.totalLessons}`}</p><p>テスト {saved.totalLessons === null ? `${summary.test}/—` : `${summary.test}/${saved.totalLessons}`}</p><p>総合 {summary.percent === null ? '—' : `${summary.percent}%`}</p></div>
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
     {saved.totalLessons === null ? <p className="mt-5 text-sm text-gray-600">全回数を設定すると、各回の動画とテストの進捗を記録できます。</p> : <>
-      <div className="mt-5 flex flex-wrap items-end gap-2 border border-gray-200 bg-slate-50 p-3">
-        <label className="text-sm">動画を第<select aria-label={`${offering.name}の動画を視聴済みにする回`} value={selectedBulkThroughLesson} disabled={disabled} onChange={event => setBulkThroughLesson(event.target.value)} className="mx-1 border border-gray-300 bg-white p-2"><option value="">選択</option>{Array.from({ length: saved.totalLessons }, (_, index) => index + 1).map(lesson => <option key={lesson} value={lesson}>{lesson}</option>)}</select>回まで視聴済みにする</label>
-        <button type="button" disabled={disabled} onClick={completeVideosThroughSelectedLesson} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">適用</button>
-        <p className="w-full text-xs text-gray-600">第1回から選択した回までの動画だけを視聴済みにします。テストと以降の動画進捗は変更しません。</p>
-      </div>
-      <div className="mt-5 space-y-2">
+      <p className="mt-5 text-xs text-gray-600">動画にチェックを入れると、その回まで一括で視聴済みになります。外す場合はその回のみ解除されます。</p>
+      <div className="mt-3 space-y-2">
       {Array.from({ length: saved.totalLessons }, (_, index) => index + 1).map(lesson => {
         const entry = saved.lessons.find(current => current.lesson === lesson);
         return <div key={lesson} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-gray-100 pt-2 text-sm"><span>第{lesson}回</span>
-          <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.videoCompleted ?? false} disabled={disabled} onChange={() => onChange(item.offeringId, toggleLesson(saved, lesson, 'videoCompleted'))} />動画</label>
+          <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.videoCompleted ?? false} disabled={disabled} onChange={event => changeVideo(lesson, event.target.checked)} />動画</label>
           <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.testCompleted ?? false} disabled={disabled} onChange={() => onChange(item.offeringId, toggleLesson(saved, lesson, 'testCompleted'))} />テスト</label>
         </div>;
       })}
