@@ -1,6 +1,15 @@
 import { useRef, useState } from 'react';
 import { toPng } from 'html-to-image';
 import { exportGradeLabel, exportStudyYearLabel, exportTermLabel, exportValue, plannerExportCsv, plannerExportFileName, type PlannerExportPresentation, type PlannerExportRow } from '../../planner/plannerExport';
+import {
+  preparePngData,
+  createPngFile,
+  currentPng,
+  sharePngFile,
+  shareResultMessage,
+} from '../../planner/pngExport';
+
+import type { PreparedPng } from '../../planner/pngExport';
 
 type Props = { presentation: PlannerExportPresentation };
 
@@ -39,33 +48,164 @@ function ExportImage({ presentation, date }: { presentation: PlannerExportPresen
   </div>;
 }
 
-export default function PlannerExportActions({ presentation }: Props) {
+export default function PlannerExportActions({
+  presentation,
+}: Props) {
   const imageRef = useRef<HTMLDivElement>(null);
+
   const [message, setMessage] = useState('');
-  const [isSavingImage, setIsSavingImage] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generated, setGenerated] =
+    useState<PreparedPng | null>(null);
+
   const now = new Date();
   const baseName = plannerExportFileName(now);
-  const handleCsv = () => {
-    downloadBlob(plannerExportCsv(presentation), `${baseName}.csv`, 'text/csv;charset=utf-8');
+
+  // 画像に反映される計画内容・日付から識別キーを作成。
+  const imageKey = JSON.stringify([
+    presentation,
+    now.getFullYear(),
+    now.getMonth() + 1,
+    now.getDate(),
+  ]);
+
+  const readyImage = currentPng(generated, imageKey);
+
+  function handleCsv() {
+    downloadBlob(
+      plannerExportCsv(presentation),
+      `${baseName}.csv`,
+      'text/csv;charset=utf-8'
+    );
     setMessage('CSVを保存しました。');
-  };
-  const handlePng = async () => {
+  }
+
+  async function handlePng() {
     if (!imageRef.current) return;
-    setIsSavingImage(true); setMessage('画像を準備しています…');
+
+    const keyAtStart = imageKey;
+    const fileName = `${baseName}.png`;
+
+    setGenerated(null);
+    setIsGenerating(true);
+    setMessage('画像を準備しています…');
+
     try {
-      const dataUrl = await toPng(imageRef.current, { backgroundColor: '#fffaf3', pixelRatio: 2, cacheBust: true, skipFonts: true });
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `${baseName}.png`;
-      link.click();
-      setMessage('画像を保存しました。');
-    } catch { setMessage('画像を作成できませんでした。もう一度お試しください。'); } finally { setIsSavingImage(false); }
-  };
-  return <section aria-label="履修計画の保存" className="flex flex-wrap items-center gap-2 border border-gray-200 bg-white p-4 sm:p-5">
-    <button type="button" onClick={handleCsv} className="border border-[#002255] px-3 py-2 text-sm text-[#002255]">CSVで保存</button>
-    <button type="button" onClick={handlePng} disabled={isSavingImage} className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50">{isSavingImage ? '画像を作成中…' : '画像で保存'}</button>
-    <p className="basis-full text-xs text-gray-600 sm:basis-auto">CSV・画像はこの端末上で生成されます。</p>
-    <p role="status" aria-live="polite" className="basis-full text-sm text-[#002255]">{message}</p>
-    <div className="pointer-events-none absolute left-[-10000px] top-0" aria-hidden="true"><div ref={imageRef}><ExportImage presentation={presentation} date={now} /></div></div>
-  </section>;
+      const { dataUrl, blob } = await preparePngData(
+        imageRef.current,
+        toPng
+      );
+
+      const file = createPngFile(blob, fileName);
+
+      setGenerated({
+        key: keyAtStart,
+        dataUrl,
+        file,
+      });
+
+      setMessage('PNGを生成しました。保存方法を選択してください。');
+    } catch {
+      setMessage(
+        '画像を生成できませんでした。もう一度お試しください。'
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function handleShare() {
+    if (!readyImage) return;
+
+    const result = await sharePngFile(
+      readyImage.file,
+      navigator
+    );
+
+    setMessage(shareResultMessage(result));
+  }
+
+  return (
+    <section
+      aria-label="履修計画の保存"
+      className="flex flex-wrap items-center gap-2 border border-gray-200 bg-white p-4 sm:p-5"
+    >
+      <button
+        type="button"
+        onClick={handleCsv}
+        className="border border-[#002255] px-3 py-2 text-sm text-[#002255]"
+      >
+        CSVで保存
+      </button>
+
+      <button
+        type="button"
+        onClick={handlePng}
+        disabled={isGenerating}
+        className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
+      >
+        {isGenerating ? '画像を作成中…' : '画像を生成'}
+      </button>
+
+      {readyImage && (
+        <>
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={isGenerating}
+            className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
+          >
+            共有・保存
+          </button>
+
+          <a
+            href={readyImage.dataUrl}
+            download={readyImage.file.name}
+            className="border border-[#002255] px-3 py-2 text-sm text-[#002255]"
+          >
+            ファイルをダウンロード
+          </a>
+        </>
+      )}
+
+      <p className="basis-full text-xs text-gray-600 sm:basis-auto">
+        CSV・画像はこの端末上で生成されます。
+      </p>
+
+      {readyImage && (
+        <div className="basis-full min-w-0 border border-gray-200 bg-white p-3">
+          <p className="mb-2 text-sm text-gray-700">
+            生成されたPNGの確認
+          </p>
+          <img
+            src={readyImage.dataUrl}
+            alt="生成された履修計画画像"
+            className="w-full max-w-md border border-gray-200"
+          />
+        </div>
+      )}
+
+      <p
+        role="status"
+        aria-live="polite"
+        className="basis-full text-sm text-[#002255]"
+      >
+        {generated && !readyImage
+          ? '履修計画の内容が変更されました。PNGを再生成してください。'
+          : message}
+      </p>
+
+      <div
+        className="pointer-events-none absolute left-[-10000px] top-0"
+        aria-hidden="true"
+      >
+        <div ref={imageRef}>
+          <ExportImage
+            presentation={presentation}
+            date={now}
+          />
+        </div>
+      </div>
+    </section>
+  );
 }
