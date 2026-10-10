@@ -1,7 +1,7 @@
 import FuturePlanNotice from './FuturePlanNotice';
 import { planningTermLabel } from '../../planner/futurePlanning';
 import { useState } from 'react';
-import { addAssessment, assessmentLabel, mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment, type ImportedMediaShareItem } from '../../planner/mediaSchooling';
+import { addAssessment, assessmentLabel, completeVideosThroughLesson, mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment, type ImportedMediaShareItem } from '../../planner/mediaSchooling';
 import type { MediaAssessment, MediaCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
 import MediaProgressShareModal from './MediaProgressShareModal';
 import type { ImportedManagedMedia, ImportedMediaAchievement, ImportedMediaPending } from '../../planner/importedAchievementCalculations';
@@ -22,6 +22,7 @@ const statusLabels: Record<PlannerItem['status'], string> = { planned: '計画�
 
 function CourseCard({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: MediaCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
   const [draft, setDraft] = useState(saved.totalLessons?.toString() ?? '');
+  const [bulkThroughLesson, setBulkThroughLesson] = useState('1');
   const [error, setError] = useState('');
   const summary = mediaProgressSummary(saved);
   const saveTotal = () => {
@@ -40,6 +41,13 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     const assessment: MediaAssessment = { id: crypto.randomUUID(), type: 'midterm', label: '中間試験', scheduledDate: null, completed: false };
     onChange(item.offeringId, addAssessment(saved, assessment));
   };
+  const selectedBulkThroughLesson = saved.totalLessons !== null && Number(bulkThroughLesson) >= 1 && Number(bulkThroughLesson) <= saved.totalLessons
+    ? Number(bulkThroughLesson)
+    : 1;
+  const completeVideosThroughSelectedLesson = () => {
+    const next = completeVideosThroughLesson(saved, selectedBulkThroughLesson);
+    if (next !== null) onChange(item.offeringId, next);
+  };
   return <article className="border border-gray-200 bg-white p-4 sm:p-6 min-w-0">
     <h3 className="font-medium text-lg break-words text-[#002255]">{offering.name}</h3>
     <p className="mt-1 text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {planningTermLabel(item, offering)} / {statusLabels[item.status]}</p>
@@ -54,7 +62,13 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     {error && <p role="alert" className="mt-1 text-sm text-red-700">{error}</p>}
     <div className="mt-4 grid grid-cols-3 gap-2 text-sm"><p>動画 {saved.totalLessons === null ? `${summary.video}/—` : `${summary.video}/${saved.totalLessons}`}</p><p>テスト {saved.totalLessons === null ? `${summary.test}/—` : `${summary.test}/${saved.totalLessons}`}</p><p>総合 {summary.percent === null ? '—' : `${summary.percent}%`}</p></div>
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
-    {saved.totalLessons === null ? <p className="mt-5 text-sm text-gray-600">全回数を設定すると、各回の動画とテストの進捗を記録できます。</p> : <div className="mt-5 space-y-2">
+    {saved.totalLessons === null ? <p className="mt-5 text-sm text-gray-600">全回数を設定すると、各回の動画とテストの進捗を記録できます。</p> : <>
+      <div className="mt-5 flex flex-wrap items-end gap-2 border border-gray-200 bg-slate-50 p-3">
+        <label className="text-sm">動画を第<select aria-label={`${offering.name}の動画を視聴済みにする回`} value={selectedBulkThroughLesson} disabled={disabled} onChange={event => setBulkThroughLesson(event.target.value)} className="mx-1 border border-gray-300 bg-white p-2"><option value="">選択</option>{Array.from({ length: saved.totalLessons }, (_, index) => index + 1).map(lesson => <option key={lesson} value={lesson}>{lesson}</option>)}</select>回まで視聴済みにする</label>
+        <button type="button" disabled={disabled} onClick={completeVideosThroughSelectedLesson} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">適用</button>
+        <p className="w-full text-xs text-gray-600">第1回から選択した回までの動画だけを視聴済みにします。テストと以降の動画進捗は変更しません。</p>
+      </div>
+      <div className="mt-5 space-y-2">
       {Array.from({ length: saved.totalLessons }, (_, index) => index + 1).map(lesson => {
         const entry = saved.lessons.find(current => current.lesson === lesson);
         return <div key={lesson} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-gray-100 pt-2 text-sm"><span>第{lesson}回</span>
@@ -62,7 +76,8 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
           <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.testCompleted ?? false} disabled={disabled} onChange={() => onChange(item.offeringId, toggleLesson(saved, lesson, 'testCompleted'))} />テスト</label>
         </div>;
       })}
-    </div>}
+      </div>
+    </>}
     <section className="mt-6 border-t border-gray-200 pt-4" aria-label={`${offering.name}の試験・評価予定`}>
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="font-medium text-[#002255]">試験・評価予定</h4><p className="mt-1 text-xs text-gray-600">試験の有無・方式・日程は科目ごとに異なります。最新の「法政通信」を確認してください。</p></div><button type="button" disabled={disabled} onClick={addNewAssessment} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">試験を追加</button></div>
       {(saved.assessments ?? []).length > 0 && <div className="mt-3 space-y-3">{(saved.assessments ?? []).map(assessment => <div key={assessment.id} className="grid gap-2 border border-gray-200 bg-slate-50 p-3 sm:grid-cols-[9rem_minmax(0,1fr)_10rem_auto] sm:items-end">
