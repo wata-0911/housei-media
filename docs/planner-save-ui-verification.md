@@ -1,5 +1,7 @@
 # Issue #95 保存待ちUIのブラウザ回帰
 
+> **2026-10-11 監査補足:** dev `05dac8c`では入力draft/確定保存・失敗再試行・復元後失効が実装済み。本書はChromium自動回帰の手順で、今回このsuiteは再実行していない。PR #138について利用者から、iPhone Safari実機のbackup/restore確認全項目と入力確定保存修正後の追加4項目（メディア試験名連続入力、全回数の複数桁入力とプリセット、日付入力、日本語変換中の入力操作）がPASSと報告された。利用者による実機報告で、Workの独立再現/自動テストとは区別する。PR #139での再検証と年度非依存の新モデル・schema・migration実機確認は未実施。[現状監査](planner-docs-current-audit-2026-10-11.md)参照。
+
 `npm run test:planner-browser` は実Chromiumと別タブのWeb Lockを使用する。通常のplannerテストとは別に実行し、ブラウザが利用できない場合は成功扱いにしない。
 
 PlaywrightとChromiumをテスト環境で用意する。Playwrightが本リポジトリからimportできる場合はそのまま実行できる。外部ランタイムを使う環境では `PLANNER_PLAYWRIGHT_MODULE` にそのモジュールの絶対パス（例: `/runtime/node_modules/playwright/index.mjs`）を渡す。必要なら `PLANNER_BROWSER_EXECUTABLE` にChromiumの実行ファイルを渡す。`PLANNER_BROWSER_PORT` の初期値は4180。
@@ -20,4 +22,6 @@ PlaywrightとChromiumをテスト環境で用意する。Playwrightが本リポ�
 
 IME合成中のEnterは保存しない。同じ値の再確定は重複保存しない。復元/初期化後はUIを再生成して、保存値と同じ値でも古い未保存draftを引き継がない。メディアの予定日・卒論の合格日も入力確定時に保存する。
 
-iPhone Safari実機・Filesへのネイティブ共有保存はこのテストの対象ではなく、未完了のAcceptance Criterionとして残す。
+iPhone Safari実機・Filesへのネイティブ共有保存はこのChromium commandの対象ではなく、当時のAcceptance Criterionでは未検証と記録された。
+
+この一文はPR #138当時の自動テスト範囲に関する監査履歴として保持する。後日PR #138について利用者からiPhone Safari実機のbackup/restore全項目PASSとの報告があり、入力修正後の追加4項目もPASSと報告された（上記追記）。利用者報告をWorkによる独立再現・自動テストと同一視しない。今回のPR #139で実機を再検証したわけではなく、新モデル・schema・migrationの受け入れ確認は後続実装後に必要。

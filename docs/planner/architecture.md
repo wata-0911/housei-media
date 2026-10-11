@@ -1,5 +1,7 @@
 # 履修プランナー Architecture v1
 
+> **2026-10-11 最新追記:** 現状基準はPR #138後のdev `05dac8c`。第15節と[現状監査](../planner-docs-current-audit-2026-10-11.md)を参照。以下の旧基準に紐づくH/F評価は履歴として保持する。目標仕様は[年度非依存化方針](../planner-curriculum-release-policy.md)に定め、新モデルは未実装、実値・公式読替等は未確定。
+
 ## 1. Document Status
 
 - 状態: 現行実装の Architecture v1（2026-10-08、Asia/Tokyo）。将来設計の確定書ではない。
@@ -334,3 +336,21 @@ The public 2026 guide printed p.133 / PDF p.135 defines admission recognition an
 `unresolvedConditions.ts` は `GraduationProgress` を読み取り、利用者の操作、大学確認、実装/根拠不足、カードへの表示集約、他scope除外を分離する。`PlannerPage` がcatalog/選択scope/profile/公式行を渡す。`UnresolvedConditions` は操作数と個別保留数を別々に表示する。未知scope/reasonと動的な公式保留は保守的に残す。判定エンジン・永続state・unknownCount・coverageには書き戻さない。
 
 算入やsource authorityの正本は従来どおり。詳細・公式根拠・168ケースの変更前後は [Issue #56監査](../planner-unresolved-conditions-audit-2026.md) と [全発生経路](../planner-unresolved-conditions-inventory-2026.md) を参照。
+
+
+## 15. 2026-10-11 現行保存・復元仕様と年度非依存化の境界
+
+基準: dev `05dac8c7deb5f9abea93c9967237aacf0427863c`。第1〜14節とH追記の旧基準SHA・検証履歴を保持する。以下がPR #126/#138後の現状補足である。
+
+- **実装済み:** `PlannerBackupPanel`→`createPlannerBackup`はpersisted rawのstate22を検証してbackup v2を準備する。全stateの公式行/内訳/meta、手動計画、3進捗/評価map、TODO、公開科目、profile、scope別卒論/指導を保持。メモリ上の未確定draftは含めない。
+- v2はenriched runtime catalogの原版とfull/semantic SHAを収録し、旧v1 decoderは同一SHAまたは固定registryで検証する。compatibilityVersion1は出典URL/頁とProgram.displayNameのみ除外し、他の意味と配列順の一致を要求する。source/target参照とload後無変化を検証し、未知原版・未対応schema・修復が必要な原文は通常復元しない。
+- `restorePlannerBackup`は元textを再検証し、`withPlannerWriteLock`内でexpectedRaw一致を確かめて主キーへ一回setItemする。recoveryは変更せず、マージなし。通常保存/初期化も共通Lockへ参加する。復元にLockは必須、非参加の旧タブは保護対象の限界として閉じる案内を残す。
+- `hosei-planner-protection` v1は主キーとrecoveryのraw文字列・SHAを保持し、正常backupとは別契約。primary null＋recoveryのみも保護できる。inspectは保存権限を与えず通常復元へ投入できない。認定shadowの表示projectionで原文を置き換えない。
+- Pageは保存成功後にloaded stateを更新し、Undo/import previewを消してeditorを再生成する。文字/数値/日付はdraftで編集して確定時に保存、失敗時全文を保持。input中のstate永続化やIME Enter保存を避ける。詳細は[保存UI検証](../planner-save-ui-verification.md)。
+- PR #126後の新規importはcapturedAtから年度/実績日を生成しない。通信は試験日→最新report日、スクーリングは明示年度/実施日が根拠。年度不明のOpening自動追加を保留し、旧推定・手動年度は保持する。
+
+**目標:** 教育課程表の制度科目→課程別Placementを正本とし、独立Attempt・手動進捗の成立にOfferingを要求しない。年度別開講/日程/固有履修条件は利用者が月刊『法政通信』で確認する。旧Openingは互換参照として保持する。
+
+**未実装:** Offering非依存の手動Attempt保存、同Openingの複数回、Placement/Version、年度非依存migration・新計算consumer。**未確定:** ID実値・改正読替・具体schema/backup次版。[詳細設計](../planner-year-independent-design.md)と[移行計画](../planner-year-independent-migration.md)を参照。年度別registryを新規導入する工程は採用しない。
+
+**継続する制約:** state22、graduationCheckComplete=false、sourceLinksReverified=false、earnedCreditsTotal正本、null/0と原文/手動情報保護。PR #138について利用者からiPhone Safari実機のbackup/restore全項目と入力修正後4項目のPASS報告あり。Workの独立再現ではなく、PR #139での再検証もしていない。年度非依存の新モデル/schema/migrationは未実装で、実機検証も未実施。全H最終監査は未完。今回の検証範囲は[現状監査](../planner-docs-current-audit-2026-10-11.md)に記録する。

@@ -1,5 +1,7 @@
 # スクーリング・リポート評価記録
 
+> **2026-10-11 現行仕様:** stateは22、courseEvaluationsはofferingIdをキーにfinalGrade/reportGrade/schoolingGradeを保存する。以下のschema6説明は導入時履歴。同じOfferingを別のplannedYearへ変更しても同ownerのため、同Openingの複数年度・再履修評価を独立保存する機能は未実装。通信の個別レポート/試験は現在correspondenceProgressに存在する。目標ownerは[Attempt ID](planner-year-independent-design.md)、具体保存fieldは未確定。評価からstatusや公式aggregateを生成しない。
+
 ## 評価と保存形式
 
 評価は`S`、`A+`、`A`、`A-`、`B+`、`B`、`B-`、`C+`、`C`、`C-`、`D`の11段階で保存する。未入力は`null`で、画面では`A＋`、`A－`のように全角記号で表示する。

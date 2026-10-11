@@ -1,5 +1,7 @@
 # CurriculumCourse foundation (2026)
 
+> **2026-10-11 現状照合:** 本文はfoundation導入と追修正の履歴。現行schema22を維持する。PR #126後は実績年度不明のOpening一意照合・自動追加を保留し、capturedAtを年度根拠にしない。source全体の代表Openingを制度exactだけで選ばない。安全なauto-registrationのearned/planned条件は[現状監査](planner-docs-current-audit-2026-10-11.md)を参照。年別開講収録を前提とする旧next stageは[新方針](planner-curriculum-release-policy.md)で置き換える。独立Attemptは未実装、stable ID/公式改正対応は[詳細設計](planner-year-independent-design.md)の未確定事項。
+
 ## Implementation origin and audit
 
 Started from latest `origin/dev` commit `787dc8635f88a0e0850bd9a0bb91c1a9fb74f3ba` on `feature/curriculum-course-foundation`. No code or migration from `feature/planner-multi-year-v22-foundation` was used. This branch does not introduce attempts, enrollment, plan intents, repeat validators, or multiple-attempt UI.
