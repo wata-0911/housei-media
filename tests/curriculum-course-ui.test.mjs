@@ -421,7 +421,7 @@ test('import UX: successful apply navigates after commit to existing focusable c
   globalThis.document = { getElementById: id => { assert.equal(id, IMPORT_RESULT_TARGET); return { focus: options => calls.push(['focus', options]), scrollIntoView: options => calls.push(['scroll', options]) }; } };
   try { focusImportedCourseList(); assert.deepEqual(calls, []); frame(); assert.deepEqual(calls, [['focus', { preventScroll: true }], ['scroll', { behavior: 'smooth', block: 'start' }]]); } finally { globalThis.document = doc; globalThis.requestAnimationFrame = raf; }
   const source = readFileSync(new URL('../src/components/planner/GradeImportPanel.tsx', import.meta.url), 'utf8');
-  assert.match(source, /if \(onApply\(units\)\).*focusImportedCourseList\(\)/);
+  assert.match(source, /if \(await onApply\(units\)\).*focusImportedCourseList\(\)/);
   assert.match(renderToStaticMarkup(createElement(GradeImportPanel, { offerings: [], plannedItems: [], existing: [], disabled: false, onApply: noop })), /id="grade-import-panel"/);
 });
 test('import UX: graduation notices render distinct counts, schooling explanation and neutral excluded information', () => {
