@@ -98,19 +98,19 @@ detached ownerは計画行数とは別に数える。items数の一致だけで�
 | YI-03 独立Attempt・owner validator契約 | YI-01/02 | schema候補とID/未解決/active-detached/単位由来を確定。合成fixtureのみで複数回・null/0・参照閉包・衝突拒否を検証。runtime保存をまだ切替えない |
 | YI-04 v22→N純粋migrationと旧decoder | YI-03、#95 | 全field台帳、deterministic ID割当、detached owner、source archive/ruleを実装。旧v1/v2/state22継続読込、無副作用、数量/参照/旧計算不変。read-only比較から始める |
 | YI-05 新Attempt対応UI・CRUD・進捗/評価/TODO/Undo | YI-04 | 新モデル対応コードを実装するが、一般利用者の永続モデル切替・新state書込み・新形式の通常保存/復元有効化はしない。既存v22の編集・保存・再読込・backup/restore・公式成績・卒業要件計算を従来どおり維持する。新UIは明示的に無効化でき、開発/テスト用操作は本番`hosei-planner:v1`を変更しない。旧計算adapterを保持し、卒業engine変更を混ぜない |
-| YI-06 新保存・backup確定導線と公開切替 | YI-04/05 | state N・新backup版、preview差分・最終確認・共通lock・一回保存を接続。v1/v2原版保持/保護v1読込を維持。quota/競合/取消/反復復元を実ブラウザ確認。移行・保存・復元・失敗保護の全契約を満たして初めて一般利用者に新モデルを有効化 |
-| YI-07 新Attemptの算入consumer監査・adapter | YI-02/05、#133根拠確認 | 架空Offeringを作らず課程/scopeから各consumerを接続。8scopeと特殊family別に小PRへ分割。公式aggregate不変、unknownを無根拠解除しない。未対応は明示保留 |
-| YI-08 PC/iPhone・公開案内・既存Issue調整 | YI-06、算入公開範囲の確定 | PCとiPhone Safari実機/Files共有・再読込、新モデル移行、移行前保護、開講/卒業保証なしを確認。#132/#134へ実態を反映、#137の開講時期収録要求を整理 |
+| YI-06 新保存・backup基盤 | YI-04/05 | schema N・新backup形式、preview差分・最終確認・共通lock・一回保存を実装。旧state22/backup v1/v2互換読込、無副作用preview、公式成績/数量/参照不変、競合/失敗時の原文保護を満たす。PCブラウザで移行・保存・再読込・復元を自動回帰し、新保存を隔離環境で動作確認する。マージ後も利用者向け切替flagは無効で、通常利用者はv22を継続 |
+| YI-07 新Attemptの算入consumer監査・adapter | YI-02/05、#133根拠確認 | 架空Offeringを作らず課程/scopeから各consumerを接続。8scopeと特殊family別に小PRへ分割。公式aggregate不変、unknownを無根拠解除しない。未対応は明示保留。全機能完成はYI-08の無条件依存にせず、公開対象の算入範囲と保留表示の安全性を確定 |
+| YI-08 公開前受け入れ・案内・有効化 | YI-06、公開対象の算入範囲確定（YI-07の完了自体は必須でない） | PC自動回帰とiPhone Safari実機で旧state22移行、保存/再読込、backup作成、Files保存、復元を確認。旧v1/v2・非互換catalog・破損/未解決参照の拒否と保護、保存失敗/容量不足/別tab/Web Lock待機で既存データが壊れないこと、公式単位/手動情報/進捗/卒論保持、未対応卒業算入の保留と既知数量保持を確認。案内・移行前backup・#132/#134/#137との範囲を整合し、明示的なリリース判断後にのみ一般利用者向けflagを有効化 |
 
-### YI-05からYI-06への公開・保存境界
+### YI-05からYI-08への公開・保存境界
 
 YI-05とYI-06は段階的にmergeできる。YI-05のmergeは一般利用者の永続形式を切り替える合図ではない。YI-05の新Attempt UIはfeature flag等の明示的制御で閉じられることを受け入れ条件とし、具体方式はYI-05実装Issueで確定する。flagを無効にした状態で旧v22の編集・通常保存・再読込・backup v2作成/復元・公式成績表示/再取込・卒業要件出力が従来どおり動く。開発・テスト用の新モデル操作は隔離fixture/storeだけを使い、実利用者のprimary/recovery localStorageを書き換えない。
 
-YI-05で準備した新形式コードはYI-06まで利用者向け保存経路から到達できない。YI-06は、旧state22・backup v1/v2の読込、preview無副作用、移行前原文保護、参照/数量不変、明示確認、共通Web Lock下の一回保存、通常backupの作成/復元、失敗時の保護を全て満たしてから切替flagを有効にする。切替可否を判断する具体flag/rollback手順はYI-06で定める。
+YI-05で準備した新形式コードは一般利用者向け保存経路から隔離する。YI-06は新PlannerState schema Nと新backup形式を実装し、旧state22・backup v1/v2の互換読込、移行previewの無副作用、移行前原文保護、公式成績・数量・参照不変、明示確認、共通Web Lock下の保存、PCブラウザでの移行/保存/再読込/backup/復元の自動回帰を完了する工程である。開発・テスト時の新モデル保存は隔離環境で確認し、通常利用者のprimary/recoveryを変更しない。YI-06の完了・devへのmerge後も一般利用者向け新モデル切替flagは無効のままとし、利用者はv22の編集・保存・backup/restoreを継続する。YI-06のmergeだけで新モデルを公開してはならない。
 
 移行の拒否・未対応参照・競合・read/write/quota失敗時は、新primaryを書かず、primaryと既存recoveryをバイト単位で維持する。旧backup/protection原文も残す。状態を無理にnormalizeして成功扱いしない。再開は対応版の明示previewから行う。卒業算入adapterが未実装の範囲は明示的に判定保留とする。公式`earnedCreditsTotal`と従来確定済み数量を保ち、内訳・手動値・仮想科目で補完/相殺しない。
 
-YI-04〜06は保存契約を共有し、YI-04/05はread-only比較と隔離fixtureで個別レビュー可能にする。YI-06に切替の最終受け入れ条件を置き、YI-07が未完なら新モデルで判定保留にする算入範囲を表示する。年度非依存記録と卒業engine完成は同一リリース条件にしない。
+YI-04〜06は保存契約を共有し、YI-04/05はread-only比較と隔離fixtureで個別レビュー可能にする。YI-06は保存基盤の実装完了条件であり、一般公開の受け入れゲートではない。YI-07が未完でもYI-08の検証・判断は進められるが、公開する算入機能の範囲を明記し、未対応部分が判定保留と表示され既知の公式数量を失わないことを確認する。YI-08でPC/iPhone Safari受け入れ、移行前保護、案内・Issue範囲を確認し、明示的なリリース判断を行った後に限って新モデルを一般利用者向けに有効化する。利用者による実機PASS報告、自動テスト結果、Workによる独立実機再現は別々の証拠として記録する。年度非依存記録と卒業engine完成は同一リリース条件にしない。
 
 #129は現行の再取り込み差分UX・安全更新が目的で、独立して進められる。ただしowner/source identity契約変更をYI-03/04へ共有し、後で移行モデルへの統合テストを行う。#133は公式根拠調査でありH全件解消ではない。将来年度の開講・日程収録や全旧課程の自動読替は候補に含めない。
 
