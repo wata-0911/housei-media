@@ -1,3 +1,10 @@
+import CommittedInput from '../src/components/planner/CommittedInput.tsx';
+import { backupCatalogIdentity, backupDigest, backupCatalogSemantics, LEGACY_BACKUP_CATALOGS } from '../src/planner/plannerBackupCompatibility.ts';
+import { createPlannerBackupProtection, inspectPlannerBackupProtection } from '../src/planner/plannerBackupProtection.ts';
+import { restorePlannerBackup } from '../src/planner/plannerBackupStorage.ts';
+import { savePlannerState, recoverPlannerState, PLANNER_WRITE_LOCK } from '../src/planner/storage.ts';
+import PlannerBackupPanel from '../src/components/planner/PlannerBackupPanel.tsx';
+import { createPlannerBackup, parsePlannerBackup, validateBackupState, backupSummary } from '../src/planner/plannerBackup.ts';
 import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
 import PlannerPage from '../src/pages/PlannerPage.tsx';
 import ThesisGuidance from '../src/components/planner/ThesisGuidance.tsx';
@@ -4126,7 +4133,7 @@ test('auto import: ordinary items survive v21 persistence and full snapshot undo
   assert.equal(next.schemaVersion, 22); assert.equal(STORAGE_KEY, 'hosei-planner:v1');
   const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
   assert.match(page, /setUndoImport\(state\)/);
-  assert.match(page, /undoImport && commit\(undoImport,/);
+  assert.match(page, /undoImport && await commit\(undoImport,/);
 });
 
 test('auto import: direct handoff and manual JSON use the same application behavior', () => {
@@ -4258,7 +4265,7 @@ test('backfill: source duplicates enable the real UI action only while a safe pl
   assert.match(noOpHtml, /<button[^>]*disabled=""/);
   assert.doesNotMatch(noOpHtml, /科目を履修計画に仮登録できます/);
   const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
-  assert.match(page, /<GradeImportPanel offerings=\{catalog\.offerings\} plannedItems=\{state\.items\}/);
+  assert.match(page, /<GradeImportPanel key=\{importEpoch\} offerings=\{catalog\.offerings\} plannedItems=\{state\.items\}/);
 });
 
 for (const credits of [2, 4]) test(`backfill: duplicate components and course-only sources respect completion ${credits}/4`, () => {
@@ -4393,10 +4400,11 @@ for (const program of thesisPrograms.filter(p => ['法律学科', '経済学科'
         onChange: next => { state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [program.scopeId]: next } }); } });
       const control = controls(tree).find(predicate);
       assert.ok(control);
-      control.props.onChange({ target: { value } });
+      if (control.type === CommittedInput) control.props.onCommit(value);
+      else control.props.onChange({ target: { value } });
     };
     edit(node => node.type === 'select', 'passed');
-    edit(node => node.type === 'input' && node.props.type === 'date', '2026-04-15');
+    edit(node => node.type === CommittedInput && node.props.type === 'date', '2026-04-15');
     assert.deepEqual(guidanceForScope(state, program.scopeId).steps.general, { status: 'passed', passedOn: '2026-04-15' });
     for (const other of thesisPrograms.filter(p => p.scopeId !== program.scopeId)) {
       state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope,
@@ -5158,4 +5166,384 @@ test('source year confirmation: a held row cannot interfere with another safe so
   assert.deepEqual(after.importedStudyRecords.slice(0, 2), before.importedStudyRecords);
   assert.equal(after.importedStudyRecords.length, 3);
   assert.equal(after.importedStudyRecords[2].sourceCourseId, before.importedCourseAchievements[1].id);
+});
+
+// Issue #95: the backup boundary is independent of grade-import JSON.
+
+test('planner backup round trips manual-only state including orphan progress and every persisted field', async () => {
+  const state = initialState();
+  const correspondence = catalog.offerings.find(row => row.method === 'correspondence');
+  const media = catalog.offerings.find(isMediaSchooling);
+  const scope = catalog.programs.find(row => row.department === '商業学科').scopeId;
+  state.selectedScopeId = scope;
+  state.thesisSelection = 'selected';
+  state.thesisProgressByScope[scope] = { selection: 'selected', status: 'in_progress' };
+  state.thesisGuidanceByScope[scope] = { steps: {}, geographyReportSubmitted: null };
+  state.items = [{ offeringId: correspondence.id, status: 'in_progress', plannedYear: 2027, plannedTerm: null, studyYear: 2, earnedOrder: null, courseCreditContribution: 0 }];
+  state.publicCourses = [createPublicCourse('00000000-0000-4000-8000-000000000001')];
+  state.todos = [{ id: '00000000-0000-4000-8000-000000000002', offeringId: correspondence.id, text: 'レポート', done: false }];
+  state.mediaSchoolingProgress[media.id] = { offeringId: media.id, totalLessons: null, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }], assessments: [{ id: 'final', type: 'final', label: '試験', scheduledDate: null, completed: false }] };
+  state.correspondenceProgress[correspondence.id] = { offeringId: correspondence.id, requiredReports: null, reports: [], examGrade: null };
+  state.courseEvaluations[correspondence.id] = { offeringId: correspondence.id, finalGrade: 'A', reportGrade: null, schoolingGrade: null };
+  state.graduationProfile.recognizedCredits.totalCredits = 0;
+  const before = JSON.stringify(state);
+  const backup = await createPlannerBackup(before, catalog, new Date('2026-10-11T00:00:00.000Z'));
+  const restored = await parsePlannerBackup(JSON.stringify(backup), catalog);
+  assert.deepEqual(restored.state, state);
+  assert.equal(JSON.stringify(state), before);
+  assert.equal(backup.backupVersion, 2);
+  assert.equal(backup.state.schemaVersion, 22);
+  assert.equal(backupSummary(backup).plans, 1);
+  assert.equal(loadState({ getItem: () => JSON.stringify(restored.state) }, catalog).error, null);
+  assert.deepEqual((await createPlannerBackup(null, catalog)).state, initialState());
+});
+
+test('planner backup rejects malformed JSON, unsupported versions, unknown keys and catalog mismatch', async () => {
+  const backup = await createPlannerBackup(null, catalog);
+  await assert.rejects(parsePlannerBackup('{', catalog), /構文/);
+  for (const mutate of [
+    b => { b.format = 'hosei_web_learning_grade_table'; },
+    b => { b.backupVersion = 3; },
+    b => { b.state.schemaVersion = 21; },
+    b => { b.catalog.sha256 = 'bad'; },
+    b => { b.createdAt = '2026-02-30T00:00:00.000Z'; },
+    b => { b.state.graduationProfile.token = 'secret'; },
+    b => { b.state.graduationProfile.recognizedCredits.token = 'secret'; },
+    b => { b.state.graduationProfile.recognizedCredits.general.humanities.token = 'secret'; },
+    b => { b.state.thesisProgressByScope['missing'] = { selection: 'selected', status: 'earned' }; },
+  ]) {
+    const bad = structuredClone(backup); mutate(bad);
+    await assert.rejects(parsePlannerBackup(JSON.stringify(bad), catalog));
+  }
+});
+
+test('planner backup refuses recognition shadow and normalization without modifying raw', async () => {
+  const state = initialState(); state.graduationProfile.recognizedCredits.totalCredits = 9924;
+  const raw = JSON.stringify(state);
+  const loaded = loadState({ getItem: () => raw }, catalog);
+  assert.equal(loaded.state.graduationProfile.recognizedCredits.totalCredits, null);
+  assert.ok(loaded.recoveredRecognitionRaw);
+  await assert.rejects(createPlannerBackup(raw, catalog));
+  const noncanonical = initialState();
+  const scope = catalog.programs.find(row => row.department === '日本文学科').scopeId;
+  noncanonical.selectedScopeId = scope;
+  await assert.rejects(createPlannerBackup(JSON.stringify(noncanonical), catalog), /修復/);
+});
+
+function backupTestStore(raw = null, recovery = 'old recovery bytes') {
+  const values = new Map([[STORAGE_KEY, raw], [BACKUP_KEY, recovery]]);
+  const writes = [];
+  return { values, writes, getItem: key => values.get(key) ?? null, setItem: (key, value) => { writes.push(key); values.set(key, value); } };
+}
+function backupTestLocks() {
+  let tail = Promise.resolve();
+  const names = [];
+  return { names, request: (name, options, action) => {
+    names.push(name); assert.equal(options.mode, 'exclusive');
+    const next = tail.then(action); tail = next.catch(() => {}); return next;
+  } };
+}
+function officialBackupFixture() {
+  const source = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-11T00:00:00.000Z', courses: [{
+    rawName: '未照合の原本科目', categoryRaw: '専門', compositionCredits: { raw: '4', value: 4 },
+    additionalEnrollment: { raw: '0', value: 0 }, recognizedExemption: { raw: '', value: null },
+    earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '0', value: 0 },
+    reports: Array.from({ length: 4 }, () => ({ raw: '合格', status: 'passed', date: '2026-10-01' })),
+    creditExam: { rawDate: '2026/10/01', rawCredits: '4', rawGrade: 'A', date: '2026-10-01', credits: 4, grade: 'A', pendingMarker: false }, schoolings: emptyGradeSchoolings(),
+  }] };
+  const state = applyImport(initialState(), importPreview(source, catalog.offerings, []), catalog.offerings);
+  const id = state.importedCourseAchievements[0].id;
+  state.importedCourseUserMeta[id] = { lifecycleStatus: 'waiting', plannedYear: 2027, plannedTerm: '後期', studyYear: 3 };
+  return state;
+}
+
+test('planner backup preserves official raw rows, component evidence, legacy components, metadata and source identity', async () => {
+  const state = officialBackupFixture();
+  const backup = await createPlannerBackup(JSON.stringify(state), catalog);
+  assert.deepEqual((await parsePlannerBackup(JSON.stringify(backup), catalog)).state, state);
+  assert.equal(backup.state.importedCourseAchievements[0].earnedCreditsTotal, 4);
+  assert.equal(backup.state.importedCourseAchievements[0].schoolingCreditsTotal, 0);
+  assert.equal(backup.state.importedCourseAchievements[0].recognizedExemption, null);
+  const legacy = structuredClone(state); delete legacy.importedStudyRecords[0].sourceCourseId;
+  validateBackupState(legacy, catalog);
+  for (const mutate of [
+    s => s.importedCourseAchievements.push(structuredClone(s.importedCourseAchievements[0])),
+    s => s.importedStudyRecords.push(structuredClone(s.importedStudyRecords[0])),
+    s => { s.importedStudyRecords[0].sourceCourseId = 'missing'; },
+    s => { s.importedStudyRecords[0].rawName = '別の所有先'; },
+    s => { s.importedStudyRecords[0].offeringId = 'missing'; },
+    s => { s.importedCourseAchievements[0].courseId = 'missing'; },
+    s => { s.importedCourseAchievements[0].candidateOfferingIds = ['missing']; },
+    s => { s.importedCourseUserMeta.missing = Object.values(s.importedCourseUserMeta)[0]; },
+    s => { s.importedStudyRecords[0].reports[0].token = 'secret'; },
+  ]) { const bad = structuredClone(state); mutate(bad); assert.throws(() => validateBackupState(bad, catalog)); }
+});
+
+test('planner backup restore is one atomic primary replacement, repeatable and keeps old recovery', async () => {
+  const state = officialBackupFixture();
+  const text = JSON.stringify(await createPlannerBackup(JSON.stringify(state), catalog));
+  const store = backupTestStore('previous bytes'); const locks = backupTestLocks();
+  const one = await restorePlannerBackup(store, text, 'previous bytes', catalog, locks);
+  const two = await restorePlannerBackup(store, text, one.raw, catalog, locks);
+  assert.deepEqual(two.state, state);
+  assert.deepEqual(loadState(store, catalog).state, state);
+  assert.equal(importedEarnedCreditsTotal(two.state.importedCourseAchievements), 4);
+  assert.equal(two.state.importedCourseAchievements.length, 1);
+  assert.deepEqual(store.writes, [STORAGE_KEY, STORAGE_KEY]);
+  assert.equal(store.getItem(BACKUP_KEY), 'old recovery bytes');
+  assert.deepEqual(locks.names, [PLANNER_WRITE_LOCK, PLANNER_WRITE_LOCK]);
+  // Re-importing the same source stays on the existing source row after restore.
+  const row = state.importedCourseAchievements[0];
+  assert.equal(two.state.importedCourseAchievements[0].fingerprint, row.fingerprint);
+});
+
+test('planner backup rejected input, preview-only, stale data and missing locks never write', async () => {
+  const text = JSON.stringify(await createPlannerBackup(null, catalog));
+  const store = backupTestStore('original'); const locks = backupTestLocks();
+  await parsePlannerBackup(text, catalog); assert.deepEqual(store.writes, []);
+  await assert.rejects(restorePlannerBackup(store, '{', 'original', catalog, locks));
+  await assert.rejects(restorePlannerBackup(store, text, 'stale', catalog, locks), /変更/);
+  await assert.rejects(restorePlannerBackup(store, text, 'original', catalog, undefined), /Web Locks/);
+  assert.equal(store.getItem(STORAGE_KEY), 'original'); assert.deepEqual(store.writes, []);
+});
+
+test('planner backup protects original bytes on read exception and quota/write exception', async () => {
+  const text = JSON.stringify(await createPlannerBackup(null, catalog));
+  for (const name of ['QuotaExceededError', 'SecurityError']) {
+    const store = backupTestStore('original', 'recovery');
+    store.setItem = () => { throw new DOMException('blocked', name); };
+    await assert.rejects(restorePlannerBackup(store, text, 'original', catalog, backupTestLocks()));
+    assert.equal(store.values.get(STORAGE_KEY), 'original'); assert.equal(store.values.get(BACKUP_KEY), 'recovery');
+  }
+  const store = backupTestStore('original'); store.getItem = () => { throw new Error('read denied'); };
+  await assert.rejects(restorePlannerBackup(store, text, 'original', catalog, backupTestLocks()), /read denied/);
+  assert.equal(store.values.get(STORAGE_KEY), 'original'); assert.deepEqual(store.writes, []);
+});
+
+test('planner backup and every browser write path share a lock and reject queued stale saves', async () => {
+  const locks = backupTestLocks(); const store = backupTestStore();
+  const previous = loadState(store, catalog);
+  const next = { ...previous.state, todos: [{ id: '00000000-0000-4000-8000-000000000003', offeringId: null, text: '別タブ更新', done: false }] };
+  const text = JSON.stringify(await createPlannerBackup(null, catalog));
+  // Queue an ordinary save before restore gets its lock.
+  const saved = await savePlannerState(store, next, previous, catalog, locks);
+  await assert.rejects(restorePlannerBackup(store, text, null, catalog, locks), /変更/);
+  assert.deepEqual(loadState(store, catalog).state, next);
+  const staleSave = savePlannerState(store, previous.state, previous, catalog, locks);
+  await assert.rejects(staleSave, /別の画面/);
+  const shadowState = initialState(); shadowState.graduationProfile.recognizedCredits.totalCredits = 9924;
+  const shadowStore = backupTestStore(JSON.stringify(shadowState));
+  const loadedShadow = loadState(shadowStore, catalog);
+  await savePlannerState(shadowStore, loadedShadow.state, loadedShadow, catalog, locks);
+  assert.equal(JSON.parse(shadowStore.getItem(STORAGE_KEY)).graduationProfile.recognizedCredits.totalCredits, 9924);
+  await recoverPlannerState(store, saved.raw, catalog, locks);
+  assert.equal(store.getItem(BACKUP_KEY), saved.raw);
+  assert.ok(locks.names.every(name => name === PLANNER_WRITE_LOCK));
+});
+
+test('planner backup panel renders privacy, replacement, pre-backup, file input and format guidance', () => {
+  const html = renderToStaticMarkup(createElement(PlannerBackupPanel, { catalog, loaded: { state: initialState(), raw: null, error: null }, disabled: false, onRestored: () => {}, onBusyChange: () => {} }));
+  assert.match(html, /個人/); assert.match(html, /外部サーバーに送信しません/);
+  assert.match(html, /事前バックアップ/); assert.match(html, /type="file"/);
+  assert.match(html, /application\/json,.json/); assert.match(html, /schema 22/);
+});
+
+test('planner backup serializes a queued restore against a simultaneous ordinary save', async () => {
+  const store = backupTestStore(); const locks = backupTestLocks();
+  const text = JSON.stringify(await createPlannerBackup(null, catalog));
+  let release;
+  const held = locks.request(PLANNER_WRITE_LOCK, { mode: 'exclusive' }, () => new Promise(resolve => { release = resolve; }));
+  await Promise.resolve();
+  let queued;
+  const reachedLock = new Promise(resolve => { queued = resolve; });
+  const request = locks.request;
+  locks.request = (...args) => { const result = request(...args); if (locks.names.length === 2) queued(); return result; };
+  const restoring = restorePlannerBackup(store, text, null, catalog, locks);
+  await reachedLock;
+  const saving = savePlannerState(store, initialState(), { state: initialState(), raw: null, error: null }, catalog, locks);
+  assert.deepEqual(store.writes, []);
+  release(); await held;
+  const results = await Promise.allSettled([restoring, saving]);
+  assert.equal(results[0].status, 'fulfilled');
+  assert.equal(results[1].status, 'rejected');
+  assert.match(results[1].reason.message, /別の画面/);
+  assert.deepEqual(store.writes, [STORAGE_KEY]);
+});
+
+test('planner backup restored official rows retain existing re-import deduplication and graduation quantities', async () => {
+  const offering = catalog.offerings.find(row => row.method === 'correspondence' && row.resolutionStatus === 'matched' && row.courseId !== null && row.credits === 4 && catalog.curriculum.courses.some(course => course.id === row.curriculumCourseId && course.curriculumCredits === 4) && catalog.offerings.filter(other => other.name === row.name && other.method === row.method).length === 1);
+  const data = autoImportData([autoImportCourse(offering.name, { earnedCredits: { raw: String(offering.credits), value: offering.credits } })]);
+  const original = applyImport(initialState(), importPreview(data, catalog.offerings), catalog.offerings);
+  assert.equal(validateState(original, catalog), true);
+  const text = JSON.stringify(await createPlannerBackup(JSON.stringify(original), catalog));
+  const store = backupTestStore();
+  const restored = await restorePlannerBackup(store, text, null, catalog, backupTestLocks());
+  const reimported = applyImport(restored.state, importPreview(data, catalog.offerings, restored.state.importedStudyRecords, restored.state.importedCourseAchievements), catalog.offerings);
+  assert.equal(reimported.importedCourseAchievements.length, original.importedCourseAchievements.length);
+  assert.equal(importedEarnedCreditsTotal(reimported.importedCourseAchievements), offering.credits);
+  assert.equal(summarizeCredits(plannerItemsWithoutOfficialEarned(restored.state.items, offeringsById, restored.state.importedCourseAchievements, catalog), offeringsById).earned, 0);
+  const derive = current => calculateGraduationProgress(current.items, catalog, null, current.publicCourses, current.thesisSelection, current.importedStudyRecords, current.importedCourseAchievements, current.graduationProfile);
+  assert.deepEqual(derive(restored.state), derive(original));
+});
+
+function compatibleBackupCatalog() {
+  const updated = structuredClone(catalog);
+  updated.programs[0].displayName += '（表示名訂正）';
+  updated.offerings[0].source = { url: 'https://example.org/revised-citation', page: 42 };
+  updated.mappings[0].source = { url: 'https://example.org/revised-mapping-citation', page: 43 };
+  return updated;
+}
+function asLegacyPlannerBackup(backup) {
+  const old = structuredClone(backup); old.backupVersion = 1;
+  delete old.catalog.snapshotData; delete old.catalog.semanticSha256; delete old.catalog.compatibilityVersion;
+  return old;
+}
+
+test('planner backup v2 retains source catalog and accepts only explicit compatible display/citation updates', async () => {
+  const source = officialBackupFixture();
+  const before = JSON.stringify(source);
+  const backup = await createPlannerBackup(before, catalog);
+  const target = compatibleBackupCatalog();
+  assert.notEqual(backup.catalog.sha256, (await backupCatalogIdentity(target)).sha256);
+  assert.deepEqual(backup.catalog.snapshotData, catalog);
+  assert.equal(backup.catalog.semanticSha256, await backupDigest(backupCatalogSemantics(target)));
+  const store = backupTestStore('current destination', 'keep recovery');
+  const loaded = await restorePlannerBackup(store, JSON.stringify(backup), 'current destination', target, backupTestLocks());
+  assert.deepEqual(loaded.state, source);
+  assert.equal(store.getItem(BACKUP_KEY), 'keep recovery');
+  assert.equal(JSON.stringify(source), before);
+  assert.deepEqual(backup.catalog.snapshotData, catalog, 'archived citation/display originals remain available');
+});
+
+test('planner backup original v1 archive remains readable after a compatible catalog update', async () => {
+  const source = officialBackupFixture();
+  const legacy = asLegacyPlannerBackup(await createPlannerBackup(JSON.stringify(source), catalog));
+  assert.equal(legacy.catalog.sha256, LEGACY_BACKUP_CATALOGS[0].sha256);
+  assert.equal(await backupDigest(backupCatalogSemantics(catalog)), LEGACY_BACKUP_CATALOGS[0].semanticSha256);
+  const target = compatibleBackupCatalog();
+  assert.deepEqual((await parsePlannerBackup(JSON.stringify(legacy), target)).state, source);
+  const unknown = structuredClone(legacy); unknown.catalog.sha256 = 'f'.repeat(64);
+  const store = backupTestStore('unchanged', 'unchanged recovery');
+  await assert.rejects(restorePlannerBackup(store, JSON.stringify(unknown), 'unchanged', target, backupTestLocks()), /旧v1/);
+  assert.deepEqual(store.writes, []); assert.equal(store.getItem(STORAGE_KEY), 'unchanged');
+  assert.equal(store.getItem(BACKUP_KEY), 'unchanged recovery');
+});
+
+for (const [label, mutate] of [
+  ['offering credits', c => { c.offerings[0].credits = (c.offerings[0].credits ?? 0) + 1; }],
+  ['offering identity', c => { c.offerings.find(row => row.courseId !== null).courseId = null; }],
+  ['scope meaning', c => { c.programs[0].department = '別の学科'; }],
+  ['requirement quantity', c => { const row = c.requirements.find(r => r.status === 'structured'); row.value = (row.value ?? 0) + 1; }],
+  ['removed references', c => { c.offerings.shift(); }],
+  ['annual change', c => { c.academicYear = 2027; }],
+  ['array order', c => { c.offerings.reverse(); }],
+]) test(`planner backup rejects incompatible ${label} without modifying primary or recovery`, async () => {
+  const backup = await createPlannerBackup(null, catalog);
+  const target = structuredClone(catalog); mutate(target);
+  const store = backupTestStore('original destination', 'old recovery');
+  for (const input of [backup, asLegacyPlannerBackup(backup)]) {
+    await assert.rejects(restorePlannerBackup(store, JSON.stringify(input), 'original destination', target, backupTestLocks()));
+  }
+  assert.deepEqual(store.writes, []);
+  assert.equal(store.getItem(STORAGE_KEY), 'original destination'); assert.equal(store.getItem(BACKUP_KEY), 'old recovery');
+});
+
+test('planner backup rejects damaged source catalog, falsified hashes and unsupported compatibility version', async () => {
+  const backup = await createPlannerBackup(null, catalog);
+  for (const mutate of [
+    b => { b.catalog.snapshotData.offerings[0].credits = 999; },
+    b => { b.catalog.semanticSha256 = '0'.repeat(64); },
+    b => { b.catalog.compatibilityVersion = 2; },
+    b => { b.catalog.snapshotData.curriculum = null; },
+  ]) {
+    const bad = structuredClone(backup); mutate(bad);
+    const store = backupTestStore('original', 'recovery');
+    await assert.rejects(restorePlannerBackup(store, JSON.stringify(bad), 'original', catalog, backupTestLocks()));
+    assert.deepEqual(store.writes, []); assert.equal(store.getItem(STORAGE_KEY), 'original'); assert.equal(store.getItem(BACKUP_KEY), 'recovery');
+  }
+});
+
+test('planner backup preserves valid old v22 rows without institutional extension and refuses old v22 needing normalization', async () => {
+  const legacyState = officialBackupFixture();
+  for (const row of legacyState.importedCourseAchievements) for (const key of ['curriculumCourseId', 'curriculumMatch', 'candidateCurriculumCourseIds', 'offeringMatch']) delete row[key];
+  delete legacyState.importedStudyRecords[0].sourceCourseId;
+  const raw = JSON.stringify(legacyState);
+  const backup = await createPlannerBackup(raw, catalog);
+  assert.deepEqual((await parsePlannerBackup(JSON.stringify(backup), compatibleBackupCatalog())).state, legacyState);
+  assert.equal(JSON.stringify(legacyState), raw);
+  const needsNormalization = initialState();
+  needsNormalization.selectedScopeId = catalog.programs.find(row => row.department === '日本文学科').scopeId;
+  const invalidRaw = JSON.stringify(needsNormalization);
+  const store = backupTestStore(invalidRaw, 'original recovery');
+  await assert.rejects(createPlannerBackup(store.getItem(STORAGE_KEY), catalog), /修復/);
+  const bad = structuredClone(backup); bad.state = needsNormalization;
+  await assert.rejects(restorePlannerBackup(store, JSON.stringify(bad), invalidRaw, catalog, backupTestLocks()), /修復/);
+  assert.deepEqual(store.writes, []); assert.equal(store.getItem(STORAGE_KEY), invalidRaw); assert.equal(store.getItem(BACKUP_KEY), 'original recovery');
+});
+
+test('planner backup protection preserves invalid JSON, recognition shadow and old recovery byte strings', async () => {
+  const shadow = initialState(); shadow.graduationProfile.recognizedCredits.totalCredits = 9924;
+  for (const primary of [' { broken JSON\n', ' \n' + JSON.stringify(shadow, null, 2) + '\n ', JSON.stringify({ schemaVersion: 22, items: [] })]) {
+    const recovery = '  {"old":"recovery", "null":null, "zero":0}\n';
+    const store = backupTestStore(primary, recovery);
+    await assert.rejects(createPlannerBackup(primary, catalog));
+    const protection = await createPlannerBackupProtection(store.getItem(STORAGE_KEY), store.getItem(BACKUP_KEY), catalog);
+    const recovered = await inspectPlannerBackupProtection(JSON.stringify(protection));
+    assert.equal(recovered.primaryRaw, primary); assert.equal(recovered.recoveryRaw, recovery);
+    assert.deepEqual(recovered.catalog.snapshotData, catalog);
+    await assert.rejects(restorePlannerBackup(store, JSON.stringify(protection), primary, catalog, backupTestLocks()), /保護ファイル/);
+    assert.deepEqual(store.writes, []); assert.equal(store.getItem(STORAGE_KEY), primary); assert.equal(store.getItem(BACKUP_KEY), recovery);
+    const tampered = structuredClone(protection); tampered.primaryRaw += 'changed';
+    await assert.rejects(inspectPlannerBackupProtection(JSON.stringify(tampered)), /SHA/);
+  }
+  const empty = await createPlannerBackupProtection(null, null, catalog);
+  assert.deepEqual(await inspectPlannerBackupProtection(JSON.stringify(empty)), empty);
+});
+
+test('planner backup rejects a rehashed incompatible source snapshot rather than trusting its self-declared semantics', async () => {
+  const backup = await createPlannerBackup(null, catalog);
+  const altered = structuredClone(catalog); altered.offerings[0].credits = (altered.offerings[0].credits ?? 0) + 1;
+  const { createBackupCatalogSnapshot } = await import('../src/planner/plannerBackupCompatibility.ts');
+  backup.catalog = await createBackupCatalogSnapshot(altered);
+  const store = backupTestStore('original', 'old recovery');
+  await assert.rejects(restorePlannerBackup(store, JSON.stringify(backup), 'original', catalog, backupTestLocks()), /互換性のない/);
+  assert.deepEqual(store.writes, []); assert.equal(store.getItem(STORAGE_KEY), 'original'); assert.equal(store.getItem(BACKUP_KEY), 'old recovery');
+});
+
+test('planner backup protection guidance is separate from normal restore and never offers automatic normalization', () => {
+  const panel = readFileSync(new URL('../src/components/planner/PlannerBackupPanel.tsx', import.meta.url), 'utf8');
+  assert.match(panel, /createPlannerBackupProtection\(raw, recoveryRaw, catalog\)/);
+  assert.match(panel, /保護が済むまで/);
+  assert.match(panel, /修復目的の無関係な保存/);
+  assert.match(panel, /原文と旧退避を保護用ファイルに保存/);
+  assert.doesNotMatch(panel, /localStorage\.setItem/);
+});
+
+test('thesis guidance disables every status, date and geography editor when saving or blocked', () => {
+  for (const department of ['日本文学科', '地理学科']) {
+    const scope = catalog.programs.find(row => row.department === department).scopeId;
+    const state = stateForScopeChange(initialState(), catalog, scope);
+    const props = { catalog, scopeId: scope, profile: state.graduationProfile, progress: guidanceForScope(state, scope), eligibilityCredits: null, onChange: () => {} };
+    const blocked = renderToStaticMarkup(createElement(ThesisGuidance, { ...props, disabled: true }));
+    const active = renderToStaticMarkup(createElement(ThesisGuidance, { ...props, disabled: false }));
+    const controls = html => [...html.matchAll(/<(?:input|select)\b[^>]*>/g)].map(match => match[0]);
+    assert.ok(controls(blocked).length >= 2);
+    assert.ok(controls(blocked).every(control => control.includes('disabled=""')));
+    assert.ok(controls(active).every(control => !control.includes('disabled=""')));
+    if (department === '地理学科') assert.match(blocked, /地理調査法リポート提出/);
+  }
+});
+
+test('recovery-only protection remains available and preserves null primary plus recovery bytes', async () => {
+  const recovery = ' \n {"raw":"original recovery","zero":0,"unknown":null}\n ';
+  const store = backupTestStore(null, recovery);
+  const html = renderToStaticMarkup(createElement(PlannerBackupPanel, { catalog, loaded: loadState(store, catalog), disabled: false, onRestored: () => {}, onBusyChange: () => {} }));
+  assert.match(html, /原文と旧退避を保護用ファイルに保存/);
+  const protectedFile = await createPlannerBackupProtection(store.getItem(STORAGE_KEY), store.getItem(BACKUP_KEY), catalog);
+  const inspected = await inspectPlannerBackupProtection(JSON.stringify(protectedFile));
+  assert.equal(inspected.primaryRaw, null); assert.equal(inspected.primarySha256, null);
+  assert.equal(inspected.recoveryRaw, recovery);
+  await assert.rejects(parsePlannerBackup(JSON.stringify(protectedFile), catalog), /保護ファイル/);
+  assert.equal((await createPlannerBackup(null, catalog)).format, 'hosei-planner-backup');
+  assert.deepEqual(store.writes, []); assert.equal(store.getItem(BACKUP_KEY), recovery);
 });

@@ -20,20 +20,21 @@ export default function ProfileBasicSettings({ catalog, scopeId, profile, disabl
 
   const updateProfile = (next: GraduationProfile) => {
     const message = graduationProfileValidationError(next);
-    if (message) { setError(message); return; }
+    if (message) { setError(message); return false; }
     setError(null);
-    onProfileChange(next);
+    return onProfileChange(next);
   };
 
-  const commitAdmissionYear = () => {
+  const commitAdmissionYear = async () => {
+    if (disabled || admissionYearDraft === null) return;
     const raw = admissionYearDraft ?? (profile.admissionYear === null ? '' : String(profile.admissionYear));
     const admissionYear = normalizeAdmissionYear(raw);
     if (raw.trim() && admissionYear === null) {
       setError('入学年度は4桁の西暦（1000〜9999）で入力してください。変更は保存していません。');
       return;
     }
-    setAdmissionYearDraft(null);
-    updateProfile({ ...profile, admissionYear });
+    const result = await updateProfile({ ...profile, admissionYear });
+    if (result !== false) setAdmissionYearDraft(null);
   };
 
   return <section aria-labelledby="profile-basic-heading" className="bg-white border border-gray-200 p-5 sm:p-7">

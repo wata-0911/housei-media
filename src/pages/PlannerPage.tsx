@@ -10,13 +10,14 @@ import PlannerProfileTab from '../components/planner/PlannerProfileTab';
 import ThesisGuidance from '../components/planner/ThesisGuidance';
 import { catalog, offeringsById } from '../planner/catalog';
 import { summarizeCredits } from '../planner/calculations';
-import { initialState, loadState, recoverState, saveRecoveredState, STORAGE_KEY, type LoadResult } from '../planner/storage';
+import { initialState, loadState, recoverPlannerState, savePlannerState, STORAGE_KEY, type LoadResult } from '../planner/storage';
 import type { ImportedCourseUserMeta, PlannerItem, PlannerState, PublicCourse } from '../planner/plannerCatalog';
 import { calculateGraduationProgress } from '../planner/graduationProgress';
 import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
 import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/publicCourses';
 import { setThesisProgressForScope, shouldShowThesisGuidance, stateForScopeChange, thesisProgressForScope } from '../planner/thesisSelection';
 import MediaSchoolingProgress from '../components/planner/MediaSchoolingProgress';
+import PlannerBackupPanel from '../components/planner/PlannerBackupPanel';
 import PlannerExportActions from '../components/planner/PlannerExportActions';
 import { plannerExportPresentation } from '../planner/plannerExport';
 import GradeImportPanel from '../components/planner/GradeImportPanel';
@@ -46,6 +47,9 @@ function downloadOriginal(raw: string) {
 
 export default function PlannerPage() {
   const [loaded, setLoaded] = useState(readSavedState);
+  const writePending = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [importEpoch, setImportEpoch] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
@@ -109,17 +113,18 @@ export default function PlannerPage() {
     return () => window.removeEventListener('message', receive);
   }, []);
 
-  function commit(next: PlannerState, message: string): boolean {
-    if (loaded.error) return false;
+  async function commit(next: PlannerState, message: string): Promise<boolean> {
+    if (loaded.error || writePending.current) return false;
+    writePending.current = true; setSaving(true);
     try {
-      setLoaded(saveRecoveredState(window.localStorage, next, loaded, catalog));
+      setLoaded(await savePlannerState(window.localStorage, next, loaded, catalog, navigator.locks));
       setSaveError(null);
       setNotice(message);
       return true;
     } catch (error) {
       setSaveError(`${error instanceof Error ? error.message : '保存できませんでした。'} 変更は反映していません。保存設定・空き容量を確認し、再操作してください。`);
       return false;
-    }
+    } finally { writePending.current = false; setSaving(false); }
   }
 
   function addOffering(id: string) {
@@ -128,11 +133,11 @@ export default function PlannerPage() {
   }
 
   function changeItem(id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) {
-    commit({ ...state, items: updatePlannerItem(state.items, id, patch) }, '履修計画を保存しました。');
+    return commit({ ...state, items: updatePlannerItem(state.items, id, patch) }, '履修計画を保存しました。');
   }
 
   function changeMediaProgress(offeringId: string, progress: PlannerState['mediaSchoolingProgress'][string]) {
-    commit({ ...state, mediaSchoolingProgress: { ...state.mediaSchoolingProgress, [offeringId]: progress } }, 'メディアスクーリングの進捗を保存しました。');
+    return commit({ ...state, mediaSchoolingProgress: { ...state.mediaSchoolingProgress, [offeringId]: progress } }, 'メディアスクーリングの進捗を保存しました。');
   }
 
   function changeEvaluation(offeringId: string, evaluation: PlannerState['courseEvaluations'][string]) {
@@ -153,52 +158,55 @@ export default function PlannerPage() {
 
   function changePublicCourse(id: string, patch: Partial<Omit<PublicCourse, 'id' | 'credits'>>) {
     const title = patch.title === undefined ? undefined : normalizePublicCourseTitle(patch.title);
-    if (title !== undefined && !isValidPublicCourseTitle(title)) return;
-    commit({ ...state, publicCourses: state.publicCourses.map(course => course.id === id ? { ...course, ...patch, ...(title === undefined ? {} : { title }) } : course) }, '公開科目を保存しました。');
+    if (title !== undefined && !isValidPublicCourseTitle(title)) return false;
+    return commit({ ...state, publicCourses: state.publicCourses.map(course => course.id === id ? { ...course, ...patch, ...(title === undefined ? {} : { title }) } : course) }, '公開科目を保存しました。');
   }
 
-  function removeItem(id: string) {
+  async function removeItem(id: string) {
     const removed = removePlannerItem(state.items, id);
     if (!removed) return;
     const offering = offeringsById.get(id);
-    if (commit({ ...state, items: state.items.filter(item => item.offeringId !== id) }, `「${offering?.name ?? '科目'}」を履修計画から削除しました。`)) {
+    if (await commit({ ...state, items: state.items.filter(item => item.offeringId !== id) }, `「${offering?.name ?? '科目'}」を履修計画から削除しました。`)) {
       setUndoItem({ kind: 'item', removed });
     }
   }
 
-  function removePublic(id: string) {
+  async function removePublic(id: string) {
     const removed = removePublicCourse(state.publicCourses, id);
     if (!removed) return;
-    if (commit({ ...state, publicCourses: state.publicCourses.filter(course => course.id !== id) }, `「${removed.course.title}」を公開科目から削除しました。`)) setUndoItem({ kind: 'publicCourse', removed });
+    if (await commit({ ...state, publicCourses: state.publicCourses.filter(course => course.id !== id) }, `「${removed.course.title}」を公開科目から削除しました。`)) setUndoItem({ kind: 'publicCourse', removed });
   }
 
-  function undoRemove() {
+  async function undoRemove() {
     if (!undoItem) return;
     if (undoItem.kind === 'item') {
       const restored = restorePlannerItem(state.items, undoItem.removed);
       const label = offeringsById.get(undoItem.removed.item.offeringId)?.name ?? '科目';
       if (restored === null) { setUndoItem(null); setNotice(`「${label}」はすでに履修計画へ追加されているため、元に戻しませんでした。`); return; }
-      if (commit({ ...state, items: restored }, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
+      if (await commit({ ...state, items: restored }, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
       return;
     }
     const restored = restorePublicCourse(state.publicCourses, undoItem.removed);
     const label = undoItem.removed.course.title;
     if (restored === null) { setUndoItem(null); setNotice(`「${label}」はすでに履修計画へ追加されているため、元に戻しませんでした。`); return; }
-    if (commit({ ...state, publicCourses: restored }, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
+    if (await commit({ ...state, publicCourses: restored }, `「${label}」を履修計画に元に戻しました。`)) setUndoItem(null);
   }
 
-  function recover() {
+  async function recover() {
     if (loaded.raw === null || !window.confirm('元の保存データをブラウザ内にバックアップし、履修計画を空にします。よろしいですか？')) return;
+    if (writePending.current) return;
+    writePending.current = true; setSaving(true);
     try {
-      const raw = recoverState(window.localStorage, loaded.raw, catalog);
+      const raw = await recoverPlannerState(window.localStorage, loaded.raw, catalog, navigator.locks);
       setLoaded({ state: initialState(), raw, error: null });
       setSaveError(null);
+      setUndoItem(null); setUndoImport(null); setDirectImport(undefined); setImportEpoch(epoch => epoch + 1);
       setNotice('元データをバックアップし、履修計画を初期化しました。');
     } catch {
       setSaveError('バックアップまたは初期化ができませんでした。元データをダウンロードしてから保存設定を確認してください。');
-    }
+    } finally { writePending.current = false; setSaving(false); }
   }
-  function applyGradeImport(units: ImportPreviewUnit[]) {
+  async function applyGradeImport(units: ImportPreviewUnit[]) {
     const next = applyImport(state, units, catalog.offerings);
     const addedItems = next.items.length - state.items.length;
     const addedCourses = next.importedCourseAchievements.length - state.importedCourseAchievements.length;
@@ -207,17 +215,17 @@ export default function PlannerPage() {
     const oldRecords = new Map(state.importedStudyRecords.map(record => [record.id, record]));
     const updatedCourses = next.importedCourseAchievements.filter(row => oldCourses.has(row.id) && oldCourses.get(row.id) !== row).length;
     const updatedRecords = next.importedStudyRecords.filter(record => oldRecords.has(record.id) && oldRecords.get(record.id) !== record).length;
-    if (commit(next, `成績表行を追加${addedCourses}件・更新${updatedCourses}件、履修内訳を追加${addedRecords}件・更新${updatedRecords}件保存しました。${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
+    if (await commit(next, `成績表行を追加${addedCourses}件・更新${updatedCourses}件、履修内訳を追加${addedRecords}件・更新${updatedRecords}件保存しました。${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
     return false;
   }
-  function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
+  function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { return commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
   function changeImportedCourseAchievement(id: string, patch: Partial<ImportedCourseAchievement>) { commit({ ...state, importedCourseAchievements: state.importedCourseAchievements.map(record => record.id === id ? { ...record, ...patch } : record) }, '成績表の科目行の照合先を保存しました。'); }
   function changeImportedUserMeta(id: string, patch: Partial<ImportedCourseUserMeta>) {
     const current = state.importedCourseUserMeta[id] ?? { lifecycleStatus: null, plannedYear: null, plannedTerm: null, studyYear: null };
-    commit({ ...state, importedCourseUserMeta: { ...state.importedCourseUserMeta, [id]: { ...current, ...patch } } }, '成績表の公式情報とは別に、履修管理情報を保存しました。');
+    return commit({ ...state, importedCourseUserMeta: { ...state.importedCourseUserMeta, [id]: { ...current, ...patch } } }, '成績表の公式情報とは別に、履修管理情報を保存しました。');
   }
-  function deleteImportedAchievement(id: string) { const record = state.importedStudyRecords.find(value => value.id === id); if (!record) return; if (commit({ ...state, importedStudyRecords: state.importedStudyRecords.filter(value => value.id !== id) }, `「${record.rawName}」の履修実績を削除しました。`)) setUndoImport(state); }
-  function undoGradeImport() { if (undoImport && commit(undoImport, '取り込んだ履修実績を元に戻しました。')) setUndoImport(null); }
+  async function deleteImportedAchievement(id: string) { const record = state.importedStudyRecords.find(value => value.id === id); if (!record) return; if (await commit({ ...state, importedStudyRecords: state.importedStudyRecords.filter(value => value.id !== id) }, `「${record.rawName}」の履修実績を削除しました。`)) setUndoImport(state); }
+  async function undoGradeImport() { if (undoImport && await commit(undoImport, '取り込んだ履修実績を元に戻しました。')) setUndoImport(null); }
   const onDirectResult = useCallback(({ ok, courseCount }: { ok: boolean; courseCount?: number }) => setNotice(ok ? `拡張機能から${courseCount}科目を受信しました。内容を確認してから反映してください。` : '拡張機能から受信した成績データを検証できませんでした。反映していません。'), []);
 
   return <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen" style={{ fontFamily: '"Noto Serif JP", serif' }}>
@@ -238,28 +246,32 @@ export default function PlannerPage() {
           <button type="button" className="underline" onClick={() => window.location.reload()}>再読み込み</button>
           {loaded.raw !== null && <>
             <button type="button" className="underline" onClick={() => downloadOriginal(loaded.raw!)}>元データをダウンロード</button>
-            <button type="button" className="underline" onClick={recover}>バックアップして初期化</button>
+            <button type="button" className="underline" disabled={saving} onClick={recover}>バックアップして初期化</button>
           </>}
         </div>
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
+      <PlannerBackupPanel catalog={catalog} loaded={loaded} disabled={saving} onRestored={next => {
+        setLoaded(next); setUndoItem(null); setUndoImport(null); setDirectImport(undefined);
+        setImportEpoch(epoch => epoch + 1); setSaveError(null); setNotice('バックアップで全データを置き換えました。');
+      }} onBusyChange={busy => { writePending.current = busy; setSaving(busy); }} />
       <CreditSummary summary={summarizeCredits(importedDerived.plannerItems, offeringsById, state.publicCourses)} importedEarnedCredits={importedEarnedCreditsTotal(state.importedCourseAchievements)} />
       <div className="min-h-5 text-sm text-[#002255]">
-        <p role="status" className="inline">{notice}</p>
-        {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
-        {undoImport && <button type="button" onClick={undoGradeImport} className="ml-2 underline underline-offset-2">取り込みを元に戻す</button>}
+        <p role="status" aria-live="polite" className="inline">{saving ? '保存処理を待っています。完了後に編集できます。' : notice}</p>
+        {undoItem && <button type="button" disabled={loaded.error !== null || saving} onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
+        {undoImport && <button type="button" disabled={loaded.error !== null || saving} onClick={undoGradeImport} className="ml-2 underline underline-offset-2">取り込みを元に戻す</button>}
       </div>
       <div role="tablist" aria-label="履修プランナーの表示" className="grid w-full max-w-2xl grid-cols-3 border-b border-gray-300">
-        <button id="annual-tab" type="button" role="tab" aria-selected={activeTab === 'annual'} aria-controls="annual-panel" onClick={() => setActiveTab('annual')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
-        <button id="media-tab" type="button" role="tab" aria-selected={activeTab === 'media'} aria-controls="media-panel" onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
-        <button id="profile-tab" type="button" role="tab" aria-selected={activeTab === 'profile'} aria-controls="profile-panel" onClick={() => setActiveTab('profile')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'profile' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>プロフィール</button>
+        <button disabled={saving} id="annual-tab" type="button" role="tab" aria-selected={activeTab === 'annual'} aria-controls="annual-panel" onClick={() => setActiveTab('annual')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
+        <button disabled={saving} id="media-tab" type="button" role="tab" aria-selected={activeTab === 'media'} aria-controls="media-panel" onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
+        <button disabled={saving} id="profile-tab" type="button" role="tab" aria-selected={activeTab === 'profile'} aria-controls="profile-panel" onClick={() => setActiveTab('profile')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'profile' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>プロフィール</button>
       </div>
       {loaded.recognitionWarning && activeTab !== 'profile' && <p role="alert" className="mt-4 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{loaded.recognitionWarning}</p>}
       {activeTab === 'annual' && <div id="annual-panel" role="tabpanel" aria-labelledby="annual-tab" className="space-y-6">
         {profileNeedsAttention && <p className="border-l-4 border-sky-600 bg-sky-50 p-3 text-sm text-sky-900">卒業判定に必要なプロフィール設定があります。プロフィールタブで確認してください。</p>}
         <AnnualCreditLimitNotice rows={annualLimitRows} />
-        <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
-        <CurriculumCourseList catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
+        <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null || saving} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
+        <CurriculumCourseList key={importEpoch} catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null || saving} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
         <PlannerExportActions presentation={exportPresentation} />
         <details
           open={gradeImportOpen}
@@ -269,14 +281,14 @@ export default function PlannerPage() {
           <summary className="cursor-pointer p-4 font-medium text-[#002255]">
             成績データを取り込む
           </summary>
-          <GradeImportPanel offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
+          <GradeImportPanel key={importEpoch} offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null || saving} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         </details>
-        <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
+        <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null || saving} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
-        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
+        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance key={importEpoch} disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab">
-        <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />
+        <MediaSchoolingProgress key={importEpoch} items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />
       </div>}
       {activeTab === 'profile' && <div ref={profilePanelRef} id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" tabIndex={-1} className="scroll-mt-24">
         <PlannerProfileTab
@@ -284,7 +296,7 @@ export default function PlannerPage() {
           scopeId={state.selectedScopeId}
           profile={state.graduationProfile}
           thesis={thesisProgress}
-          disabled={loaded.error !== null}
+          disabled={loaded.error !== null || saving}
           recognitionWarning={loaded.recognitionWarning}
           onScopeChange={selectedScopeId =>
             commit(
