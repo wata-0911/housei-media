@@ -353,4 +353,4 @@ The public 2026 guide printed p.133 / PDF p.135 defines admission recognition an
 
 **未実装:** Offering非依存の手動Attempt保存、同Openingの複数回、Placement/Version、年度非依存migration・新計算consumer。**未確定:** ID実値・改正読替・具体schema/backup次版。[詳細設計](../planner-year-independent-design.md)と[移行計画](../planner-year-independent-migration.md)を参照。年度別registryを新規導入する工程は採用しない。
 
-**継続する制約:** state22、graduationCheckComplete=false、sourceLinksReverified=false、earnedCreditsTotal正本、null/0と原文/手動情報保護。iPhone Safari実機・Files共有は未検証。全H最終監査は未完。今回の検証範囲は[現状監査](../planner-docs-current-audit-2026-10-11.md)に記録する。
+**継続する制約:** state22、graduationCheckComplete=false、sourceLinksReverified=false、earnedCreditsTotal正本、null/0と原文/手動情報保護。PR #138について利用者からiPhone Safari実機のbackup/restore全項目と入力修正後4項目のPASS報告あり。Workの独立再現ではなく、PR #139での再検証もしていない。年度非依存の新モデル/schema/migrationは未実装で、実機検証も未実施。全H最終監査は未完。今回の検証範囲は[現状監査](../planner-docs-current-audit-2026-10-11.md)に記録する。

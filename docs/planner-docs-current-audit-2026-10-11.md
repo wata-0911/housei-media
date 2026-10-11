@@ -6,7 +6,7 @@
 
 ## 今回の照合範囲
 
-確認したのはdocs全体の版・年度・backup・未実装表現、型/schema、runtime catalog/generator、storage/validation、import source/年度、BackupPanel/Pageの保存経路、進捗/評価/Undo/年度計画、既存テストである。GitHubで#95、#129、#133、#132、#134、#137、#98とPR #126/#138の状態・本文も確認した。個人のlocalStorage・実成績、公式PDFの再取得・全リンク再検証、iPhone実機は対象外。
+確認したのはdocs全体の版・年度・backup・未実装表現、型/schema、runtime catalog/generator、storage/validation、import source/年度、BackupPanel/Pageの保存経路、進捗/評価/Undo/年度計画、既存テストである。GitHubで#95、#129、#133、#132、#134、#137、#98とPR #126/#138の状態・本文も確認した。個人のlocalStorage・実成績、公式PDFの再取得・全リンク再検証は対象外。iPhone実機についてはPR #138のユーザー報告を参照したが、Workによる再検証はしていない。
 
 既存公式資料の年月・ページ・SHAは既存監査から参照し、新規確認をしたとは記録しない。読み取り不能な公式表を新しい文書へ推測転記しない。
 
@@ -45,7 +45,7 @@
 | 保存失敗 | read/quota/security例外・stale raw拒否。rollbackによる再書込なし。原文保護出力は自動修復・自動ダウンロードではない |
 | 入力確定 | Page/各editorのdraft、blur/Enter/保存で確定、IME中Enter抑止、失敗後全文再試行。保存待ち中編集停止。復元後古いdraftを継続しない |
 
-関連回帰は`tests/planner.test.mjs`のbackup/protection/legacy-v22/Lock群と`tests/planner-save-lock.browser.mjs`。PR #138の実Chromium17件・extension54件・bookmarklet168件は過去PRでの報告で、本監査の再実行結果と区別する。Web Locks非参加の旧タブ、iPhone Safari実機・Files共有保存、将来schema/年度モデル移行は未検証/未実装として残る。
+関連回帰は`tests/planner.test.mjs`のbackup/protection/legacy-v22/Lock群と`tests/planner-save-lock.browser.mjs`。PR #138の実Chromium17件・extension54件・bookmarklet168件は過去PRでの報告で、本監査の再実行結果と区別する。PR #138に関する利用者報告では、iPhone Safari実機のbackup/restore確認は全項目PASSで、入力確定保存後の追加実機4項目（メディア試験名の連続入力、全回数の複数桁入力とプリセット、日付入力、日本語変換中の入力）もPASS。本監査・PR #139でのiPhone Safari再検証はしていない。将来schema/年度モデル移行は未実装で、その実機検証も未実施。Web Locks非参加の旧タブの制約は残る。
 
 ## 文書の不一致と今回の処置
 
@@ -62,7 +62,7 @@
 | #129（open） | sourceDuplicateなど既存機能と全差分UXが混同され得る | 既存安全機能あり/全面差分対応は後続を区別 |
 | #133/#132/#134（open） | 公式確認・公開説明の未完了 | 年度非依存化と別工程。未完を維持 |
 | #98（closed） | current_2026新規defaultをhistoricalへ適用する誤読 | 既存明示/unknown/legacyを新defaultで書換えない。具体課程版への移行は別対応表 |
-| #137（open） | 長期休暇スク/開講期収録は今回の非目標と衝突 | 分野分類と時期機能を分けて後続で範囲調整。本PRではIssue改変なし |
+| #137（open） | 開講期/長期休暇スクーリングの検索は確定方針外。分野・区分分類は年度非依存の候補 | 分類フィルター候補のみ維持。時期/長期休暇フィルター（2026参考版を含む）を推奨工程から外す。後続でIssue範囲変更、本PRではIssue改変なし |
 
 各既存文書のschema追加時点・旧PASS件数・検証不能の記録を削除しない。最新版と表示した追記を先に読み、履歴本文を現在の実装指示にしない。
 
@@ -77,7 +77,7 @@
 - `npm run typecheck`、`npm run lint`、`npm run test:planner`: **2155 PASS、fail/skip 0**。既存168ケースの卒業計算baseline比較もPASS。
 - `npm run build`: PASS。grade-import生成物検査とcatalog:check（321制度科目/686 Opening）を含む。既存500kB超chunk警告あり。
 - 新たに追加した相対リンク/fragment84箇所の存在を確認し、エラー0。変更21ファイルはすべてdocs内Markdown、3監査書の元本文はbyte単位でprefix一致。`git diff --check`もPASS。既存リンクの公式再確認とは区別する。
-- 新規テスト・コード変更なし。今回extension/bookmarklet専用suiteと実ブラウザsuiteを再実行していない。PDF再確認・iPhone実機・新モデルのmigration/数量不変テストは未実施。
+- 新規テスト・コード変更なし。今回extension/bookmarklet専用suiteと実ブラウザsuiteを再実行していない。PR #138のiPhone実機PASSは利用者報告として記録し、Workによる独立再現とは区別する。PDF再確認・今回のiPhone再検証・新モデルのmigration/数量不変テストは未実施。
 
 目標・未実装・未確定の全体は[方針](planner-curriculum-release-policy.md)、[詳細設計](planner-year-independent-design.md)、[移行/Issue候補](planner-year-independent-migration.md)を参照。flagsは`graduationCheckComplete=false`、`sourceLinksReverified=false`、state22のまま。全公式リンク、全旧課程、全H項目の完了判定を変更しない。
 

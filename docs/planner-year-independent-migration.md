@@ -97,12 +97,20 @@ detached ownerは計画行数とは別に数える。items数の一致だけで�
 | YI-02 制度マスターの独立read model | YI-01 | CurriculumVersion/Placement＋旧crosswalkをpure loaderで検証。Offering0件でも名称・構成単位・scope候補を読める。2026原版・既存adapter出力は不変。年度開講registryを追加しない |
 | YI-03 独立Attempt・owner validator契約 | YI-01/02 | schema候補とID/未解決/active-detached/単位由来を確定。合成fixtureのみで複数回・null/0・参照閉包・衝突拒否を検証。runtime保存をまだ切替えない |
 | YI-04 v22→N純粋migrationと旧decoder | YI-03、#95 | 全field台帳、deterministic ID割当、detached owner、source archive/ruleを実装。旧v1/v2/state22継続読込、無副作用、数量/参照/旧計算不変。read-only比較から始める |
-| YI-05 計画CRUD・進捗/評価/TODO・Undo切替 | YI-04 | Page/search/list/media/correspondence/evaluation/todo/export/shareを同ownerへ切替。開講なし計画、再履修別ID、進捗分離、失敗draft保持、削除/Undo検証。旧計算adapterを保持し卒業engine変更を混ぜない |
-| YI-06 新保存・backup確定導線 | YI-04/05 | state N・新backup版、preview差分・最終確認・共通lock・一回保存を接続。v1/v2原版保持/保護v1読込を維持。quota/競合/取消/反復復元を実ブラウザ確認。ここで初めて永続version切替 |
+| YI-05 新Attempt対応UI・CRUD・進捗/評価/TODO/Undo | YI-04 | 新モデル対応コードを実装するが、一般利用者の永続モデル切替・新state書込み・新形式の通常保存/復元有効化はしない。既存v22の編集・保存・再読込・backup/restore・公式成績・卒業要件計算を従来どおり維持する。新UIは明示的に無効化でき、開発/テスト用操作は本番`hosei-planner:v1`を変更しない。旧計算adapterを保持し、卒業engine変更を混ぜない |
+| YI-06 新保存・backup確定導線と公開切替 | YI-04/05 | state N・新backup版、preview差分・最終確認・共通lock・一回保存を接続。v1/v2原版保持/保護v1読込を維持。quota/競合/取消/反復復元を実ブラウザ確認。移行・保存・復元・失敗保護の全契約を満たして初めて一般利用者に新モデルを有効化 |
 | YI-07 新Attemptの算入consumer監査・adapter | YI-02/05、#133根拠確認 | 架空Offeringを作らず課程/scopeから各consumerを接続。8scopeと特殊family別に小PRへ分割。公式aggregate不変、unknownを無根拠解除しない。未対応は明示保留 |
-| YI-08 PC/iPhone・公開案内・既存Issue調整 | YI-06、算入公開範囲の確定 | PCとiPhone Safari実機/Files共有・再読込、移行前保護、開講/卒業保証なしを確認。#132/#134へ実態を反映、#137の開講時期収録要求を整理 |
+| YI-08 PC/iPhone・公開案内・既存Issue調整 | YI-06、算入公開範囲の確定 | PCとiPhone Safari実機/Files共有・再読込、新モデル移行、移行前保護、開講/卒業保証なしを確認。#132/#134へ実態を反映、#137の開講時期収録要求を整理 |
 
-YI-04〜06は相互に保存契約を共有するが、最終保存切替前には合成入力・read-only比較でレビューできる形に分ける。YI-07が未完なら、新モデルの利用者公開時にどの算入を保留するかを明示する。年度非依存記録と卒業エンジン完成を同一リリース条件にしない。
+### YI-05からYI-06への公開・保存境界
+
+YI-05とYI-06は段階的にmergeできる。YI-05のmergeは一般利用者の永続形式を切り替える合図ではない。YI-05の新Attempt UIはfeature flag等の明示的制御で閉じられることを受け入れ条件とし、具体方式はYI-05実装Issueで確定する。flagを無効にした状態で旧v22の編集・通常保存・再読込・backup v2作成/復元・公式成績表示/再取込・卒業要件出力が従来どおり動く。開発・テスト用の新モデル操作は隔離fixture/storeだけを使い、実利用者のprimary/recovery localStorageを書き換えない。
+
+YI-05で準備した新形式コードはYI-06まで利用者向け保存経路から到達できない。YI-06は、旧state22・backup v1/v2の読込、preview無副作用、移行前原文保護、参照/数量不変、明示確認、共通Web Lock下の一回保存、通常backupの作成/復元、失敗時の保護を全て満たしてから切替flagを有効にする。切替可否を判断する具体flag/rollback手順はYI-06で定める。
+
+移行の拒否・未対応参照・競合・read/write/quota失敗時は、新primaryを書かず、primaryと既存recoveryをバイト単位で維持する。旧backup/protection原文も残す。状態を無理にnormalizeして成功扱いしない。再開は対応版の明示previewから行う。卒業算入adapterが未実装の範囲は明示的に判定保留とする。公式`earnedCreditsTotal`と従来確定済み数量を保ち、内訳・手動値・仮想科目で補完/相殺しない。
+
+YI-04〜06は保存契約を共有し、YI-04/05はread-only比較と隔離fixtureで個別レビュー可能にする。YI-06に切替の最終受け入れ条件を置き、YI-07が未完なら新モデルで判定保留にする算入範囲を表示する。年度非依存記録と卒業engine完成は同一リリース条件にしない。
 
 #129は現行の再取り込み差分UX・安全更新が目的で、独立して進められる。ただしowner/source identity契約変更をYI-03/04へ共有し、後で移行モデルへの統合テストを行う。#133は公式根拠調査でありH全件解消ではない。将来年度の開講・日程収録や全旧課程の自動読替は候補に含めない。
 
