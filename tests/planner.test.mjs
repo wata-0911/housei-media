@@ -1,3 +1,4 @@
+import CommittedInput from '../src/components/planner/CommittedInput.tsx';
 import { backupCatalogIdentity, backupDigest, backupCatalogSemantics, LEGACY_BACKUP_CATALOGS } from '../src/planner/plannerBackupCompatibility.ts';
 import { createPlannerBackupProtection, inspectPlannerBackupProtection } from '../src/planner/plannerBackupProtection.ts';
 import { restorePlannerBackup } from '../src/planner/plannerBackupStorage.ts';
@@ -4399,10 +4400,11 @@ for (const program of thesisPrograms.filter(p => ['法律学科', '経済学科'
         onChange: next => { state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [program.scopeId]: next } }); } });
       const control = controls(tree).find(predicate);
       assert.ok(control);
-      control.props.onChange({ target: { value } });
+      if (control.type === CommittedInput) control.props.onCommit(value);
+      else control.props.onChange({ target: { value } });
     };
     edit(node => node.type === 'select', 'passed');
-    edit(node => node.type === 'input' && node.props.type === 'date', '2026-04-15');
+    edit(node => node.type === CommittedInput && node.props.type === 'date', '2026-04-15');
     assert.deepEqual(guidanceForScope(state, program.scopeId).steps.general, { status: 'passed', passedOn: '2026-04-15' });
     for (const other of thesisPrograms.filter(p => p.scopeId !== program.scopeId)) {
       state = commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope,

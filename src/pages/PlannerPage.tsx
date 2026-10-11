@@ -133,11 +133,11 @@ export default function PlannerPage() {
   }
 
   function changeItem(id: string, patch: Partial<Omit<PlannerItem, 'offeringId'>>) {
-    commit({ ...state, items: updatePlannerItem(state.items, id, patch) }, '履修計画を保存しました。');
+    return commit({ ...state, items: updatePlannerItem(state.items, id, patch) }, '履修計画を保存しました。');
   }
 
   function changeMediaProgress(offeringId: string, progress: PlannerState['mediaSchoolingProgress'][string]) {
-    commit({ ...state, mediaSchoolingProgress: { ...state.mediaSchoolingProgress, [offeringId]: progress } }, 'メディアスクーリングの進捗を保存しました。');
+    return commit({ ...state, mediaSchoolingProgress: { ...state.mediaSchoolingProgress, [offeringId]: progress } }, 'メディアスクーリングの進捗を保存しました。');
   }
 
   function changeEvaluation(offeringId: string, evaluation: PlannerState['courseEvaluations'][string]) {
@@ -158,8 +158,8 @@ export default function PlannerPage() {
 
   function changePublicCourse(id: string, patch: Partial<Omit<PublicCourse, 'id' | 'credits'>>) {
     const title = patch.title === undefined ? undefined : normalizePublicCourseTitle(patch.title);
-    if (title !== undefined && !isValidPublicCourseTitle(title)) return;
-    commit({ ...state, publicCourses: state.publicCourses.map(course => course.id === id ? { ...course, ...patch, ...(title === undefined ? {} : { title }) } : course) }, '公開科目を保存しました。');
+    if (title !== undefined && !isValidPublicCourseTitle(title)) return false;
+    return commit({ ...state, publicCourses: state.publicCourses.map(course => course.id === id ? { ...course, ...patch, ...(title === undefined ? {} : { title }) } : course) }, '公開科目を保存しました。');
   }
 
   async function removeItem(id: string) {
@@ -218,11 +218,11 @@ export default function PlannerPage() {
     if (await commit(next, `成績表行を追加${addedCourses}件・更新${updatedCourses}件、履修内訳を追加${addedRecords}件・更新${updatedRecords}件保存しました。${addedItems}科目を履修計画に仮登録しました。状態・学年・年度・時期を確認してください。`)) { setUndoImport(state); setDirectImport(undefined); return true; }
     return false;
   }
-  function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
+  function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { return commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
   function changeImportedCourseAchievement(id: string, patch: Partial<ImportedCourseAchievement>) { commit({ ...state, importedCourseAchievements: state.importedCourseAchievements.map(record => record.id === id ? { ...record, ...patch } : record) }, '成績表の科目行の照合先を保存しました。'); }
   function changeImportedUserMeta(id: string, patch: Partial<ImportedCourseUserMeta>) {
     const current = state.importedCourseUserMeta[id] ?? { lifecycleStatus: null, plannedYear: null, plannedTerm: null, studyYear: null };
-    commit({ ...state, importedCourseUserMeta: { ...state.importedCourseUserMeta, [id]: { ...current, ...patch } } }, '成績表の公式情報とは別に、履修管理情報を保存しました。');
+    return commit({ ...state, importedCourseUserMeta: { ...state.importedCourseUserMeta, [id]: { ...current, ...patch } } }, '成績表の公式情報とは別に、履修管理情報を保存しました。');
   }
   async function deleteImportedAchievement(id: string) { const record = state.importedStudyRecords.find(value => value.id === id); if (!record) return; if (await commit({ ...state, importedStudyRecords: state.importedStudyRecords.filter(value => value.id !== id) }, `「${record.rawName}」の履修実績を削除しました。`)) setUndoImport(state); }
   async function undoGradeImport() { if (undoImport && await commit(undoImport, '取り込んだ履修実績を元に戻しました。')) setUndoImport(null); }
@@ -262,16 +262,16 @@ export default function PlannerPage() {
         {undoImport && <button type="button" disabled={loaded.error !== null || saving} onClick={undoGradeImport} className="ml-2 underline underline-offset-2">取り込みを元に戻す</button>}
       </div>
       <div role="tablist" aria-label="履修プランナーの表示" className="grid w-full max-w-2xl grid-cols-3 border-b border-gray-300">
-        <button id="annual-tab" type="button" role="tab" aria-selected={activeTab === 'annual'} aria-controls="annual-panel" onClick={() => setActiveTab('annual')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
-        <button id="media-tab" type="button" role="tab" aria-selected={activeTab === 'media'} aria-controls="media-panel" onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
-        <button id="profile-tab" type="button" role="tab" aria-selected={activeTab === 'profile'} aria-controls="profile-panel" onClick={() => setActiveTab('profile')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'profile' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>プロフィール</button>
+        <button disabled={saving} id="annual-tab" type="button" role="tab" aria-selected={activeTab === 'annual'} aria-controls="annual-panel" onClick={() => setActiveTab('annual')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
+        <button disabled={saving} id="media-tab" type="button" role="tab" aria-selected={activeTab === 'media'} aria-controls="media-panel" onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
+        <button disabled={saving} id="profile-tab" type="button" role="tab" aria-selected={activeTab === 'profile'} aria-controls="profile-panel" onClick={() => setActiveTab('profile')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'profile' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>プロフィール</button>
       </div>
       {loaded.recognitionWarning && activeTab !== 'profile' && <p role="alert" className="mt-4 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{loaded.recognitionWarning}</p>}
       {activeTab === 'annual' && <div id="annual-panel" role="tabpanel" aria-labelledby="annual-tab" className="space-y-6">
         {profileNeedsAttention && <p className="border-l-4 border-sky-600 bg-sky-50 p-3 text-sm text-sky-900">卒業判定に必要なプロフィール設定があります。プロフィールタブで確認してください。</p>}
         <AnnualCreditLimitNotice rows={annualLimitRows} />
         <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null || saving} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
-        <CurriculumCourseList catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null || saving} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
+        <CurriculumCourseList key={importEpoch} catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null || saving} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
         <PlannerExportActions presentation={exportPresentation} />
         <details
           open={gradeImportOpen}
@@ -285,10 +285,10 @@ export default function PlannerPage() {
         </details>
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null || saving} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
-        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
+        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance key={importEpoch} disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab">
-        <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />
+        <MediaSchoolingProgress key={importEpoch} items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />
       </div>}
       {activeTab === 'profile' && <div ref={profilePanelRef} id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" tabIndex={-1} className="scroll-mt-24">
         <PlannerProfileTab

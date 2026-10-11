@@ -10,6 +10,9 @@ import { initialState, STORAGE_KEY, BACKUP_KEY } from '../src/planner/storage.ts
 import { stateForScopeChange } from '../src/planner/thesisSelection.ts';
 import { inspectPlannerBackupProtection } from '../src/planner/plannerBackupProtection.ts';
 import { createPlannerBackup } from '../src/planner/plannerBackup.ts';
+import { isMediaSchooling } from '../src/planner/mediaSchooling.ts';
+import { createPublicCourse } from '../src/planner/publicCourses.ts';
+import { applyImport, importPreview } from '../src/planner/gradeImportApply.ts';
 
 const root = new URL('../', import.meta.url).pathname;
 const port = Number(process.env.PLANNER_BROWSER_PORT || 4180);
@@ -72,6 +75,7 @@ test('Web Lock wait disables thesis editors, preserves pending state, and permit
   await page.getByText('卒論手続の記録を保存しました。', { exact: true }).waitFor();
   await allDisabled(guidance, false);
   await guidance.locator('input[type=date]').first().fill('2026-10-11');
+  await guidance.locator('input[type=date]').first().press('Enter');
   await page.waitForFunction(key => Object.values(JSON.parse(localStorage.getItem(key)).thesisGuidanceByScope).some(g => Object.values(g.steps).some(s => s.status === 'planned' && s.passedOn === '2026-10-11')), STORAGE_KEY);
   await page.reload(); await guidance.waitFor();
   assert.equal(await guidance.locator('input[type=date]').first().inputValue(), '2026-10-11');
@@ -168,4 +172,182 @@ test('backup restore waits with thesis controls disabled and enables the restore
   await allDisabled(guidance, true); assert.equal(await persisted(page), raw);
   await release(); await panel.getByText('全データを置き換えて保存しました。再読み込み後も保持されます。', { exact: true }).waitFor();
   await allDisabled(guidance, false); assert.equal(await persisted(page), raw);
+});
+
+function textFixture() {
+  const state = stateForScopeChange(initialState(), catalog, catalog.programs.find(row => row.department === '日本文学科').scopeId);
+  state.graduationProfile.admissionType = 'other_transfer';
+  const media = catalog.offerings.find(isMediaSchooling);
+  state.items = [{ offeringId: media.id, status: 'in_progress', plannedYear: 2026, plannedTerm: null, studyYear: 2, earnedOrder: null }];
+  state.mediaSchoolingProgress[media.id] = { offeringId: media.id, totalLessons: 14, lessons: [], assessments: [{ id: 'draft-assessment', type: 'other', label: '初期名', scheduledDate: null, completed: false }] };
+  state.publicCourses = [createPublicCourse('00000000-0000-4000-8000-000000000001')];
+  return { state, media };
+}
+async function mediaEditor(t) {
+  const fixture = textFixture();
+  const opened = await open(t, '日本文学科', JSON.stringify(fixture.state));
+  await opened.page.getByRole('tab', { name: 'メディア', exact: true }).click();
+  const name = opened.page.getByLabel('試験・評価予定の名称', { exact: true });
+  const total = opened.page.getByLabel(`${fixture.media.name}の全回数`, { exact: true });
+  return { ...opened, ...fixture, name, total };
+}
+async function recordWrites(page) {
+  await page.evaluate(key => {
+    window.realDraftSetItem = Storage.prototype.setItem; window.draftWrites = []; window.draftFail = false;
+    Storage.prototype.setItem = function (k, value) {
+      if (k === key) { window.draftWrites.push(value); if (window.draftFail) throw new DOMException('test quota', 'QuotaExceededError'); }
+      return window.realDraftSetItem.call(this, k, value);
+    };
+  }, STORAGE_KEY);
+}
+async function mediaName(page, id, expected) {
+  await page.waitForFunction(({ key, id, expected }) => JSON.parse(localStorage.getItem(key)).mediaSchoolingProgress[id].assessments[0].label === expected, { key: STORAGE_KEY, id, expected });
+}
+
+test('media name supports continuous typing without writes or focus loss; blur and Enter commit once', async t => {
+  const { page, name, media, raw } = await mediaEditor(t); await recordWrites(page);
+  await name.fill(''); await name.pressSequentially('連続入力を最後まで', { delay: 35 });
+  assert.equal(await name.inputValue(), '連続入力を最後まで');
+  assert.equal(await name.isDisabled(), false); assert.equal(await name.evaluate(el => el === document.activeElement), true);
+  assert.equal(await persisted(page), raw); assert.equal(await page.evaluate(() => window.draftWrites.length), 0);
+  await name.press('Tab'); await mediaName(page, media.id, '連続入力を最後まで');
+  assert.equal(await page.evaluate(() => window.draftWrites.length), 1);
+  await name.fill('次の名称'); await name.press('Enter'); await mediaName(page, media.id, '次の名称');
+  await name.press('Tab'); assert.equal(await page.evaluate(() => window.draftWrites.length), 2);
+  await page.reload(); await page.getByRole('tab', { name: 'メディア', exact: true }).click();
+  assert.equal(await page.getByLabel('試験・評価予定の名称', { exact: true }).inputValue(), '次の名称');
+});
+
+test('media name failed save keeps the full draft and retry saves the same text', async t => {
+  const { page, name, media, raw } = await mediaEditor(t); await recordWrites(page);
+  await page.evaluate(() => { window.draftFail = true; });
+  await name.fill('失敗しても全文を保持'); await name.press('Enter');
+  await page.getByRole('alert').filter({ hasText: '変更は反映していません' }).waitFor();
+  assert.equal(await name.inputValue(), '失敗しても全文を保持'); assert.equal(await persisted(page), raw);
+  await page.evaluate(() => { window.draftFail = false; });
+  await page.getByRole('button', { name: '再試行', exact: true }).click();
+  await mediaName(page, media.id, '失敗しても全文を保持');
+  assert.equal(await page.getByRole('button', { name: '再試行', exact: true }).count(), 0);
+});
+
+test('media name remains editable before confirmation during a held lock, preserves full draft while queued and resumes', async t => {
+  const { page, context, name, media, raw } = await mediaEditor(t); const release = await hold(context);
+  await name.fill(''); await name.pressSequentially('ロック待ちの全文');
+  assert.equal(await name.isDisabled(), false); assert.equal(await persisted(page), raw);
+  await name.press('Enter'); await page.getByText('保存処理を待っています。完了後に編集できます。', { exact: true }).waitFor();
+  assert.equal(await name.isDisabled(), true); assert.equal(await name.inputValue(), 'ロック待ちの全文');
+  await assert.rejects(name.fill('拒否される追加', { timeout: 300 }), /Timeout/);
+  assert.equal(await name.inputValue(), 'ロック待ちの全文'); await release();
+  await mediaName(page, media.id, 'ロック待ちの全文');
+  await name.fill('解除後に再編集'); await name.press('Enter'); await mediaName(page, media.id, '解除後に再編集');
+});
+
+test('media total supports multi-digit drafts, retains failures and retries the numeric value', async t => {
+  const { page, total, media, raw } = await mediaEditor(t); await recordWrites(page);
+  await total.fill(''); await total.pressSequentially('125', { delay: 35 });
+  assert.equal(await total.inputValue(), '125'); assert.equal(await persisted(page), raw);
+  assert.equal(await page.evaluate(() => window.draftWrites.length), 0);
+  await page.evaluate(() => { window.draftFail = true; });
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: '変更は反映していません' }).waitFor();
+  assert.equal(await total.inputValue(), '125'); assert.equal(await persisted(page), raw);
+  await page.evaluate(() => { window.draftFail = false; });
+  await page.getByRole('button', { name: '再試行', exact: true }).click();
+  await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).mediaSchoolingProgress[id].totalLessons === 125, { key: STORAGE_KEY, id: media.id });
+});
+
+test('IME composition Enter does not persist an unfinished media draft', async t => {
+  const { page, name, media, raw } = await mediaEditor(t); await recordWrites(page);
+  await name.fill('編集中'); await name.dispatchEvent('compositionstart'); await name.press('Enter');
+  assert.equal(await persisted(page), raw); assert.equal(await page.evaluate(() => window.draftWrites.length), 0);
+  await name.dispatchEvent('compositionend'); await name.press('Enter'); await mediaName(page, media.id, '編集中');
+  assert.equal(await page.evaluate(() => window.draftWrites.length), 1);
+});
+
+test('admission year and recognized credits keep unsaved numeric drafts after failure and allow Enter retry', async t => {
+  const { page, raw } = await mediaEditor(t); await recordWrites(page);
+  await page.getByRole('tab', { name: 'プロフィール', exact: true }).click();
+  const year = page.getByLabel('入学年度', { exact: true });
+  await year.fill(''); await year.pressSequentially('2028', { delay: 35 });
+  assert.equal(await persisted(page), raw); assert.equal(await page.evaluate(() => window.draftWrites.length), 0);
+  await page.evaluate(() => { window.draftFail = true; }); await year.press('Enter');
+  await page.getByRole('alert').filter({ hasText: '変更は反映していません' }).waitFor();
+  assert.equal(await year.inputValue(), '2028'); assert.equal(await persisted(page), raw);
+  await page.evaluate(() => { window.draftFail = false; }); await year.press('Enter');
+  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).graduationProfile.admissionYear === 2028, STORAGE_KEY);
+  const credits = page.getByLabel('認定単位', { exact: true }); const before = await persisted(page);
+  await credits.fill('12.5'); assert.equal(await persisted(page), before);
+  await page.evaluate(() => { window.draftFail = true; }); await credits.press('Enter');
+  await page.getByRole('alert').filter({ hasText: '変更は反映していません' }).waitFor();
+  assert.equal(await credits.inputValue(), '12.5'); assert.equal(await persisted(page), before);
+  await page.evaluate(() => { window.draftFail = false; }); await credits.press('Enter');
+  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).graduationProfile.recognizedCredits.totalCredits === 12.5, STORAGE_KEY);
+});
+
+test('imported component year and term are drafts, preserve failed text and keep official credits unchanged', async t => {
+  const { state } = textFixture();
+  const emptySchool = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
+  const source = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-11T00:00:00.000Z', courses: [{ rawName: '未照合の入力確認科目', categoryRaw: '専門', compositionCredits: { raw: '4', value: 4 }, additionalEnrollment: { raw: '0', value: 0 }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: '4', value: 4 }, schoolingCredits: { raw: '0', value: 0 }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '2026/10/01', rawCredits: '4', rawGrade: 'A', date: '2026-10-01', credits: 4, grade: 'A', pendingMarker: false }, schoolings: [emptySchool, emptySchool] }] };
+  const imported = applyImport(state, importPreview(source, catalog.offerings, []), catalog.offerings);
+  const { page, raw } = await open(t, '日本文学科', JSON.stringify(imported)); await recordWrites(page);
+  await page.locator('details').evaluateAll(rows => { for (const row of rows) row.open = true; });
+  const editor = page.locator('article[data-import-study-id]').first();
+  const year = editor.getByRole('spinbutton'); const term = editor.getByRole('textbox');
+  await year.fill(''); await year.pressSequentially('2027'); assert.equal(await persisted(page), raw);
+  await year.press('Enter'); await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).importedStudyRecords[0].academicYear === 2027, STORAGE_KEY);
+  const before = await persisted(page); await page.evaluate(() => { window.draftFail = true; });
+  await term.fill(''); await term.pressSequentially('前期の長い入力'); assert.equal(await persisted(page), before);
+  await term.press('Enter'); await page.getByRole('alert').filter({ hasText: '変更は反映していません' }).waitFor();
+  assert.equal(await term.inputValue(), '前期の長い入力'); assert.equal(await persisted(page), before);
+  await page.evaluate(() => { window.draftFail = false; }); await term.press('Enter');
+  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).importedStudyRecords[0].term === '前期の長い入力', STORAGE_KEY);
+  const restored = JSON.parse(await persisted(page));
+  assert.deepEqual(restored.importedCourseAchievements, imported.importedCourseAchievements);
+});
+
+test('restore invalidates an unsaved media draft even when the stored value is identical', async t => {
+  const { page, total, state } = await mediaEditor(t);
+  await total.fill('201'); await total.press('Enter');
+  await page.getByRole('alert').filter({ hasText: '全回数は1〜200' }).waitFor();
+  assert.equal(await total.inputValue(), '201');
+  const panel = page.getByRole('region', { name: 'プランナー全データのバックアップ・復元' });
+  const backup = await createPlannerBackup(JSON.stringify(state), catalog);
+  await panel.locator('input[type=file]').setInputFiles({ name: 'same-state.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await panel.getByRole('checkbox').check(); await panel.getByRole('button', { name: '確認したバックアップで全件置換する', exact: true }).click();
+  await panel.getByText('全データを置き換えて保存しました。再読み込み後も保持されます。', { exact: true }).waitFor();
+  assert.equal(await total.inputValue(), '14');
+  assert.equal(await page.getByRole('alert').filter({ hasText: '全回数は1〜200' }).count(), 0);
+});
+
+test('public course title and planned year retain failed drafts and confirm whole values after a held lock', async t => {
+  const fixture = textFixture();
+  const { page, context, raw } = await open(t, '日本文学科', JSON.stringify(fixture.state)); await recordWrites(page);
+  const group = page.getByRole('region', { name: '公開科目', exact: true });
+  await group.getByRole('button', { name: '開く', exact: true }).click();
+  const title = group.locator('input:not([aria-label]):visible');
+  await title.fill(''); await title.pressSequentially('連続入力できる公開科目名', { delay: 35 });
+  assert.equal(await persisted(page), raw); assert.equal(await title.evaluate(el => el === document.activeElement), true);
+  await page.evaluate(() => { window.draftFail = true; }); await title.press('Enter');
+  await page.getByRole('alert').filter({ hasText: '変更は反映していません' }).waitFor();
+  assert.equal(await title.inputValue(), '連続入力できる公開科目名'); assert.equal(await persisted(page), raw);
+  await page.evaluate(() => { window.draftFail = false; }); await title.press('Enter');
+  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).publicCourses[0].title === '連続入力できる公開科目名', STORAGE_KEY);
+  const year = group.locator('input[aria-label="計画年度"]:visible'); const before = await persisted(page);
+  const release = await hold(context); await year.fill(''); await year.pressSequentially('2027');
+  assert.equal(await persisted(page), before); assert.equal(await year.isDisabled(), false);
+  await year.press('Enter'); await page.getByText('保存処理を待っています。完了後に編集できます。', { exact: true }).waitFor();
+  assert.equal(await year.inputValue(), '2027'); assert.equal(await year.isDisabled(), true);
+  await release(); await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).publicCourses[0].plannedYear === 2027, STORAGE_KEY);
+});
+
+test('media total presets replace the draft without a preceding blur save, including the same stored preset', async t => {
+  const { page, total, media } = await mediaEditor(t); await recordWrites(page);
+  await total.fill('125'); await page.getByRole('button', { name: '14回', exact: true }).click();
+  await page.waitForFunction(() => window.draftWrites.length === 1);
+  await page.getByText('メディアスクーリングの進捗を保存しました。', { exact: true }).waitFor();
+  assert.equal(await total.inputValue(), '14');
+  assert.equal(JSON.parse(await persisted(page)).mediaSchoolingProgress[media.id].totalLessons, 14);
+  await total.fill('125'); await page.getByRole('button', { name: '15回', exact: true }).click();
+  await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).mediaSchoolingProgress[id].totalLessons === 15, { key: STORAGE_KEY, id: media.id });
+  assert.equal(await total.inputValue(), '15'); assert.equal(await page.evaluate(() => window.draftWrites.length), 2);
 });

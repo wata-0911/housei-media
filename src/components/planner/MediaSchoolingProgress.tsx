@@ -1,6 +1,7 @@
 import FuturePlanNotice from './FuturePlanNotice';
+import CommittedInput from './CommittedInput';
 import { planningTermLabel } from '../../planner/futurePlanning';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { addAssessment, assessmentLabel, completeVideosThroughLesson, mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment, type ImportedMediaShareItem } from '../../planner/mediaSchooling';
 import type { MediaAssessment, MediaCourseProgress, Offering, PlannerItem } from '../../planner/plannerCatalog';
 import MediaProgressShareModal from './MediaProgressShareModal';
@@ -15,26 +16,28 @@ type Props = {
   importedPending: ImportedMediaPending[];
   onResolveImportedMedia: (sourceCourseId: string, offeringId: string) => void;
   disabled: boolean;
-  onChange: (offeringId: string, progress: MediaCourseProgress) => void;
+  onChange: (offeringId: string, progress: MediaCourseProgress) => void | boolean | Promise<void | boolean>;
 };
 
 const statusLabels: Record<PlannerItem['status'], string> = { planned: '計画中', in_progress: '履修中', waiting: '結果待ち', earned: '修得済み', failed: '不合格', dropped: '取りやめ' };
 
 function CourseCard({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: MediaCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
-  const [draft, setDraft] = useState(saved.totalLessons?.toString() ?? '');
   const [error, setError] = useState('');
+  const [totalEpoch, setTotalEpoch] = useState(0);
+  const totalInput = useRef<HTMLInputElement>(null);
   const summary = mediaProgressSummary(saved);
-  const saveTotal = () => {
-    const value = draft.trim() === '' ? null : Number(draft);
-    if (value !== null && (!Number.isInteger(value) || value < 1 || value > 200)) { setError('全回数は1〜200の整数で入力してください。'); return; }
+  const saveTotal = (raw: string) => {
+    const value = raw.trim() === '' ? null : Number(raw);
+    if (value !== null && (!Number.isInteger(value) || value < 1 || value > 200)) throw new Error('全回数は1〜200の整数で入力してください。');
     const next = setTotalLessons(saved, value);
-    if (next === null) { setError('完了済みの回があるため、その回より小さくは設定できません。'); return; }
-    setError(''); onChange(item.offeringId, next);
+    if (next === null) throw new Error('完了済みの回があるため、その回より小さくは設定できません。');
+    setError(''); return onChange(item.offeringId, next);
   };
-  const chooseTotal = (totalLessons: number) => {
+  const chooseTotal = async (totalLessons: number) => {
     const next = setTotalLessons(saved, totalLessons);
     if (next === null) { setError('完了済みの回があるため、その回より小さくは設定できません。'); return; }
-    setDraft(String(totalLessons)); setError(''); onChange(item.offeringId, next);
+    setError(''); const result = await onChange(item.offeringId, next);
+    if (result !== false) setTotalEpoch(epoch => epoch + 1);
   };
   const addNewAssessment = () => {
     const assessment: MediaAssessment = { id: crypto.randomUUID(), type: 'midterm', label: '中間試験', scheduledDate: null, completed: false };
@@ -52,11 +55,10 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     <FuturePlanNotice item={item} offering={offering} />
     <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <label className="block text-sm">全回数
-        <input aria-label={`${offering.name}の全回数`} inputMode="numeric" value={draft} disabled={disabled} onChange={event => { setDraft(event.target.value); setError(''); }} onBlur={saveTotal} placeholder="未設定" className="mt-1 w-full border border-gray-300 rounded-sm p-2 disabled:opacity-50" />
+        <CommittedInput key={totalEpoch} inputRef={totalInput} aria-label={`${offering.name}の全回数`} inputMode="numeric" value={saved.totalLessons?.toString() ?? ''} disabled={disabled} onCommit={saveTotal} saveLabel="保存" placeholder="未設定" className="mt-1 w-full border border-gray-300 rounded-sm p-2 disabled:opacity-50" />
       </label>
-      <button type="button" disabled={disabled} onClick={saveTotal} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">保存</button>
     </div>
-    <div className="mt-2 flex flex-wrap gap-2 text-sm"><span className="self-center text-gray-600">よくある回数:</span><button type="button" disabled={disabled} onClick={() => chooseTotal(14)} className="border border-gray-300 px-3 py-1 disabled:opacity-50">14回</button><button type="button" disabled={disabled} onClick={() => chooseTotal(15)} className="border border-gray-300 px-3 py-1 disabled:opacity-50">15回</button><button type="button" disabled={disabled} onClick={() => { setDraft(''); setError(''); }} className="border border-gray-300 px-3 py-1 disabled:opacity-50">その他</button><span className="self-center text-xs text-gray-500">その他は上の入力欄に回数を入力</span></div>
+    <div className="mt-2 flex flex-wrap gap-2 text-sm"><span className="self-center text-gray-600">よくある回数:</span><button type="button" disabled={disabled} data-replaces-draft="true" onClick={() => chooseTotal(14)} className="border border-gray-300 px-3 py-1 disabled:opacity-50">14回</button><button type="button" disabled={disabled} data-replaces-draft="true" onClick={() => chooseTotal(15)} className="border border-gray-300 px-3 py-1 disabled:opacity-50">15回</button><button type="button" disabled={disabled} data-replaces-draft="true" onClick={() => { totalInput.current?.focus(); totalInput.current?.select(); }} className="border border-gray-300 px-3 py-1 disabled:opacity-50">その他</button><span className="self-center text-xs text-gray-500">その他は上の入力欄に回数を入力</span></div>
     {error && <p role="alert" className="mt-1 text-sm text-red-700">{error}</p>}
     <div className="mt-4 grid grid-cols-3 gap-2 text-sm"><p>動画 {saved.totalLessons === null ? `${summary.video}/—` : `${summary.video}/${saved.totalLessons}`}</p><p>テスト {saved.totalLessons === null ? `${summary.test}/—` : `${summary.test}/${saved.totalLessons}`}</p><p>総合 {summary.percent === null ? '—' : `${summary.percent}%`}</p></div>
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
@@ -73,11 +75,12 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
       </div>
     </>}
     <section className="mt-6 border-t border-gray-200 pt-4" aria-label={`${offering.name}の試験・評価予定`}>
+      <p className="mb-2 text-xs text-gray-600">名称・全回数・予定日は、入力欄を離れるかEnterキーで確定して保存します。</p>
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="font-medium text-[#002255]">試験・評価予定</h4><p className="mt-1 text-xs text-gray-600">試験の有無・方式・日程は科目ごとに異なります。最新の「法政通信」を確認してください。</p></div><button type="button" disabled={disabled} onClick={addNewAssessment} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">試験を追加</button></div>
       {(saved.assessments ?? []).length > 0 && <div className="mt-3 space-y-3">{(saved.assessments ?? []).map(assessment => <div key={assessment.id} className="grid gap-2 border border-gray-200 bg-slate-50 p-3 sm:grid-cols-[9rem_minmax(0,1fr)_10rem_auto] sm:items-end">
         <label className="text-xs">種類<select value={assessment.type} disabled={disabled} onChange={event => { const type = event.target.value as MediaAssessment['type']; onChange(item.offeringId, updateAssessment(saved, assessment.id, { type, label: type === 'midterm' ? '中間試験' : type === 'final' ? '期末試験' : assessment.label || 'その他の試験' })); }} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm"><option value="midterm">中間試験</option><option value="final">期末試験</option><option value="other">その他</option></select></label>
-        {assessment.type === 'other' ? <label className="text-xs">名称<input value={assessment.label} maxLength={200} disabled={disabled} onChange={event => onChange(item.offeringId, updateAssessment(saved, assessment.id, { label: event.target.value }))} onBlur={event => { if (!event.target.value.trim()) onChange(item.offeringId, updateAssessment(saved, assessment.id, { label: 'その他の試験' })); }} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label> : <p className="pb-2 text-sm">{assessmentLabel(assessment)}</p>}
-        <label className="text-xs">予定日<input type="date" value={assessment.scheduledDate ?? ''} disabled={disabled} onChange={event => onChange(item.offeringId, updateAssessment(saved, assessment.id, { scheduledDate: event.target.value || null }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label>
+        {assessment.type === 'other' ? <label className="text-xs">名称<CommittedInput aria-label="試験・評価予定の名称" value={assessment.label} maxLength={200} disabled={disabled} normalize={raw => raw.trim() ? raw : 'その他の試験'} onCommit={label => onChange(item.offeringId, updateAssessment(saved, assessment.id, { label }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label> : <p className="pb-2 text-sm">{assessmentLabel(assessment)}</p>}
+        <label className="text-xs">予定日<CommittedInput type="date" value={assessment.scheduledDate ?? ''} disabled={disabled} onCommit={raw => onChange(item.offeringId, updateAssessment(saved, assessment.id, { scheduledDate: raw || null }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label>
         <div className="flex items-center justify-between gap-3 pb-2"><label className="flex items-center gap-1 whitespace-nowrap text-sm"><input type="checkbox" checked={assessment.completed} disabled={disabled} onChange={() => onChange(item.offeringId, updateAssessment(saved, assessment.id, { completed: !assessment.completed }))} />実施済み</label><button type="button" disabled={disabled} onClick={() => onChange(item.offeringId, removeAssessment(saved, assessment.id))} className="text-sm text-red-700 underline disabled:opacity-50">削除</button></div>
       </div>)}</div>}
     </section>

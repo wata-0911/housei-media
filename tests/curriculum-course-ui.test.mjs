@@ -18,6 +18,7 @@ import ImportedAchievements, { ImportedManagementPanel } from '../src/components
 import { ImportedCourseRepairControls } from '../src/components/planner/ImportedCourseRepair.tsx';
 import ImportedCourseRepair from '../src/components/planner/ImportedCourseRepair.tsx';
 import ImportedStudyRecordEditor from '../src/components/planner/ImportedStudyRecordEditor.tsx';
+import CommittedInput from '../src/components/planner/CommittedInput.tsx';
 import UnresolvedCurriculumSection from '../src/components/planner/UnresolvedCurriculumSection.tsx';
 import GradeImportPanel, { GradeImportPreviewUnit, GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
 import GraduationProgress from '../src/components/planner/GraduationProgress.tsx';
@@ -403,15 +404,16 @@ test('import UX: orphan/duplicate/unknown/held/schooling confirmation remain vis
 test('import UX: record maintenance preserves year/term/matching/delete callbacks, source aggregates and read-only disable', () => {
   const record = detail({ method: 'correspondence' }); const calls = [], deleted = [];
   const child = ImportedStudyRecordEditor({ record, offerings: [{ ...correspondence, name: record.rawName }], disabled: false, onChange: (...args) => calls.push(args), onDelete: id => deleted.push(id) });
-  const inputs = elements(child).filter(n => n.type === 'input');
-  inputs[0].props.onChange({ target: { value: '2028' } }); assert.deepEqual(calls.at(-1), [record.id, { academicYear: 2028, yearSource: 'manual' }]);
-  inputs[0].props.onChange({ target: { value: '' } }); assert.deepEqual(calls.at(-1), [record.id, { academicYear: null, yearSource: 'manual' }]);
-  inputs[1].props.onChange({ target: { value: '後期' } }); assert.deepEqual(calls.at(-1), [record.id, { term: '後期' }]);
+  const inputs = elements(child).filter(n => n.type === CommittedInput);
+  inputs[0].props.onCommit('2028'); assert.deepEqual(calls.at(-1), [record.id, { academicYear: 2028, yearSource: 'manual' }]);
+  inputs[0].props.onCommit(''); assert.deepEqual(calls.at(-1), [record.id, { academicYear: null, yearSource: 'manual' }]);
+  assert.throws(() => inputs[0].props.onCommit('20'), /4桁/);
+  inputs[1].props.onCommit('後期'); assert.deepEqual(calls.at(-1), [record.id, { term: '後期' }]);
   find(child, 'select').props.onChange({ target: { value: correspondence.id } }); assert.deepEqual(calls.at(-1), [record.id, { offeringId: correspondence.id }]);
   const oldWindow = globalThis.window; globalThis.window = { confirm: () => true };
   try { find(child, 'button').props.onClick(); assert.deepEqual(deleted, [record.id]); } finally { globalThis.window = oldWindow; }
   const locked = ImportedStudyRecordEditor({ record, offerings: [], disabled: true, onChange: noop, onDelete: noop });
-  assert.ok(elements(locked).filter(n => ['input', 'select', 'button'].includes(n.type)).every(n => n.props.disabled === true));
+  assert.ok(elements(locked).filter(n => n.type === CommittedInput || ['select', 'button'].includes(n.type)).every(n => n.props.disabled === true));
   assert.ok(calls.every(([, patch]) => !Object.hasOwn(patch, 'earnedCreditsTotal')));
 });
 test('import UX: successful apply navigates after commit to existing focusable course-list target', () => {

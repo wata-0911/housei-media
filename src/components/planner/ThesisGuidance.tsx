@@ -1,3 +1,4 @@
+import CommittedInput from './CommittedInput';
 import type { GraduationProfile, PlannerCatalog, ThesisGuidanceProgress, ThesisGuidanceStatus } from '../../planner/plannerCatalog';
 import { thesisGuidanceViews } from '../../planner/thesisGuidance';
 
@@ -20,7 +21,7 @@ export default function ThesisGuidance({ catalog, scopeId, profile, progress, el
     </label>}
     {rows.map(row => <div key={row.id} className="mt-4 border-t pt-3">
       <p className="font-medium">{row.label}</p>
-      <div className="mt-2 flex gap-2"><select disabled={disabled} value={row.step.status} onChange={event => onChange({ ...progress, steps: { ...progress.steps, [row.id]: { ...row.step, status: event.target.value as ThesisGuidanceStatus } } })} className="border p-1"><option value="not_started">未着手</option><option value="planned">予定</option><option value="passed">合格・受講済み</option><option value="failed">不合格</option></select><input disabled={disabled} aria-label={`${row.label}合格日`} type="date" value={row.step.passedOn ?? ''} onChange={event => onChange({ ...progress, steps: { ...progress.steps, [row.id]: { ...row.step, passedOn: event.target.value || null } } })} className="border p-1" /></div>
+      <div className="mt-2 flex gap-2"><select disabled={disabled} value={row.step.status} onChange={event => onChange({ ...progress, steps: { ...progress.steps, [row.id]: { ...row.step, status: event.target.value as ThesisGuidanceStatus } } })} className="border p-1"><option value="not_started">未着手</option><option value="planned">予定</option><option value="passed">合格・受講済み</option><option value="failed">不合格</option></select><CommittedInput disabled={disabled} aria-label={`${row.label}合格日`} type="date" value={row.step.passedOn ?? ''} onCommit={raw => onChange({ ...progress, steps: { ...progress.steps, [row.id]: { ...row.step, passedOn: raw || null } } })} className="border p-1" /></div>
       <ul className="mt-2 text-xs">{rows.length && row.conditions.map(condition => <li key={condition.label}>{condition.label}：{label(condition.status)}{condition.reason ? `（${condition.reason}）` : ''}</li>)}</ul>
     </div>)}
   </section>;
