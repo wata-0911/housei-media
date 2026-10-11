@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { normalizeInstitutionalCanonicalName } from '../src/planner/institutional/canonicalName.ts';
+import { yi02IssuanceBaseline } from '../src/planner/institutional/registryBaseline.ts';
 import { loadInstitutionalCatalog } from '../src/planner/institutional/loader.ts';
 import { loadYi01InstitutionalCatalog, yi01InstitutionalInput, yi02InstitutionalRegistry } from '../src/planner/institutional/yi01.ts';
 import { searchInstitutionalPlacements, placementsForContext, resolveInstitutionalLegacyRef } from '../src/planner/institutional/query.ts';
@@ -23,9 +25,9 @@ const real = loadYi01InstitutionalCatalog();
 const counts = rows => Object.fromEntries(['safe', 'ambiguous', 'conflict', 'unmatched'].map(status => [status, rows.filter(r => r.status === status).length]));
 
 test('institutional: synthetic Offering 0 loads and exposes official evidence/credits without name fallback', () => {
-  const { input, registry } = institutionalFixture();
+  const { input, registry, baseline } = institutionalFixture();
   assert.equal(input.offerings.length, 0);
-  const model = loadInstitutionalCatalog(input, registry);
+  const model = loadInstitutionalCatalog(input, registry, baseline);
   const found = searchInstitutionalPlacements(model, '同名科目');
   assert.equal(found.length, 3);
   assert.equal(found[0].officialName, '同名科目');
@@ -86,11 +88,11 @@ test('institutional: dangling refs, namespace, revision, malformed evidence and 
     assert.throws(() => loadInstitutionalCatalog(i, r), /Institutional catalog/);
   }
   const f = institutionalFixture(); f.registry.placements[1].placementRoleKey = f.registry.placements[0].placementRoleKey;
-  assert.throws(() => loadInstitutionalCatalog(f.input, f.registry), /duplicate placement role/);
+  assert.throws(() => loadInstitutionalCatalog(f.input, f.registry, f.baseline), /placement role mismatch/);
 });
 
 test('institutional: same name/credits never merge identities and same scope permits 4/2 roles', () => {
-  const f = institutionalFixture(); const model = loadInstitutionalCatalog(f.input, f.registry);
+  const f = institutionalFixture(); const model = loadInstitutionalCatalog(f.input, f.registry, f.baseline);
   const courses = model.institutionalCourses.filter(c => c.officialName === '同名科目');
   assert.equal(courses.length, 2); assert.notEqual(courses[0].id, courses[1].id);
   const placements = model.placements.filter(p => p.institutionalCourseId === courses[0].id);
@@ -102,7 +104,7 @@ test('institutional: same name/credits never merge identities and same scope per
 });
 
 test('institutional: Ⅰ/Ⅱ/A/B/(1)/(2) remain distinct searchable labels', () => {
-  const f = institutionalFixture(); const model = loadInstitutionalCatalog(f.input, f.registry);
+  const f = institutionalFixture(); const model = loadInstitutionalCatalog(f.input, f.registry, f.baseline);
   for (const name of ['科目Ⅰ', '科目Ⅱ', '科目A', '科目B', '科目(1)', '科目(2)']) {
     assert.equal(searchInstitutionalPlacements(model, name).length, 1);
     assert.equal(searchInstitutionalPlacements(model, name)[0].officialName, name);
@@ -115,7 +117,7 @@ test('institutional: null/0 composition credits remain different', () => {
     f.input.officialRows[n].curriculumCredits = value;
     f.input.mappingRows[n].legacySnapshot.curriculumCredits = value;
   }
-  const model = loadInstitutionalCatalog(f.input, f.registry);
+  const model = loadInstitutionalCatalog(f.input, f.registry, f.baseline);
   assert.equal(searchInstitutionalPlacements(model, '不明単位')[0].compositionCredits, null);
   assert.equal(searchInstitutionalPlacements(model, '明示ゼロ')[0].compositionCredits, 0);
 });
@@ -243,4 +245,160 @@ test('institutional: six catalog raw files and complete 2026 adapter outputs unc
   assert.deepEqual(calculateGraduationProgress([], catalog, null, [], 'undecided'), progressBefore);
   assert.equal(state.schemaVersion, 22);
   assert.equal(catalog.metadata.graduationCheckComplete, false); assert.equal(catalog.metadata.sourceLinksReverified, false);
+});
+
+// Follow-up: exact diagnostics distinguish the targeted invariant from an
+// unrelated early rejection (e.g. duplicate issuance request or malformed ID).
+const auditIIMapping = input => input.mappingRows.find(row => row.status === 'safe' && row.canonicalName === '監査論Ⅱ');
+const auditIIRecords = input => {
+  const mapping = auditIIMapping(input);
+  return { mapping, official: input.officialRows.find(row => row.evidenceId === mapping.officialEvidenceIds[0]),
+    course: input.curriculumRows.find(row => row.oldCurriculumCourseId === mapping.oldCurriculumCourseId) };
+};
+
+test('P2-1: all 502 official/mapping names and every CurriculumCourse member match YI-01 normalization', () => {
+  assert.equal(yi01InstitutionalInput.mappingRows.length, 502);
+  for (const mapping of yi01InstitutionalInput.mappingRows) {
+    const row = yi01InstitutionalInput.officialRows.find(r => r.evidenceId === mapping.officialEvidenceIds[0]);
+    const course = yi01InstitutionalInput.curriculumRows.find(r => r.oldCurriculumCourseId === mapping.oldCurriculumCourseId);
+    assert.equal(normalizeInstitutionalCanonicalName(row.canonicalName), normalizeInstitutionalCanonicalName(mapping.canonicalName));
+    assert.equal(normalizeInstitutionalCanonicalName(course.canonicalName), normalizeInstitutionalCanonicalName(mapping.canonicalName));
+  }
+  assert.equal(loadYi01InstitutionalCatalog().placements.length, 502);
+});
+
+for (const [target, error] of [
+  ['official', /^Institutional catalog: official\/mapping canonical name mismatch:/],
+  ['mapping', /^Institutional catalog: curriculum\/mapping canonical name mismatch:/],
+  ['course', /^Institutional catalog: curriculum\/mapping canonical name mismatch:/],
+  ['official_and_mapping', /^Institutional catalog: curriculum\/mapping canonical name mismatch:/],
+  ['all_three', /^Institutional catalog: fixed canonical name mismatch:/],
+]) {
+  test(`P2-1: 監査論Ⅱ→Ⅰ in ${target} rejected by the corresponding name gate`, () => {
+    const input = cloneInput(), records = auditIIRecords(input);
+    assert.ok(records.mapping); assert.equal(records.course.mappingIds.length, 1);
+    for (const key of target === 'official_and_mapping' ? ['official', 'mapping']
+      : target === 'all_three' ? ['official', 'mapping', 'course'] : [target]) records[key].canonicalName = '監査論Ⅰ';
+    assert.throws(() => loadInstitutionalCatalog(input, yi02InstitutionalRegistry), { message: error });
+  });
+}
+
+test('P2-1: comparison protects Ⅰ/Ⅱ/Ⅲ from each other and ASCII I, and retains A/B/(1)/(2)', () => {
+  const norm = normalizeInstitutionalCanonicalName;
+  for (const [left, right] of [['科目Ⅰ', '科目Ⅱ'], ['科目Ⅱ', '科目Ⅲ'], ['科目Ⅰ', '科目I'], ['科目A', '科目B'], ['科目(1)', '科目(2)']]) {
+    assert.notEqual(norm(left), norm(right));
+    const f = institutionalFixture([left, right]);
+    f.input.mappingRows[0].canonicalName = right;
+    assert.throws(() => loadInstitutionalCatalog(f.input, f.registry, f.baseline), { message: /^Institutional catalog: curriculum\/mapping canonical name mismatch:/ });
+  }
+  assert.equal(norm(' \t科 目Ａ（１）　'), '科目A(1)');
+  assert.equal(norm('科目Ⅰ'), '科目\uE000');
+  assert.equal(norm('科目\u0085\u001cA'), '科目A');
+  assert.equal(norm('科目\uFEFFA'), '科目\uFEFFA'); // Matches Python \s, not JavaScript \s.
+});
+
+test('P2-1: whitespace/width differences pass across every safe multi-scope member without rewriting labels', () => {
+  const input = cloneInput();
+  const course = input.curriculumRows.find(r => r.status === 'safe' && r.scopeIds.length > 1);
+  assert.ok(course);
+  for (const [index, id] of course.mappingIds.entries()) {
+    const mapping = input.mappingRows.find(r => r.oldMappingId === id);
+    const row = input.officialRows.find(r => r.evidenceId === mapping.officialEvidenceIds[0]);
+    row.canonicalName = `${'　'.repeat(index + 1)}${row.canonicalName} \t`;
+  }
+  const result = loadInstitutionalCatalog(input, yi02InstitutionalRegistry);
+  assert.equal(result.institutionalCourses.length, 221);
+  for (const placement of result.placements.filter(p => p.institutionalCourseId === course.adoptedStableId)) {
+    assert.equal(placement.officialRow.canonicalName, input.officialRows.find(r => r.evidenceId === placement.officialRow.evidenceId).canonicalName);
+  }
+  const f = institutionalFixture(['科目A(1)']);
+  f.input.officialRows[0].canonicalName = '　科 目Ａ（１）　';
+  assert.equal(loadInstitutionalCatalog(f.input, f.registry, f.baseline).placements[0].officialRow.canonicalName, '　科 目Ａ（１）　');
+});
+
+test('P2-1: changing only one multi-scope Mapping member is rejected by curriculum/member name validation', () => {
+  const input = cloneInput();
+  const course = input.curriculumRows.find(r => r.status === 'safe' && r.scopeIds.length > 1);
+  input.mappingRows.find(r => r.oldMappingId === course.mappingIds.at(-1)).canonicalName = '異なる制度科目';
+  assert.throws(() => loadInstitutionalCatalog(input, yi02InstitutionalRegistry), { message: /^Institutional catalog: curriculum\/mapping canonical name mismatch:/ });
+});
+
+test('P2-1: officialLabel remains a distinct display field rather than an exact canonicalName constraint', () => {
+  assert.ok(yi01InstitutionalInput.officialRows.some(r => r.officialLabel !== r.canonicalName));
+  const input = cloneInput(); auditIIRecords(input).official.officialLabel = '監査論Ⅱ（原表の表示注記）';
+  const model = loadInstitutionalCatalog(input, yi02InstitutionalRegistry);
+  assert.ok(model.placements.some(p => p.officialName === '監査論Ⅱ（原表の表示注記）'));
+});
+
+test('P2-2: fixed baseline provenance and registry bytes remain those of audited HEAD; all 1/221/502 bindings pass', () => {
+  const baselineBytes = readFileSync(new URL('../src/data/institutional_issuance_baseline.json', import.meta.url));
+  const baseline = JSON.parse(baselineBytes);
+  assert.equal(baseline.auditedCommit, '81a2dc0a835a02134b3c69138e8c90c4ada7d7ea');
+  assert.equal(createHash('sha256').update(baselineBytes).digest('hex'), '852b21d115dc1982a9f1a3dc549127fc6ee006e4d1bc1b7bf3307abd7c7f0e2a');
+  const registryBytes = readFileSync(new URL('../src/data/institutional_registry.json', import.meta.url));
+  assert.equal(createHash('sha256').update(registryBytes).digest('hex'), '0dbf6cf080fd5a148fbb8f747ce065382c079786616d500d52133f63f1406580');
+  assert.equal(baseline.registrySha256, '0dbf6cf080fd5a148fbb8f747ce065382c079786616d500d52133f63f1406580');
+  assert.equal(createHash('sha256').update(readFileSync(new URL('../docs/planner-yi-01/curriculum-crosswalk.json', import.meta.url))).digest('hex'), baseline.curriculumCrosswalkSha256);
+  assert.deepEqual([baseline.curriculumVersions.length, baseline.institutionalCourses.length, baseline.placements.length], [1, 221, 502]);
+  assert.ok(Object.isFrozen(yi02IssuanceBaseline.placements[0]));
+  assert.throws(() => { yi02IssuanceBaseline.placements[0].id = 'rewrite'; }, TypeError);
+  const model = loadYi01InstitutionalCatalog();
+  assert.deepEqual([model.curriculumVersions.length, model.institutionalCourses.length, model.placements.length], [1, 221, 502]);
+});
+
+function swappedField(records, field) {
+  [records[0][field], records[1][field]] = [records[1][field], records[0][field]];
+}
+for (const [target, error] of [
+  ['role', /^Institutional catalog: placement role mismatch$/],
+  ['cp_request', /^Institutional catalog: placement issuance request mismatch$/],
+  ['ic_request', /^Institutional catalog: course issuance request mismatch$/],
+  ['cv_request', /^Institutional catalog: fixed issuance mismatch: CurriculumVersion:/],
+  ['cp_ids', /^Institutional catalog: fixed issuance mismatch: CurriculumPlacement:/],
+  ['cp_origins_with_requests', /^Institutional catalog: fixed issuance mismatch: CurriculumPlacement:/],
+  ['cp_evidence', /^Institutional catalog: placement evidence mismatch$/],
+  ['cv_id_with_all_refs', /^Institutional catalog: fixed issuance mismatch: CurriculumVersion:/],
+]) {
+  test(`P2-2: valid unique ${target} alteration rejected by the intended issuance/role gate`, () => {
+    const registry = structuredClone(yi02InstitutionalRegistry);
+    if (target === 'role') registry.placements[0].placementRoleKey = registry.placements.find(p => p.scopeId !== registry.placements[0].scopeId).placementRoleKey;
+    if (target === 'cp_request') swappedField(registry.placements, 'issuanceRequestId');
+    if (target === 'ic_request') swappedField(registry.institutionalCourses, 'issuanceRequestId');
+    if (target === 'cv_request') registry.curriculumVersions[0].issuanceRequestId = 'yi-02:another-documented-curriculum';
+    if (target === 'cp_ids') swappedField(registry.placements, 'id');
+    if (target === 'cp_origins_with_requests') {
+      for (const field of ['issuanceRequestId', 'oldMappingId', 'evidenceId', 'placementRoleKey', 'scopeId', 'curriculumVersionId']) swappedField(registry.placements, field);
+    }
+    if (target === 'cp_evidence') swappedField(registry.placements, 'evidenceId');
+    if (target === 'cv_id_with_all_refs') {
+      registry.curriculumVersions[0].id = 'hosei:cv:00000000-0000-4000-8000-000000009999';
+      registry.placements.forEach(p => { p.curriculumVersionId = registry.curriculumVersions[0].id; });
+    }
+    const issued = [...registry.curriculumVersions, ...registry.institutionalCourses, ...registry.placements];
+    // No duplicate-ID/request check can account for this rejection.
+    assert.equal(new Set(issued.map(r => r.id)).size, issued.length);
+    assert.equal(new Set(issued.map(r => r.issuanceRequestId)).size, issued.length);
+    assert.throws(() => loadInstitutionalCatalog(cloneInput(), registry), { message: error });
+  });
+}
+
+test('P2-2: synthetic issuance expectation is independent; 4/2 roles pass, ID swap fails its own baseline', () => {
+  const f = institutionalFixture(['合成制度科目']);
+  const expected = structuredClone(f.baseline);
+  const model = loadInstitutionalCatalog(f.input, f.registry, f.baseline);
+  assert.deepEqual(model.placements.map(p => p.compositionCredits), [4, 2]);
+  assert.equal(new Set(model.placements.map(p => p.scopeId)).size, 1);
+  assert.equal(new Set(model.placements.map(p => p.placementRoleKey)).size, 2);
+  swappedField(f.registry.placements, 'id');
+  assert.deepEqual(f.baseline, expected);
+  assert.throws(() => loadInstitutionalCatalog(f.input, f.registry, f.baseline), { message: /^Institutional catalog: fixed issuance mismatch: CurriculumPlacement:/ });
+});
+
+test('P2-2: issuance baseline comparisons are independent of registry/expected-record array order', () => {
+  const registry = structuredClone(yi02InstitutionalRegistry);
+  registry.institutionalCourses.reverse(); registry.placements.reverse();
+  const baseline = structuredClone(yi02IssuanceBaseline);
+  baseline.institutionalCourses.reverse(); baseline.placements.reverse();
+  const result = loadInstitutionalCatalog(cloneInput(), registry, baseline);
+  assert.deepEqual(new Set(result.placements.map(p => p.id)), new Set(real.placements.map(p => p.id)));
 });

@@ -1,4 +1,6 @@
 import type { InstitutionalInput, InstitutionalRegistry } from './types';
+import { normalizeInstitutionalCanonicalName } from './canonicalName';
+import { validateRegistryBaseline, yi02IssuanceBaseline, type InstitutionalIssuanceBaseline } from './registryBaseline';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 export const idPattern = (namespace: string) => new RegExp(`^${namespace}${uuid}$`);
@@ -23,7 +25,7 @@ export function sameDigests(a: Record<string, string>, b: Record<string, string>
 
 /** Validate against a trusted, issuance-time registry, never against annual offerings.
  * Callers must supply measured raw-file digests, not backup v2 semantic digests. */
-export function validateInstitutionalInput(input: InstitutionalInput, registry: InstitutionalRegistry): void {
+export function validateInstitutionalInput(input: InstitutionalInput, registry: InstitutionalRegistry, baseline: InstitutionalIssuanceBaseline = yi02IssuanceBaseline): void {
   requireInvariant(input.auditVersion === 1 && registry.auditVersion === 1 && registry.registryVersion === 1, 'unsupported audit/registry version');
   requireInvariant(input.sourceDigest === registry.sourceRevision.sha256 && /^[0-9a-f]{64}$/.test(input.sourceDigest), 'source digest mismatch');
   requireInvariant(sameDigests(input.legacyDigests, registry.legacyDigests), 'legacy raw digest set mismatch');
@@ -48,6 +50,7 @@ export function validateInstitutionalInput(input: InstitutionalInput, registry: 
   }
   for (const course of courses.values()) {
     requireInvariant(idPattern('curriculum:').test(course.id) || idPattern('hosei:ic:').test(course.id), `unknown course namespace: ${course.id}`);
+    requireInvariant(course.issuanceRequestId === `yi-01:adopt:${course.oldCurriculumCourseId}`, 'course issuance request mismatch');
     const decision = cc.get(course.oldCurriculumCourseId);
     // This YI-01 slice has no newly evidenced IC issuance. A new namespace does not bypass adoption review.
     requireInvariant(decision?.status === 'safe' && decision.adoptedStableId === course.id
@@ -80,11 +83,13 @@ export function validateInstitutionalInput(input: InstitutionalInput, registry: 
         && decision.scopeIds.includes(mapping.scopeId) && mapping.status === decision.status
         && mapping.adoptedStableId === decision.adoptedStableId && sameSet(mapping.candidateStableIds, decision.candidateStableIds)
         && mapping.officialEvidenceIds.every(ref => decision.evidenceIds.includes(ref)), 'invalid member/identity gate');
+      requireInvariant(normalizeInstitutionalCanonicalName(mapping.canonicalName) === normalizeInstitutionalCanonicalName(decision.canonicalName),
+        `curriculum/mapping canonical name mismatch: ${id}`);
     }
     requireInvariant(sameSet(decision.scopeIds, [...new Set(decision.mappingIds.map(id => mappings.get(id)!.scopeId))])
       && sameSet(decision.evidenceIds.filter(id => rows.has(id)), decision.mappingIds.flatMap(id => mappings.get(id)!.officialEvidenceIds)), 'incomplete course scope/evidence');
     if (decision.status === 'safe') requireInvariant(decision.peerCurriculumCourseIds.length === 0
-      && new Set(decision.evidenceIds.filter(id => rows.has(id)).map(id => rows.get(id)!.canonicalName)).size === 1, 'ambiguous safe identity');
+      && new Set(decision.evidenceIds.filter(id => rows.has(id)).map(id => normalizeInstitutionalCanonicalName(rows.get(id)!.canonicalName))).size === 1, 'ambiguous safe identity');
   }
   requireInvariant(sameSet(usedMappings, [...mappings.keys()]), 'incomplete mapping partition');
   for (const row of rows.values()) requireInvariant(row.officialLabel.length > 0 && row.canonicalName.length > 0
@@ -97,6 +102,8 @@ export function validateInstitutionalInput(input: InstitutionalInput, registry: 
     const old = mapping.legacySnapshot;
     requireInvariant(row && scope && row.scope === scope.officialScopeLabel && old.scopeId === mapping.scopeId
       && old.mappingId === mapping.oldMappingId && old.source.page === row.printedPage, 'dangling/mismatched placement source/scope');
+    requireInvariant(normalizeInstitutionalCanonicalName(row.canonicalName) === normalizeInstitutionalCanonicalName(mapping.canonicalName),
+      `official/mapping canonical name mismatch: ${mapping.oldMappingId}`);
     usedRows.push(row.evidenceId);
     requireInvariant(['faculty', 'department', 'course'].every(key => old[key as keyof typeof old] === scope[key as keyof typeof scope]), 'scope definition mismatch');
     requireInvariant((row.curriculumCredits === null || (Number.isFinite(row.curriculumCredits) && row.curriculumCredits >= 0))
@@ -116,13 +123,16 @@ export function validateInstitutionalInput(input: InstitutionalInput, registry: 
   for (const placement of placements.values()) {
     const mapping = mappings.get(placement.oldMappingId);
     requireInvariant(idPattern('hosei:cp:').test(placement.id) && versions.has(placement.curriculumVersionId)
-      && mapping && mapping.scopeId === placement.scopeId && mapping.officialEvidenceIds[0] === placement.evidenceId
-      && placement.placementRoleKey.length > 0, 'dangling placement/unknown namespace');
+      && mapping && mapping.scopeId === placement.scopeId, 'dangling placement/unknown namespace');
+    requireInvariant(mapping.officialEvidenceIds[0] === placement.evidenceId, 'placement evidence mismatch');
+    const row = rows.get(placement.evidenceId)!;
+    requireInvariant(placement.placementRoleKey === `${row.table}:${row.evidenceId}`, 'placement role mismatch');
+    requireInvariant(placement.issuanceRequestId === `yi-02:placement:${placement.oldMappingId}`, 'placement issuance request mismatch');
     usedPlacementMappings.push(placement.oldMappingId);
-    // Null IC placements use their legacy audit identity; unrelated unresolved rows cannot collide.
-    placementKeys.push(JSON.stringify([placement.curriculumVersionId, placement.scopeId, mapping.adoptedStableId ?? mapping.oldCurriculumCourseId, placement.placementRoleKey]));
+    placementKeys.push(JSON.stringify([placement.curriculumVersionId, placement.scopeId, placement.placementRoleKey]));
   }
   requireInvariant(new Set(placementKeys).size === placementKeys.length, 'duplicate placement role');
   requireInvariant(sameSet(usedPlacementMappings, [...mappings.keys()]), 'incomplete placement registry');
   requireInvariant(sameSet([...courses.keys()], input.curriculumRows.filter(r => r.status === 'safe').map(r => r.adoptedStableId!)), 'incomplete safe registry');
+  validateRegistryBaseline(input, registry, baseline);
 }

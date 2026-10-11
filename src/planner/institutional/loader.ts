@@ -1,10 +1,11 @@
 import type { CurriculumAuditRow, MappingAuditRow, IdentityDecision, IdentityStatus, InstitutionalCatalog, InstitutionalInput, InstitutionalRegistry } from './types';
 import { validateInstitutionalInput } from './validation';
+import type { InstitutionalIssuanceBaseline } from './registryBaseline';
 
 /** Pure conversion: no ID issuance, annual catalog import, storage, or date inference.
  * The trusted registry is pinned at issuance; inputs are detached before returning. */
-export function loadInstitutionalCatalog(input: InstitutionalInput, registry: InstitutionalRegistry): InstitutionalCatalog {
-  validateInstitutionalInput(input, registry);
+export function loadInstitutionalCatalog(input: InstitutionalInput, registry: InstitutionalRegistry, baseline?: InstitutionalIssuanceBaseline): InstitutionalCatalog {
+  validateInstitutionalInput(input, registry, baseline);
   const sourceRevisionId = registry.sourceRevision.id;
   const decision = (row: CurriculumAuditRow | MappingAuditRow): IdentityDecision => ({
     oldEntityKind: 'oldMappingId' in row ? 'Mapping' : 'CurriculumCourse',
