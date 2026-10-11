@@ -2,7 +2,7 @@
 
 `HoseiGradeImportV1` は、法政Web学習サービスの成績表をローカルの Chrome 拡張が読み取るための、versioned JSON hand-off format です。`schemaVersion: 1` と source を固定し、Planner は `isHoseiGradeImportV1` で全フィールドを再検証します。
 
-この contract に `offeringId`、catalog 名への変換、Planner 状態、最終評価は含めません。単位修得試験の評価は科目最終評価ではないためです。Plannerは名称のtrimと空白正規化だけで照合し、一意一致以外は確認対象です。
+この contract に `offeringId`、catalog 名への変換、Planner 状態、最終評価は含めません。単位修得試験の評価は科目最終評価ではないためです。取得contractとPlanner内部の照合は別です。現行のStage Aは制度科目の名称/明示aliasと構成単位・区分の根拠から候補を作り、Stage Bは年度・方式・名称を使う開講照合です。一意制度照合だけで代表Offeringを選ばず、曖昧・未照合は保持します。
 
 各表示値は raw を保存します。日付は有効な日付だけ ISO `YYYY-MM-DD` に正規化し、無効値は `null` と raw を保持します。リポートは empty / `○` / `×` / `*` / その他を、それぞれ none / passed / resubmit / processing / unknown として表現します。`×` を成績の D と解釈しません。
 
@@ -12,7 +12,7 @@
 
 列は科目名、構成単位・追加履修・認定/免除・修得・スクーリング単位、リポート1〜4、単位修得試験（日付・単位・評価）、スクーリング1と2（各 年度・期・日付・単位・評価）の順です。一行には通信とスクーリングが共存できるため、Plannerでは通信1件と各スクーリングslotを別々の実績候補にします。
 
-スクーリングの明示年度は `25` を `2025` に正規化して初期値にし、元の文字列も保持します。通信には年度列がないため、日付だけから年度を決めず未設定にします。利用者が直した年度はmanual、将来安全な既存計画から補う場合だけinferredとして表示します。
+スクーリングの明示年度は `25` を `2025` に正規化して初期値にし、元の文字列も保持します。通信には年度列がありません。PR #126後の現行実装は試験日→最新リポート日を根拠に4月始まりの年度をinferredとして求め、両方なければacademicYear=null / yearSource=unknownです。capturedAtは取得日時であり年度・実績日に代用しません。スクーリングは明示年度をsource、実施日由来をinferredとして区別します。手動修正はmanualで保持し、旧推定年度も一律に書き換えません。原行の複数明示年度が競合する場合は代表年度を選びません。
 
 `*4` は保留マーカー付きの4単位であり、`pendingMarker: true` と `credits: 4` を同時に保持します。componentの試験・スクーリング評価は最終評価へコピーしません。カタログにないImported Courseは卒業要件mappingを持たず、`graduationCheckComplete=false` は変わりません。
 
@@ -34,3 +34,10 @@
 公式成績の `sourceDuplicate` 判定とPlannerItem生成を分離します。保存済み成績のプレビューは公式保存対象としては未選択のままですが、既存と同じ安全条件で具体Offeringが決まり、そのPlannerItemが存在しない場合はPlannerItemだけを仮登録します。Importedの科目行・詳細・照合先等は書き換えず、同じ操作の再実行は完全no-opです。曖昧・未一致は補完しません。
 
 UIの実行ボタンも反映処理と同じpure helperで候補を判定し、安全な補完候補があれば件数を表示して実行できます。候補がなく公式成績への変更もなければボタンは無効です。初期値・年度と時期の安全な仮入力・公式単位の正本性・schema v22・全state snapshotによるundoは変更しません。
+
+
+## 2026-10-11 全データbackupとの分離
+
+現行stateは22。`HoseiGradeImportV1`は公式成績取得のcontractであり、#95/PR #138の`hosei-planner-backup` v2（旧v1読込）とは別形式。通常backup復元はapplyImportを実行せず全stateを置換する。原文保護ファイルも別契約。詳細は[backup互換性](planner-backup-compatibility.md)。
+
+目標の独立Attempt・制度identityへの参照は[年度非依存化詳細設計](planner-year-independent-design.md)。新保存モデルは未実装、stable ID実値や具体schemaは未確定。公式修得単位はImportedCourseAchievement.earnedCreditsTotalのまま、内訳で再集計しない。

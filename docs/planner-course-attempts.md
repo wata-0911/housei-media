@@ -1,5 +1,7 @@
 # CurriculumCourse progress / PlannerItem履修回 (2026)
 
+> **2026-10-11 現状照合:** 以下の起点・変更前監査・PASS件数は各実装時の履歴。現行はschema22、Offeringごと一PlannerItem、進捗/評価/TODOもOffering owner。現在の一覧は[CurriculumCourseView UI](planner-curriculum-course-view-ui.md)。PR #126後は取得日由来の新規年度推定を行わず、年度不明の自動Opening追加を保留する。#95/PR #138の全state backupも実装済み。[目標](planner-year-independent-design.md)の独立履修回・owner移行は未実装、具体schema等は未確定。
+
 実装起点は最新dev `81ceeb1`（CurriculumCourse foundationのPR #49 merge）。独立cloneから `feature/planner-course-attempts` を作成。旧 `feature/planner-multi-year-v22-foundation` のmerge/cherry-pick、main/devへのcommit/merge、reset/rebase/force-push/clean、他作業・stashへの操作は行っていない。
 
 ## 変更前の監査

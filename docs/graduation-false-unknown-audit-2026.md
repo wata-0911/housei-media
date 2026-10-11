@@ -1111,3 +1111,16 @@ H38では元fixtureのforeign4/unknown、overall4/unknownを維持する。さ�
 セルフレビュー（実diff、production呼出経路、正式回帰、変更前後出力を再照合）：今回の変更に残存する **P1=0 / P2=0 / P3=0**。本番不具合は今回の3失敗原因としては発見せず、旧期待値の不一致のみを修正した。歴史本文は元ファイルの完全なprefix、helperの共通fixtureと対象外17件は元のまま、変更ファイルは指定2件のみであることを機械的に確認した。
 
 残る範囲は、H21のpositive認定行の制度意味/ordinary overlap、専門認定Offering数量依存、H19/H43の専門認定guard、課程unknown/legacy、public/special/repeatableの未対応境界、その他H-familyの過去finding。今回これらを解消済みとはせず、卒業要件エンジン全体の完成も主張しない。
+
+
+## 2026-10-11 追記 — 保存契約・年度非依存化設計の現状照合
+
+基準dev: `05dac8c7deb5f9abea93c9967237aacf0427863c`（PR #138 merge）。状態: **文書更新・参照境界の監査**。以前の監査日・H/F項目・数量表・PASS/未検証記録は当時の履歴を保持する。本追記は全H項目の再監査完了、公式PDF/全リンク再検証、旧課程対応完了を意味しない。
+
+現状: #95はPR #138で全永続stateのJSON backup v2、旧v1読み込み、原版/SHA保持、原文保護、無副作用preview、最終確認と共通Web Lock下の一回置換を実装済み。PR #126の新規capture日由来年度推定禁止と既存手動/推定年度保護もdevへマージ済み。H02関連のstale annual exact限定回復は存在するため、過去の「年度参照問題未修正」を全現行経路へ一般化しない。
+
+評価: `earnedCreditsTotal`の公式authority、null/0、source ID/fingerprint、年度根拠、手動選択、公式行/内訳/meta分離を継続する。backup完了で算入保留が解除されるわけではない。`graduationCheckComplete=false`、`sourceLinksReverified=false`、state22を維持する。#133の公式根拠確認、全H最終監査、iPhone Safari/Files共有は未完了/未検証のまま。
+
+目標: 教育課程表を正本とし、年度開講・日程・年度固有条件の収録を不要とする。未実装: 独立Attempt owner・課程別Placement・旧v22から新モデルへのmigrationと新consumer。未確定: stable ID実値、改正読替、具体保存schema。過去の「次slice」は当時の提案であり、最新工程は[年度非依存化方針](planner-curriculum-release-policy.md)、[詳細設計](planner-year-independent-design.md)、[移行計画](planner-year-independent-migration.md)を参照する。
+
+今回のコード/Issue/テストとの照合と検証範囲は[2026-10-11現状監査](planner-docs-current-audit-2026-10-11.md)。文書改訂だけで監査statusをsupportedへ変更しない。卒業要件エンジン、カタログ、保存schema、公式成績計算コードは変更していない。

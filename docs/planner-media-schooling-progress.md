@@ -1,5 +1,7 @@
 # メディアスクーリング進捗
 
+> **2026-10-11 現行仕様:** state22、Offering ownerを継続。動画/テストに加えassessment ID・名称・予定日・完了も保存し、全回数nullを許容する。入力確定保存と全state backupは#95/PR #138で実装済み。以下のschema5と当時の将来機能は履歴。[年度非依存のAttempt owner](planner-year-independent-design.md)は未実装、具体移行schemaは未確定。同Openingに別年度の進捗を複製しない。
+
 2026 catalogの`offering.method`実値は`correspondence`と`schooling`です。この機能では、`method: "schooling"`かつ構造化された`deliveryCategory`が厳密に`前期メディア`または`後期メディア`の開講だけをメディアスクーリングとして扱います。科目名の「メディア」文字列は判定に使いません。該当は128開講です。
 
 PlannerStateはschemaVersion 5になり、`mediaSchoolingProgress: Record<string, MediaCourseProgress>`を追加しました。v4からのmigrationは既存の`items`、`publicCourses`、`thesisSelection`、`selectedScopeId`、`todos`、各itemの`earnedOrder`を保持し、進捗を空で初期化します。localStorage keyは従来どおり`hosei-planner:v1`です。

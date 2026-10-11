@@ -1,5 +1,7 @@
 # Issue #95 バックアップ互換性・保護契約
 
+> **2026-10-11 確認済み現行仕様:** dev `05dac8c`、#95/PR #138はマージ済み。本書のv2/v1/保護/Lock契約は現行実装。年度非依存化の目標・旧state22への継続読込責任は[詳細設計](planner-year-independent-design.md)と[移行計画](planner-year-independent-migration.md)。新モデルの移行は未実装、新backup版・schemaの具体形は未確定。
+
 ## 版と原版保持
 
 新規出力は `hosei-planner-backup` backupVersion **2**、state.schemaVersion **22**。形式の版・stateの版・カタログの版・互換性規則の版を分ける。v2は作成時のenriched runtimeカタログ全体を `catalog.snapshotData` に保持し、全体SHA-256と互換性規則v1のsemantic SHA-256を持つ。SHAは破損検出であり大学の署名/真正性認証ではない。

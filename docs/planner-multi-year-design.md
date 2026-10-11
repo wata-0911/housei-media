@@ -1,5 +1,7 @@
 # 履修プランナー multi-year foundation — Phase 1 設計・監査
 
+> **旧設計案として保持（2026-10-11）:** annual registry・年別manifest・実開講の自動linkは[今回の製品スコープ](planner-curriculum-release-policy.md)に含めない。本文のv21→提案v22は当時の案で、現行stateは既に22。[目標詳細設計](planner-year-independent-design.md)と[移行計画](planner-year-independent-migration.md)を実装順序の正本とする。新モデルは未実装、stable ID実値・改正読替等は未確定。旧ID/原版/進捗/競合保護の判断は継承する。
+
 設計日: 2026-10-02（Asia/Tokyo）。調査基準: `dev` commit `12d8c8452fd0628eccd1328a87a534beb2b8fcc0`（2026最終監査と放送大学認定対応のmerge後）。作業branch: `feature/planner-multi-year-foundation`。
 
 この文書はPhase 1の設計成果物。production実装、snapshot・schema・既存テストの変更は含まない。提案する保存schemaは **v22**。将来の公式資料を取り込む前に、2027/2028以降の履修意図を保存できる基盤を定義する。

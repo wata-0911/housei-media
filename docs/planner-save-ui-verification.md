@@ -1,5 +1,7 @@
 # Issue #95 保存待ちUIのブラウザ回帰
 
+> **2026-10-11 監査補足:** dev `05dac8c`では入力draft/確定保存・失敗再試行・復元後失効が実装済み。本書は現行テストの実行手順で、今回の実ブラウザ再実行結果ではない。[現状監査](planner-docs-current-audit-2026-10-11.md)参照。年度非依存のowner/UIは未実装、具体schemaは未確定。iPhone実機・Files共有は引き続き未検証。
+
 `npm run test:planner-browser` は実Chromiumと別タブのWeb Lockを使用する。通常のplannerテストとは別に実行し、ブラウザが利用できない場合は成功扱いにしない。
 
 PlaywrightとChromiumをテスト環境で用意する。Playwrightが本リポジトリからimportできる場合はそのまま実行できる。外部ランタイムを使う環境では `PLANNER_PLAYWRIGHT_MODULE` にそのモジュールの絶対パス（例: `/runtime/node_modules/playwright/index.mjs`）を渡す。必要なら `PLANNER_BROWSER_EXECUTABLE` にChromiumの実行ファイルを渡す。`PLANNER_BROWSER_PORT` の初期値は4180。

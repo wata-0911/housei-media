@@ -1,5 +1,7 @@
 # Planner CurriculumCourse中心モデル — architecture decision / v22 read foundation
 
+> **2026-10-11 方針更新:** 制度identity・課程配置・履修回の責務分離と旧321 ID保護を継承する。第7節等のannual registryを前提とする工程と過去の次sliceは履歴であり、[最新方針](planner-curriculum-release-policy.md)を優先する。現行UIは[CourseView UI](planner-curriculum-course-view-ui.md)、現行仕様は[最新監査](planner-docs-current-audit-2026-10-11.md)。独立Attempt/migrationは未実装、IDの採用範囲と改正読替は[詳細設計](planner-year-independent-design.md)の未確定事項。
+
 監査日: 2026-10-02（Asia/Tokyo）。基準: `dev` **4938da08fea438ad0379db1fd33bce63d2dc27c2**。branch: `feature/planner-curriculum-centered-model`。
 
 **結論はB: 現行CurriculumCourseと将来のstable Course identityを責務・型として分ける必要がある。** 現行の321 IDsは2026の制度科目参照として維持する。新しいIDを今回発行しない。長期モデルの中心は制度上の同一科目であり、Offering、PlannerItem、公式aggregate、課程上の配置をその下で参照する。名称一致、開講年度の変更だけをidentity変更の根拠にしない。

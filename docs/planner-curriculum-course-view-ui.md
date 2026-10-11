@@ -1,5 +1,7 @@
 # CurriculumCourse-centered Planner list (v22)
 
+> **2026-10-11 補足:** Offering ownerを維持する現行read modelとして継続する。保存はschema22、全データbackupは#95/PR #138で実装済み。将来のmulti-year registryを必須とする旧next sliceは[新方針](planner-curriculum-release-policy.md)を優先する。独立Attempt参照は未実装、具体schema/ID規約は[詳細設計](planner-year-independent-design.md)の未確定事項。以下の検証日・ブラウザ未確認記録はその時点の履歴として保持する。
+
 Based on dev `4120ed921a1d5b138cf2b055e34e2877d3047aa9`, architecture decision B in [planner-curriculum-centered-model.md](planner-curriculum-centered-model.md).
 
 `PlannerPage` derives `deriveCurriculumCourseView(state, catalog)` for the履修・修得一覧 only. Exact saved 2026 CurriculumCourse identities group each parent. Official achievements and Offering-owned learner attempts are separate children even when they have the same source link. Names do not merge identities. A parent has no studyYear; each attempt retains its own year, studyYear and term.

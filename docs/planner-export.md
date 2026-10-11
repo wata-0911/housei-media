@@ -1,5 +1,7 @@
 # 履修計画のCSV・画像出力
 
+> **2026-10-11 現状補足:** CSV/PNGは表示用出力で、全PlannerState復元用ファイルではない。#95/PR #138のJSON v2（旧v1読込）と[原文保護](planner-backup-compatibility.md)が別に実装済み。現state22、目標は[Attempt参照](planner-year-independent-design.md)への追従で未実装。新schemaの出力契約は後続で確定し、公式原行をCSVから復元する機能は提供しない。
+
 履修計画のCSVとPNGは、ログインなしでこの端末のブラウザ内だけで生成する。履修データや画像をサーバーへ送信しない。
 
 ## 共通モデル
