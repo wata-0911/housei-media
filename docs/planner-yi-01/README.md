@@ -10,7 +10,7 @@
 | --- | --- |
 | [公式表・脚注Markdown](official-evidence.md) / [502原行JSON](official-rows.json) | 画像照合済み物理行、正式ラベル、構成単位、分類、scope、方式記号、脚注、bbox。旧データの転記を公式確認と呼ばない |
 | [科目コードMarkdown](official-codes.md) / [JSON](official-codes.json) | 本科生・選科生表と教職用途を区別した578行の必要抜粋。原列・記号・条件を保持 |
-| [脚注JSON](official-notes.json) / [補助・改正資料](official-context.md) | 脚注の適用範囲、単位軸、歴史的読替・追加確認事項 |
+| [脚注JSON](official-notes.json) / [補助・改正資料](official-context.md) | 全84脚注の全文転記・冊子/PDFページ・marker・scope・source digest。監査者注記は別field |
 | [321対応CSV](curriculum-crosswalk.csv) / [JSON](curriculum-crosswalk.json) | 既存CurriculumCourse全件。候補、限定採用ID、判定、peer、旧equivalence、rule版、証拠 |
 | [502対応CSV](mapping-crosswalk.csv) / [JSON](mapping-crosswalk.json) | Mapping全件。原行対応と制度identity確定を別fieldにし、コード用途・scope・旧Offering参照を追跡 |
 | [旧関係JSON](legacy-relations.json) | 686 Offering ID、209 legacy Course対応、明示Mapping edge、override来歴。日程・開講期・年別名称は収録しない |
@@ -102,7 +102,7 @@ C-METHODの6件は**bool表現の意味・完全性の不整合**で、既存req
 
 ## 検証と変更境界
 
-全件集合・digest・unique/reference・分類集計・source頁/scope/数量一致・safe採用条件を`python3 docs/planner-yi-01/verify.py`で検証する。Markdownの列数・文字化け・相対リンクも同検証器でチェック。公式表は52ページ画像と照合し、複雑表の旧層・結合セル・右端列を補正した。検証結果と既存catalog checkは最終commit前の実行結果を末尾に記録する。
+全件集合・digest・unique/reference・分類集計・source頁/scope/数量一致・safe採用条件を`python3 docs/planner-yi-01/verify.py`で検証する。Markdownの列数・文字化け・相対リンクも同検証器でチェックする。PR差分の範囲確認は台帳検証と分離し、比較元を明示して`python3 docs/planner-yi-01/verify.py --check-change-scope --base origin/dev`のように実行する。通常の実行はGit差分を読まない。公式表は52ページ画像と照合し、複雑表の旧層・結合セル・右端列を補正した。
 
 変更はこのディレクトリの文書・監査JSON/CSV・監査検証器のみ。`src/`、`src/data/`、既存scripts、package/lockfile、既存docs履歴は無変更。state22、graduationCheckComplete=false、sourceLinksReverified=falseを保持。公式earnedCreditsTotalの再計算・内訳補完・source link自動付替え・migration・年度開講収録・mergeを行わない。
 
@@ -112,3 +112,9 @@ C-METHODの6件は**bool表現の意味・完全性の不整合**で、既存req
 - 既存 `node --import tsx scripts/generate-curriculum-catalog.mts --check`: PASS（321 courses / 686 annual offerings）。実際のloaderも件数・false flagsを確認。依存は作業cloneにpnpm `--ignore-scripts --lockfile=false`で取得（package/lockfileは無変更、lockfile厳密再現の総合テストではない）。
 - 元6ファイルのSHA-256一致、全tracked差分をこのdocsディレクトリに限定。schema/コード/元カタログは無変更。`git diff --check`をcommit前に実行。
 - runtimeコード変更がないため新runtimeテスト、全UI/build、iPhone実機、全卒業engine suiteは実施していない。PDF可視52ページ確認と監査整合PASSを、これらのPASSとして報告しない。
+
+## PR #141 独立監査フォローアップ
+
+2026-10-11、添付PDF SHA-256を再確認し、冊子p.47/48/53/55/57/59の対象脚注を抽出テキストとページ画像で再照合した。公式の「公開科目」開講情報を含む6件の本文を全文へ修正し、製品境界の説明は`auditNote`へ分離した。残る脚注も確認し、p.57-i/mとp.59-i/n/oの5件が未収録だったため全文を追加した。合計84件についてmarker列とページ範囲を照合した。これらの証拠保存は年度別開講検索や科目マスターの実装範囲を変更しない。
+
+`verify.py`の通常実行はYI-01台帳と監査開始時点のcatalog digestを検証する。PR差分範囲は`--check-change-scope --base <明示したcommit-or-branch>`で追加実行する。無関係な将来のGit変更は通常検証の対象外で、原版JSON digest pinは引き続き検証対象。
