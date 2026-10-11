@@ -246,7 +246,7 @@ export default function PlannerPage() {
           <button type="button" className="underline" onClick={() => window.location.reload()}>再読み込み</button>
           {loaded.raw !== null && <>
             <button type="button" className="underline" onClick={() => downloadOriginal(loaded.raw!)}>元データをダウンロード</button>
-            <button type="button" className="underline" onClick={recover}>バックアップして初期化</button>
+            <button type="button" className="underline" disabled={saving} onClick={recover}>バックアップして初期化</button>
           </>}
         </div>
       </div>}
@@ -257,9 +257,9 @@ export default function PlannerPage() {
       }} onBusyChange={busy => { writePending.current = busy; setSaving(busy); }} />
       <CreditSummary summary={summarizeCredits(importedDerived.plannerItems, offeringsById, state.publicCourses)} importedEarnedCredits={importedEarnedCreditsTotal(state.importedCourseAchievements)} />
       <div className="min-h-5 text-sm text-[#002255]">
-        <p role="status" className="inline">{notice}</p>
-        {undoItem && <button type="button" onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
-        {undoImport && <button type="button" onClick={undoGradeImport} className="ml-2 underline underline-offset-2">取り込みを元に戻す</button>}
+        <p role="status" aria-live="polite" className="inline">{saving ? '保存処理を待っています。完了後に編集できます。' : notice}</p>
+        {undoItem && <button type="button" disabled={loaded.error !== null || saving} onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
+        {undoImport && <button type="button" disabled={loaded.error !== null || saving} onClick={undoGradeImport} className="ml-2 underline underline-offset-2">取り込みを元に戻す</button>}
       </div>
       <div role="tablist" aria-label="履修プランナーの表示" className="grid w-full max-w-2xl grid-cols-3 border-b border-gray-300">
         <button id="annual-tab" type="button" role="tab" aria-selected={activeTab === 'annual'} aria-controls="annual-panel" onClick={() => setActiveTab('annual')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
@@ -285,7 +285,7 @@ export default function PlannerPage() {
         </details>
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null || saving} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
-        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
+        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab">
         <MediaSchoolingProgress items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />

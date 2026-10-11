@@ -5516,3 +5516,32 @@ test('planner backup protection guidance is separate from normal restore and nev
   assert.match(panel, /原文と旧退避を保護用ファイルに保存/);
   assert.doesNotMatch(panel, /localStorage\.setItem/);
 });
+
+test('thesis guidance disables every status, date and geography editor when saving or blocked', () => {
+  for (const department of ['日本文学科', '地理学科']) {
+    const scope = catalog.programs.find(row => row.department === department).scopeId;
+    const state = stateForScopeChange(initialState(), catalog, scope);
+    const props = { catalog, scopeId: scope, profile: state.graduationProfile, progress: guidanceForScope(state, scope), eligibilityCredits: null, onChange: () => {} };
+    const blocked = renderToStaticMarkup(createElement(ThesisGuidance, { ...props, disabled: true }));
+    const active = renderToStaticMarkup(createElement(ThesisGuidance, { ...props, disabled: false }));
+    const controls = html => [...html.matchAll(/<(?:input|select)\b[^>]*>/g)].map(match => match[0]);
+    assert.ok(controls(blocked).length >= 2);
+    assert.ok(controls(blocked).every(control => control.includes('disabled=""')));
+    assert.ok(controls(active).every(control => !control.includes('disabled=""')));
+    if (department === '地理学科') assert.match(blocked, /地理調査法リポート提出/);
+  }
+});
+
+test('recovery-only protection remains available and preserves null primary plus recovery bytes', async () => {
+  const recovery = ' \n {"raw":"original recovery","zero":0,"unknown":null}\n ';
+  const store = backupTestStore(null, recovery);
+  const html = renderToStaticMarkup(createElement(PlannerBackupPanel, { catalog, loaded: loadState(store, catalog), disabled: false, onRestored: () => {}, onBusyChange: () => {} }));
+  assert.match(html, /原文と旧退避を保護用ファイルに保存/);
+  const protectedFile = await createPlannerBackupProtection(store.getItem(STORAGE_KEY), store.getItem(BACKUP_KEY), catalog);
+  const inspected = await inspectPlannerBackupProtection(JSON.stringify(protectedFile));
+  assert.equal(inspected.primaryRaw, null); assert.equal(inspected.primarySha256, null);
+  assert.equal(inspected.recoveryRaw, recovery);
+  await assert.rejects(parsePlannerBackup(JSON.stringify(protectedFile), catalog), /保護ファイル/);
+  assert.equal((await createPlannerBackup(null, catalog)).format, 'hosei-planner-backup');
+  assert.deepEqual(store.writes, []); assert.equal(store.getItem(BACKUP_KEY), recovery);
+});

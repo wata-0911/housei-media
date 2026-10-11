@@ -99,7 +99,7 @@ export default function PlannerBackupPanel({ catalog, loaded, disabled, onRestor
     <p className="text-sm">復元前に、このサイトの他のタブ・画面を閉じてください。旧版の画面は排他制御に参加できません。Web Locks非対応環境では復元を停止します。</p>
     <div className="flex flex-wrap gap-2">
       <button type="button" className={buttonClass} disabled={disabled || working} onClick={prepareBackup}>現在の全データをJSONで準備（事前バックアップ）</button>
-      {loaded.raw !== null && <button type="button" className={buttonClass} disabled={disabled || working} onClick={prepareOriginal}>原文と旧退避を保護用ファイルに保存</button>}
+      <button type="button" className={buttonClass} disabled={disabled || working} onClick={prepareOriginal}>原文と旧退避を保護用ファイルに保存</button>
     </div>
     {prepared && !staleFile && download?.file === prepared.file && <div className="flex flex-wrap gap-3">
       <button type="button" className={buttonClass} disabled={disabled} onClick={share}>共有・保存（iPhoneなど）</button>

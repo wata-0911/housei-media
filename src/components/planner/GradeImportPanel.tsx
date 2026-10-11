@@ -44,9 +44,9 @@ export default function GradeImportPanel({ offerings, plannedItems, existing, ex
     <label className="block text-sm">またはJSONを貼り付け<textarea disabled={disabled} value={text} onChange={e => setText(e.target.value)} className="mt-1 min-h-24 w-full border p-2 font-mono text-xs" /></label>
     <button type="button" disabled={disabled || !text.trim()} onClick={() => read(text)} className="bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50">読み込み・検証</button>
     {error && <p role="alert" className="border border-red-300 bg-red-50 p-2 text-sm">{error}</p>}
-    {units && <div className="space-y-3"><p className="text-sm">{units.filter(x => x.match === 'exact_unique').length}件を一意一致、{units.filter(x => x.match !== 'exact_unique').length}件は要確認、{units.filter(x => x.duplicate).length}件は既に保存済みです。</p>
+    {units && <fieldset disabled={disabled || applying} className="min-w-0 space-y-3"><p className="text-sm">{units.filter(x => x.match === 'exact_unique').length}件を一意一致、{units.filter(x => x.match !== 'exact_unique').length}件は要確認、{units.filter(x => x.duplicate).length}件は既に保存済みです。</p>
       {units.map((unit, index) => <GradeImportPreviewUnit key={unit.id} unit={unit} onChange={patch => update(index, patch)} />)}
       <GradeImportApplyActions units={units} plannedItems={plannedItems} offerings={offerings} disabled={disabled || applying} onApply={async () => { setApplying(true); try { if (await onApply(units)) { setUnits(null); setText(''); focusImportedCourseList(); } } finally { setApplying(false); } }} />
-    </div>}
+    </fieldset>}
   </section>;
 }
