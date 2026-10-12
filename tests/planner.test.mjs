@@ -653,9 +653,9 @@ test('structured course-count conditions require completed curriculum courses an
       { ...base, mappingId: 'second-course', scopeId: scope, category: '専門教育', field: null, requirementType: '選択必修', curriculumCredits: 4 },
     ],
     offerings: [
-      { ...catalog.offerings[0], id: 'first-part', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
-      { ...catalog.offerings[0], id: 'first-rest', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
-      { ...catalog.offerings[0], id: 'second', credits: 4, resolutionStatus: 'matched', mappingIds: ['second-course'] },
+      { ...catalog.offerings[0], id: 'first-part', curriculumCourseId: 'first-course', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
+      { ...catalog.offerings[0], id: 'first-rest', curriculumCourseId: 'first-course', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
+      { ...catalog.offerings[0], id: 'second', curriculumCourseId: 'second-course', credits: 4, resolutionStatus: 'matched', mappingIds: ['second-course'] },
     ],
     requirements: [
       { id: 'eight-credits-two-courses', ruleId: 'eight-credits-two-courses', scopeId: scope, sourcePage: 47, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育', requirement_type: '選択必修' }, value: 8, unit: 'credits', conditions: { full_course_credits_required: true, min_courses: 2 } },
@@ -2066,7 +2066,10 @@ function professionalFixture(department, mappingRows, offeringRows) {
         };
       }),
       offerings: offeringRows.map(([id, credits, mappingIds, method = 'correspondence']) => ({
-        ...baseOffering, id, name: id, credits, method, resolutionStatus: 'matched', mappingIds,
+        // Synthetic curriculum rows have independent identities. Copying the
+        // base opening's institutional ID would collapse unrelated courses.
+        ...baseOffering, id, name: id, curriculumCourseId: `fixture-course:${mappingIds[0] ?? id}`,
+        credits, method, resolutionStatus: 'matched', mappingIds,
       })),
       // Professional cards read the official overflow definition rather than
       // copying a department threshold into the fixture.

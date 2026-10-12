@@ -23,6 +23,7 @@ import { unresolvedEarnedImpact, impactsCard, impactsRequirement, UNRESOLVED_EAR
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import { importedGraduationNotices, type ImportedGraduationNotice } from './importedGraduationNotices';
 import { plannerItemsWithoutOfficialEarned } from './officialCourseCredits';
+import { plannerItemCreditContribution } from './plannerItemCredits';
 import { deriveOfficialGraduationFacts, officialFactCreditState, type OfficialAllocationInput } from './officialGraduationFacts';
 import { unresolvedSchoolingImpact, schoolingImpactsRequirement, schoolingCanChangeForeignCompletion, type UnresolvedSchoolingImpact } from './unresolvedSchoolingImpact';
 import { heldOfficialSchoolingContributions } from './heldOfficialSchooling';
@@ -244,18 +245,24 @@ function evaluateStructured(
     return matchingMappings.length ? [{ item, offering, mappings: matchingMappings }] : [];
   });
 
-  if (matched.some(({ offering }) => offering.credits === null)) return unknown(requirement, '対象科目に単位数不明の開講があります');
+  // Schooling is an attendance/allocation quantity; ordinary Course completion
+  // uses the learner's contribution, with opening credits only as a legacy default.
+  const creditsFor = (item: PlannerItem, offering: Offering) => requirement.ruleType === 'min_schooling_credits'
+    ? offering.credits : plannerItemCreditContribution(item, offering);
+  if (matched.some(({ item, offering }) => creditsFor(item, offering) === null)) return unknown(requirement, '対象科目に単位数不明の開講があります');
 
   const completedMappings = new Map<string, { mapping: Mapping; earned: number; inProgress: number; planned: number }>();
   for (const row of matched) {
-    for (const mapping of row.mappings) {
-      const entry = completedMappings.get(mapping.mappingId) ?? {
+    const distinct = new Map(row.mappings.map(mapping => [curriculumEntryKey(row.offering, mapping), mapping]));
+    for (const [key, mapping] of distinct) {
+      const entry = completedMappings.get(key) ?? {
         mapping, earned: 0, inProgress: 0, planned: 0,
       };
-      if (row.item.status === 'earned') entry.earned += row.offering.credits!;
-      else if (row.item.status === 'in_progress') entry.inProgress += row.offering.credits!;
-      else if (row.item.status === 'planned') entry.planned += row.offering.credits!;
-      completedMappings.set(mapping.mappingId, entry);
+      const credits = creditsFor(row.item, row.offering)!;
+      if (row.item.status === 'earned') entry.earned += credits;
+      else if (row.item.status === 'in_progress') entry.inProgress += credits;
+      else if (row.item.status === 'planned') entry.planned += credits;
+      completedMappings.set(key, entry);
     }
   }
   if (requirement.conditions?.full_course_credits_required
@@ -271,7 +278,7 @@ function evaluateStructured(
     }
     const rows = matched.filter(row => row.item.status === status);
     if (unit === 'courses') return new Set(rows.map(row => row.offering.id)).size;
-    return rows.reduce((sum, row) => sum + row.offering.credits!, 0);
+    return rows.reduce((sum, row) => sum + creditsFor(row.item, row.offering)!, 0);
   };
   const officialEarned = officialMatched.reduce((sum, a) => sum + (unit === 'courses' ? (a.completedCredits > 0 ? 1 : 0)
     : requirement.ruleType === 'min_schooling_credits' ? (a.schoolingCredits ?? 0)
@@ -610,6 +617,17 @@ type CurriculumEntry = {
   earnedSchooling: number;
 };
 
+/** A completion belongs to one institutional Course and allocation policy.
+ * Equivalent mapping edges may join its independent annual attempts, but a
+ * shared edge/name must never join different Courses. Legacy catalogs retain
+ * their existing curriculum-mapping identity when no institutional Course ID
+ * is available (legacy courseId is an annual alias, not institutional proof). */
+function curriculumEntryKey(offering: Offering, mapping: Mapping): string {
+  if (!offering.curriculumCourseId) return `mapping:${mapping.mappingId}`;
+  return JSON.stringify([offering.curriculumCourseId, mapping.scopeId, mapping.category,
+    mapping.field, mapping.requirementType, mapping.curriculumCredits, mapping.schoolingOnly, mapping.mediaOnly]);
+}
+
 function curriculumCourseLabel(offering: Offering) {
   // Delivery and department qualifiers describe an offering, rather than the
   // curriculum course being completed across multiple offerings.
@@ -746,16 +764,24 @@ function professionalCards(
       if (item.status === 'earned') legacyRepeatable.add(mapping.mappingId);
       continue;
     }
-    const entry = entries.get(mapping.mappingId) ?? {
-      mapping, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0, earnedSchooling: 0,
+    const key = curriculumEntryKey(offering, mapping);
+    const credits = plannerItemCreditContribution(item, offering);
+    if (credits === null) {
+      if (item.status === 'earned') incompleteMetadata.add(mapping.mappingId);
+      continue;
+    }
+    const entry = entries.get(key) ?? {
+      mapping, completionId: key, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0, earnedSchooling: 0,
     };
     if (item.status === 'earned') {
-      entry.earned += offering.credits;
-      if (schoolingItems.has(item) && offering.method === 'schooling') entry.earnedSchooling += offering.credits;
+      entry.earned += credits;
+      // This is schooling evidence within ordinary Course completion/H12,
+      // not the independent schooling allocation or attendance total.
+      if (schoolingItems.has(item) && offering.method === 'schooling') entry.earnedSchooling += credits;
     }
-    else if (item.status === 'in_progress') entry.inProgress += offering.credits;
-    else if (item.status === 'planned') entry.planned += offering.credits;
-    entries.set(mapping.mappingId, entry);
+    else if (item.status === 'in_progress') entry.inProgress += credits;
+    else if (item.status === 'planned') entry.planned += credits;
+    entries.set(key, entry);
   }
 
   const addCredits = (name: string, item: PlannerItem, offering: Offering, credits: number) => {
@@ -1363,11 +1389,14 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
   const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, impact, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, official.allocations);
-  // H12 evidence is not automatically ordinary credit. Generic law totals must
-  // use the same 8-Course/32-credit allocation (including its elective destination).
+  // Neither H12 evidence nor explicit manual contributions are automatically
+  // ordinary credit. Generic law totals must use the same completed-Course and
+  // 8-Course/32-credit allocation (including its schooling-only destination).
   if (catalog.programs.find(p => p.scopeId === scopeId)?.department === '法律学科'
-    && official.allocations.some(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
-      && a.mapping.curriculumCredits === 4 && a.credits === 2 && a.completedCredits === 0)) {
+    && (plannerItems.some(item => item.status === 'earned' && item.courseCreditContribution !== undefined
+      && eligibleMappings(offerings.get(item.offeringId)!).some(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育'))
+      || official.allocations.some(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
+        && a.mapping.curriculumCredits === 4 && a.credits === 2 && a.completedCredits === 0))) {
     const lawOrdinaryCards: Record<string, string> = {
       law_total_with_thesis_min_credits: 'professional-law-total',
       law_total_without_thesis_min_credits: 'professional-law-total',
