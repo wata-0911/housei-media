@@ -526,12 +526,13 @@ test('migration: safe legacy crosswalk survives a compatible ambiguous manual re
 
 test('import: reimport and manual override preserve curriculum identity and learner metadata', () => {
   const f = fixture(); const data = importData(importCourse('制度科目'));
+  data.courses[0].creditExam = { rawDate: '2020/07/01', date: '2020-07-01', rawCredits: '4', credits: 4, rawGrade: 'A', grade: 'A', pendingMarker: false };
   const first = applyImport(initialState(), importPreview(data, f.offerings, [], [], f.context), f.offerings);
   const row = first.importedCourseAchievements[0];
   const edited = { ...first, importedCourseAchievements: [{ ...row, selectedOfferingId: f.offerings[1].id, selectionSource: 'manual', offeringMatch: 'exact_unique' }], importedCourseUserMeta: { [row.id]: { lifecycleStatus: 'waiting', plannedYear: 2027, plannedTerm: null, studyYear: 4 } } };
   const repeated = importPreview(data, f.offerings, edited.importedStudyRecords, edited.importedCourseAchievements, f.context);
   assert.deepEqual(applyImport(edited, repeated, f.offerings), edited);
-  const updated = importData(importCourse('制度科目', { earnedCredits: { raw: '4', value: 4 } }));
+  const updated = structuredClone(data); updated.courses[0].earnedCredits = { raw: '4', value: 4 };
   const applied = applyImport(edited, importPreview(updated, f.offerings, edited.importedStudyRecords, edited.importedCourseAchievements, f.context), f.offerings);
   assert.equal(applied.importedCourseAchievements.length, 1);
   assert.equal(applied.importedCourseAchievements[0].selectedOfferingId, f.offerings[1].id);

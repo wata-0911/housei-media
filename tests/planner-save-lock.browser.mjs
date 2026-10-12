@@ -351,3 +351,39 @@ test('media total presets replace the draft without a preceding blur save, inclu
   await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).mediaSchoolingProgress[id].totalLessons === 15, { key: STORAGE_KEY, id: media.id });
   assert.equal(await total.inputValue(), '15'); assert.equal(await page.evaluate(() => window.draftWrites.length), 2);
 });
+
+test('grade identity P1: preview holds a different exam year and preserves stored original bytes', async t => {
+  const numeric = value => ({ raw: value === null ? '' : String(value), value });
+  const empty = { rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null };
+  const data = { schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-10-12T00:00:00.000Z', courses: [{
+    rawName: '論理学', categoryRaw: '人文', compositionCredits: numeric(4), earnedCredits: numeric(4),
+    schoolingCredits: numeric(null), additionalEnrollment: numeric(null), recognizedExemption: numeric(null),
+    reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })),
+    creditExam: { rawDate: '2020/07/01', date: '2020-07-01', rawCredits: '4', credits: 4, rawGrade: 'A', grade: 'A', pendingMarker: false }, schoolings: [empty, empty],
+  }] };
+  const state = applyImport(initialState(), importPreview(data, catalog.offerings), catalog.offerings);
+  const { page, raw } = await open(t, '日本文学科', JSON.stringify(state)); await recordWrites(page);
+  await page.locator('details').evaluateAll(rows => { for (const row of rows) row.open = true; });
+  const panel = page.locator('#grade-import-panel');
+  const incoming = structuredClone(data);
+  incoming.courses[0].creditExam.rawDate = '2021/07/01'; incoming.courses[0].creditExam.date = '2021-07-01';
+  incoming.courses[0].earnedCredits = numeric(2);
+  await panel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(incoming));
+  await panel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
+  await panel.getByRole('alert').filter({ hasText: '取り込みを保留' }).waitFor();
+  assert.equal(await panel.getByRole('checkbox', { name: '論理学を取り込む', exact: true }).isDisabled(), true);
+  assert.equal(await panel.getByRole('button', { name: '確認した履修実績を保存・履修計画に仮登録', exact: true }).isDisabled(), true);
+  assert.equal(await persisted(page), raw);
+  assert.equal(await page.evaluate(() => window.draftWrites.length), 0);
+  // A new unrelated row can be applied in the same preview; the held row stays intact.
+  incoming.courses.push({ ...structuredClone(data.courses[0]), rawName: '合成の別科目' });
+  await panel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(incoming));
+  await panel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
+  await panel.getByRole('button', { name: '確認した履修実績を保存・履修計画に仮登録', exact: true }).click();
+  await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).importedCourseAchievements.length === 2, STORAGE_KEY);
+  const saved = JSON.parse(await persisted(page));
+  assert.deepEqual(saved.importedCourseAchievements[0], state.importedCourseAchievements[0]);
+  assert.deepEqual(saved.importedStudyRecords[0], state.importedStudyRecords[0]);
+  await page.reload();
+  assert.deepEqual(JSON.parse(await persisted(page)).importedCourseAchievements[0], state.importedCourseAchievements[0]);
+});

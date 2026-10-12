@@ -952,7 +952,7 @@ for (const deselectedSource of [null, 'source A', 'source B']) test(`two officia
   assert.equal(validateState(next, f), true); assert.equal(next.schemaVersion, 22);
 });
 for (const savedSource of ['source A', 'source B', 'both']) {
-  for (const selectNewSource of savedSource === 'both' ? [false] : [false, true]) test(`competing-source backfill stays planned with ${savedSource} saved and new source selected=${selectNewSource}`, () => {
+  for (const selectNewSource of savedSource === 'both' ? [false] : [false, true]) test(`competing-source backfill holds uncertain rows or stays planned with ${savedSource} saved and new source selected=${selectNewSource}`, () => {
     const f = fixture(); const offerings = [f.offerings[2]];
     const context = { curriculum: f.curriculum, mappings: f.mappings };
     const data = competingSourceData(f.course.canonicalName);
@@ -967,6 +967,12 @@ for (const savedSource of ['source A', 'source B', 'both']) {
     assert.ok(duplicates.every(unit => !unit.selected && unit.sourceExistingId !== null && unit.sourceExistingId !== unit.sourceCourse.id));
     const units = preview.map(unit => ({ ...unit, selected: !unit.sourceDuplicate && selectNewSource }));
     const next = applyImport(before, units, offerings);
+    if (savedSource !== 'both') {
+      assert.ok(preview.filter(unit => !unit.sourceDuplicate).every(unit => unit.sourceIdentityConflict));
+      assert.equal(next, before, 'holding a competing source must not manufacture earned backfill or add another official row');
+      assert.deepEqual(before, snapshot);
+      return;
+    }
     assert.equal(next.items.length, 1); assert.equal(next.items[0].status, 'planned');
     assert.equal('importedSourceCourseId' in next.items[0], false);
     assert.deepEqual(before, snapshot);

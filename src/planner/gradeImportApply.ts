@@ -22,7 +22,7 @@ export type ImportedCourseAchievement = Partial<CurriculumImportMatch> & { offer
  * actual session date for schooling. It is not an exam-date field (use examDate).
  * Legacy date/year values are retained on reimport, never reinterpreted as source facts. */
 export type ImportedStudyRecord = { id: string; fingerprint: string; source: 'hosei_import'; rawName: string; offeringId: string | null; match: ImportMatch; method: ImportMethod; academicYear: number | null; yearSource: 'source' | 'inferred' | 'manual' | 'unknown'; rawYear: string | null; term: string | null; rawTerm: string | null; date: string | null; credits: number | null; grade: string | null; reports?: HoseiGradeImportCourse['reports']; examGrade?: string | null; sourceCourseId?: string; earnedCreditsTotal?: number | null; schoolingCreditsTotal?: number | null; compositionCredits?: number | null; recognizedExemption?: number | null; additionalEnrollment?: number | null; examDate?: string | null; capturedAt?: string };
-export type ImportPreviewUnit = ImportedStudyRecord & { selected: boolean; candidates: Offering[]; duplicate: boolean; sourceCourse: ImportedCourseAchievement; sourceDuplicate: boolean; sourceExistingId: string | null; courseOnly?: boolean; sourceYearConflict?: boolean };
+export type ImportPreviewUnit = ImportedStudyRecord & { selected: boolean; candidates: Offering[]; duplicate: boolean; sourceCourse: ImportedCourseAchievement; sourceDuplicate: boolean; sourceExistingId: string | null; sourceExistingSnapshot?: string; courseOnly?: boolean; sourceYearConflict?: boolean; sourceIdentityConflict?: boolean; sourceIdentityReason?: string };
 
 export const normalizeImportName = (name: string) => name.trim().replace(/[\s\u3000]+/g, ' ');
 export function schoolingAcademicYear(raw: string | null): number | null { const n = raw?.trim(); if (!n || !/^\d{2}(?:\d{2})?$/.test(n)) return null; const value = Number(n); return n.length === 2 ? 2000 + value : value; }
@@ -145,7 +145,7 @@ export function importedExamDate(
 
   return date;
 }
-function sameSourceIdentity(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.fingerprint === b.fingerprint; }
+function sameSourceFingerprint(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.fingerprint === b.fingerprint; }
 // Derived/manual years are not official aggregate facts. Explicit source years
 // already belong to the unchanged source-v2 fingerprint.
 function sameSourceFacts(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.earnedCreditsTotal === b.earnedCreditsTotal && a.schoolingCreditsTotal === b.schoolingCreditsTotal && a.compositionCredits === b.compositionCredits && a.recognizedExemption === b.recognizedExemption && a.additionalEnrollment === b.additionalEnrollment; }
@@ -187,6 +187,117 @@ function isSourceYearExtension(existing: ImportedCourseAchievement, incoming: Im
 
 function canConfirmSourceYear(existing: ImportedCourseAchievement, incoming: ImportedCourseAchievement): boolean {
   return existing.academicYear === null && existing.yearSource === 'unknown' && isSourceYearExtension(existing, incoming);
+}
+
+function nativeDate(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const parts = /^(\d{2}|\d{4})[/.年](\d{1,2})[/.月](\d{1,2})日?$/.exec(raw.trim());
+  if (!parts) return null;
+  const year = parts[1].length === 2 ? 2000 + Number(parts[1]) : Number(parts[1]);
+  const date = `${year}-${parts[2].padStart(2, '0')}-${parts[3].padStart(2, '0')}`;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date ? null : date;
+}
+
+function nativeCredits(raw: unknown): number | null {
+  if (typeof raw !== 'string') return null;
+  const text = raw.trim().replace(/^\*/, '');
+  return /^\d+(?:\.\d+)?$/.test(text) && Number.isFinite(Number(text)) ? Number(text) : null;
+}
+
+function sameCreditEvidence(old: unknown, next: unknown): boolean {
+  return old === next || (nativeCredits(old) !== null && nativeCredits(old) === nativeCredits(next));
+}
+
+function sourceComponentDatesAgree(unit: ImportPreviewUnit): boolean {
+  if (unit.courseOnly) return true;
+  const evidence = sourceEvidence(unit.sourceCourse);
+  if (!evidence) return false;
+  if (unit.method === 'correspondence') {
+    const examDate = nativeDate(evidence[5][0]);
+    const reportDates = evidence[4].map(report => report[2]).filter((date): date is string => typeof date === 'string').sort();
+    return examDate === (unit.examDate ?? null) && unit.date === (examDate ?? reportDates.at(-1) ?? null)
+      && JSON.stringify(unit.reports?.map(report => [report.raw, report.status, report.date])) === JSON.stringify(evidence[4]);
+  }
+  const slot = /:([01])$/.exec(unit.fingerprint);
+  return slot !== null && nativeDate(evidence[3][Number(slot[1])][2]) === unit.date;
+}
+
+/** Native learning dates, never capture dates or catalog matches, anchor a refresh.
+ * Keep every occupied component's date/credits/method/slot; only dated results
+ * may change. An additional slot may be retained without replacing old evidence.
+ * This deliberately cannot authorize date corrections or undated result changes. */
+function canRefreshSource(existing: ImportedCourseAchievement, incoming: ImportedCourseAchievement): boolean {
+  if (isSourceYearExtension(existing, incoming)) return true;
+  const old = sourceEvidence(existing); const next = sourceEvidence(incoming);
+  if (!old || !next || old[6] !== 0 || next[6] !== 0
+    || old[1] !== next[1] || old[2] !== next[2]
+    || existing.compositionCredits !== incoming.compositionCredits
+    || existing.recognizedExemption !== incoming.recognizedExemption
+    || existing.additionalEnrollment !== incoming.additionalEnrollment) return false;
+  let anchored = false;
+  // Reports can change status on the same dated submission, not submission date.
+  if (!old[4].every((report, index) => {
+    const other = next[4][index];
+    if (JSON.stringify(report) === JSON.stringify(other)) return true;
+    return report[2] !== null && report[2] === other[2];
+  })) return false;
+  if (old[5][0] !== next[5][0] || !sameCreditEvidence(old[5][1], next[5][1])) return false;
+  if (nativeDate(old[5][0]) !== null && nativeCredits(old[5][1]) !== null) anchored = true;
+  else if (JSON.stringify(old[5]) !== JSON.stringify(next[5])) return false;
+  if (!old[3].every((slot, index) => {
+    const other = next[3][index];
+    if (slot.every(field => field === '')) return true;
+    if (![0, 1, 2].every(column => slot[column] === other[column]) || !sameCreditEvidence(slot[3], other[3])) return false;
+    const datedSlot = nativeDate(slot[2]) !== null && schoolingAcademicYear(slot[0]) !== null && slot[1] !== '' && nativeCredits(slot[3]) !== null;
+    if (datedSlot) anchored = true;
+    return datedSlot || slot[4] === other[4];
+  })) return false;
+  // Adding/correcting an explicit year uses the stricter extension contract above.
+  if (old[3].some((slot, index) => slot[0] !== next[3][index][0])) return false;
+  return anchored;
+}
+
+type SourceResolution = { kind: 'new' | 'duplicate' | 'update' | 'held'; existing?: ImportedCourseAchievement };
+/** Name/category/course candidates only locate possible collisions. Exact content
+ * plus equal official facts permits a no-op; changing facts requires evidence. */
+function resolveSource(incoming: ImportedCourseAchievement, saved: ImportedCourseAchievement[], incomingNameCount: number): SourceResolution {
+  const candidates = saved.filter(row => normalizeImportName(row.rawName) === normalizeImportName(incoming.rawName));
+  const exact = candidates.filter(row => sameSourceFingerprint(row, incoming));
+  if (exact.length === 1 && sameSourceFacts(exact[0], incoming)) return { kind: 'duplicate', existing: exact[0] };
+  if (candidates.length === 0) return { kind: 'new' };
+  if (candidates.length === 1 && incomingNameCount === 1 && canRefreshSource(candidates[0], incoming)) return { kind: 'update', existing: candidates[0] };
+  return { kind: 'held' };
+}
+
+/** Re-check against current state before either official writes or planner backfill.
+ * Preview references/checkboxes are proposals, not identity evidence. A stale or
+ * contradictory source group is rejected as a whole, including deselected units. */
+export function revalidateImportIdentity(state: PlannerState, units: ImportPreviewUnit[]): ImportPreviewUnit[] {
+  const groups = new Map<string, ImportPreviewUnit[]>();
+  for (const unit of units) groups.set(unit.sourceCourse.id, [...(groups.get(unit.sourceCourse.id) ?? []), unit]);
+  return [...groups.values()].flatMap(group => {
+    const first = group[0];
+    const count = [...groups.values()].filter(other => normalizeImportName(other[0].sourceCourse.rawName) === normalizeImportName(first.sourceCourse.rawName)).length;
+    const resolved = resolveSource(first.sourceCourse, state.importedCourseAchievements, count);
+    let reason: string | undefined;
+    if (group.some(unit => unit.sourceIdentityConflict || unit.sourceYearConflict)) reason = 'preview-held';
+    else if (group.some(unit => unit.sourceCourseId !== first.sourceCourse.id
+      || normalizeImportName(unit.rawName) !== normalizeImportName(first.sourceCourse.rawName)
+      || (['earnedCreditsTotal', 'schoolingCreditsTotal', 'compositionCredits', 'recognizedExemption', 'additionalEnrollment'] as const).some(key => unit[key] !== first.sourceCourse[key])
+      || JSON.stringify(unit.sourceCourse) !== JSON.stringify(first.sourceCourse)
+      || unit.sourceExistingId !== first.sourceExistingId
+      || unit.sourceExistingSnapshot !== first.sourceExistingSnapshot)) reason = 'inconsistent-source-group';
+    else if (resolved.kind === 'held') reason = 'unproven-source-identity';
+    else if (resolved.kind !== 'new' && group.some(unit => !sourceComponentDatesAgree(unit))) reason = 'contradictory-component-date';
+    else if (first.sourceExistingId !== null && first.sourceExistingId !== resolved.existing?.id) reason = 'invalid-source-reference';
+    else if (resolved.kind === 'update' && (first.sourceExistingId !== resolved.existing!.id
+      || first.sourceExistingSnapshot !== JSON.stringify(resolved.existing))) reason = 'stale-source-reference';
+    else if (resolved.kind === 'new' && state.importedCourseAchievements.some(row => row.id === first.sourceCourse.id)) reason = 'source-id-collision';
+    if (reason) return group.map(unit => ({ ...unit, selected: false, sourceDuplicate: false, sourceIdentityConflict: true, sourceIdentityReason: reason }));
+    return group.map(unit => ({ ...unit, sourceExistingId: resolved.existing?.id ?? null,
+      sourceDuplicate: resolved.kind === 'duplicate', selected: resolved.kind === 'duplicate' ? false : unit.selected }));
+  });
 }
 
 /** Compare the native correspondence evidence, independently of other components
@@ -247,20 +358,12 @@ export function importPreview(value: unknown, offerings: Offering[], existing: I
     occurrences.set(baseFingerprint, occurrence + 1);
     const sourceCourse = sourceCourseFor(course, data.capturedAt, occurrence, offerings, context);
     const sourceCourseId = sourceCourse.id;
-    const exactExisting = existingCourses.find(value => sameSourceIdentity(value, sourceCourse));
-    const legacyMatches = existingCourses.filter(value => normalizeImportName(value.rawName) === normalizeImportName(sourceCourse.rawName) && value.categoryRaw === sourceCourse.categoryRaw);
-    const existingCourse = exactExisting ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined);
-    const sourceDuplicate = existingCourse !== undefined && sameSourceFacts(existingCourse, sourceCourse) && !canConfirmSourceYear(existingCourse, sourceCourse);
-    const previousEvidence = existingCourse && sourceEvidence(existingCourse);
-    const hasExplicitYear = course.schoolings.some(slot => schoolingAcademicYear(slot.year) !== null || schoolingAcademicYear(slot.rawYear) !== null)
-      || previousEvidence?.[3].some(slot => schoolingAcademicYear(slot[0]) !== null);
-    const changedYearEvidence = hasExplicitYear && (!previousEvidence || course.schoolings.some((slot, index) => slot.rawYear !== previousEvidence[3][index][0]));
-    // Content occurrence numbers cannot match changed rows in a same-name group.
-    // Hold these rows in preview rather than merging by name or counting a new row.
-    const sourceYearConflict = !exactExisting && legacyMatches.length > 0 && changedYearEvidence
-      && (legacyMatches.length !== 1
-        || data.courses.filter(row => normalizeImportName(row.rawName) === normalizeImportName(course.rawName) && row.categoryRaw === course.categoryRaw).length !== 1
-        || !existingCourse || !isSourceYearExtension(existingCourse, sourceCourse));
+    const resolution = resolveSource(sourceCourse, existingCourses,
+      data.courses.filter(row => normalizeImportName(row.rawName) === normalizeImportName(course.rawName)).length);
+    const existingCourse = resolution.existing;
+    const sourceDuplicate = resolution.kind === 'duplicate';
+    const sourceYearConflict = resolution.kind === 'held' && [sourceCourse, ...existingCourses.filter(row => normalizeImportName(row.rawName) === normalizeImportName(sourceCourse.rawName))]
+      .some(row => sourceEvidence(row)?.[3].some(slot => schoolingAcademicYear(slot[0]) !== null));
     const aggregate = { sourceCourseId, earnedCreditsTotal: course.earnedCredits.value, schoolingCreditsTotal: course.schoolingCredits.value, compositionCredits: course.compositionCredits.value, recognizedExemption: course.recognizedExemption.value, additionalEnrollment: course.additionalEnrollment.value, capturedAt: data.capturedAt };
     if (hasCorrespondenceEvidence(course)) {
       const inferred = inferredCorrespondenceYear(course);
@@ -283,23 +386,24 @@ export function importPreview(value: unknown, offerings: Offering[], existing: I
       const record = { id: crypto.randomUUID(), fingerprint: `course-only:${sourceCourse.fingerprint}`, source: 'hosei_import' as const, rawName: course.rawName, offeringId: null, match: result.match, method: 'correspondence' as const, academicYear: sourceCourse.academicYear, yearSource: sourceCourse.yearSource, rawYear: null, term: null, rawTerm: null, date: null, credits: null, grade: null, ...aggregate };
       rows.push({ ...record, candidates: result.candidates, duplicate: false, sourceCourse, sourceDuplicate, sourceExistingId: existingCourse?.id ?? null, selected: !sourceDuplicate, courseOnly: true });
     }
-    // A changed source payload can add a component while its aggregates stay
-    // identical. Make that update reviewable instead of suppressing its details.
-    // An unchanged payload stays a duplicate, including intentionally removed records.
     const components = rows.slice(firstUnit);
-    if (sourceDuplicate && existingCourse?.fingerprint !== sourceCourse.fingerprint
-      && components.some(unit => !unit.duplicate && !unit.courseOnly)) {
-      for (const unit of components) { unit.sourceDuplicate = false; unit.selected = true; }
+    const contradictoryDate = resolution.kind !== 'new' && components.some(unit => !sourceComponentDatesAgree(unit));
+    for (const unit of components) {
+      if (resolution.existing) unit.sourceExistingSnapshot = JSON.stringify(resolution.existing);
     }
-    if (sourceYearConflict) {
-      for (const unit of components) { unit.sourceYearConflict = true; unit.sourceExistingId = null; unit.sourceDuplicate = false; unit.selected = false; }
+    if (sourceYearConflict || resolution.kind === 'held' || contradictoryDate) {
+      for (const unit of components) {
+        unit.sourceYearConflict = Boolean(sourceYearConflict); unit.sourceIdentityConflict = true;
+        unit.sourceIdentityReason = contradictoryDate ? 'contradictory-component-date' : 'unproven-source-identity';
+        unit.sourceExistingId = null; unit.sourceDuplicate = false; unit.selected = false;
+      }
     }
   }
   return rows;
 }
 /** Stage B retains the strict offering matcher. A course match never picks a representative opening. */
 export function autoPlannerOfferingIdForImport(unit: ImportPreviewUnit, offerings: Offering[]): string | null {
-  if (unit.sourceYearConflict || unit.academicYear === null) return null;
+  if (unit.sourceIdentityConflict || unit.sourceYearConflict || unit.academicYear === null) return null;
   const candidates = unit.courseOnly
     ? offerings.filter(offering => normalizeImportName(offering.name) === normalizeImportName(unit.rawName))
     : match(unit.rawName, unit.method, offerings).candidates;
@@ -326,6 +430,10 @@ function sourceAggregateComplete(source: ImportedCourseAchievement): boolean {
  * unchecked preview selection only excludes official-data writes. A completed
  * source cannot manufacture a planned fallback when aggregate attribution is unsafe. */
 export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: PlannerItem[], offerings: Offering[]): PlannerItem[] {
+  // A held competing row must not disappear from attribution and turn another
+  // same-name duplicate into an apparently one-to-one earned planner item.
+  const heldNames = new Set(units.filter(unit => unit.sourceIdentityConflict || unit.sourceYearConflict).map(unit => normalizeImportName(unit.sourceCourse.rawName)));
+  units = units.filter(unit => !heldNames.has(normalizeImportName(unit.sourceCourse.rawName)));
   const existingIds = new Set(existing.map(item => item.offeringId));
   const unitsByOffering = new Map<string, ImportPreviewUnit[]>();
   const offeringsBySource = new Map<string, Set<string>>();
@@ -402,7 +510,8 @@ function reconcileStudyRecords(existing: ImportedStudyRecord[], additions: Impor
 }
 
 export function applyImport(state: PlannerState, units: ImportPreviewUnit[], offerings: Offering[]): PlannerState {
-  const selected = units.filter(unit => unit.selected && !unit.sourceDuplicate && !unit.sourceYearConflict);
+  units = revalidateImportIdentity(state, units);
+  const selected = units.filter(unit => unit.selected && !unit.sourceDuplicate && !unit.sourceYearConflict && !unit.sourceIdentityConflict);
   const plannerAdditions = autoPlannerItemsForImport(units, state.items, offerings);
   // Preserve the official arrays (and the whole state for a complete no-op).
   if (selected.length === 0) return plannerAdditions.length > 0
