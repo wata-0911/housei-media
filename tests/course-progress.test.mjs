@@ -259,14 +259,18 @@ test('P2 import: reimport same source and schooling slot updates grade losslessl
     saveState(store, before, raw, catalog); assert.deepEqual(loadState(store, catalog).state, snapshot); assert.equal(next.schemaVersion, 22);
   }
 });
-test('P2 import: uncertain or competing component identity never overwrites an old record', () => {
+test('P2 import: uncertain or competing component identity holds the whole source without appending', () => {
   const offerings = economicsOfferings(); const data = extractedEconomics(); const saved = applyImport(initialState(), importPreview(data, offerings), offerings);
   const changed = structuredClone(data); Object.assign(changed.courses[0].schoolings[0], { rawGrade: 'A+', grade: 'A+' });
   for (const records of [saved.importedStudyRecords.map(r => r.method === 'schooling' ? { ...r, fingerprint: 'legacy-unknown-slot' } : r), [...saved.importedStudyRecords, { ...saved.importedStudyRecords[1], id: 'competing-detail' }]]) {
     const before = { ...saved, importedStudyRecords: records };
-    const next = applyImport(before, importPreview(changed, offerings, records, before.importedCourseAchievements), offerings);
+    const snapshot = structuredClone(before);
+    const preview = importPreview(changed, offerings, records, before.importedCourseAchievements);
+    assert.ok(preview.every(unit => unit.sourceIdentityReason === 'unproven-component-identity' && !unit.selected));
+    const next = applyImport(before, preview, offerings);
     assert.ok(next.importedStudyRecords.some(r => r.id === records[1].id && r.grade === 'A'));
-    assert.equal(next.importedStudyRecords.length, records.length + 1);
+    assert.equal(next, before);
+    assert.deepEqual(before, snapshot);
   }
 });
 test('P2 import: grade refresh preserves component association and other native slots', () => {
@@ -952,7 +956,7 @@ for (const deselectedSource of [null, 'source A', 'source B']) test(`two officia
   assert.equal(validateState(next, f), true); assert.equal(next.schemaVersion, 22);
 });
 for (const savedSource of ['source A', 'source B', 'both']) {
-  for (const selectNewSource of savedSource === 'both' ? [false] : [false, true]) test(`competing-source backfill stays planned with ${savedSource} saved and new source selected=${selectNewSource}`, () => {
+  for (const selectNewSource of savedSource === 'both' ? [false] : [false, true]) test(`competing-source backfill holds uncertain rows or stays planned with ${savedSource} saved and new source selected=${selectNewSource}`, () => {
     const f = fixture(); const offerings = [f.offerings[2]];
     const context = { curriculum: f.curriculum, mappings: f.mappings };
     const data = competingSourceData(f.course.canonicalName);
@@ -967,6 +971,12 @@ for (const savedSource of ['source A', 'source B', 'both']) {
     assert.ok(duplicates.every(unit => !unit.selected && unit.sourceExistingId !== null && unit.sourceExistingId !== unit.sourceCourse.id));
     const units = preview.map(unit => ({ ...unit, selected: !unit.sourceDuplicate && selectNewSource }));
     const next = applyImport(before, units, offerings);
+    if (savedSource !== 'both') {
+      assert.ok(preview.filter(unit => !unit.sourceDuplicate).every(unit => unit.sourceIdentityConflict));
+      assert.equal(next, before, 'holding a competing source must not manufacture earned backfill or add another official row');
+      assert.deepEqual(before, snapshot);
+      return;
+    }
     assert.equal(next.items.length, 1); assert.equal(next.items[0].status, 'planned');
     assert.equal('importedSourceCourseId' in next.items[0], false);
     assert.deepEqual(before, snapshot);

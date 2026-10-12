@@ -2879,12 +2879,12 @@ test('raw categories count unmatched source rows once while graduation remains u
   assert.equal(categories.find(row => row.category === '専門教育').earned, 16);
 });
 
-test('source rows upsert changed earned credits and auto normal schooling stays pending for media review', () => {
+test('undated source credit changes are held and auto normal schooling stays pending for media review', () => {
   const course = earned => ({ rawName: '更新科目', categoryRaw: null, compositionCredits: { raw: String(earned), value: earned }, additionalEnrollment: { raw: '', value: null }, recognizedExemption: { raw: '', value: null }, earnedCredits: { raw: String(earned), value: earned }, schoolingCredits: { raw: '', value: null }, reports: Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null })), creditExam: { rawDate: '', rawCredits: '', rawGrade: '', date: null, credits: null, grade: null, pendingMarker: false }, schoolings: emptyGradeSchoolings() });
   const firstImport = applyImport(initialState(), importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-01-01T00:00:00.000Z', courses: [course(2)] }, []), []);
   const update = importPreview({ schemaVersion: 1, source: 'hosei_web_learning_grade_table', capturedAt: '2026-02-01T00:00:00.000Z', courses: [course(4)] }, [], firstImport.importedStudyRecords, firstImport.importedCourseAchievements);
   const updated = applyImport(firstImport, update, []);
-  assert.equal(updated.importedCourseAchievements.length, 1); assert.equal(importedEarnedCreditsTotal(updated.importedCourseAchievements), 4);
+  assert.equal(updated, firstImport); assert.ok(update.every(unit => unit.sourceIdentityConflict)); assert.equal(importedEarnedCreditsTotal(updated.importedCourseAchievements), 2);
   const media = catalog.offerings.find(value => isMediaSchooling(value) && value.courseId !== null && value.resolutionStatus === 'matched'); const normal = catalog.offerings.find(value => value.courseId === media.courseId && value.method === 'schooling' && !isMediaSchooling(value));
   const component = { id: 'auto-normal', fingerprint: 'auto-normal', source: 'hosei_import', rawName: normal.name, offeringId: normal.id, match: 'exact_unique', method: 'schooling', academicYear: 2025, yearSource: 'source', rawYear: '25', term: '夏', rawTerm: '夏', date: null, credits: 2, grade: null, sourceCourseId: 'auto-row', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, capturedAt: '' };
   const row = { id: 'auto-row', fingerprint: 'auto-row', source: 'hosei_import', rawName: normal.name, categoryRaw: null, capturedAt: '', earnedCreditsTotal: 2, schoolingCreditsTotal: 2, compositionCredits: 2, recognizedExemption: null, additionalEnrollment: null, academicYear: 2025, yearSource: 'source', courseId: normal.courseId, selectedOfferingId: normal.id, selectionSource: 'auto', match: 'exact_unique', candidateOfferingIds: [normal.id, media.id] };
@@ -4899,18 +4899,19 @@ for (const manual of [false, true]) test(`date integrity: source-v2 reimport ret
     assert.equal(unit.selected, false);
     assert.equal(applyImport(before, [unit], []), before);
   }
-  // A real aggregate change updates the same official source, not its unchanged detail.
+  // Undated aggregate changes cannot prove identity, even with a legacy/manual year.
   const updated = structuredClone(data);
   updated.courses[0].earnedCredits = { raw: '2', value: 2 };
   const preview = importPreview(updated, [], before.importedStudyRecords, before.importedCourseAchievements);
   assert.equal(preview[0].sourceDuplicate, false);
-  assert.equal(preview[0].duplicate, true);
+  assert.equal(preview[0].sourceExistingId, null, 'held rows are not associated even for legacy component compatibility');
   const after = persistedImport(applyImport(before, preview, []));
   assert.equal(after.importedCourseAchievements.length, 1);
   assert.deepEqual(after.importedStudyRecords, before.importedStudyRecords);
   assert.equal(after.importedStudyRecords[0].sourceCourseId, after.importedCourseAchievements[0].id);
-  assert.deepEqual(after.importedCourseAchievements[0], { ...before.importedCourseAchievements[0], earnedCreditsTotal: 2 });
-  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 2);
+  assert.ok(preview.every(unit => unit.sourceIdentityConflict));
+  assert.deepEqual(after, before);
+  assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
   assert.deepEqual(before, snapshot);
 });
 
@@ -4966,7 +4967,7 @@ test('date integrity: adding schooling retains an unchanged legacy undated corre
   assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
 });
 
-test('date integrity: changed correspondence evidence is not suppressed by the legacy date compatibility check', () => {
+test('date integrity: changed undated correspondence evidence is held by source identity', () => {
   const data = dateIntegrityData();
   const before = legacyCaptureState(data);
   data.courses[0].creditExam.rawGrade = 'A'; data.courses[0].creditExam.grade = 'A';
@@ -4975,10 +4976,8 @@ test('date integrity: changed correspondence evidence is not suppressed by the l
   assert.equal(preview[0].sourceDuplicate, false);
   const after = applyImport(before, preview, []);
   assert.equal(after.importedCourseAchievements.length, 1);
-  assert.equal(after.importedStudyRecords.length, 2, 'undated changed evidence remains append-only');
-  assert.deepEqual(after.importedStudyRecords[0], before.importedStudyRecords[0]);
-  assert.equal(after.importedStudyRecords[1].date, null);
-  assert.equal(after.importedStudyRecords[1].grade, 'A');
+  assert.ok(preview.every(unit => unit.sourceIdentityConflict));
+  assert.equal(after, before);
   assert.equal(importedEarnedCreditsTotal(after.importedCourseAchievements), 4);
 });
 
