@@ -22,7 +22,7 @@ type ManagementProps = {
 };
 
 // Extracted so the explicit maintenance view retains the same source-owned editors.
-export function ImportedManagementRows({ records, courseRows = [], offerings, catalog = defaultCatalog, notices = [], disabled, onChange, onChangeCourse, onDelete }: ManagementProps) {
+export function ImportedManagementRows({ records, courseRows = [], sourceRows = courseRows, offerings, catalog = defaultCatalog, notices = [], disabled, onChange, onChangeCourse, onDelete }: ManagementProps & { sourceRows?: ImportedCourseAchievement[] }) {
   return <div className="space-y-4">
     {courseRows.length > 0 && <section className="space-y-2"><h3 className="border-b border-gray-200 pb-1 text-base">成績表の科目行</h3><p className="text-xs text-gray-600">公式の修得単位の正本です。ここで選ぶ照合先は詳細記録より優先します。</p>{courseRows.map(row => <article key={row.id} data-import-management-id={row.id} className="border border-gray-200 p-3 text-sm">
       <p className="font-medium">{row.rawName}</p>
@@ -32,7 +32,7 @@ export function ImportedManagementRows({ records, courseRows = [], offerings, ca
       <p className="mt-1 text-xs text-gray-600">カリキュラム照合: {matchLabel(row.curriculumMatch ?? row.match)} / 開講照合: {matchLabel(row.offeringMatch ?? 'unmatched')} / {row.selectionSource === 'manual' ? '手動照合' : row.selectionSource === 'auto' ? '自動照合' : '未設定'}{row.categoryRaw ? ` / 成績表区分: ${row.categoryRaw}` : ''}</p>
       {notices.filter(notice => notice.sourceRowIds.includes(row.id)).map((notice, index) => <p key={index} className="mt-1 text-xs text-amber-800">{notice.reason}</p>)}
     </article>)}</section>}
-    {groupImportedAchievements(records).map(([year, group]) => <section key={year ?? 'unset'} className="space-y-2"><h3 className="border-b border-gray-200 pb-1 text-base">履修内訳 — {year === null ? '年度未設定' : `${year}年度`}</h3>{group.map(record => <ImportedStudyRecordEditor key={record.id} record={record} offerings={offerings} disabled={disabled} onChange={onChange} onDelete={onDelete} />)}</section>)}
+    {groupImportedAchievements(records).map(([year, group]) => <section key={year ?? 'unset'} className="space-y-2"><h3 className="border-b border-gray-200 pb-1 text-base">履修内訳 — {year === null ? '年度未設定' : `${year}年度`}</h3>{group.map(record => <ImportedStudyRecordEditor key={record.id} record={record} sourceRows={sourceRows} offerings={offerings} disabled={disabled} onChange={onChange} onDelete={onDelete} />)}</section>)}
   </div>;
 }
 
@@ -49,7 +49,7 @@ export function ImportedManagementPanel(props: ManagementProps & { showAll: bool
       <button type="button" aria-pressed={showAll} onClick={() => onShowAll(!showAll)} className="ml-4 text-sm underline">{showAll ? '確認対象だけを表示' : '保存済み全件のメンテナンスを表示'}</button>
       {showAll && <p className="my-3 text-xs text-gray-600">保存済み全件を表示しています。照合や内訳の修正・削除に利用してください。</p>}
       {!showAll && issueRows.length + issueRecords.length === 0 && <p className="mt-3 text-sm">確認対象はありません。取り込んだ科目は履修・修得一覧に表示しています。</p>}
-      <div className="mt-4"><ImportedManagementRows {...props} records={showAll ? records : issueRecords} courseRows={showAll ? courseRows : issueRows} /></div>
+      <div className="mt-4"><ImportedManagementRows {...props} sourceRows={courseRows} records={showAll ? records : issueRecords} courseRows={showAll ? courseRows : issueRows} /></div>
     </details>
   </section>;
 }

@@ -50,7 +50,7 @@ native証拠による通常更新では、構成単位・認定免除・追加�
 
 ## 検証
 
-2026-10-12 JST、最終作業treeでの結果（GitHub CIはDraft PR本文で別途記録）:
+2026-10-12 JST、P1修正HEAD `8b678cb138bc689b70c76d70badc26ee1d249153`での結果（P2フォローアップは後述、GitHub CIはDraft PR本文で別途記録）:
 
 | コマンド/環境 | 結果 |
 | --- | --- |
@@ -94,3 +94,66 @@ native証拠による通常更新では、構成単位・認定免除・追加�
 これはP1の安全性補修。全面的な「新規/変更あり/変更なし/要確認」差分一覧、すべての項目の変更前→変更後表示、日付訂正/別履修を証明する手動確認ワークフローは未実装。Issue全体の受け入れ条件を完了扱いにしない。
 
 Draft PRのまま独立レビューへ引き継ぐ。自己テストのPASSは独立監査完了を意味しない。特にnative証拠で許可する境界、年度補完、apply参照改変、同名競合時の計画補完、旧v22/backup復元を再確認する。mergeは実施しない。
+
+## PR #148 独立監査P2フォローアップ
+
+作業開始時にPRがDraft・未マージ、HEADが`8b678cb138bc689b70c76d70badc26ee1d249153`、最新`origin/dev`が上記baseと同一であることと、作業treeに未コミット変更がないことを確認。同じブランチ/PRへ追加commitで対応する。
+
+### P2-1: 手動年度変更後の内訳重複
+
+合成の論理学・2020-07-01/Aを保存し、内訳の`academicYear=2019`/`yearSource=manual`へ変更した後、同日/Sを反映すると、修正前は内訳が1→2件に増えた。元の`componentIdentity()`が利用者編集可能な`academicYear`をキーへ含め、更新候補が見つからない場合に無条件追加していたため。
+
+修正後は、原行ID、正規化名称、方式、fingerprintで確認したS slot、原行に残る試験/S日付・内訳単位・元の年度/期から内訳identityを検証する。学習者の年度・yearSource・表示期・Offeringを証拠にしない。単なる年度キーの削除ではなく、保存済み内訳とincomingの双方を、それぞれ旧・新のnative原行証拠と照合する。
+
+同じnative identityの保存側/入力側候補がそれぞれ一件で、元のpayloadも確認できる場合だけ、同じ内訳IDを更新する。`academicYear`、`yearSource`、`term`、`offeringId`、`match`は保存済み値を保持。異なる試験日を統合せず、原行のP1 guardも継続する。
+
+候補の競合、旧fingerprint、元の試験日との矛盾、確認できない親参照は`unproven-component-identity`で原行グループ全体を保留する。チェックボックスで候補を減らしたり保留フラグを外してもapplyで再検証する。内訳のduplicateフラグも現在stateから再計算し、古いフラグで安全な評価更新が抑止されないようにした。
+
+本当に未保存の方式/slotは、検証済み原行とnative payloadが一致するときに追加する。従来の限定的な明示年度補完は、旧・新の非空欄/公式値が保たれた追加であることを確認して維持する。この経路で残す日付なしSの旧/新snapshotは元データの変化を保存する履歴であり、手動年度の差による重複生成ではない。証拠なしのgrade/日付変更をこの例外で許可しない。
+
+旧`course-progress`回帰には「曖昧な内訳を上書きせず別件追加する」assertionがあった。今回の受け入れ条件に従い、identity guardの理由と原行を含むstate不変をassertする契約へ強化した。修正前の新規2テストのFAILログを先に確認しており、問題の再現を省いて期待値を合わせたものではない。
+
+### P2-2: 公式合計更新後の内訳snapshot表示
+
+同じ日付/fingerprintで公式修得4→2のみ更新すると、内訳は重複として書き換えられず、`earnedCreditsTotal=4`のsnapshotが残った。これは取込時点の履歴として保持できるが、内訳編集画面がその値を現在の「成績表の科目行」と表示していた。修正前の表示テストで、現在値2の表示がなく4のみ表示されることを再現した。
+
+| 比較した方式 | 影響/判断 |
+| --- | --- |
+| 公式値を全内訳のsnapshotへ同期 | 原文に対応する過去の集計を変更し、未選択/旧内訳の関連証拠も個別に検証する必要がある。履歴の意味を変えるため採用しない |
+| 表示時に確定した親の現在値を参照 | 保存形式や履歴を変えず正本を表示できる。最小修正として採用 |
+
+編集画面は、既存`sourceCourseId`で一意に見つかり、source/名称も整合する公式原行から「現在の公式集計」を表示する。内訳snapshotが異なる場合は「取込時の集計（履歴）」と明記する。親が欠落・重複・名称不整合の場合は現在値を推定せず「対応未確認」と表示する。名称やsnapshot値だけで親を接続しない。保守画面の表示絞り込みが、現在値の参照に必要な原行を落とさないよう、全原行を参照用に渡す。
+
+試験/S固有の単位・日付・評価・リポートは公式合計から推測して変更しない。公式4→2のみの更新では内訳4は履歴のまま保持し、試験単位4も変更しない。現在の公式修得2との二重加算はしない。
+
+影響調査:
+
+- `ImportedSourceDetails`、科目カード、履修一覧は既に公式原行を参照。今回の誤表示は内訳編集画面で修正。
+- 通常の`deriveImportedAchievements`、年度集計、卒業factは原行aggregateが正本。内訳snapshot4は現在の2を置換しないことを回帰で確認。
+- 原行配列が存在しない旧互換APIのfallbackは、内訳snapshotから仮のlegacy行を作る。この経路は現在の原行値を持たないため、今回変更していない。
+- `repairImportedAchievements`のsnapshot比較は親が不明な旧記録の照合制約。古いsnapshotを同期して照合を通すことはせず、保守的な未接続を維持。
+- 旧版保存migrationは復元用にsnapshotを読むが、schema22の今回の更新/保存でmigrationや修復を追加していない。
+
+### フォローアップの検証・残事項
+
+新規の最初の2件は監査HEADの変更前にFAIL（内訳`2 !== 1`、現在値2の表示なし）、修正後にPASS。追加27回帰は手動年度/未設定年度、完全同一JSON、別試験日、S slot、候補競合、旧v22、親不明、null/0、無関係行の混在、保存→再読込→JSONバックアップ/復元を扱う。Chromiumでは実際の年度編集→評価更新→合計のみ更新→再読込を確認した。
+
+| 最終検証 | 結果 |
+| --- | --- |
+| `npm run test:planner` | PASS 2,252件、fail/skip 0。identity suite 61件、卒業168出力一致 |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS。既存の大きなchunk警告あり |
+| `npm run catalog:check` | PASS、321制度科目/686開講 |
+| `npm run test:extension` | PASS 54件 |
+| `npm run test:bookmarklet` | PASS 168件 |
+| `npm run test:planner-browser` | PASS 19件、ローカルheadless Chromium |
+| `git diff --check` | PASS |
+| iPhone Safari実機 | SKIP |
+| 追加commitの独立レビュー | 未実施、Draftでレビュー待ち |
+
+GitHub CIの結果と最終HEADはPR本文へ記録する。
+
+フォローアップの変更ファイルは取込処理、`ImportedStudyRecordEditor.tsx`、`ImportedAchievements.tsx`、identity/course-progress/browserの3テストファイル、本書。schema22、卒業エンジン、falseフラグ、YI-01/02、parser、backup v1/v2、保存Lock/expectedRaw/原文保護、進捗ownerを変更しない。
+
+過去に既に作られた曖昧な重複内訳を、自動削除・統合するmigrationは実施しない。確定できない更新を保留する。iPhone Safari実機は未検証。全文差分UIなどIssue #129の残作業は継続し、同じDraft PRで独立レビューを待つ。自己テストPASSを独立監査完了とは扱わない。

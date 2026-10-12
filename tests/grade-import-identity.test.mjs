@@ -10,6 +10,9 @@ import { plannerItemFromCourseSearch } from '../src/planner/plannerItemState.ts'
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { GradeImportPreviewUnit, GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
+import ImportedStudyRecordEditor from '../src/components/planner/ImportedStudyRecordEditor.tsx';
+import { ImportedManagementRows } from '../src/components/planner/ImportedAchievements.tsx';
+import { deriveImportedAchievements } from '../src/planner/importedAchievementCalculations.ts';
 
 const numeric = value => ({ raw: value === null ? '' : String(value), value });
 const emptySlot = () => ({ rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null });
@@ -24,6 +27,204 @@ function fixture(date = '2020-07-01', earned = 4) {
 }
 const preview = (data, state, offerings = []) => importPreview(data, offerings, state.importedStudyRecords, state.importedCourseAchievements);
 const imported = (data = fixture()) => applyImport(initialState(), importPreview(data, []), []);
+
+test('P2 component: manual year correction does not duplicate a same-exam grade refresh', () => {
+  const before = imported();
+  Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual', term: '手動の期' });
+  const data = fixture(); data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  const after = applyImport(before, preview(data, before), []);
+  assert.equal(after.importedStudyRecords.length, 1);
+  assert.equal(after.importedStudyRecords[0].id, before.importedStudyRecords[0].id);
+  assert.equal(after.importedStudyRecords[0].academicYear, 2019);
+  assert.equal(after.importedStudyRecords[0].yearSource, 'manual');
+  assert.equal(after.importedStudyRecords[0].term, '手動の期');
+  assert.equal(after.importedStudyRecords[0].grade, 'S');
+});
+
+test('P2 aggregate: an aggregate-only refresh presents current official 2 and identifies snapshot 4 as history', () => {
+  const before = imported();
+  const data = fixture('2020-07-01', 2);
+  const units = preview(data, before);
+  assert.equal(units[0].sourceCourse.fingerprint, before.importedCourseAchievements[0].fingerprint);
+  const after = applyImport(before, units, []);
+  assert.equal(after.importedCourseAchievements[0].earnedCreditsTotal, 2);
+  assert.equal(after.importedStudyRecords[0].earnedCreditsTotal, 4, 'keep the original snapshot as history');
+  assert.deepEqual(after.importedStudyRecords, before.importedStudyRecords);
+  const html = renderToStaticMarkup(createElement(ImportedStudyRecordEditor, { record: after.importedStudyRecords[0], sourceRows: after.importedCourseAchievements, offerings: [], disabled: false, onChange() {}, onDelete() {} }));
+  assert.match(html, /現在の公式集計[^<]*修得単位 2/);
+  assert.match(html, /取込時の集計（履歴）[^<]*修得単位 4/);
+});
+
+for (const manualYear of [2019, null]) test(`P2 component: manual year ${manualYear} survives refresh and subsequent identical imports`, () => {
+  const before = imported();
+  Object.assign(before.importedStudyRecords[0], { academicYear: manualYear, yearSource: 'manual', term: '手動期' });
+  const snapshot = structuredClone(before);
+  assert.equal(applyImport(before, preview(fixture(), before), []), before);
+  const data = fixture(); data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  const after = applyImport(before, preview(data, before), []);
+  assert.equal(after.importedStudyRecords.length, 1);
+  assert.equal(after.importedStudyRecords[0].academicYear, manualYear);
+  assert.equal(after.importedStudyRecords[0].yearSource, 'manual');
+  assert.equal(applyImport(after, preview(data, after), []), after);
+  assert.deepEqual(before, snapshot);
+});
+
+test('P2 component: manually corrected year cannot merge a different exam date', () => {
+  const before = imported();
+  Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual' });
+  assertHeld(before, fixture('2021-07-01'));
+});
+
+function assertComponentHeld(before, data) {
+  const snapshot = structuredClone(before);
+  const units = preview(data, before);
+  assert.ok(units.every(unit => unit.sourceIdentityConflict && !unit.selected && unit.sourceIdentityReason === 'unproven-component-identity'));
+  assert.equal(applyImport(before, units, []), before);
+  const forced = units.map(unit => ({ ...unit, sourceIdentityConflict: false, sourceYearConflict: false, selected: true,
+    sourceExistingId: before.importedCourseAchievements[0].id, sourceExistingSnapshot: JSON.stringify(before.importedCourseAchievements[0]) }));
+  assert.ok(revalidateImportIdentity(before, forced).every(unit => unit.sourceIdentityReason === 'unproven-component-identity'));
+  assert.equal(applyImport(before, forced, []), before);
+  assert.deepEqual(before, snapshot);
+  return units;
+}
+
+for (const variant of ['duplicate anchor', 'legacy fingerprint', 'missing parent', 'legacy capture date', 'contradictory exam date', 'contradictory prior grade']) test(`P2 component guard: ${variant} is held without updating or appending`, () => {
+  const before = imported(); const record = before.importedStudyRecords[0];
+  if (variant === 'duplicate anchor') before.importedStudyRecords.push({ ...record, id: 'second-component', academicYear: 2019, yearSource: 'manual' });
+  if (variant === 'legacy fingerprint') record.fingerprint = 'v22-legacy-component';
+  if (variant === 'missing parent') delete record.sourceCourseId;
+  if (variant === 'legacy capture date') { record.date = '2026-10-12'; delete record.examDate; record.fingerprint = JSON.stringify([record.rawName, record.method, record.rawYear, record.rawTerm, record.date, record.credits, record.grade, record.reports.map(r => r.raw), record.examGrade]); }
+  if (variant === 'contradictory exam date') record.examDate = '2021-07-01';
+  if (variant === 'contradictory prior grade') { record.grade = 'B'; record.examGrade = 'B'; record.fingerprint = JSON.stringify([record.rawName, record.method, record.rawYear, record.rawTerm, record.date, record.credits, record.grade, record.reports.map(r => r.raw), record.examGrade]); }
+  assert.equal(validateState(before, catalog), true, 'state is accepted before the identity guard is invoked');
+  const data = fixture(); data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  assertComponentHeld(before, data);
+});
+
+test('P2 component guard: an incoming collision cannot be made unique by deselection', () => {
+  const before = imported(); const data = fixture();
+  data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  const units = preview(data, before);
+  const conflicting = [...units, { ...units[0], id: 'competing-incoming', selected: false }];
+  assert.ok(revalidateImportIdentity(before, conflicting).every(unit => unit.sourceIdentityReason === 'unproven-component-identity'));
+  assert.equal(applyImport(before, conflicting, []), before);
+});
+
+test('P2 component guard: a stale duplicate flag cannot suppress a proven grade refresh', () => {
+  const before = imported(); const data = fixture();
+  data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  const units = preview(data, before).map(unit => ({ ...unit, duplicate: true }));
+  assert.ok(revalidateImportIdentity(before, units).every(unit => unit.duplicate === false));
+  const after = applyImport(before, units, []);
+  assert.equal(after.importedStudyRecords.length, 1); assert.equal(after.importedStudyRecords[0].grade, 'S');
+});
+
+test('P2 component guard: a stale undated fingerprint cannot authorize explicit-year addition', () => {
+  const before = imported(fixture(null)); before.importedStudyRecords[0].grade = 'B';
+  const data = fixture(null);
+  data.courses[0].schoolings[0] = { ...emptySlot(), rawYear: '20', year: '20', rawCredits: '2', credits: 2 };
+  assertComponentHeld(before, data);
+});
+
+test('P2 component: source-backed refresh preserves manual association and progress owners', () => {
+  const before = imported(); const offering = catalog.offerings.find(o => o.name === '論理学' && o.method === 'correspondence');
+  Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual', term: '手動期', offeringId: offering.id, match: 'exact_unique' });
+  before.items = [{ ...plannerItemFromCourseSearch(offering.id), status: 'waiting', plannedYear: 2028 }];
+  before.courseEvaluations[offering.id] = { offeringId: offering.id, finalGrade: 'B', reportGrade: null, schoolingGrade: null };
+  before.correspondenceProgress[offering.id] = { offeringId: offering.id, requiredReports: 2, reports: [{ reportNumber: 1, status: 'passed', grade: 'A' }], examGrade: 'S' };
+  const snapshot = structuredClone(before); const data = fixture();
+  data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  const after = applyImport(before, preview(data, before), []);
+  assert.equal(after.importedStudyRecords.length, 1);
+  for (const field of ['id', 'offeringId', 'match', 'academicYear', 'yearSource', 'term']) assert.equal(after.importedStudyRecords[0][field], before.importedStudyRecords[0][field]);
+  assert.deepEqual(after.items, before.items);
+  assert.equal(after.correspondenceProgress, before.correspondenceProgress); assert.equal(after.courseEvaluations, before.courseEvaluations);
+  assert.deepEqual(before, snapshot); assert.equal(validateState(after, catalog), true);
+});
+
+test('P2 component: old v22 missing examDate refreshes only from matching native date evidence', () => {
+  const before = imported(); delete before.importedStudyRecords[0].examDate;
+  Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual' });
+  const data = fixture(); data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  const after = applyImport(before, preview(data, before), []);
+  assert.equal(after.importedStudyRecords.length, 1); assert.equal(after.importedStudyRecords[0].academicYear, 2019);
+  assert.equal(after.importedStudyRecords[0].examDate, '2020-07-01');
+});
+
+test('P2 component: schooling slots remain distinct while manual years and terms survive a grade refresh', () => {
+  const data = fixture();
+  data.courses[0].schoolings = [0, 1].map(() => ({ ...emptySlot(), rawYear: '20', year: '20', rawTerm: '夏', term: '夏', rawDate: '2020/08/01', date: '2020-08-01', rawCredits: '2', credits: 2, rawGrade: 'A', grade: 'A' }));
+  const before = imported(data);
+  Object.assign(before.importedStudyRecords[1], { academicYear: 2019, yearSource: 'manual', term: '手動期' });
+  data.courses[0].schoolings[0].rawGrade = 'S'; data.courses[0].schoolings[0].grade = 'S';
+  const after = applyImport(before, preview(data, before), []);
+  assert.equal(after.importedStudyRecords.length, 3);
+  assert.equal(after.importedStudyRecords[1].id, before.importedStudyRecords[1].id);
+  assert.equal(after.importedStudyRecords[1].grade, 'S');
+  assert.equal(after.importedStudyRecords[1].academicYear, 2019);
+  assert.equal(after.importedStudyRecords[1].yearSource, 'manual');
+  assert.equal(after.importedStudyRecords[1].term, '手動期');
+  assert.deepEqual(after.importedStudyRecords[2], before.importedStudyRecords[2]);
+  assert.equal(applyImport(after, preview(data, after), []), after);
+});
+
+for (const total of [null, 0, 2]) test(`P2 aggregate: current official ${total} never overwrites intrinsic credits or becomes snapshot budget`, () => {
+  const before = imported(); const after = applyImport(before, preview(fixture('2020-07-01', total), before), []);
+  assert.equal(after.importedCourseAchievements[0].earnedCreditsTotal, total);
+  assert.deepEqual(after.importedStudyRecords, before.importedStudyRecords);
+  assert.equal(after.importedStudyRecords[0].credits, 4);
+  const derived = deriveImportedAchievements(after.importedStudyRecords, new Map(catalog.offerings.map(o => [o.id, o])), [], after.importedCourseAchievements, catalog);
+  assert.equal(derived.categoryOfferings.reduce((sum, o) => sum + o.credits, 0), total ?? 0);
+  const html = renderToStaticMarkup(createElement(ImportedManagementRows, { records: after.importedStudyRecords, courseRows: [], sourceRows: after.importedCourseAchievements, offerings: [], disabled: false, onChange() {}, onChangeCourse() {}, onDelete() {} }));
+  assert.match(html, new RegExp(`現在の公式集計[^<]*修得単位 ${total ?? '不明'}`));
+  assert.match(html, /取込時の集計（履歴）[^<]*修得単位 4/);
+  assert.equal(applyImport(after, preview(fixture('2020-07-01', total), after), []), after);
+});
+
+for (const variant of ['absent', 'ambiguous', 'wrong name', 'wrong id']) test(`P2 aggregate presentation: ${variant} parent is never inferred from name or snapshot`, () => {
+  const before = imported(); const row = before.importedCourseAchievements[0];
+  const sourceRows = variant === 'absent' ? [] : variant === 'ambiguous' ? [row, { ...row }] : variant === 'wrong name' ? [{ ...row, rawName: '別科目' }] : [{ ...row, id: 'other-source' }];
+  const html = renderToStaticMarkup(createElement(ImportedStudyRecordEditor, { record: before.importedStudyRecords[0], sourceRows, offerings: [], disabled: false, onChange() {}, onDelete() {} }));
+  assert.doesNotMatch(html, /現在の公式集計/);
+  assert.match(html, /取込時の集計（履歴）/); assert.match(html, /対応未確認/);
+});
+
+test('P2 component: a held component collision does not prevent unrelated source import', () => {
+  const before = imported(); before.importedStudyRecords[0].fingerprint = 'legacy-ambiguous';
+  const snapshot = structuredClone(before);
+  const data = fixture(); data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S';
+  data.courses.push({ ...structuredClone(fixture().courses[0]), rawName: '合成の別科目' });
+  const units = preview(data, before);
+  assert.ok(units.filter(u => u.rawName === '論理学').every(u => u.sourceIdentityConflict));
+  const after = applyImport(before, units, []);
+  assert.equal(after.importedCourseAchievements.length, 2); assert.equal(after.importedStudyRecords.length, 2);
+  assert.deepEqual(after.importedCourseAchievements[0], before.importedCourseAchievements[0]);
+  assert.deepEqual(after.importedStudyRecords[0], before.importedStudyRecords[0]);
+  assert.deepEqual(before, snapshot);
+});
+
+for (const scenario of ['manual grade', 'aggregate only']) test(`P2 persistence: ${scenario} survives v22 reload, backup/restore and repeated import`, async () => {
+  const before = imported(); Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual', term: '手動期' });
+  const data = scenario === 'aggregate only' ? fixture('2020-07-01', 2) : fixture();
+  if (scenario === 'manual grade') { data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S'; }
+  const values = new Map([[BACKUP_KEY, 'original recovery bytes']]);
+  const store = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  const oldRaw = saveState(store, before, null, catalog);
+  const loadedBefore = loadState(store, catalog); assert.equal(loadedBefore.error, null);
+  const after = applyImport(loadedBefore.state, preview(data, loadedBefore.state), []);
+  const raw = saveState(store, after, oldRaw, catalog);
+  const reloaded = loadState(store, catalog); assert.equal(reloaded.error, null); assert.deepEqual(reloaded.state, after);
+  assert.equal(reloaded.state.schemaVersion, 22); assert.equal(after.importedStudyRecords.length, 1);
+  assert.equal(after.importedStudyRecords[0].academicYear, 2019);
+  const text = JSON.stringify(await createPlannerBackup(raw, catalog));
+  assert.deepEqual((await parsePlannerBackup(text, catalog)).state, after);
+  const restored = await restorePlannerBackup(store, text, raw, catalog, { request: async (_name, _options, callback) => callback() });
+  assert.deepEqual(restored.state, after);
+  assert.equal(store.getItem(BACKUP_KEY), 'original recovery bytes');
+  assert.equal(applyImport(restored.state, preview(data, restored.state), []), restored.state);
+  const html = renderToStaticMarkup(createElement(ImportedStudyRecordEditor, { record: restored.state.importedStudyRecords[0], sourceRows: restored.state.importedCourseAchievements, offerings: [], disabled: false, onChange() {}, onDelete() {} }));
+  assert.match(html, /手動修正/); assert.match(html, new RegExp(`現在の公式集計[^<]*修得単位 ${scenario === 'aggregate only' ? 2 : 4}`));
+});
 
 test('identity P1: a different exam year cannot overwrite official 4 credits with 2', () => {
   const before = imported();

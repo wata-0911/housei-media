@@ -259,14 +259,18 @@ test('P2 import: reimport same source and schooling slot updates grade losslessl
     saveState(store, before, raw, catalog); assert.deepEqual(loadState(store, catalog).state, snapshot); assert.equal(next.schemaVersion, 22);
   }
 });
-test('P2 import: uncertain or competing component identity never overwrites an old record', () => {
+test('P2 import: uncertain or competing component identity holds the whole source without appending', () => {
   const offerings = economicsOfferings(); const data = extractedEconomics(); const saved = applyImport(initialState(), importPreview(data, offerings), offerings);
   const changed = structuredClone(data); Object.assign(changed.courses[0].schoolings[0], { rawGrade: 'A+', grade: 'A+' });
   for (const records of [saved.importedStudyRecords.map(r => r.method === 'schooling' ? { ...r, fingerprint: 'legacy-unknown-slot' } : r), [...saved.importedStudyRecords, { ...saved.importedStudyRecords[1], id: 'competing-detail' }]]) {
     const before = { ...saved, importedStudyRecords: records };
-    const next = applyImport(before, importPreview(changed, offerings, records, before.importedCourseAchievements), offerings);
+    const snapshot = structuredClone(before);
+    const preview = importPreview(changed, offerings, records, before.importedCourseAchievements);
+    assert.ok(preview.every(unit => unit.sourceIdentityReason === 'unproven-component-identity' && !unit.selected));
+    const next = applyImport(before, preview, offerings);
     assert.ok(next.importedStudyRecords.some(r => r.id === records[1].id && r.grade === 'A'));
-    assert.equal(next.importedStudyRecords.length, records.length + 1);
+    assert.equal(next, before);
+    assert.deepEqual(before, snapshot);
   }
 });
 test('P2 import: grade refresh preserves component association and other native slots', () => {

@@ -209,7 +209,7 @@ function sameCreditEvidence(old: unknown, next: unknown): boolean {
   return old === next || (nativeCredits(old) !== null && nativeCredits(old) === nativeCredits(next));
 }
 
-function sourceComponentDatesAgree(unit: ImportPreviewUnit): boolean {
+function sourceComponentDatesAgree(unit: ImportedStudyRecord & { sourceCourse: ImportedCourseAchievement; courseOnly?: boolean }): boolean {
   if (unit.courseOnly) return true;
   const evidence = sourceEvidence(unit.sourceCourse);
   if (!evidence) return false;
@@ -294,8 +294,11 @@ export function revalidateImportIdentity(state: PlannerState, units: ImportPrevi
     else if (resolved.kind === 'update' && (first.sourceExistingId !== resolved.existing!.id
       || first.sourceExistingSnapshot !== JSON.stringify(resolved.existing))) reason = 'stale-source-reference';
     else if (resolved.kind === 'new' && state.importedCourseAchievements.some(row => row.id === first.sourceCourse.id)) reason = 'source-id-collision';
+    else if (resolved.kind === 'update' && hasComponentIdentityConflict(group, state.importedStudyRecords, resolved.existing!, first.sourceCourse, state.importedCourseAchievements)) reason = 'unproven-component-identity';
     if (reason) return group.map(unit => ({ ...unit, selected: false, sourceDuplicate: false, sourceIdentityConflict: true, sourceIdentityReason: reason }));
+    const componentDuplicates = resolved.kind === 'update' ? currentComponentDuplicates(group, state.importedStudyRecords, resolved.existing!, first.sourceCourse) : null;
     return group.map(unit => ({ ...unit, sourceExistingId: resolved.existing?.id ?? null,
+      duplicate: componentDuplicates?.get(unit.id) ?? unit.duplicate,
       sourceDuplicate: resolved.kind === 'duplicate', selected: resolved.kind === 'duplicate' ? false : unit.selected }));
   });
 }
@@ -304,6 +307,7 @@ export function revalidateImportIdentity(state: PlannerState, units: ImportPrevi
  * and aggregates. No legacy date is promoted to a learning date or rewritten. */
 function sameUndatedComponent(old: ImportedStudyRecord, record: ImportedStudyRecord, source: ImportedCourseAchievement, existingSource?: ImportedCourseAchievement): boolean {
   if (!existingSource || old.sourceCourseId !== existingSource.id || record.method !== 'correspondence' || record.date !== null
+    || old.fingerprint !== importFingerprint(old)
     || old.fingerprint !== importFingerprint({ ...record, date: old.date })) return false;
   try {
     const previous: unknown = JSON.parse(existingSource.fingerprint);
@@ -388,13 +392,16 @@ export function importPreview(value: unknown, offerings: Offering[], existing: I
     }
     const components = rows.slice(firstUnit);
     const contradictoryDate = resolution.kind !== 'new' && components.some(unit => !sourceComponentDatesAgree(unit));
+    const componentConflict = resolution.kind === 'update' && hasComponentIdentityConflict(components, existing, resolution.existing!, sourceCourse, existingCourses);
+    const componentDuplicates = resolution.kind === 'update' && !componentConflict ? currentComponentDuplicates(components, existing, resolution.existing!, sourceCourse) : null;
     for (const unit of components) {
       if (resolution.existing) unit.sourceExistingSnapshot = JSON.stringify(resolution.existing);
+      unit.duplicate = componentDuplicates?.get(unit.id) ?? unit.duplicate;
     }
-    if (sourceYearConflict || resolution.kind === 'held' || contradictoryDate) {
+    if (sourceYearConflict || resolution.kind === 'held' || contradictoryDate || componentConflict) {
       for (const unit of components) {
         unit.sourceYearConflict = Boolean(sourceYearConflict); unit.sourceIdentityConflict = true;
-        unit.sourceIdentityReason = contradictoryDate ? 'contradictory-component-date' : 'unproven-source-identity';
+        unit.sourceIdentityReason = contradictoryDate ? 'contradictory-component-date' : componentConflict ? 'unproven-component-identity' : 'unproven-source-identity';
         unit.sourceExistingId = null; unit.sourceDuplicate = false; unit.selected = false;
       }
     }
@@ -479,32 +486,111 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
   });
 }
 
-/** A conservative identity for updates to a native source snapshot. Content
- * fingerprints alone are not identities. Legacy/edited/undated records stay append-only. */
-function componentIdentity(record: ImportedStudyRecord): string | null {
-  if (!record.sourceCourseId || !record.date || record.credits === null || record.academicYear === null) return null;
-  let slot: number | null = null;
+/** Slot is native fingerprint evidence, not an editable year/term or Offering. */
+function componentSlot(record: ImportedStudyRecord): string | null {
   const base = importFingerprint(record);
   if (record.method === 'schooling') {
     const suffix = /:([01])$/.exec(record.fingerprint);
-    if (!suffix || record.fingerprint !== `${base}:${suffix[1]}` || !record.rawYear || !record.rawTerm) return null;
-    slot = Number(suffix[1]);
-  } else if (record.fingerprint !== base) return null;
-  return JSON.stringify([record.sourceCourseId, record.rawName, record.method, slot, record.academicYear, record.rawYear, record.rawTerm, record.date, record.credits]);
+    return suffix && record.fingerprint === `${base}:${suffix[1]}` ? `schooling:${suffix[1]}` : null;
+  }
+  return record.fingerprint === base ? 'correspondence' : null;
 }
 
-function reconcileStudyRecords(existing: ImportedStudyRecord[], additions: ImportedStudyRecord[], allIncoming: ImportedStudyRecord[]): ImportedStudyRecord[] {
+/** Verify a component against its own retained native parent snapshot. Editable
+ * academicYear/yearSource/term/Offering never supply a component identity. */
+function componentIdentity(record: ImportedStudyRecord, source: ImportedCourseAchievement): string | null {
+  const slot = componentSlot(record); const evidence = sourceEvidence(source);
+  if (!slot || !evidence || record.sourceCourseId !== source.id
+    || normalizeImportName(record.rawName) !== normalizeImportName(source.rawName)) return null;
+  const schooling = record.method === 'schooling' ? evidence[3][Number(slot.at(-1))] : null;
+  const date = nativeDate(schooling ? schooling[2] : evidence[5][0]);
+  const credits = nativeCredits(schooling ? schooling[3] : evidence[5][1]);
+  if (date === null || credits === null || record.date !== date || record.credits !== credits
+    || (schooling ? record.rawYear !== (schooling[0] || null) || record.rawTerm !== (schooling[1] || null)
+      : record.rawYear !== null || record.rawTerm !== null || importedExamDate(record, source) !== date)) return null;
+  return JSON.stringify([source.id, normalizeImportName(source.rawName), slot, date, credits, schooling?.[0] ?? null, schooling?.[1] ?? null]);
+}
+
+function nativeGrade(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const grade = raw.trim();
+  return ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D'].includes(grade) ? grade : null;
+}
+
+/** Only native payloads can be added to a proven parent. The bounded explicit
+ * year extension may retain another undated slot snapshot as source history. */
+function isNativeComponentSnapshot(record: ImportedStudyRecord, source: ImportedCourseAchievement): boolean {
+  const slot = componentSlot(record); const evidence = sourceEvidence(source);
+  if (!slot || !evidence || record.sourceCourseId !== source.id
+    || normalizeImportName(record.rawName) !== normalizeImportName(source.rawName)) return false;
+  if (record.method === 'correspondence') {
+    return sourceComponentDatesAgree({ ...record, examDate: importedExamDate(record, source), sourceCourse: source })
+      && record.rawYear === null && record.rawTerm === null
+      && record.credits === nativeCredits(evidence[5][1]) && record.grade === nativeGrade(evidence[5][2])
+      && record.examGrade === nativeGrade(evidence[5][2]);
+  }
+  const raw = evidence[3][Number(slot.at(-1))];
+  return record.rawYear === (raw[0] || null) && record.rawTerm === (raw[1] || null)
+    && record.date === nativeDate(raw[2]) && record.credits === nativeCredits(raw[3])
+    && record.grade === nativeGrade(raw[4]);
+}
+
+type ComponentResolution = { kind: 'duplicate' | 'update' | 'append' | 'held'; existing?: ImportedStudyRecord };
+function resolveComponentRecord(record: ImportedStudyRecord, existing: ImportedStudyRecord[], allIncoming: ImportedStudyRecord[], previous: ImportedCourseAchievement, next: ImportedCourseAchievement): ComponentResolution {
+  if (!isNativeComponentSnapshot(record, next)) return { kind: 'held' };
+  const key = componentIdentity(record, next);
+  const linked = existing.filter(old => old.sourceCourseId === previous.id);
+  const matches = key === null ? [] : linked.filter(old => componentIdentity(old, previous) === key);
+  const incomingMatches = key === null ? [] : allIncoming.filter(other => componentIdentity(other, next) === key);
+  if (matches.length > 1 || incomingMatches.length > 1) return { kind: 'held' };
+  const duplicates = linked.filter(old => old.fingerprint === record.fingerprint || sameUndatedComponent(old, record, next, previous));
+  if (duplicates.length > 1) return { kind: 'held' };
+  if (duplicates.length === 1) return isNativeComponentSnapshot(duplicates[0], previous)
+    || sameUndatedComponent(duplicates[0], record, next, previous)
+    || isSourceYearExtension(previous, next) && isNativeComponentSnapshot(duplicates[0], next)
+    ? { kind: 'duplicate', existing: duplicates[0] } : { kind: 'held' };
+  if (matches.length === 1 && incomingMatches.length === 1) return isNativeComponentSnapshot(matches[0], previous)
+    ? { kind: 'update', existing: matches[0] } : { kind: 'held' };
+  const slot = componentSlot(record);
+  const sameSlot = linked.filter(old => old.method === record.method && (componentSlot(old) === slot || componentSlot(old) === null));
+  if (!slot || sameSlot.length > 0) {
+    // Preserve the bounded additive-year compatibility path, with both native
+    // snapshots checked. No editable attribute can authorize this append.
+    if (sameSlot.length === 1 && isSourceYearExtension(previous, next)
+      && sameSlot[0].method === 'schooling' && record.method === 'schooling'
+      && isNativeComponentSnapshot(sameSlot[0], previous)) return { kind: 'append' };
+    return { kind: 'held' };
+  }
+  return { kind: 'append' }; // a genuinely absent method/slot on a proven parent
+}
+
+function hasComponentIdentityConflict(units: ImportPreviewUnit[], existing: ImportedStudyRecord[], previous: ImportedCourseAchievement, incoming: ImportedCourseAchievement, sources: ImportedCourseAchievement[]): boolean {
+  const next = { ...incoming, id: previous.id };
+  const records = units.filter(unit => !unit.courseOnly).map(unit => ({ ...unit, sourceCourseId: previous.id }));
+  return records.some(record => existing.some(old => normalizeImportName(old.rawName) === normalizeImportName(record.rawName)
+    && old.method === record.method && (!old.sourceCourseId || !sources.some(source => source.id === old.sourceCourseId)))
+    || resolveComponentRecord(record, existing, records, previous, next).kind === 'held');
+}
+
+/** Duplicate flags are preview hints too; recompute them from current owned
+ * records so a stale/forged flag cannot suppress a proven component refresh. */
+function currentComponentDuplicates(units: ImportPreviewUnit[], existing: ImportedStudyRecord[], previous: ImportedCourseAchievement, incoming: ImportedCourseAchievement): Map<string, boolean> {
+  const next = { ...incoming, id: previous.id };
+  const records = units.filter(unit => !unit.courseOnly).map(unit => ({ ...unit, sourceCourseId: previous.id }));
+  return new Map(records.map(record => [record.id, resolveComponentRecord(record, existing, records, previous, next).kind === 'duplicate']));
+}
+
+function reconcileStudyRecords(existing: ImportedStudyRecord[], additions: ImportedStudyRecord[], allIncoming: ImportedStudyRecord[], previousSources: ImportedCourseAchievement[], nextSources: ImportedCourseAchievement[]): ImportedStudyRecord[] {
   const updates = new Map<string, ImportedStudyRecord>(); const appended: ImportedStudyRecord[] = [];
   for (const record of additions) {
-    const key = componentIdentity(record);
-    const matches = key === null ? [] : existing.filter(old => componentIdentity(old) === key);
-    // Selection must not turn competing incoming slots into a unique update.
-    const incoming = key === null ? [] : allIncoming.filter(next => componentIdentity(next) === key);
-    if (matches.length === 1 && incoming.length === 1) {
-      const old = matches[0];
+    const previous = previousSources.find(source => source.id === record.sourceCourseId);
+    const next = nextSources.find(source => source.id === record.sourceCourseId);
+    const resolution = previous && next ? resolveComponentRecord(record, existing, allIncoming, previous, next) : { kind: 'append' as const };
+    if (resolution.kind === 'update' && resolution.existing) {
+      const old = resolution.existing;
       // Keep learner-managed association/year context; source content is refreshed.
       updates.set(old.id, { ...record, id: old.id, offeringId: old.offeringId, match: old.match, academicYear: old.academicYear, yearSource: old.yearSource, term: old.term });
-    } else appended.push(record);
+    } else if (resolution.kind === 'append') appended.push(record);
   }
   return [...existing.map(old => updates.get(old.id) ?? old), ...appended];
 }
@@ -531,7 +617,7 @@ export function applyImport(state: PlannerState, units: ImportPreviewUnit[], off
   }));
   const rows = state.importedCourseAchievements.map(existing => { const update = sourceUpdates.get(existing.id); if (!update) return existing; const confirmYear = canConfirmSourceYear(existing, update); return { ...existing, ...update, id: existing.id, academicYear: confirmYear ? update.academicYear : existing.academicYear, yearSource: confirmYear ? update.yearSource : existing.yearSource, ...(existing.selectionSource === 'manual' ? { courseId: existing.courseId, match: existing.match, curriculumCourseId: existing.curriculumCourseId, curriculumMatch: existing.curriculumMatch, candidateCurriculumCourseIds: existing.candidateCurriculumCourseIds, offeringMatch: existing.offeringMatch, candidateOfferingIds: existing.candidateOfferingIds } : {}), selectedOfferingId: existing.selectionSource === 'manual' ? existing.selectedOfferingId : update.selectedOfferingId, selectionSource: existing.selectionSource === 'manual' ? 'manual' : update.selectionSource }; });
   const allIncoming = units.filter(unit => !unit.courseOnly).map(unit => ({ ...unit, sourceCourseId: unit.sourceExistingId ?? unit.sourceCourse.id }));
-  return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: reconcileStudyRecords(state.importedStudyRecords, additions, allIncoming), importedCourseAchievements: [...rows, ...sourceAdditions] };
+  return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: reconcileStudyRecords(state.importedStudyRecords, additions, allIncoming, state.importedCourseAchievements, [...rows, ...sourceAdditions]), importedCourseAchievements: [...rows, ...sourceAdditions] };
 }
 
 export function importedEarnedCreditsTotal(rows: ImportedCourseAchievement[]): number { return rows.reduce((sum, row) => sum + (row.earnedCreditsTotal && row.earnedCreditsTotal > 0 ? row.earnedCreditsTotal : 0), 0); }
