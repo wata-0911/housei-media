@@ -22,7 +22,7 @@ export type ImportedCourseAchievement = Partial<CurriculumImportMatch> & { offer
  * actual session date for schooling. It is not an exam-date field (use examDate).
  * Legacy date/year values are retained on reimport, never reinterpreted as source facts. */
 export type ImportedStudyRecord = { id: string; fingerprint: string; source: 'hosei_import'; rawName: string; offeringId: string | null; match: ImportMatch; method: ImportMethod; academicYear: number | null; yearSource: 'source' | 'inferred' | 'manual' | 'unknown'; rawYear: string | null; term: string | null; rawTerm: string | null; date: string | null; credits: number | null; grade: string | null; reports?: HoseiGradeImportCourse['reports']; examGrade?: string | null; sourceCourseId?: string; earnedCreditsTotal?: number | null; schoolingCreditsTotal?: number | null; compositionCredits?: number | null; recognizedExemption?: number | null; additionalEnrollment?: number | null; examDate?: string | null; capturedAt?: string };
-export type ImportPreviewUnit = ImportedStudyRecord & { selected: boolean; candidates: Offering[]; duplicate: boolean; sourceCourse: ImportedCourseAchievement; sourceDuplicate: boolean; sourceExistingId: string | null; sourceExistingSnapshot?: string; courseOnly?: boolean; sourceYearConflict?: boolean; sourceIdentityConflict?: boolean; sourceIdentityReason?: string };
+export type ImportPreviewUnit = ImportedStudyRecord & { selected: boolean; candidates: Offering[]; duplicate: boolean; sourceCourse: ImportedCourseAchievement; sourceDuplicate: boolean; sourceExistingId: string | null; sourceExistingSnapshot?: string; courseOnly?: boolean; sourceYearConflict?: boolean; sourceIdentityConflict?: boolean; sourceIdentityReason?: string; sourceComponentUpdateRequired?: boolean };
 
 export const normalizeImportName = (name: string) => name.trim().replace(/[\s\u3000]+/g, ' ');
 export function schoolingAcademicYear(raw: string | null): number | null { const n = raw?.trim(); if (!n || !/^\d{2}(?:\d{2})?$/.test(n)) return null; const value = Number(n); return n.length === 2 ? 2000 + value : value; }
@@ -276,13 +276,14 @@ function resolveSource(incoming: ImportedCourseAchievement, saved: ImportedCours
 export function revalidateImportIdentity(state: PlannerState, units: ImportPreviewUnit[]): ImportPreviewUnit[] {
   const groups = new Map<string, ImportPreviewUnit[]>();
   for (const unit of units) groups.set(unit.sourceCourse.id, [...(groups.get(unit.sourceCourse.id) ?? []), unit]);
-  return [...groups.values()].flatMap(group => {
+  return holdIncompleteImportSelections([...groups.values()].flatMap<ImportPreviewUnit>(group => {
     const first = group[0];
     const count = [...groups.values()].filter(other => normalizeImportName(other[0].sourceCourse.rawName) === normalizeImportName(first.sourceCourse.rawName)).length;
     const resolved = resolveSource(first.sourceCourse, state.importedCourseAchievements, count);
     let reason: string | undefined;
     if (group.some(unit => unit.sourceIdentityConflict || unit.sourceYearConflict)) reason = 'preview-held';
-    else if (group.some(unit => unit.sourceCourseId !== first.sourceCourse.id
+    else if (new Set(group.map(unit => unit.id)).size !== group.length
+      || group.some(unit => unit.sourceCourseId !== first.sourceCourse.id
       || normalizeImportName(unit.rawName) !== normalizeImportName(first.sourceCourse.rawName)
       || (['earnedCreditsTotal', 'schoolingCreditsTotal', 'compositionCredits', 'recognizedExemption', 'additionalEnrollment'] as const).some(key => unit[key] !== first.sourceCourse[key])
       || JSON.stringify(unit.sourceCourse) !== JSON.stringify(first.sourceCourse)
@@ -295,12 +296,14 @@ export function revalidateImportIdentity(state: PlannerState, units: ImportPrevi
       || first.sourceExistingSnapshot !== JSON.stringify(resolved.existing))) reason = 'stale-source-reference';
     else if (resolved.kind === 'new' && state.importedCourseAchievements.some(row => row.id === first.sourceCourse.id)) reason = 'source-id-collision';
     else if (resolved.kind === 'update' && hasComponentIdentityConflict(group, state.importedStudyRecords, resolved.existing!, first.sourceCourse, state.importedCourseAchievements)) reason = 'unproven-component-identity';
+    else if (resolved.kind === 'update' && !hasCompleteComponentPreview(group, first.sourceCourse)) reason = 'incomplete-source-selection';
     if (reason) return group.map(unit => ({ ...unit, selected: false, sourceDuplicate: false, sourceIdentityConflict: true, sourceIdentityReason: reason }));
-    const componentDuplicates = resolved.kind === 'update' ? currentComponentDuplicates(group, state.importedStudyRecords, resolved.existing!, first.sourceCourse) : null;
+    const componentRefreshes = resolved.kind === 'update' ? currentComponentRefreshes(group, state.importedStudyRecords, resolved.existing!, first.sourceCourse) : null;
     return group.map(unit => ({ ...unit, sourceExistingId: resolved.existing?.id ?? null,
-      duplicate: componentDuplicates?.get(unit.id) ?? unit.duplicate,
+      duplicate: componentRefreshes?.get(unit.id)?.duplicate ?? unit.duplicate,
+      sourceComponentUpdateRequired: componentRefreshes?.get(unit.id)?.updateRequired ?? false,
       sourceDuplicate: resolved.kind === 'duplicate', selected: resolved.kind === 'duplicate' ? false : unit.selected }));
-  });
+  }));
 }
 
 /** Compare the native correspondence evidence, independently of other components
@@ -393,10 +396,11 @@ export function importPreview(value: unknown, offerings: Offering[], existing: I
     const components = rows.slice(firstUnit);
     const contradictoryDate = resolution.kind !== 'new' && components.some(unit => !sourceComponentDatesAgree(unit));
     const componentConflict = resolution.kind === 'update' && hasComponentIdentityConflict(components, existing, resolution.existing!, sourceCourse, existingCourses);
-    const componentDuplicates = resolution.kind === 'update' && !componentConflict ? currentComponentDuplicates(components, existing, resolution.existing!, sourceCourse) : null;
+    const componentRefreshes = resolution.kind === 'update' && !componentConflict ? currentComponentRefreshes(components, existing, resolution.existing!, sourceCourse) : null;
     for (const unit of components) {
       if (resolution.existing) unit.sourceExistingSnapshot = JSON.stringify(resolution.existing);
-      unit.duplicate = componentDuplicates?.get(unit.id) ?? unit.duplicate;
+      unit.duplicate = componentRefreshes?.get(unit.id)?.duplicate ?? unit.duplicate;
+      unit.sourceComponentUpdateRequired = componentRefreshes?.get(unit.id)?.updateRequired ?? false;
     }
     if (sourceYearConflict || resolution.kind === 'held' || contradictoryDate || componentConflict) {
       for (const unit of components) {
@@ -558,7 +562,7 @@ function resolveComponentRecord(record: ImportedStudyRecord, existing: ImportedS
     // snapshots checked. No editable attribute can authorize this append.
     if (sameSlot.length === 1 && isSourceYearExtension(previous, next)
       && sameSlot[0].method === 'schooling' && record.method === 'schooling'
-      && isNativeComponentSnapshot(sameSlot[0], previous)) return { kind: 'append' };
+      && isNativeComponentSnapshot(sameSlot[0], previous)) return { kind: 'append', existing: sameSlot[0] };
     return { kind: 'held' };
   }
   return { kind: 'append' }; // a genuinely absent method/slot on a proven parent
@@ -572,12 +576,43 @@ function hasComponentIdentityConflict(units: ImportPreviewUnit[], existing: Impo
     || resolveComponentRecord(record, existing, records, previous, next).kind === 'held');
 }
 
-/** Duplicate flags are preview hints too; recompute them from current owned
+/** Duplicate/required-refresh flags are preview hints; recompute from current owned
  * records so a stale/forged flag cannot suppress a proven component refresh. */
-function currentComponentDuplicates(units: ImportPreviewUnit[], existing: ImportedStudyRecord[], previous: ImportedCourseAchievement, incoming: ImportedCourseAchievement): Map<string, boolean> {
+function currentComponentRefreshes(units: ImportPreviewUnit[], existing: ImportedStudyRecord[], previous: ImportedCourseAchievement, incoming: ImportedCourseAchievement): Map<string, { duplicate: boolean; updateRequired: boolean }> {
   const next = { ...incoming, id: previous.id };
   const records = units.filter(unit => !unit.courseOnly).map(unit => ({ ...unit, sourceCourseId: previous.id }));
-  return new Map(records.map(record => [record.id, resolveComponentRecord(record, existing, records, previous, next).kind === 'duplicate']));
+  return new Map(records.map(record => {
+    const resolution = resolveComponentRecord(record, existing, records, previous, next);
+    return [record.id, { duplicate: resolution.kind === 'duplicate',
+      updateRequired: resolution.kind === 'update' || resolution.kind === 'append' && resolution.existing !== undefined }];
+  }));
+}
+
+/** A caller may deselect detail records, but may not omit them from the evidence
+ * reviewed for an existing source refresh. Native source slots define coverage. */
+function hasCompleteComponentPreview(units: ImportPreviewUnit[], source: ImportedCourseAchievement): boolean {
+  const evidence = sourceEvidence(source);
+  if (!evidence) return false;
+  const expected: string[] = [];
+  if (evidence[4].some(report => report[0] !== '' || report[1] !== 'none' || report[2] !== null)
+    || evidence[5].some(field => field !== '' && field !== false)) expected.push('correspondence');
+  evidence[3].forEach((slot, index) => { if (slot.some(field => field !== '')) expected.push(`schooling:${index}`); });
+  const actual = units.filter(unit => !unit.courseOnly).map(componentSlot);
+  return actual.length === expected.length && expected.every(slot => actual.filter(value => value === slot).length === 1)
+    && (expected.length > 0 || units.length === 1 && units[0].courseOnly === true);
+}
+
+/** Selection is not identity evidence. A parent refresh must retain each owned
+ * component's native snapshot agreement. Leave unchecked records untouched and
+ * hold the whole source if a required refresh was unchecked. apply recomputes the
+ * required flags from current state; UI uses the same projection for guidance. */
+export function holdIncompleteImportSelections(units: ImportPreviewUnit[]): ImportPreviewUnit[] {
+  const held = new Set(units.filter(unit => unit.sourceExistingId !== null && !unit.sourceDuplicate
+    && !unit.sourceIdentityConflict && !unit.sourceYearConflict
+    && unit.sourceComponentUpdateRequired && !unit.selected).map(unit => unit.sourceCourse.id));
+  return units.map(unit => held.has(unit.sourceCourse.id)
+    ? { ...unit, selected: false, sourceDuplicate: false, sourceIdentityConflict: true, sourceIdentityReason: 'incomplete-source-selection' }
+    : unit);
 }
 
 function reconcileStudyRecords(existing: ImportedStudyRecord[], additions: ImportedStudyRecord[], allIncoming: ImportedStudyRecord[], previousSources: ImportedCourseAchievement[], nextSources: ImportedCourseAchievement[]): ImportedStudyRecord[] {
@@ -617,7 +652,10 @@ export function applyImport(state: PlannerState, units: ImportPreviewUnit[], off
   }));
   const rows = state.importedCourseAchievements.map(existing => { const update = sourceUpdates.get(existing.id); if (!update) return existing; const confirmYear = canConfirmSourceYear(existing, update); return { ...existing, ...update, id: existing.id, academicYear: confirmYear ? update.academicYear : existing.academicYear, yearSource: confirmYear ? update.yearSource : existing.yearSource, ...(existing.selectionSource === 'manual' ? { courseId: existing.courseId, match: existing.match, curriculumCourseId: existing.curriculumCourseId, curriculumMatch: existing.curriculumMatch, candidateCurriculumCourseIds: existing.candidateCurriculumCourseIds, offeringMatch: existing.offeringMatch, candidateOfferingIds: existing.candidateOfferingIds } : {}), selectedOfferingId: existing.selectionSource === 'manual' ? existing.selectedOfferingId : update.selectedOfferingId, selectionSource: existing.selectionSource === 'manual' ? 'manual' : update.selectionSource }; });
   const allIncoming = units.filter(unit => !unit.courseOnly).map(unit => ({ ...unit, sourceCourseId: unit.sourceExistingId ?? unit.sourceCourse.id }));
-  return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: reconcileStudyRecords(state.importedStudyRecords, additions, allIncoming, state.importedCourseAchievements, [...rows, ...sourceAdditions]), importedCourseAchievements: [...rows, ...sourceAdditions] };
+  // Reconciliation uses the verified incoming native snapshot. Persisted parent
+  // years may be manual/inferred and cannot replace the source-year evidence.
+  const nextEvidence = [...rows.map(row => sourceUpdates.has(row.id) ? { ...sourceUpdates.get(row.id)!, id: row.id } : row), ...sourceAdditions];
+  return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: reconcileStudyRecords(state.importedStudyRecords, additions, allIncoming, state.importedCourseAchievements, nextEvidence), importedCourseAchievements: [...rows, ...sourceAdditions] };
 }
 
 export function importedEarnedCreditsTotal(rows: ImportedCourseAchievement[]): number { return rows.reduce((sum, row) => sum + (row.earnedCreditsTotal && row.earnedCreditsTotal > 0 ? row.earnedCreditsTotal : 0), 0); }

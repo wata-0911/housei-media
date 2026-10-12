@@ -1,17 +1,19 @@
 import GradeImportBookmarklet from './GradeImportBookmarklet';
 import { useEffect, useState } from 'react';
 import { isHoseiGradeImportV1, type HoseiGradeImportV1 } from '../../planner/gradeImportContract';
-import { autoPlannerItemsForImport, importPreview, type ImportPreviewUnit, type ImportedCourseAchievement, type ImportedStudyRecord } from '../../planner/gradeImportApply';
+import { autoPlannerItemsForImport, holdIncompleteImportSelections, importPreview, type ImportPreviewUnit, type ImportedCourseAchievement, type ImportedStudyRecord } from '../../planner/gradeImportApply';
 import { focusImportedCourseList } from '../../planner/importNavigation';
 import type { Offering, PlannerItem } from '../../planner/plannerCatalog';
 
 const matchLabel = (match: string | undefined) => match === 'exact_unique' ? '一意一致' : match === 'ambiguous' ? '要確認' : '未一致';
 
 export function GradeImportApplyActions({ units, plannedItems, offerings, disabled, onApply }: { units: ImportPreviewUnit[]; plannedItems: PlannerItem[]; offerings: Offering[]; disabled: boolean; onApply: () => void }) {
+  units = holdIncompleteImportSelections(units);
   const plannerAdditions = autoPlannerItemsForImport(units, plannedItems, offerings);
-  const backfillCount = autoPlannerItemsForImport(units.filter(unit => unit.sourceDuplicate), plannedItems, offerings).length;
+  const backfillCount = autoPlannerItemsForImport(units.filter(unit => unit.sourceDuplicate || unit.sourceIdentityConflict || unit.sourceYearConflict), plannedItems, offerings).length;
   const hasOfficialChanges = units.some(unit => unit.selected && !unit.sourceDuplicate && !unit.sourceYearConflict && !unit.sourceIdentityConflict);
   return <>
+    {units.some(unit => unit.sourceIdentityReason === 'incomplete-source-selection') && <p role="alert" className="text-sm">要確認：更新が必要な保存済み内訳が選択されていないため、この科目の成績表行と内訳の更新を保留しています。元の記録は変更しません。更新する場合は、変更された内訳をすべて選択してください。</p>}
     {backfillCount > 0 && <p role="status" className="text-sm">成績表行は保存済みです。{backfillCount}科目を履修計画に仮登録できます。公式成績は重複保存しません。</p>}
     <button type="button" disabled={disabled || (!hasOfficialChanges && plannerAdditions.length === 0)} onClick={onApply} className="bg-[#E65C00] px-3 py-2 text-sm text-white disabled:opacity-50">確認した履修実績を保存・履修計画に仮登録</button>
   </>;

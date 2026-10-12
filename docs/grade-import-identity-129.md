@@ -157,3 +157,50 @@ GitHub CIの結果と最終HEADはPR本文へ記録する。
 フォローアップの変更ファイルは取込処理、`ImportedStudyRecordEditor.tsx`、`ImportedAchievements.tsx`、identity/course-progress/browserの3テストファイル、本書。schema22、卒業エンジン、falseフラグ、YI-01/02、parser、backup v1/v2、保存Lock/expectedRaw/原文保護、進捗ownerを変更しない。
 
 過去に既に作られた曖昧な重複内訳を、自動削除・統合するmigrationは実施しない。確定できない更新を保留する。iPhone Safari実機は未検証。全文差分UIなどIssue #129の残作業は継続し、同じDraft PRで独立レビューを待つ。自己テストPASSを独立監査完了とは扱わない。
+
+## PR #148 部分選択P2フォローアップ
+
+監査/作業開始HEADは`fd2156ff18707ad39406620daf0d34c5a57447d4`。PR #148がDraft・未マージ、同じfeatureブランチで未コミット変更がないこと、最新origin/devが`3ce5d2f1c8f94b3e12e1ab58288cccc4c629c71f`のままであることを確認した。
+
+### 再現と原因
+
+通信A・S A・公式4単位を合成fixtureで保存し、同日/同内訳単位で通信A→Sへ変更したJSONのSだけを選択した。修正前は原行fingerprintだけが新しくなり、通信はAのまま残った。全件再取り込みは原行の完全重複扱いで通信を更新せず、さらに公式合計4→2の訂正は旧通信snapshotが現在の原行と一致しないため`unproven-component-identity`で保留された。
+
+最初の2再現テストは変更前にFAIL（部分反映でstateが変わる、最終公式値`4 !== 2`）、変更後にPASS。根本原因は、原行identityと内訳identityを確認していても、既存の変更内訳の選択が原行更新に必要であることを検証していなかった点。
+
+### 採用した境界
+
+- native原行と現在stateから内訳ごとのduplicate/必要な更新を再計算する。証拠で確認された既存内訳の更新、および既存slotの限定的な明示年度補完には選択が必要。
+- 必要な内訳が未選択なら、科目の原行グループ全体を`incomplete-source-selection`で保留する。原行・内訳・手動情報・進捗は完全不変。未選択内訳を更新しない。
+- 更新対象原行のnative通信/S slotを全てプレビューで提示することもapplyで検証する。配列から内訳を省略した呼び出し、改変したrequired/duplicateフラグ、衝突する提案IDでも保留を回避できない。既存のidentity guard理由は保持する。
+- 変更のない内訳の未選択、公式合計のみの訂正は許可する。本当に未保存の方式/slotは独立した任意の追加として扱う。存在しない内訳を追加しなくても旧snapshotとの矛盾は生まれない。
+- UIは保留理由と「変更された内訳をすべて選択」を案内し、その科目だけなら保存を無効化する。選択を戻せるようcheckboxは有効のまま。混在する無関係行は反映可能で、保留した科目を計画へ補完しない。
+- bounded年度補完の内訳照合には、検証済みincoming native原行を渡す。保存する原行の手動/推定年度を元データの明示年度証拠へ代用しない。これにより全件選択時の安全な補完と、保存済み利用者年度の保持が両立する。
+
+全件再取り込みで通信S/S Aへ整合した後、日付・内訳単位を変えず公式4→2を反映できる。通信/Sは2件の独立した記録、公式aggregateが正本。内訳の過去の集計は取込時履歴、表示の現在値は既存の確定親参照方式を維持する。
+
+### 既に不整合になった保存データ
+
+現行schema22には、置換された原行の旧native fingerprint履歴を保存する契約がない。残存内訳の日付・名称・単位・評価だけでは、その内訳が置換前原行に属していたことや旧payloadを確定できない。新原行に合うJSONを提示しただけで既存内訳を書き換える修復は採用しない。
+
+矛盾した保存データは同一JSONでno-op、集計訂正時には従来のidentity guardで保留する。確実に整合していた変更前JSONバックアップがある場合は、既存の明示的な全件復元操作でその記録を戻し、全件選択したnative更新と公式訂正を反映できることをテストした。自動復元・新しいmigration・推測での親子接続は行わない。確実な旧記録がない不整合データの修復は未解決として独立レビューに引き継ぐ。
+
+### 検証と非変更範囲
+
+追加14件は部分選択、通信/S両方向、再選択、改変フラグ/省略/ID衝突、変更なし内訳、新slot、限定年度補完、手動年度、無関係行の混在、保存/再読込/JSON backup/復元、既存不整合の保留と確実なバックアップ復旧を検証する。Chromiumを1ケース追加し、実際の部分選択で書込0/原文不変、全件再読込、4→2訂正、冪等性、手動年度保持、現在値/履歴表示、再読込を確認する。
+
+| 最終検証 | 結果 |
+| --- | --- |
+| `npm run test:planner` | PASS 2,266件（identity 75件、卒業168出力一致） |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS。既存の大きなchunk警告あり |
+| `npm run catalog:check` | PASS、321制度科目/686開講 |
+| `npm run test:extension` | PASS 54件 |
+| `npm run test:bookmarklet` | PASS 168件 |
+| `npm run test:planner-browser` | PASS 20件、ローカルheadless Chromium |
+| `git diff --check` | PASS |
+| iPhone Safari実機 | SKIP |
+| 今回の追加commitの独立レビュー | 未実施、Draftでレビュー待ち |
+
+変更は`gradeImportApply.ts`、`GradeImportPanel.tsx`、identity/browser回帰、本書のみ。schema22、卒業エンジン、falseフラグ、YI-01/02、parser contract、backup v1/v2、保存Lock/expectedRaw/原文保護、既存計画/通信/メディア/評価ownerは変更しない。全面差分UI、年度非依存化、曖昧な既存重複の自動修復は対象外。HEADとGitHub CIはPR本文へ記録する。自己テストを独立監査完了とは扱わず、Draft・未マージのまま追加レビューへ引き継ぐ。

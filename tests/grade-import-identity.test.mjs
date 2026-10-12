@@ -28,6 +28,144 @@ function fixture(date = '2020-07-01', earned = 4) {
 const preview = (data, state, offerings = []) => importPreview(data, offerings, state.importedStudyRecords, state.importedCourseAchievements);
 const imported = (data = fixture()) => applyImport(initialState(), importPreview(data, []), []);
 
+function splitFixture() {
+  const data = fixture();
+  Object.assign(data.courses[0].creditExam, { rawCredits: '2', credits: 2 });
+  data.courses[0].schoolingCredits = numeric(2);
+  data.courses[0].schoolings[0] = { ...emptySlot(), rawYear: '20', year: '20', rawTerm: '夏', term: '夏', rawDate: '2020/08/01', date: '2020-08-01', rawCredits: '2', credits: 2, rawGrade: 'A', grade: 'A' };
+  return data;
+}
+function changedSplitFixture() {
+  const data = splitFixture(); data.courses[0].creditExam.rawGrade = 'S'; data.courses[0].creditExam.grade = 'S'; return data;
+}
+
+test('P2 partial: an unselected changed correspondence must hold the entire official source', () => {
+  const before = imported(splitFixture());
+  const units = preview(changedSplitFixture(), before).map(unit => ({ ...unit, selected: unit.method === 'schooling' }));
+  const after = applyImport(before, units, []);
+  assert.equal(after, before, 'the parent fingerprint and both independent component snapshots must remain unchanged');
+});
+
+test('P2 partial: partial attempt then full reimport must allow the legitimate official 4 to 2 correction', () => {
+  const before = imported(splitFixture()); const data = changedSplitFixture();
+  const partial = applyImport(before, preview(data, before).map(unit => ({ ...unit, selected: unit.method === 'schooling' })), []);
+  const full = applyImport(partial, preview(data, partial), []);
+  const correction = structuredClone(data); correction.courses[0].earnedCredits = numeric(2);
+  const final = applyImport(full, preview(correction, full), []);
+  assert.equal(final.importedCourseAchievements[0].earnedCreditsTotal, 2);
+  assert.equal(final.importedStudyRecords.length, 2);
+  assert.deepEqual(final.importedStudyRecords.map(record => [record.method, record.grade, record.credits]), [['correspondence', 'S', 2], ['schooling', 'A', 2]]);
+});
+
+for (const changed of ['correspondence', 'schooling', 'both']) test(`P2 partial: unchecked ${changed} refresh holds native snapshots and offers actionable UI`, () => {
+  const before = imported(splitFixture()); const snapshot = structuredClone(before); const data = splitFixture();
+  if (changed !== 'schooling') Object.assign(data.courses[0].creditExam, { rawGrade: 'S', grade: 'S' });
+  if (changed !== 'correspondence') Object.assign(data.courses[0].schoolings[0], { rawGrade: 'S', grade: 'S' });
+  const units = preview(data, before).map(unit => ({ ...unit, selected: unit.method !== (changed === 'both' ? 'correspondence' : changed) }));
+  assert.ok(revalidateImportIdentity(before, units).every(unit => unit.sourceIdentityReason === 'incomplete-source-selection'));
+  assert.equal(applyImport(before, units, []), before); assert.deepEqual(before, snapshot);
+  const html = renderToStaticMarkup(createElement(GradeImportApplyActions, { units, plannedItems: [], offerings: [], disabled: false, onApply() {} }));
+  assert.match(html, /更新が必要な保存済み内訳が選択されていない/); assert.match(html, /<button[^>]*disabled/);
+  const checkbox = renderToStaticMarkup(createElement(GradeImportPreviewUnit, { unit: units[0], onChange() {} }));
+  assert.doesNotMatch(checkbox, /<input[^>]*type="checkbox"[^>]*disabled/);
+  const full = applyImport(before, units.map(unit => ({ ...unit, selected: true })), []);
+  assert.equal(full.importedStudyRecords.length, 2);
+});
+
+for (const variant of ['omitted detail', 'forged required flag']) test(`P2 partial guard: ${variant} cannot bypass atomic selection`, () => {
+  const before = imported(splitFixture()); let units = preview(changedSplitFixture(), before);
+  units = variant === 'omitted detail' ? units.filter(unit => unit.method === 'schooling')
+    : units.map(unit => ({ ...unit, sourceComponentUpdateRequired: false, duplicate: true, selected: unit.method === 'schooling' }));
+  assert.ok(revalidateImportIdentity(before, units).every(unit => unit.sourceIdentityReason === 'incomplete-source-selection'));
+  assert.equal(applyImport(before, units, []), before);
+});
+
+test('P2 partial guard: colliding proposal IDs cannot hide a required component refresh', () => {
+  const before = imported(splitFixture()); const units = preview(changedSplitFixture(), before);
+  units[0].selected = false; units[1].id = units[0].id;
+  assert.ok(revalidateImportIdentity(before, units).every(unit => unit.sourceIdentityReason === 'inconsistent-source-group'));
+  assert.equal(applyImport(before, units, []), before);
+});
+
+test('P2 partial: unchecked bounded year completion holds the source instead of abandoning the old snapshot', () => {
+  const data = splitFixture(); data.courses[0].schoolings[0].rawYear = ''; data.courses[0].schoolings[0].year = null;
+  const before = imported(data); const units = preview(splitFixture(), before);
+  assert.equal(units.find(unit => unit.method === 'schooling').sourceComponentUpdateRequired, true);
+  const partial = units.map(unit => ({ ...unit, selected: unit.method === 'correspondence' }));
+  assert.ok(revalidateImportIdentity(before, partial).every(unit => unit.sourceIdentityReason === 'incomplete-source-selection'));
+  assert.equal(applyImport(before, partial, []), before);
+  const full = applyImport(before, units, []);
+  assert.equal(full.importedStudyRecords.length, 3, 'bounded source-year history path is preserved');
+  assert.equal(applyImport(full, preview(splitFixture(), full), []), full);
+});
+
+test('P2 partial: unchanged owned detail can stay unchecked during grade and aggregate refreshes', () => {
+  const before = imported(splitFixture()); const data = changedSplitFixture();
+  const after = applyImport(before, preview(data, before).map(unit => ({ ...unit, selected: unit.method === 'correspondence' })), []);
+  assert.equal(after.importedStudyRecords[0].grade, 'S'); assert.equal(after.importedStudyRecords[1], before.importedStudyRecords[1]);
+  data.courses[0].earnedCredits = numeric(2);
+  const final = applyImport(after, preview(data, after).map(unit => ({ ...unit, selected: unit.method === 'schooling' })), []);
+  assert.equal(final.importedCourseAchievements[0].earnedCreditsTotal, 2);
+  assert.deepEqual(final.importedStudyRecords, after.importedStudyRecords);
+  assert.equal(applyImport(final, preview(data, final), []), final);
+});
+
+test('P2 partial: an unchecked genuinely new slot remains optional and can later be imported safely', () => {
+  const data = splitFixture(); data.courses[0].schoolings[0] = emptySlot();
+  const before = imported(data); const next = splitFixture();
+  const partial = applyImport(before, preview(next, before).map(unit => ({ ...unit, selected: unit.method === 'correspondence' })), []);
+  assert.equal(partial.importedStudyRecords.length, 1);
+  next.courses[0].earnedCredits = numeric(2);
+  const final = applyImport(partial, preview(next, partial), []);
+  assert.equal(final.importedCourseAchievements[0].earnedCreditsTotal, 2); assert.equal(final.importedStudyRecords.length, 2);
+});
+
+test('P2 partial: holding one source preserves manual owners and permits an unrelated import', () => {
+  const before = imported(splitFixture());
+  Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual', term: '手動期' });
+  const snapshot = structuredClone(before); const data = changedSplitFixture();
+  data.courses.push({ ...structuredClone(fixture().courses[0]), rawName: '合成の別科目' });
+  const units = preview(data, before).map(unit => ({ ...unit, selected: !(unit.rawName === '論理学' && unit.method === 'correspondence') }));
+  const after = applyImport(before, units, []);
+  assert.equal(after.importedCourseAchievements.length, 2); assert.equal(after.importedStudyRecords.length, 3);
+  assert.deepEqual(after.importedCourseAchievements[0], before.importedCourseAchievements[0]);
+  assert.deepEqual(after.importedStudyRecords.slice(0, 2), before.importedStudyRecords); assert.deepEqual(before, snapshot);
+});
+
+test('P2 partial persistence: full correction preserves manual context through save, reload and backup restore', async () => {
+  const before = imported(splitFixture()); Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual', term: '手動期' });
+  const values = new Map([[BACKUP_KEY, 'original recovery bytes']]);
+  const store = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  const oldRaw = saveState(store, before, null, catalog);
+  const data = changedSplitFixture();
+  const partial = applyImport(before, preview(data, before).map(unit => ({ ...unit, selected: unit.method === 'schooling' })), []);
+  assert.equal(partial, before);
+  const full = applyImport(partial, preview(data, partial), []); data.courses[0].earnedCredits = numeric(2);
+  const after = applyImport(full, preview(data, full), []); const raw = saveState(store, after, oldRaw, catalog);
+  assert.deepEqual(loadState(store, catalog).state, after);
+  const text = JSON.stringify(await createPlannerBackup(raw, catalog));
+  assert.deepEqual((await parsePlannerBackup(text, catalog)).state, after);
+  const restored = await restorePlannerBackup(store, text, raw, catalog, { request: async (_name, _options, callback) => callback() });
+  assert.deepEqual(restored.state, after); assert.equal(store.getItem(BACKUP_KEY), 'original recovery bytes');
+  assert.equal(applyImport(restored.state, preview(data, restored.state), []), restored.state);
+  assert.equal(restored.state.importedStudyRecords.length, 2); assert.equal(restored.state.importedStudyRecords[0].academicYear, 2019);
+});
+
+test('P2 partial recovery: contradictory prior snapshots are held; a trusted consistent backup permits full refresh', async () => {
+  const before = imported(splitFixture()); const data = changedSplitFixture();
+  const broken = structuredClone(before);
+  broken.importedCourseAchievements[0].fingerprint = preview(data, before)[0].sourceCourse.fingerprint;
+  const values = new Map(); const store = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  const trustedRaw = saveState(store, before, null, catalog); const backup = JSON.stringify(await createPlannerBackup(trustedRaw, catalog));
+  const brokenRaw = saveState(store, broken, trustedRaw, catalog);
+  assert.equal(applyImport(broken, preview(data, broken), []), broken, 'identical content must not guess a repair');
+  data.courses[0].earnedCredits = numeric(2); assertComponentHeld(broken, data);
+  const restored = await restorePlannerBackup(store, backup, brokenRaw, catalog, { request: async (_name, _options, callback) => callback() });
+  const final = applyImport(restored.state, preview(data, restored.state), []);
+  assert.equal(final.importedCourseAchievements[0].earnedCreditsTotal, 2); assert.equal(final.importedStudyRecords[0].grade, 'S');
+  assert.equal(final.importedStudyRecords.length, 2);
+});
+
 test('P2 component: manual year correction does not duplicate a same-exam grade refresh', () => {
   const before = imported();
   Object.assign(before.importedStudyRecords[0], { academicYear: 2019, yearSource: 'manual', term: '手動の期' });
