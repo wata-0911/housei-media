@@ -2,8 +2,7 @@ import { deriveCurriculumCourseProgress } from '../planner/progress/curriculumCo
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import CourseSearch from '../components/planner/search/CourseSearch';
 import CurriculumCourseList from '../components/planner/courses/CurriculumCourseList';
-import CategorySummary from '../components/planner/planning/CategorySummary';
-import { annualCreditLimitReferences, createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/planning/annualPlan';
+import { annualCreditLimitReferences, createCreditClassifier, selectablePrograms } from '../planner/planning/annualPlan';
 import CreditSummary from '../components/planner/planning/CreditSummary';
 import GraduationProgress from '../components/planner/graduation/GraduationProgress';
 import PlannerProfileTab from '../components/planner/profile/PlannerProfileTab';
@@ -284,7 +283,6 @@ export default function PlannerPage() {
           <GradeImportPanel key={importEpoch} offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null || saving} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         </details>
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null || saving} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
-        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance key={importEpoch} disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab">
