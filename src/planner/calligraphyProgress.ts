@@ -15,12 +15,26 @@ export function isCalligraphyCourse(course: CurriculumCourse): boolean {
 }
 export type CalligraphyProgress = {
   earnedCredits: number; projectedCredits: number; completedCredits: number;
+  /** Actual pending S1 contributions, capped by the shared remaining structure budget.
+   * waiting is reserved separately and is neither inProgress nor planned in graduation cards. */
+  inProgressCredits: number; plannedCredits: number; waitingCredits: number;
   completion: 'complete' | 'incomplete' | 'unknown'; projectedCompletion: 'complete' | 'incomplete' | 'unknown';
   evidence: 'official' | 'learner' | 'none'; officialPreferred: boolean; warnings: string[];
 };
 /** p.48g: batch acceptance is a completion prerequisite, never a standalone credit. */
 function structureCredits(schooling: number, batchPassed: boolean): number {
   return schooling >= 2 || (schooling >= 1 && batchPassed) ? 2 : Math.min(1, schooling);
+}
+/** Completion forecasts are not lifecycle quantities. Batch acceptance supplies no
+ * independent credit in any bucket. Earned structure has priority; waiting reserves
+ * its pending S1 budget, then in-progress and planned share the remaining room. */
+function schoolingReferences(earnedStructure: number, waiting: number, inProgress: number, planned: number) {
+  let room = Math.max(0, 2 - earnedStructure);
+  const take = (credits: number) => { const counted = Math.min(room, credits); room -= counted; return counted; };
+  const waitingCredits = take(waiting);
+  const inProgressCredits = take(inProgress);
+  const plannedCredits = take(planned);
+  return { waitingCredits, inProgressCredits, plannedCredits };
 }
 export function deriveCalligraphyProgress(
   course: CurriculumCourse, items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null,
@@ -44,25 +58,32 @@ export function deriveCalligraphyProgress(
     const completed = current && exactRows.length === 1 && scopeId !== null
       && deriveOfficialGraduationFacts(exactRows, records, catalog, scopeId, profile).allocations.some(a => a.fact.curriculumCourseId === course.id && a.completedCredits === 2);
     const completion = completed ? 'complete' : exactRows.length === 1 && earned === 0 && exactRows[0].earnedCreditsTotal === 0 ? 'incomplete' : 'unknown';
-    return { earnedCredits: earned, projectedCredits: earned, completedCredits: completed ? 2 : 0, completion, projectedCompletion: completion,
+    return { earnedCredits: earned, projectedCredits: earned, completedCredits: completed ? 2 : 0,
+      inProgressCredits: 0, plannedCredits: 0, waitingCredits: 0, completion, projectedCompletion: completion,
       evidence: completed ? 'official' : 'none', officialPreferred: true,
       warnings: ['書道実技の修得単位は公式集計を優先します。添削進捗や手動履修で公式値を補完・重複加算しません。',
         ...(completed ? [] : ['公式成績の構成2単位・修得2単位・スクーリング1または2単位等の完成根拠を確認してください。'])] };
   }
   const active = attempts.filter(item => item.status !== 'dropped' && item.status !== 'failed' && item.importedSourceCourseId === undefined);
-  const schoolCredits = (projected: boolean) => active.reduce((total, item) => {
+  const schoolCredits = (status: PlannerItem['status']) => active.reduce((total, item) => {
     const o = offerings.get(item.offeringId)!;
     return total + (o.resolutionStatus === 'matched' && o.method === 'schooling' && o.academicYear === 2026 && o.credits === 1
-      && (item.status === 'earned' || (projected && ['planned', 'in_progress', 'waiting'].includes(item.status)))
-      ? plannerItemCreditContribution(item, o) ?? 0 : 0);
+      && item.status === status ? plannerItemCreditContribution(item, o) ?? 0 : 0);
   }, 0);
+  const earnedSchooling = schoolCredits('earned');
+  const waitingSchooling = schoolCredits('waiting');
+  const inProgressSchooling = schoolCredits('in_progress');
+  const plannedSchooling = schoolCredits('planned');
   const correspondence = active.filter(item => isCalligraphyCorrespondence(offerings.get(item.offeringId)));
   const passed = correspondence.some(item => saved[item.offeringId]?.calligraphyBatchStatus === 'passed');
-  const earned = structureCredits(schoolCredits(false), passed);
-  const projected = structureCredits(schoolCredits(true), passed);
+  const earned = structureCredits(earnedSchooling, passed);
+  const projected = structureCredits(earnedSchooling + waitingSchooling + inProgressSchooling + plannedSchooling, passed);
   const completion = current ? earned === 2 ? 'complete' : 'incomplete' : 'unknown';
   const projectedCompletion = current ? projected === 2 ? 'complete' : 'incomplete' : 'unknown';
-  return { earnedCredits: current ? earned : Math.min(2, schoolCredits(false)), projectedCredits: current ? projected : Math.min(2, schoolCredits(true)),
+  const earnedCredits = current ? earned : Math.min(2, earnedSchooling);
+  const references = schoolingReferences(earnedCredits, waitingSchooling, inProgressSchooling, plannedSchooling);
+  return { earnedCredits, projectedCredits: current ? projected : Math.min(2, earnedSchooling + waitingSchooling + inProgressSchooling + plannedSchooling),
+    ...references,
     completedCredits: completion === 'complete' ? 2 : 0, completion, projectedCompletion, evidence: completion === 'complete' ? 'learner' : 'none', officialPreferred: false,
     warnings: ['添削10課題は一括した本人の学習進捗です。添削だけで正式な1単位または完成2単位を修得したことにはなりません。',
       ...(correspondence.some(item => saved[item.offeringId]?.calligraphyBatchStatus === undefined) ? ['保存済み通信2単位の履修状態・評価・リポートは保持しています。添削一括の状態を確認して入力してください。自動変換はしていません。'] : []),

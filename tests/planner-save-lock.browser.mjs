@@ -542,3 +542,62 @@ test('calligraphy UI status, S1 revocation, reload, and JSON restoration preserv
   await page.reload(); card = await calligraphyCard(page);
   await card.getByText('本人記録による完成条件: 2 / 2単位 · 完成', { exact: true }).waitFor();
 });
+
+import { referenceCases as calligraphyReferenceCases } from './fixtures/calligraphy-state-references.mjs';
+async function assertCalligraphyReferences(page, expected, label) {
+  const section = page.locator('section[aria-labelledby="graduation-progress-heading"]');
+  await section.waitFor();
+  for (const name of ['専門教育：選択', '専門教育：合計']) {
+    const card = section.locator('article').filter({ has: page.getByRole('heading', { name, exact: true }) });
+    const text = `参考：履修中 ${expected.inProgress}単位 / 計画中 ${expected.planned}単位`;
+    await card.getByText(text, { exact: true }).waitFor();
+    assert.equal(await card.locator('p.text-lg .font-semibold').innerText(), String(expected.graduation), `${label}/${name}/earned`);
+  }
+}
+for (const program of calligraphyPrograms) test(`calligraphy P2 Chromium card state matrix ${program.course}`, async t => {
+  const makeState = scenario => ({ ...stateForScopeChange(initialState(), catalog, program.scopeId), graduationProfile: calligraphyProfile,
+    items: scenario.items, correspondenceProgress: scenario.saved, importedCourseAchievements: scenario.rows });
+  const { page } = await open(t, '日本文学科', JSON.stringify(makeState(calligraphyReferenceCases[0])));
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const scenario of calligraphyReferenceCases) {
+    const raw = JSON.stringify(makeState(scenario));
+    await page.evaluate(({ raw, key }) => localStorage.setItem(key, raw), { raw, key: STORAGE_KEY });
+    await page.reload();
+    await assertCalligraphyReferences(page, scenario.expected, scenario.label);
+    const courseCard = await calligraphyCard(page);
+    const projectedCompletion = scenario.rows.length ? scenario.completion : scenario.expected.projected === 2 ? 'complete' : 'incomplete';
+    const expectedCompletion = projectedCompletion === 'complete' ? '完成' : projectedCompletion === 'unknown' ? '判定保留' : '未完成';
+    await courseCard.getByText(`予定込み: ${scenario.expected.projected} / 2単位 · ${expectedCompletion}`, { exact: true }).waitFor();
+    assert.equal(await persisted(page), raw, `reading ${scenario.label} must not rewrite saved state`);
+    if (process.env.CALLIGRAPHY_P2_SCREENSHOT_DIR && scenario.label === 'S1 in_progress') {
+      const elective = page.locator('section[aria-labelledby="graduation-progress-heading"] article').filter({ has: page.getByRole('heading', { name: '専門教育：選択', exact: true }) });
+      await elective.screenshot({ path: `${process.env.CALLIGRAPHY_P2_SCREENSHOT_DIR}/s1-in-progress-${program.scopeId}.png`, style: 'header { visibility: hidden !important; transition: none !important; }' });
+    }
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, scenario.label);
+  }
+});
+for (const program of calligraphyPrograms) test(`calligraphy P2 Chromium lifecycle and backup references ${program.course}`, async t => {
+  const initial = { ...stateForScopeChange(initialState(), catalog, program.scopeId), graduationProfile: calligraphyProfile,
+    items: [calligraphyItem(calligraphyCorr, 'in_progress'), calligraphyItem(calligraphySchools[0])], correspondenceProgress: calligraphyBatch('passed') };
+  const { page } = await open(t, '日本文学科', JSON.stringify(initial));
+  await page.setViewportSize({ width: 390, height: 844 });
+  const backup = await createPlannerBackup(JSON.stringify(initial), catalog);
+  let card = await calligraphyCard(page);
+  const school = card.locator(`[data-attempt-id="${calligraphySchools[0].id}"]`);
+  await school.getByText('履修状況の詳細・編集', { exact: true }).click();
+  for (const [status, inProgress, planned, earned] of [['in_progress', 1, 0, 0], ['waiting', 0, 0, 0], ['planned', 0, 1, 0], ['earned', 0, 0, 2], ['in_progress', 1, 0, 0]]) {
+    await school.locator('label').filter({ hasText: /^状態/ }).locator('select').selectOption(status);
+    await page.waitForFunction(({ key, id, status }) => JSON.parse(localStorage.getItem(key)).items.find(i => i.offeringId === id).status === status, { key: STORAGE_KEY, id: calligraphySchools[0].id, status });
+    await assertCalligraphyReferences(page, { inProgress, planned, graduation: earned }, status);
+    await page.reload(); card = await calligraphyCard(page);
+    await assertCalligraphyReferences(page, { inProgress, planned, graduation: earned }, `${status}/reload`);
+    await card.locator(`[data-attempt-id="${calligraphySchools[0].id}"]`).getByText('履修状況の詳細・編集', { exact: true }).click();
+  }
+  const panel = page.getByRole('region', { name: 'プランナー全データのバックアップ・復元' });
+  await panel.locator('input[type=file]').setInputFiles({ name: 'calligraphy-p2.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await panel.getByRole('checkbox').check();
+  await panel.getByRole('button', { name: '確認したバックアップで全件置換する', exact: true }).click();
+  await panel.getByText('全データを置き換えて保存しました。再読み込み後も保持されます。', { exact: true }).waitFor();
+  assert.deepEqual(JSON.parse(await persisted(page)), initial);
+  await page.reload(); await assertCalligraphyReferences(page, { inProgress: 0, planned: 0, graduation: 2 }, 'restored earned');
+});

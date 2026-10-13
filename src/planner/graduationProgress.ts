@@ -815,8 +815,8 @@ function professionalCards(
     const special = calligraphy.get(offering.curriculumCourseId ?? '');
     if (special) {
       entry.earned = special.officialPreferred ? 0 : special.earnedCredits;
-      entry.planned = special.officialPreferred ? 0 : Math.max(0, special.projectedCredits - special.earnedCredits);
-      entry.inProgress = 0;
+      entry.planned = special.plannedCredits;
+      entry.inProgress = special.inProgressCredits;
       entry.calligraphyCompletedCredits = special.officialPreferred ? 0 : special.completedCredits;
       entries.set(key, entry);
       continue;
