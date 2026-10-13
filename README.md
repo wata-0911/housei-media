@@ -48,7 +48,9 @@ ReactとTypeScriptによるSPAです。以下は `package-lock.json` に記録�
 public/                  # カレンダー・プロフィールなどの画像
 src/
   components/            # Header、Footer、XTimeline
+    planner/             # 履修プランナーUI（backup, courses, gradeImport, graduation 等）
   pages/                 # 各ページとメンバーページ用CSS
+  planner/               # 履修プランナーロジック（backup, catalog, gradeImport, graduation 等）
   data/qaData.ts         # 型付きQ&Aデータ
   assets/                # ソース側のアセット
   App.tsx                # ルーティング・メタ情報

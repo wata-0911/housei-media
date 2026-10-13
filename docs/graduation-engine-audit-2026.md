@@ -4,6 +4,8 @@
 
 **結論: 卒業要件エンジンは未完成。`graduationCheckComplete=false`、PlannerState schema 22、persistent shape を維持する。** 本監査は実装・正本・identity・例外・テストを別々に確認したもの。画面の `coverageStatus=supported` やテスト成功を、そのまま監査の supported に読み替えない。次の実装は **official achievement を CurriculumCourse → Mapping へ直接渡す calculation-only fact layer** の1 slice に限定する。
 
+注: 本文のモジュール名（例: `graduationProgress.ts`）は監査当時の識別子である。現行の責務別パスは [architecture.md 第16節](planner/architecture.md) を正とする。監査結論・判定・未完成の記述は変更しない。
+
 ## 1. 判定基準と監査範囲
 
 - **supported**: 明記した限定範囲について、実装・取得した公式根拠・入力 identity・境界条件・テストが揃う。

@@ -1,6 +1,6 @@
 # 年度非依存化の詳細設計
 
-設計日: 2026-10-11（Asia/Tokyo）。基準dev: `05dac8c7deb5f9abea93c9967237aacf0427863c`。状態: **参照方向・保護境界を決める目標設計。新しい型・保存モデルは未実装。** 本文の概念フィールド名は後続実装で確定する。[方針](planner-curriculum-release-policy.md)、[現状監査](planner-docs-current-audit-2026-10-11.md)、[移行計画](planner-year-independent-migration.md)と併読する。
+設計日: 2026-10-11（Asia/Tokyo）。基準dev: `05dac8c7deb5f9abea93c9967237aacf0427863c`。状態: **参照方向・保護境界を決める目標設計。新しい型・保存モデルは未実装。** 本文の概念フィールド名は後続実装で確定する。[方針](planner-curriculum-release-policy.md)、[現状監査](planner-docs-current-audit-2026-10-11.md)、[移行計画](planner-year-independent-migration.md)と併読する。現行ファイル配置は [architecture.md 第16節](planner/architecture.md)。本文の basename は対応表の識別子であり、実装済みを意味しない。
 
 ## 現行コードと目標の対応
 
