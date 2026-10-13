@@ -11,11 +11,11 @@ for (const program of programs) test(`calligraphy P2 audit minimum ${program.cou
   assert.deepEqual([x.progress.earnedCredits, x.progress.projectedCredits, x.progress.completion], [0, 1, 'incomplete']);
 });
 
-import { catalog } from '../src/planner/catalog.ts';
-import { deriveCalligraphyProgress } from '../src/planner/calligraphyProgress.ts';
-import { initialState, loadState, saveState, STORAGE_KEY } from '../src/planner/storage.ts';
-import { createPlannerBackup, parsePlannerBackup } from '../src/planner/plannerBackup.ts';
-import { stateForScopeChange } from '../src/planner/thesisSelection.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { deriveCalligraphyProgress } from '../src/planner/progress/calligraphyProgress.ts';
+import { initialState, loadState, saveState, STORAGE_KEY } from '../src/planner/backup/storage.ts';
+import { createPlannerBackup, parsePlannerBackup } from '../src/planner/backup/plannerBackup.ts';
+import { stateForScopeChange } from '../src/planner/graduation/thesisSelection.ts';
 import { validateState } from '../src/planner/validation.ts';
 import { course, corr, profile, batch, official } from './fixtures/calligraphy-progress.mjs';
 import { referenceCases, persistenceCaseLabels } from './fixtures/calligraphy-state-references.mjs';

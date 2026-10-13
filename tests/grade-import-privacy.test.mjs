@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { catalog } from '../src/planner/catalog.ts';
-import { isHoseiGradeImportV1, parseHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
-import { importPreview, applyImport, importedEarnedCreditsTotal } from '../src/planner/gradeImportApply.ts';
-import { previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
-import { initialState, saveState, STORAGE_KEY } from '../src/planner/storage.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { isHoseiGradeImportV1, parseHoseiGradeImportV1 } from '../src/planner/gradeImport/gradeImportContract.ts';
+import { importPreview, applyImport, importedEarnedCreditsTotal } from '../src/planner/gradeImport/gradeImportApply.ts';
+import { previewDirectGradeHandoff } from '../src/planner/gradeImport/directGradeHandoff.ts';
+import { initialState, saveState, STORAGE_KEY } from '../src/planner/backup/storage.ts';
 import { validateState } from '../src/planner/validation.ts';
 import { serializeGradeImport } from '../bookmarklet/serialize.ts';
 

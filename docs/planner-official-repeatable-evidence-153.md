@@ -2,6 +2,8 @@
 
 対象は2026年度現行課程。開始devは `483a4ab725bb44cfd1d61f76fdc83e9582e9f642`、ブランチは `feature/153-official-repeatable-evidence`。PR #156・#157・#148は開始時点でdevへマージ済み。自己検証は独立監査ではなく、Draft PRで監査を待つ。Refs #153。
 
+2026-10-14再開時、devは `fe47963a1273768443e8e0ecec369adef35f54b7` へ進んでいたため、通常mergeで取り込んだ（PR #158〜#161）。#159の責務別ディレクトリ変更に合わせ、新モジュールを `src/planner/graduation/`、既存モジュール参照を移動後のパスへ統合した。履歴の書換えはしていない。
+
 ## 公式根拠と既存実装
 
 [2026年度学習のしおり](https://www.tsukyo.hosei.ac.jp/wp/wp-content/uploads/2026/02/shiori2026.pdf)を2026-10-13に再取得。SHA-256は `bb7fee419cec0f9d421b1d206947cf8fb1facb69992d685352817f756d19c4a5`。既存#133監査に使用された原版と同一。冊子ページに2を足すとPDFページになる。
@@ -76,7 +78,7 @@ schemaVersion=22、backup形式、state migration、import contract v1を変更�
 - `officialGraduationFacts.ts`: 証明済み反復だけ専用配分へ接続、矛盾する0の保留。
 - `graduationProgress.ts`: 既存反復family枠へ接続、証拠に基づく回数、法律専門S除外。
 - `globalOfficialSchooling.ts` / `unresolvedSchoolingImpact.ts`: 新たに証明した矛盾をfallback算入せず、S0の矛盾も未確定として保持。
-- `importedGraduationNotices.ts` / `components/planner/GraduationProgress.tsx`: 限定した日本語通知・超過表示。
+- `importedGraduationNotices.ts` / `components/planner/graduation/GraduationProgress.tsx`: 限定した日本語通知・超過表示。
 - 専用fixture / `official-repeatable.test.mjs` / `planner-save-lock.browser.mjs` / `package.json`: 回帰テストと通常CIへの登録。
 
 ## 残存制約と監査候補

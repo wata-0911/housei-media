@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { catalog } from '../src/planner/catalog.ts';
-import { generateCurriculumCatalog } from '../src/planner/curriculumGeneration.ts';
-import { deriveCurriculumCourseView } from '../src/planner/curriculumCourseView.ts';
-import { plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
-import { plannerItemFromCourseSearch } from '../src/planner/plannerItemState.ts';
-import { initialState } from '../src/planner/storage.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { generateCurriculumCatalog } from '../src/planner/catalog/curriculumGeneration.ts';
+import { deriveCurriculumCourseView } from '../src/planner/progress/curriculumCourseView.ts';
+import { plannerItemsWithoutOfficialEarned } from '../src/planner/graduation/officialCourseCredits.ts';
+import { plannerItemFromCourseSearch } from '../src/planner/planning/plannerItemState.ts';
+import { initialState } from '../src/planner/backup/storage.ts';
 
 const economics = catalog.curriculum.courses.find(course => course.canonicalName === '経済学');
 const openings = catalog.offerings.filter(offering => offering.curriculumCourseId === economics.id);

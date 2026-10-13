@@ -4,10 +4,10 @@ import vm from 'node:vm';
 import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { isHoseiGradeImportV1, diagnoseHoseiGradeImportV1 } from '../../src/planner/gradeImportContract.ts';
-import { importPreview } from '../../src/planner/gradeImportApply.ts';
+import { isHoseiGradeImportV1, diagnoseHoseiGradeImportV1 } from '../../src/planner/gradeImport/gradeImportContract.ts';
+import { importPreview } from '../../src/planner/gradeImport/gradeImportApply.ts';
 import { serializeGradeImport } from '../serialize.ts';
-import GradeImportPanel from '../../src/components/planner/GradeImportPanel.tsx';
+import GradeImportPanel from '../../src/components/planner/gradeImport/GradeImportPanel.tsx';
 
 const extension = readFileSync(new URL('../../extension/hosei-planner-import/parser/extractor.js', import.meta.url), 'utf8');
 const artifact = JSON.parse(readFileSync(new URL('../../src/generated/gradeImportBookmarklet.json', import.meta.url), 'utf8'));

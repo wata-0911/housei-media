@@ -1,6 +1,6 @@
-import { catalog } from '../../src/planner/catalog.ts';
-import { plannerItemFromCourseSearch } from '../../src/planner/plannerItemState.ts';
-import { initialState } from '../../src/planner/storage.ts';
+import { catalog } from '../../src/planner/catalog/catalog.ts';
+import { plannerItemFromCourseSearch } from '../../src/planner/planning/plannerItemState.ts';
+import { initialState } from '../../src/planner/backup/storage.ts';
 export const economics = catalog.curriculum.courses.find(course => course.canonicalName === '経済学');
 export const correspondence = catalog.offerings.find(o => o.curriculumCourseId === economics.id && o.method === 'correspondence');
 export const winter = catalog.offerings.find(o => o.curriculumCourseId === economics.id && o.method === 'schooling' && o.name.includes('冬期'));

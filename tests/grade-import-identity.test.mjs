@@ -1,18 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyImport, importPreview, revalidateImportIdentity } from '../src/planner/gradeImportApply.ts';
-import { initialState, saveState, loadState, STORAGE_KEY, BACKUP_KEY } from '../src/planner/storage.ts';
-import { catalog } from '../src/planner/catalog.ts';
+import { applyImport, importPreview, revalidateImportIdentity } from '../src/planner/gradeImport/gradeImportApply.ts';
+import { initialState, saveState, loadState, STORAGE_KEY, BACKUP_KEY } from '../src/planner/backup/storage.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
 import { validateState } from '../src/planner/validation.ts';
-import { createPlannerBackup, parsePlannerBackup } from '../src/planner/plannerBackup.ts';
-import { restorePlannerBackup } from '../src/planner/plannerBackupStorage.ts';
-import { plannerItemFromCourseSearch } from '../src/planner/plannerItemState.ts';
+import { createPlannerBackup, parsePlannerBackup } from '../src/planner/backup/plannerBackup.ts';
+import { restorePlannerBackup } from '../src/planner/backup/plannerBackupStorage.ts';
+import { plannerItemFromCourseSearch } from '../src/planner/planning/plannerItemState.ts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { GradeImportPreviewUnit, GradeImportApplyActions } from '../src/components/planner/GradeImportPanel.tsx';
-import ImportedStudyRecordEditor from '../src/components/planner/ImportedStudyRecordEditor.tsx';
-import { ImportedManagementRows } from '../src/components/planner/ImportedAchievements.tsx';
-import { deriveImportedAchievements } from '../src/planner/importedAchievementCalculations.ts';
+import { GradeImportPreviewUnit, GradeImportApplyActions } from '../src/components/planner/gradeImport/GradeImportPanel.tsx';
+import ImportedStudyRecordEditor from '../src/components/planner/gradeImport/ImportedStudyRecordEditor.tsx';
+import { ImportedManagementRows } from '../src/components/planner/gradeImport/ImportedAchievements.tsx';
+import { deriveImportedAchievements } from '../src/planner/gradeImport/importedAchievementCalculations.ts';
 
 const numeric = value => ({ raw: value === null ? '' : String(value), value });
 const emptySlot = () => ({ rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null });

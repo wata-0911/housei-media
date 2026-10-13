@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catalog } from '../src/planner/catalog.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
-import { deriveCurriculumCourseProgress } from '../src/planner/curriculumCourseProgress.ts';
-import { initialState } from '../src/planner/storage.ts';
-import { repeatableRule } from '../src/planner/repeatableRules.ts';
-import { geographyTransferKind } from '../src/planner/geographyTransferRules.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { deriveCurriculumCourseProgress } from '../src/planner/progress/curriculumCourseProgress.ts';
+import { initialState } from '../src/planner/backup/storage.ts';
+import { repeatableRule } from '../src/planner/graduation/repeatableRules.ts';
+import { geographyTransferKind } from '../src/planner/graduation/geographyTransferRules.ts';
 import { officialRow } from './fixtures/unresolved-condition-scenarios.mjs';
 
 const programs = catalog.programs.filter(p => ['日本文学科', '地理学科'].includes(p.department));

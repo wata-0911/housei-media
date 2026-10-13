@@ -1,35 +1,34 @@
-import { deriveCurriculumCourseProgress } from '../planner/curriculumCourseProgress';
+import { deriveCurriculumCourseProgress } from '../planner/progress/curriculumCourseProgress';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import CourseSearch from '../components/planner/CourseSearch';
-import CurriculumCourseList from '../components/planner/CurriculumCourseList';
-import CategorySummary from '../components/planner/CategorySummary';
-import { annualCreditLimitReferences, createCreditClassifier, selectablePrograms, summarizeCategories } from '../planner/annualPlan';
-import CreditSummary from '../components/planner/CreditSummary';
-import GraduationProgress from '../components/planner/GraduationProgress';
-import PlannerProfileTab from '../components/planner/PlannerProfileTab';
-import ThesisGuidance from '../components/planner/ThesisGuidance';
-import { catalog, offeringsById } from '../planner/catalog';
+import CourseSearch from '../components/planner/search/CourseSearch';
+import CurriculumCourseList from '../components/planner/courses/CurriculumCourseList';
+import { annualCreditLimitReferences, createCreditClassifier, selectablePrograms } from '../planner/planning/annualPlan';
+import CreditSummary from '../components/planner/planning/CreditSummary';
+import GraduationProgress from '../components/planner/graduation/GraduationProgress';
+import PlannerProfileTab from '../components/planner/profile/PlannerProfileTab';
+import ThesisGuidance from '../components/planner/graduation/ThesisGuidance';
+import { catalog, offeringsById } from '../planner/catalog/catalog';
 import { summarizeCredits } from '../planner/calculations';
-import { initialState, loadState, recoverPlannerState, savePlannerState, STORAGE_KEY, type LoadResult } from '../planner/storage';
+import { initialState, loadState, recoverPlannerState, savePlannerState, STORAGE_KEY, type LoadResult } from '../planner/backup/storage';
 import type { ImportedCourseUserMeta, PlannerItem, PlannerState, PublicCourse } from '../planner/plannerCatalog';
-import { calculateGraduationProgress } from '../planner/graduationProgress';
-import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/removeUndo';
-import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/publicCourses';
-import { setThesisProgressForScope, shouldShowThesisGuidance, stateForScopeChange, thesisProgressForScope } from '../planner/thesisSelection';
-import MediaSchoolingProgress from '../components/planner/MediaSchoolingProgress';
-import PlannerBackupPanel from '../components/planner/PlannerBackupPanel';
-import PlannerExportActions from '../components/planner/PlannerExportActions';
-import { plannerExportPresentation } from '../planner/plannerExport';
-import GradeImportPanel from '../components/planner/GradeImportPanel';
-import ImportedAchievements from '../components/planner/ImportedAchievements';
-import AnnualCreditLimitNotice from '../components/planner/AnnualCreditLimitNotice';
-import { applyImport, importedEarnedCreditsTotal, type ImportedCourseAchievement, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImportApply';
-import { deriveImportedAchievements, managedImportedMedia } from '../planner/importedAchievementCalculations';
-import { deriveCurriculumCourseView } from '../planner/curriculumCourseView';
-import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/plannerItemState';
-import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/directGradeHandoff';
-import { guidanceEligibilityCredits, guidanceForScope } from '../planner/thesisGuidance';
-import { missingGraduationProfilePrerequisites } from '../planner/graduationProfile';
+import { calculateGraduationProgress } from '../planner/graduation/graduationProgress';
+import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse, type RemovedPlanEntry } from '../planner/planning/removeUndo';
+import { createPublicCourse, isValidPublicCourseTitle, normalizePublicCourseTitle } from '../planner/planning/publicCourses';
+import { setThesisProgressForScope, shouldShowThesisGuidance, stateForScopeChange, thesisProgressForScope } from '../planner/graduation/thesisSelection';
+import MediaSchoolingProgress from '../components/planner/progress/MediaSchoolingProgress';
+import PlannerBackupPanel from '../components/planner/backup/PlannerBackupPanel';
+import PlannerExportActions from '../components/planner/exports/PlannerExportActions';
+import { plannerExportPresentation } from '../planner/exports/plannerExport';
+import GradeImportPanel from '../components/planner/gradeImport/GradeImportPanel';
+import ImportedAchievements from '../components/planner/gradeImport/ImportedAchievements';
+import AnnualCreditLimitNotice from '../components/planner/planning/AnnualCreditLimitNotice';
+import { applyImport, importedEarnedCreditsTotal, type ImportedCourseAchievement, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImport/gradeImportApply';
+import { deriveImportedAchievements, managedImportedMedia } from '../planner/gradeImport/importedAchievementCalculations';
+import { deriveCurriculumCourseView } from '../planner/progress/curriculumCourseView';
+import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/planning/plannerItemState';
+import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/gradeImport/directGradeHandoff';
+import { guidanceEligibilityCredits, guidanceForScope } from '../planner/graduation/thesisGuidance';
+import { missingGraduationProfilePrerequisites } from '../planner/graduation/graduationProfile';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -284,7 +283,6 @@ export default function PlannerPage() {
           <GradeImportPanel key={importEpoch} offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null || saving} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
         </details>
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null || saving} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
-        {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <CategorySummary rows={summarizeCategories(importedDerived.plannerItems, catalog, state.selectedScopeId, state.publicCourses, importedDerived.categoryItems, importedDerived.categoryOfferings, importedDerived.categoryOverrides)} importedAchievementCount={importedDerived.categoryItems.length} importedUnclassified={importedDerived.unclassified} />}
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance key={importEpoch} disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab">

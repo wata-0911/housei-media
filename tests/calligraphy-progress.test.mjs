@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveCurriculumCourseProgress } from '../src/planner/curriculumCourseProgress.ts';
-import { catalog } from '../src/planner/catalog.ts';
+import { deriveCurriculumCourseProgress } from '../src/planner/progress/curriculumCourseProgress.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
 import { course, corr, schools, programs, item, profile, batch, result } from './fixtures/calligraphy-progress.mjs';
 for (const program of programs) {
   for (const [label, items, saved, earned, complete, credits] of [
@@ -24,14 +24,14 @@ for (const program of programs) {
 }
 
 import { official } from './fixtures/calligraphy-progress.mjs';
-import { stateForScopeChange } from '../src/planner/thesisSelection.ts';
-import { initialState, saveState, loadState, STORAGE_KEY } from '../src/planner/storage.ts';
+import { stateForScopeChange } from '../src/planner/graduation/thesisSelection.ts';
+import { initialState, saveState, loadState, STORAGE_KEY } from '../src/planner/backup/storage.ts';
 import { validateState } from '../src/planner/validation.ts';
-import { createPlannerBackup, parsePlannerBackup } from '../src/planner/plannerBackup.ts';
-import { deriveCurriculumCourseView } from '../src/planner/curriculumCourseView.ts';
-import { correspondenceCreditResult, progressForCorrespondence } from '../src/planner/correspondenceProgress.ts';
-import { plannerExportPresentation } from '../src/planner/plannerExport.ts';
-import { CorrespondenceDetails } from '../src/components/planner/CorrespondenceProgress.tsx';
+import { createPlannerBackup, parsePlannerBackup } from '../src/planner/backup/plannerBackup.ts';
+import { deriveCurriculumCourseView } from '../src/planner/progress/curriculumCourseView.ts';
+import { correspondenceCreditResult, progressForCorrespondence } from '../src/planner/progress/correspondenceProgress.ts';
+import { plannerExportPresentation } from '../src/planner/exports/plannerExport.ts';
+import { CorrespondenceDetails } from '../src/components/planner/progress/CorrespondenceProgress.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 

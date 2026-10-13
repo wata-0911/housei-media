@@ -4,6 +4,8 @@
 
 状態: **現行仕様の照合と目標設計の監査。年度非依存化・卒業エンジンの実装監査完了ではない。** 過去のH/F項目、PASS記録、公式資料確認履歴はそのまま保存する。H01〜H66を全件再評価した記録ではない。
 
+注: 本文中の `src/planner/` / `src/components/planner/` 参照パスは、PR #159（`322198a`）以降の責務別配置に合わせて更新済みである。監査日・基準 commit・監査事実・未実装判定は書き換えない。ディレクトリ現状は [architecture.md 第16節](planner/architecture.md) を参照。
+
 ## 今回の照合範囲
 
 確認したのはdocs全体の版・年度・backup・未実装表現、型/schema、runtime catalog/generator、storage/validation、import source/年度、BackupPanel/Pageの保存経路、進捗/評価/Undo/年度計画、既存テストである。GitHubで#95、#129、#133、#132、#134、#137、#98とPR #126/#138の状態・本文も確認した。個人のlocalStorage・実成績、公式PDFの再取得・全リンク再検証は対象外。iPhone実機についてはPR #138のユーザー報告を参照したが、Workによる再検証はしていない。
@@ -14,17 +16,17 @@
 
 | 現行事実 | 根拠 / 目標との差 |
 | --- | --- |
-| state22 / catalog1 / 2026固定 | [型](../src/planner/plannerCatalog.ts)、[schema](../src/planner/planner_catalog_2026.schema.json)、[loader](../src/planner/catalog.ts)。state/catalog版は別。年度非依存保存は未導入 |
+| state22 / catalog1 / 2026固定 | [型](../src/planner/plannerCatalog.ts)、[schema](../src/planner/planner_catalog_2026.schema.json)、[loader](../src/planner/catalog/catalog.ts)。state/catalog版は別。年度非依存保存は未導入 |
 | runtime: 686 Offering、502 Mapping、209 legacy Course、321 CurriculumCourse | catalogを実際にimportして件数確認。requirements182（structured142/unsupported40）。Courseは全provisional |
-| Offering relation: unique616 / ambiguous32 / unmatched38、候補Openingなしの制度科目36 | [generated curriculum](../src/data/planner_curriculum_2026.json)、[attach](../src/planner/curriculumCatalog.ts)。制度科目候補は開講なしでも存在するがloader自体は年別relation coverageに依存 |
-| imported rowのStage A制度照合とStage B開講照合は独立 | [matcher](../src/planner/curriculumImportMatch.ts)、[apply](../src/planner/gradeImportApply.ts)。現行のname/aliasによるexactは現在カタログ接続であり、歴史的同一性の永久保証ではない |
-| 一つのOfferingに一PlannerItem | [validation](../src/planner/validation.ts)、[item state](../src/planner/plannerItemState.ts)。別Openingなら同科目の複数記録は可能、同Openingの再履修は独立ID未対応 |
-| future plannedYearは1000〜9999の既存範囲 | validation、[未来表示](../src/planner/planTable.ts)。希望暦年を保存できるがOpeningは2026、方式/期/年間上限は参考。年度非依存実装完了ではない |
-| media / correspondence / evaluations / TODOはOpening参照 | [media](../src/planner/mediaSchooling.ts)、[通信](../src/planner/correspondenceProgress.ts)、型。削除後もmapが残る。Attempt IDへの移行は未実装 |
-| 公式修得単位の正本はearnedCreditsTotal | [公式数量](../src/planner/officialCourseCredits.ts)、[official facts](../src/planner/officialGraduationFacts.ts)。原行と内訳、元のnull/0を保持。CourseProgressと卒業算入は別consumer |
+| Offering relation: unique616 / ambiguous32 / unmatched38、候補Openingなしの制度科目36 | [generated curriculum](../src/data/planner_curriculum_2026.json)、[attach](../src/planner/catalog/curriculumCatalog.ts)。制度科目候補は開講なしでも存在するがloader自体は年別relation coverageに依存 |
+| imported rowのStage A制度照合とStage B開講照合は独立 | [matcher](../src/planner/gradeImport/curriculumImportMatch.ts)、[apply](../src/planner/gradeImport/gradeImportApply.ts)。現行のname/aliasによるexactは現在カタログ接続であり、歴史的同一性の永久保証ではない |
+| 一つのOfferingに一PlannerItem | [validation](../src/planner/validation.ts)、[item state](../src/planner/planning/plannerItemState.ts)。別Openingなら同科目の複数記録は可能、同Openingの再履修は独立ID未対応 |
+| future plannedYearは1000〜9999の既存範囲 | validation、[未来表示](../src/planner/planning/planTable.ts)。希望暦年を保存できるがOpeningは2026、方式/期/年間上限は参考。年度非依存実装完了ではない |
+| media / correspondence / evaluations / TODOはOpening参照 | [media](../src/planner/progress/mediaSchooling.ts)、[通信](../src/planner/progress/correspondenceProgress.ts)、型。削除後もmapが残る。Attempt IDへの移行は未実装 |
+| 公式修得単位の正本はearnedCreditsTotal | [公式数量](../src/planner/graduation/officialCourseCredits.ts)、[official facts](../src/planner/graduation/officialGraduationFacts.ts)。原行と内訳、元のnull/0を保持。CourseProgressと卒業算入は別consumer |
 | 卒論はscope別、public/metaは独立ID | 型、[Page](../src/pages/PlannerPage.tsx)。Offering非依存の経路も存在するため一律Attempt化しない |
-| stale annual exactの限定回復は実装済み | [identity validation](../src/planner/curriculumIdentityValidation.ts)、storage。制度exactと旧selectionを保持しannual claimだけambiguousへ下げる。全参照修復や新制度照合ではない |
-| loadは主キーへ書き込まない | [storage](../src/planner/storage.ts)。raw保持、future schema拒否、認定shadow。表示回復とraw正本を区別 |
+| stale annual exactの限定回復は実装済み | [identity validation](../src/planner/catalog/curriculumIdentityValidation.ts)、storage。制度exactと旧selectionを保持しannual claimだけambiguousへ下げる。全参照修復や新制度照合ではない |
+| loadは主キーへ書き込まない | [storage](../src/planner/backup/storage.ts)。raw保持、future schema拒否、認定shadow。表示回復とraw正本を区別 |
 | 原行の取得日を新規年度推定に使わない | PR #126、inferredCorrespondenceYear/sourceCourseFor。通信は試験日→最新リポート日、なければnull/unknown。既存推定/手動年度を一律修正しない |
 | 安全な既存auto-registrationは限定earned / planned | autoPlannerItemsForImport。source↔Openingの双方一意性、原行positive等を検査。制度exactだけでOpening代表を選ばず、無条件planned生成も行わない |
 
@@ -34,14 +36,14 @@
 
 | 契約 | 現行コード・挙動 |
 | --- | --- |
-| 全永続化stateの出力 | [plannerBackup.ts](../src/planner/plannerBackup.ts)。items/public/todos、3進捗/評価map、公式原行/内訳/meta、profile、卒論/指導/scope。メモリの未保存draftは対象外 |
-| backup v2 / v1読み込み | [compatibility](../src/planner/plannerBackupCompatibility.ts)。v2はenriched runtime原版＋full/semantic SHA。v1は同一SHAまたは固定registry。未知原版は拒否 |
+| 全永続化stateの出力 | [plannerBackup.ts](../src/planner/backup/plannerBackup.ts)。items/public/todos、3進捗/評価map、公式原行/内訳/meta、profile、卒論/指導/scope。メモリの未保存draftは対象外 |
+| backup v2 / v1読み込み | [compatibility](../src/planner/backup/plannerBackupCompatibility.ts)。v2はenriched runtime原版＋full/semantic SHA。v1は同一SHAまたは固定registry。未知原版は拒否 |
 | compatibilityVersion1 | source.url/page（Offering/Mapping）とProgram.displayNameだけをsemantic比較から除外。他の数量/identity/規則/未知field/配列順まで一致が必要。SHAは大学の真正性認証ではない |
 | source/target両方のstate検証 | v2 source snapshotも検証、current catalogに対しても検証。再loadで変化・認定shadowが必要なら正常backup/restore拒否。最新loadをmigrationとして無言使用しない |
 | プレビュー | file textのparse/数量要約のみ。state/storageに書かず、全件置換説明・事前backup・最終checkbox確認がある |
-| 確定復元 | [restore](../src/planner/plannerBackupStorage.ts)。原text再検証、共通Web Lock内expectedRaw比較、主キー一回setItem、recovery不変。マージなし。Pageは成功後にstate更新/Undoとdraft失効 |
+| 確定復元 | [restore](../src/planner/backup/plannerBackupStorage.ts)。原text再検証、共通Web Lock内expectedRaw比較、主キー一回setItem、recovery不変。マージなし。Pageは成功後にstate更新/Undoとdraft失効 |
 | 通常保存・初期化 | savePlannerState/recoverPlannerStateも共通Lock。通常saveはLockなし既存ブラウザ支援を残すが復元はLockなし拒否。初期化の旧recovery処理と復元は別契約 |
-| 原文保護 | [protection](../src/planner/plannerBackupProtection.ts)。primaryRaw/recoveryRaw、各SHA、原版を保持。primary null＋recoveryのみも対応。通常復元には使えずinspectも書かない |
+| 原文保護 | [protection](../src/planner/backup/plannerBackupProtection.ts)。primaryRaw/recoveryRaw、各SHA、原版を保持。primary null＋recoveryのみも対応。通常復元には使えずinspectも書かない |
 | 保存失敗 | read/quota/security例外・stale raw拒否。rollbackによる再書込なし。原文保護出力は自動修復・自動ダウンロードではない |
 | 入力確定 | Page/各editorのdraft、blur/Enter/保存で確定、IME中Enter抑止、失敗後全文再試行。保存待ち中編集停止。復元後古いdraftを継続しない |
 

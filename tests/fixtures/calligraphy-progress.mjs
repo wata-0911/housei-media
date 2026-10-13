@@ -1,8 +1,8 @@
-import { catalog } from '../../src/planner/catalog.ts';
-import { initialState } from '../../src/planner/storage.ts';
-import { plannerItemFromCourseSearch } from '../../src/planner/plannerItemState.ts';
-import { deriveCurriculumCourseProgress } from '../../src/planner/curriculumCourseProgress.ts';
-import { calculateGraduationProgress } from '../../src/planner/graduationProgress.ts';
+import { catalog } from '../../src/planner/catalog/catalog.ts';
+import { initialState } from '../../src/planner/backup/storage.ts';
+import { plannerItemFromCourseSearch } from '../../src/planner/planning/plannerItemState.ts';
+import { deriveCurriculumCourseProgress } from '../../src/planner/progress/curriculumCourseProgress.ts';
+import { calculateGraduationProgress } from '../../src/planner/graduation/graduationProgress.ts';
 export const course = catalog.curriculum.courses.find(c => c.canonicalName === '書道実技');
 export const corr = catalog.offerings.find(o => o.curriculumCourseId === course.id && o.method === 'correspondence');
 export const schools = catalog.offerings.filter(o => o.curriculumCourseId === course.id && o.method === 'schooling' && o.credits === 1);

@@ -1,6 +1,6 @@
-import { catalog } from '../../src/planner/catalog.ts';
-import { importPreview, applyImport } from '../../src/planner/gradeImportApply.ts';
-import { initialState } from '../../src/planner/storage.ts';
+import { catalog } from '../../src/planner/catalog/catalog.ts';
+import { importPreview, applyImport } from '../../src/planner/gradeImport/gradeImportApply.ts';
+import { initialState } from '../../src/planner/backup/storage.ts';
 export const repeatProfile = { ...initialState().graduationProfile, admissionYear: 2018, admissionType: 'first_year', curriculumApplicability: 'current_2026' };
 export const numeric = value => ({ raw: value === null ? '' : String(value), value });
 export const emptySlot = () => ({ rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null });

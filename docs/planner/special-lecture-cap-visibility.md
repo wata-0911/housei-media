@@ -36,7 +36,7 @@ p.45では一般教育全体の36単位上限と、既に要件を充足・免�
 - 一般教育、各学科の選択カード（経済・商業は専門教育合計）に補足欄を追加。新しい達成要件カードは作らない。
 - 基礎特講の既存集計と総合特講の既存 `repeatableCourses` 用数量を再利用する。名称の一致条件・算入先・加算処理は維持する。
 - 空の計画でも上限を表示する。総合特講の表示先は選択学科の制度科目・Mappingで決め、公式のみの入力は年度Offeringの削除・名称変更に左右されない。
-- `specialLectureProgress.ts` は表示用派生値のみを返す。JSXは数量の計算を行わない。
+- `src/planner/graduation/specialLectureProgress.ts` は表示用派生値のみを返す。JSXは数量の計算を行わない。
 - 基礎特講の旧noteの超過assertionは、移動先の構造化数量のassertionへ置換した。既存の算入4単位assertionは保持した。
 
 ## 表示例（安全なPlanner入力）

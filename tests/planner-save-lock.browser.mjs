@@ -5,14 +5,14 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readFile } from 'node:fs/promises';
-import { catalog } from '../src/planner/catalog.ts';
-import { initialState, STORAGE_KEY, BACKUP_KEY } from '../src/planner/storage.ts';
-import { stateForScopeChange } from '../src/planner/thesisSelection.ts';
-import { inspectPlannerBackupProtection } from '../src/planner/plannerBackupProtection.ts';
-import { createPlannerBackup } from '../src/planner/plannerBackup.ts';
-import { isMediaSchooling } from '../src/planner/mediaSchooling.ts';
-import { createPublicCourse } from '../src/planner/publicCourses.ts';
-import { applyImport, importPreview } from '../src/planner/gradeImportApply.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { initialState, STORAGE_KEY, BACKUP_KEY } from '../src/planner/backup/storage.ts';
+import { stateForScopeChange } from '../src/planner/graduation/thesisSelection.ts';
+import { inspectPlannerBackupProtection } from '../src/planner/backup/plannerBackupProtection.ts';
+import { createPlannerBackup } from '../src/planner/backup/plannerBackup.ts';
+import { isMediaSchooling } from '../src/planner/progress/mediaSchooling.ts';
+import { createPublicCourse } from '../src/planner/planning/publicCourses.ts';
+import { applyImport, importPreview } from '../src/planner/gradeImport/gradeImportApply.ts';
 
 const root = new URL('../', import.meta.url).pathname;
 const port = Number(process.env.PLANNER_BROWSER_PORT || 4180);
@@ -640,7 +640,8 @@ import { repeatProfile, repeatedPayload, importRepeated, payload as repeatPayloa
 test('official repeatable Chromium: cap and source total remain separate after reload', async t => {
   const imported = importRepeated(repeatedPayload('政治学', 3));
   const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
-  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile };
+  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile,
+    thesisSelection: 'not_selected', thesisProgressByScope: { [scope]: { selection: 'not_selected', status: 'not_started' } } };
   const { page } = await open(t, '法律学科', JSON.stringify(state));
   const section = page.locator('section[aria-labelledby="graduation-progress-heading"]');
   for (let pass = 0; pass < 2; pass++) {
@@ -659,7 +660,8 @@ test('official repeatable Chromium: cap and source total remain separate after r
 test('official repeatable Chromium: explicit zero conflicting with passed detail is visibly held', async t => {
   const data = repeatPayload([repeatNativeRow('政治学', [2025])]); data.courses[0].earnedCredits = repeatNumeric(0);
   const imported = importRepeated(data), scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
-  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile };
+  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile,
+    thesisSelection: 'not_selected', thesisProgressByScope: { [scope]: { selection: 'not_selected', status: 'not_started' } } };
   const { page } = await open(t, '法律学科', JSON.stringify(state));
   const notice = page.locator('[data-import-notice-kind="allocation_held"]');
   await notice.locator('summary').click();

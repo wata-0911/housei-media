@@ -9,13 +9,13 @@ import { loadYi01InstitutionalCatalog, yi01InstitutionalInput, yi02Institutional
 import { searchInstitutionalPlacements, placementsForContext, resolveInstitutionalLegacyRef } from '../src/planner/institutional/query.ts';
 import { validateInstitutionalLegacyArchive, resolveInstitutionalArchiveRef } from '../src/planner/institutional/legacyArchive.ts';
 import { institutionalFixture } from './fixtures/institutional-fixture.mjs';
-import { catalog } from '../src/planner/catalog.ts';
-import { applyManualMappingOverrides } from '../src/planner/manualMappingOverrides.ts';
-import { attachCurriculumCatalog } from '../src/planner/curriculumCatalog.ts';
-import { deriveCurriculumCourseView } from '../src/planner/curriculumCourseView.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
-import { LEGACY_BACKUP_CATALOGS } from '../src/planner/plannerBackupCompatibility.ts';
-import { initialState } from '../src/planner/storage.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { applyManualMappingOverrides } from '../src/planner/catalog/manualMappingOverrides.ts';
+import { attachCurriculumCatalog } from '../src/planner/catalog/curriculumCatalog.ts';
+import { deriveCurriculumCourseView } from '../src/planner/progress/curriculumCourseView.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { LEGACY_BACKUP_CATALOGS } from '../src/planner/backup/plannerBackupCompatibility.ts';
+import { initialState } from '../src/planner/backup/storage.ts';
 
 const read = path => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 const archive = read('../docs/planner-yi-01/legacy-relations.json');
