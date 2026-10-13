@@ -115,8 +115,8 @@ for (const program of catalog.programs.filter(p => ['日本文学科', '地理�
     const x = fixture(program), p = x.run([item(x.offering)]);
     assert.equal(overall(p), 0);
     assert.ok(p.cards.filter(c => c.ruleType === 'professional_group').every(c => c.earned === 0));
-    // Generic rules without a full-Course condition retain their raw contribution
-    // semantics; the department allocator supplies the counted graduation total.
+    // Source-specific rules retain their own quantities; the P2-aligned Japanese
+    // and Geography bucket minima now reuse completed graduation allocations.
     assert.ok(p.requirements.filter(r => r.unit === 'credits' && r.label.startsWith('専門教育') && r.earned !== null).every(r => r.earned <= 2));
   });
 }

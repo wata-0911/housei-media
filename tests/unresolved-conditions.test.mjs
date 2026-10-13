@@ -139,10 +139,37 @@ test('schema and incomplete metadata remain unchanged', () => {
   project(base, p); assert.deepEqual(p, original);
 });
 
-test('168 full engine outputs match the pre-change dev baseline (quantities, statuses, coverage, notices)', async () => {
+test('168 complete outputs preserve baseline except six reviewed P2 completion quantities', async () => {
   const { createHash } = await import('node:crypto');
   const { readFileSync } = await import('node:fs');
   const baseline = JSON.parse(readFileSync(new URL('./fixtures/unresolved-engine-baseline.json', import.meta.url), 'utf8'));
   assert.equal(Object.keys(baseline.scenarios).length, cases.length);
-  for (const s of cases) assert.equal(createHash('sha256').update(JSON.stringify(calculateScenario(s))).digest('hex'), baseline.scenarios[s.name], s.name);
+  // Keep the original baseline bytes. Each of these actual-catalog C cases is
+  // one earned S2 opening of an incomplete four-credit Course. Only its raw2
+  // in the required-elective and professional-total minima changes to counted0.
+  // Restoring those SIX exact cells must reproduce the entire old output hash;
+  // no status, reason, coverage, notice, card or reference delta is permitted.
+  const reviewed = {
+    '文学部 / 日本文学科 / 言語コース/C': 'japanese_language',
+    '文学部 / 日本文学科 / 芸能文化コース/C': 'japanese_performance',
+    '文学部 / 日本文学科 / 文学コース/C': 'japanese_literature',
+  };
+  let reviewedCells = 0;
+  for (const s of cases) {
+    const actual = calculateScenario(s), comparison = structuredClone(actual), prefix = reviewed[s.name];
+    if (prefix) {
+      assert.equal(s.items.length, 1); assert.equal(s.items[0].status, 'earned');
+      const offering = s.catalog.offerings.find(o => o.id === s.items[0].offeringId);
+      assert.equal(offering.credits, 2);
+      assert.equal(s.catalog.curriculum.courses.find(c => c.id === offering.curriculumCourseId).curriculumCredits, 4);
+      for (const suffix of ['required_elective_min_credits', 'total_min_credits']) {
+        const rule = s.catalog.requirements.find(r => r.ruleId === `${prefix}_${suffix}`);
+        const row = comparison.requirements.find(r => r.requirementId === rule.id);
+        assert.deepEqual([row.earned, row.status, row.coverageStatus], [0, 'unsatisfied', 'supported']);
+        row.earned = 2; reviewedCells++;
+      }
+    }
+    assert.equal(createHash('sha256').update(JSON.stringify(comparison)).digest('hex'), baseline.scenarios[s.name], s.name);
+  }
+  assert.equal(reviewedCells, 6);
 });

@@ -201,6 +201,43 @@ const OFFICIAL_SCHOOLING_REASON = '公式実績のスクーリング算入条件
  */
 type CalculationItems = { ordinary: PlannerItem[]; schooling: PlannerItem[] };
 
+/** Audited bucket minima, not schooling quantities, field/course-count checks,
+ * repeat caps or procedure rules. Reuse the department's completed and mutually
+ * exclusive allocation (including lawful transfers), never raw attempt totals. */
+const PROFESSIONAL_ALLOCATION_MINIMUMS: Record<string, { cardId: string; requirementType?: string }> = {
+  ...Object.fromEntries(['japanese_language', 'japanese_literature', 'japanese_performance'].flatMap(prefix => [
+    [`${prefix}_required_min_credits`, { cardId: 'professional-required', requirementType: '必修' }],
+    [`${prefix}_required_elective_min_credits`, { cardId: 'professional-required-elective', requirementType: '選択必修' }],
+    [`${prefix}_elective_min_credits`, { cardId: 'professional-elective', requirementType: '選択' }],
+    [`${prefix}_total_min_credits`, { cardId: 'professional-japanese-total' }],
+  ])),
+  geography_required_elective_min_credits: { cardId: 'professional-geography-required-elective', requirementType: '選択必修' },
+  geography_elective_min_credits: { cardId: 'professional-geography-elective', requirementType: '選択' },
+  geography_total_min_credits: { cardId: 'professional-geography-total' },
+};
+
+function alignProfessionalAllocationMinimums(rows: RequirementProgress[], catalog: PlannerCatalog, scopeId: string, cards: ProgressCard[]) {
+  for (const row of rows) {
+    const rule = catalog.requirements.find(rule => rule.id === row.requirementId);
+    const allocation = rule && PROFESSIONAL_ALLOCATION_MINIMUMS[rule.ruleId];
+    if (!allocation || rule?.status !== 'structured' || rule.scopeId !== scopeId || rule.ruleType !== 'min_credits'
+      || rule.value === null || Object.keys(rule.conditions ?? {}).length !== 0
+      || rule.target.curriculum_category !== '専門教育' || rule.target.requirement_type !== allocation.requirementType
+      || Object.keys(rule.target).some(key => !['curriculum_category', 'requirement_type'].includes(key))) continue;
+    // An unsupported/unclear evaluation cannot become satisfied by this reuse.
+    if (row.status === 'unknown' && row.reason !== UNRESOLVED_EARNED_REASON) continue;
+    const card = cards.find(card => card.requirementId === allocation.cardId);
+    if (!card) continue;
+    row.earned = card.earned === null ? null : card.normalEarned ?? card.earned;
+    row.inProgress = card.inProgress; row.planned = card.planned;
+    // A bucket's credit minimum is distinct from Geography's additional field
+    // and completed-course minima. Do not copy that card's combined AND status.
+    row.status = row.status === 'unknown' || card.status === 'unknown' || row.earned === null ? 'unknown'
+      : evaluateStatus('min_credits', row.earned, rule.value);
+    row.reason ??= card.reason;
+  }
+}
+
 function evaluateStructured(
   requirement: StructuredRequirement,
   items: PlannerItem[],
@@ -1389,6 +1426,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
   const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, impact, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, official.allocations);
+  alignProfessionalAllocationMinimums(requirements, catalog, scopeId, professional);
   // Neither H12 evidence nor explicit manual contributions are automatically
   // ordinary credit. Generic law totals must use the same completed-Course and
   // 8-Course/32-credit allocation (including its schooling-only destination).
