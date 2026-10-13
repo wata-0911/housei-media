@@ -1505,16 +1505,16 @@ for (const program of h57Programs) {
   });
 }
 
-test('H57 existing completedCurriculumCredits S0=0 and S1/S2=2 stays intact in Planner path', () => {
+test('H57 Planner completion requires explicit batch acceptance+S1 or S1+S1', () => {
   const x = h57Fixture();
   const correspondence = { ...x.offering, id: 'h57-correspondence', name: '書道実技', curriculumCourseId: x.course.id,
     mappingIds: [x.mapping.mappingId], credits: 2, method: 'correspondence' };
   const schooling = { ...correspondence, id: 'h57-schooling', method: 'schooling', credits: 1 };
   const another = { ...schooling, id: 'h57-schooling-2' };
   x.f.offerings = [correspondence, schooling, another];
-  const manual = items => calculateGraduationProgress(items, x.f, x.scope, [], 'not_selected', [], [], x.profile);
+  const saved = { [correspondence.id]: { offeringId: correspondence.id, requiredReports: null, reports: [], examGrade: null, calligraphyBatchStatus: 'passed' } };
+  const manual = items => calculateGraduationProgress(items, x.f, x.scope, [], 'not_selected', [], [], x.profile, null, saved);
   assert.equal(h57Elective(manual([item(correspondence, 'earned')])).earned, 0);
-  correspondence.credits = 1;
   assert.equal(h57Elective(manual([item(correspondence, 'earned'), item(schooling, 'earned')])).earned, 2);
   assert.equal(h57Elective(manual([item(schooling, 'earned'), item(another, 'earned')])).earned, 2);
 });

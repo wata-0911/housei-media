@@ -1,3 +1,4 @@
+import { isCalligraphyCorrespondence } from '../../planner/calligraphyProgress';
 import CorrespondenceStudyMethod, { type ChangeCorrespondenceItem } from './CorrespondenceStudyMethod';
 import FuturePlanNotice from './FuturePlanNotice';
 import { planningTermLabel } from '../../planner/futurePlanning';
@@ -10,6 +11,29 @@ type Props = { items: PlannerItem[]; offerings: Map<string, Offering>; progress:
 const statusLabel = { not_submitted: '未提出', submitted: '提出済み', grading: '添削中', resubmit: '再提出', passed: '合格済み' } as const;
 
 export function CorrespondenceDetails({ item, offering, saved, disabled, onChange, onChangeItem }: { item: PlannerItem; offering: Offering; saved: CorrespondenceCourseProgress; disabled: boolean; onChange: Props['onChange']; onChangeItem?: ChangeCorrespondenceItem }) {
+  if (isCalligraphyCorrespondence(offering)) return <article className="min-w-0 border border-gray-200 bg-white p-4 sm:p-6">
+    <h3 className="break-words text-lg font-medium text-[#002255]">{offering.name}：添削10課題一括</h3>
+    <p className="mt-2 text-sm text-gray-600">日本文学科・2026年度現行課程の本人管理進捗です。添削だけで正式な1単位または完成2単位を修得したことにはなりません。</p>
+    <label className="mt-3 block min-w-0 text-sm">添削10課題一括の状態
+      <select aria-label="書道実技の添削10課題一括の状態" value={saved.calligraphyBatchStatus ?? ''} disabled={disabled}
+        onChange={event => {
+          const next = { ...saved };
+          if (event.target.value === '') delete next.calligraphyBatchStatus;
+          else next.calligraphyBatchStatus = event.target.value as NonNullable<CorrespondenceCourseProgress['calligraphyBatchStatus']>;
+          onChange(item.offeringId, next);
+        }} className="mt-1 block w-full min-w-0 rounded-sm border border-gray-300 bg-white p-2">
+        <option value="">未設定（保存済み履修方式を確認）</option>
+        <option value="not_submitted">未着手</option><option value="grading">進行中</option><option value="passed">合格済み（10課題一括）</option>
+      </select>
+    </label>
+    <p className="mt-3 text-sm">S1＋S1、または添削一括合格＋修得済みS1で構成2単位の完成条件を満たします。スクーリングの状態を変更すると完成判定も更新します。正式な修得は成績表で確認してください。</p>
+    <p className="mt-2 text-xs text-gray-600">開講2単位・履修状態・評価は保持し、添削1単位へ自動変換しません。</p>
+    <FuturePlanNotice item={item} offering={offering} />
+    {(saved.reports.length > 0 || saved.examGrade !== null || saved.requiredReports !== null) && <details className="mt-3 text-sm"><summary>保存済みリポート・試験記録（完成判定には使用しません）</summary>
+      <p>必要リポート: {saved.requiredReports ?? '未確認'} / 試験: {saved.examGrade ?? '未受験'}</p>
+      {saved.reports.map(report => <p key={report.reportNumber}>リポート {report.reportNumber}: {statusLabel[report.status]} / {report.grade ?? '評価未設定'}</p>)}
+    </details>}
+  </article>;
   const effective = effectiveCorrespondenceProgress(item, offering, saved);
   const result = correspondenceCreditResult(effective);
   const requirement = correspondenceRequirementFor(offering);
@@ -28,5 +52,5 @@ export function CorrespondenceDetails({ item, offering, saved, disabled, onChang
 
 export default function CorrespondenceProgress({ items, offerings, progress, disabled, onChange, onChangeItem }: Props) {
   const courseItems = correspondencePlanItems(items, offerings);
-  return <section aria-labelledby="correspondence-heading" className="space-y-4"><div className="border border-gray-200 bg-white p-4 sm:p-6"><h2 id="correspondence-heading" className="text-xl text-[#002255]">通信学習</h2><p className="mt-2 text-sm text-gray-600">リポートと単位修得試験を記録します。科目の履修ステータスや卒業要件には自動反映しません。</p></div>{courseItems.length === 0 ? <div className="border border-gray-200 bg-white p-5 text-sm text-gray-600">年間履修計画に通信学習科目を追加すると、ここで進捗を記録できます。</div> : <div className="grid gap-4 lg:grid-cols-2">{courseItems.map(item => { const offering = offerings.get(item.offeringId)!; return <CorrespondenceDetails key={item.offeringId} item={item} offering={offering} saved={progressForCorrespondence(offering, progress)} disabled={disabled} onChange={onChange} onChangeItem={onChangeItem} />; })}</div>}</section>;
+  return <section aria-labelledby="correspondence-heading" className="space-y-4"><div className="border border-gray-200 bg-white p-4 sm:p-6"><h2 id="correspondence-heading" className="text-xl text-[#002255]">通信学習</h2><p className="mt-2 text-sm text-gray-600">リポートと単位修得試験を記録します。科目の履修ステータスは変更しません。書道実技の添削一括は、スクーリング修得と組み合わせて本人記録の完成条件に反映します。</p></div>{courseItems.length === 0 ? <div className="border border-gray-200 bg-white p-5 text-sm text-gray-600">年間履修計画に通信学習科目を追加すると、ここで進捗を記録できます。</div> : <div className="grid gap-4 lg:grid-cols-2">{courseItems.map(item => { const offering = offerings.get(item.offeringId)!; return <CorrespondenceDetails key={item.offeringId} item={item} offering={offering} saved={progressForCorrespondence(offering, progress)} disabled={disabled} onChange={onChange} onChangeItem={onChangeItem} />; })}</div>}</section>;
 }

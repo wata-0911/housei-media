@@ -21,7 +21,7 @@ export default function CurriculumCourseProgress({ progress, catalog, disabled =
         return <details key={course.curriculumCourseId} className="py-3">
           <summary className="cursor-pointer text-sm leading-7">
             <span className="font-medium">{course.canonicalName}</span> <span className="text-gray-600">科目構成: {denominator}単位</span>
-            <span className="block ml-4">修得済み {displayCredits(course.earnedCredits)} / {denominator} · {completionLabels[course.completion]}{course.earnedExcessCredits > 0 && ` · +${course.earnedExcessCredits}単位 超過候補`}</span>
+            <span className="block ml-4">{course.completionEvidence === 'learner' ? '本人記録による完成条件' : '修得済み'} {displayCredits(course.earnedCredits)} / {denominator} · {completionLabels[course.completion]}{course.earnedExcessCredits > 0 && ` · +${course.earnedExcessCredits}単位 超過候補`}</span>
             <span className="block ml-4">予定込み {displayCredits(course.projectedCredits)} / {denominator} · {completionLabels[course.projectedCompletion]}{course.projectedExcessCredits > 0 && ` · +${course.projectedExcessCredits}単位 超過候補`}</span>
             <span className="block ml-4 text-xs text-gray-500">{contexts.join('、')}</span>
           </summary>

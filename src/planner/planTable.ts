@@ -1,3 +1,4 @@
+import { isCalligraphyCorrespondence } from './calligraphyProgress';
 import { correspondenceCreditResult, effectiveCorrespondenceProgress, progressForCorrespondence } from './correspondenceProgress';
 import { gradeLabel } from './courseEvaluations';
 import { isMediaSchooling, mediaProgressSummary, progressFor } from './mediaSchooling';
@@ -31,6 +32,10 @@ export function mediaProgressText(course: MediaCourseProgress): string {
 }
 
 export function progressSummaryForOffering(item: PlannerItem, offering: Offering, correspondence: Record<string, CorrespondenceCourseProgress>, media: Record<string, MediaCourseProgress>): string {
+  if (isCalligraphyCorrespondence(offering)) {
+    const status = correspondence[offering.id]?.calligraphyBatchStatus;
+    return `添削10課題一括: ${status === 'passed' ? '合格済み' : status === 'grading' ? '進行中' : status === 'not_submitted' ? '未着手' : '未設定・方式要確認'}（正式単位とは別）`;
+  }
   if (offering.method === 'correspondence') return correspondenceProgressSummary(effectiveCorrespondenceProgress(item, offering, progressForCorrespondence(offering, correspondence)));
   if (isMediaSchooling(offering)) return mediaProgressText(progressFor(offering.id, media));
   return statusLabels[item.status];

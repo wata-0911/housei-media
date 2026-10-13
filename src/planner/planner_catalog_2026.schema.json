@@ -1100,6 +1100,7 @@
             "type": "object",
             "properties": {
               "offeringId": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+              "calligraphyBatchStatus": { "enum": ["not_submitted", "grading", "passed"] },
               "requiredReports": { "anyOf": [{ "type": "integer", "minimum": 1, "maximum": 20 }, { "type": "null" }] },
               "reports": { "type": "array", "items": { "type": "object", "properties": { "reportNumber": { "type": "integer", "minimum": 1, "maximum": 20 }, "status": { "enum": ["not_submitted", "submitted", "grading", "resubmit", "passed"] }, "grade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-"] }, { "type": "null" }] } }, "required": ["reportNumber", "status", "grade"], "additionalProperties": false } },
               "examGrade": { "anyOf": [{ "enum": ["S", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"] }, { "type": "null" }] }

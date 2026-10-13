@@ -1,3 +1,4 @@
+import { deriveCalligraphyProgress, isCalligraphyCourse, type CalligraphyProgress } from './calligraphyProgress';
 import type {
   Mapping,
   Offering,
@@ -9,6 +10,7 @@ import type {
   ThesisSelection,
   ThesisProgress,
   GraduationProfile,
+  CorrespondenceCourseProgress,
 } from './plannerCatalog';
 import { effectiveRecognitionForAdmission, graduationProfileValidationError, hasCreditBearingRecognition, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from './graduationProfile';
 import { createMappingResolver, requirementsForScope } from './plannerHelpers';
@@ -652,6 +654,7 @@ type CurriculumEntry = {
   inProgress: number;
   planned: number;
   earnedSchooling: number;
+  calligraphyCompletedCredits?: number;
 };
 
 /** A completion belongs to one institutional Course and allocation policy.
@@ -678,10 +681,8 @@ function isCalligraphyPracticum(entry: CurriculumEntry) {
 }
 
 function completedCurriculumCredits(entry: CurriculumEntry) {
-  // 2026 p.48: 書道実技 is completed by correspondence + one schooling
-  // credit, or by two schooling credits. Correspondence-only completion is
-  // deliberately not treated as a completed curriculum course.
-  if (isCalligraphyPracticum(entry) && entry.earnedSchooling < 1) return 0;
+  // Calligraphy uses the shared prerequisite model (or guarded official H57 allocation).
+  if (isCalligraphyPracticum(entry)) return entry.calligraphyCompletedCredits ?? 0;
   return entry.earned >= entry.mapping.curriculumCredits! ? entry.mapping.curriculumCredits! : 0;
 }
 
@@ -705,6 +706,7 @@ function professionalCards(
   sources: CalculationItems, catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>,
   eligibleMappings: (offering: Offering) => Mapping[], impact: UnresolvedEarnedImpact, publicCourseCredits: number, thesisSelection: ThesisSelection, thesisStatus: ThesisProgress['status'],
   official: OfficialAllocationInput[],
+  calligraphy: Map<string, CalligraphyProgress>,
 ): ProgressCard[] {
   const items = sources.ordinary, schoolingItems = new Set(sources.schooling);
   const program = catalog.programs.find(candidate => candidate.scopeId === scopeId);
@@ -810,6 +812,15 @@ function professionalCards(
     const entry = entries.get(key) ?? {
       mapping, completionId: key, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0, earnedSchooling: 0,
     };
+    const special = calligraphy.get(offering.curriculumCourseId ?? '');
+    if (special) {
+      entry.earned = special.officialPreferred ? 0 : special.earnedCredits;
+      entry.planned = special.officialPreferred ? 0 : Math.max(0, special.projectedCredits - special.earnedCredits);
+      entry.inProgress = 0;
+      entry.calligraphyCompletedCredits = special.officialPreferred ? 0 : special.completedCredits;
+      entries.set(key, entry);
+      continue;
+    }
     if (item.status === 'earned') {
       entry.earned += credits;
       // This is schooling evidence within ordinary Course completion/H12,
@@ -888,6 +899,7 @@ function professionalCards(
 
   for (const a of official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育')) {
     entries.set(`official:${a.fact.curriculumCourseId}`, {
+      ...(a.fact.canonicalName === '書道実技' ? { calligraphyCompletedCredits: a.completedCredits } : {}),
       mapping: a.mapping, completionId: a.fact.curriculumCourseId!, label: a.fact.canonicalName!,
       earned: a.credits, inProgress: 0, planned: 0, earnedSchooling: a.schoolingCredits ?? 0,
     });
@@ -1369,7 +1381,7 @@ function literaturePartialExceptionCard(items: PlannerItem[], catalog: PlannerCa
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, openUniversityCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, openUniversityCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null, correspondenceProgress: Record<string, CorrespondenceCourseProgress> = {}): GraduationProgress {
   profile = { ...profile, recognizedCredits: effectiveRecognitionForAdmission(profile) };
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
@@ -1425,7 +1437,9 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     });
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
-  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, impact, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, official.allocations);
+  const calligraphy = new Map((catalog.curriculum?.courses ?? []).filter(course => isCalligraphyCourse(course))
+    .map(course => [course.id, deriveCalligraphyProgress(course, items, catalog, scopeId, correspondenceProgress, importedCourseAchievements, importedStudyRecords, profile)]));
+  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, impact, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, official.allocations, calligraphy);
   alignProfessionalAllocationMinimums(requirements, catalog, scopeId, professional);
   // Neither H12 evidence nor explicit manual contributions are automatically
   // ordinary credit. Generic law totals must use the same completed-Course and

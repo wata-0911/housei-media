@@ -12,7 +12,7 @@ export default function CurriculumCourseCard({ course, editor }: { course: Curri
       <h3 className="text-lg font-medium text-[#002255]">{course.canonicalName}</h3>
       <p className="mt-1 text-sm text-gray-600">科目構成: {target}単位</p>
       <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
-        <p>修得: {course.earnedCredits}{!course.repeatable && ` / ${target}`}単位 · {completionLabels[course.completion]}</p>
+        <p>{course.completionEvidence === 'learner' ? '本人記録による完成条件' : '修得'}: {course.earnedCredits}{!course.repeatable && ` / ${target}`}単位 · {completionLabels[course.completion]}</p>
         <p>予定込み: {course.projectedCredits}{!course.repeatable && ` / ${target}`}単位 · {completionLabels[course.projectedCompletion]}</p>
         {!course.repeatable && <p>残り: {course.remainingCredits ?? '未確認'}単位</p>}
         <p>超過候補: 修得 {course.earnedExcessCredits}単位 / 予定込み {course.projectedExcessCredits}単位</p>
