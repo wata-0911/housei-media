@@ -1,74 +1,74 @@
-import CommittedInput from '../src/components/planner/CommittedInput.tsx';
-import { backupCatalogIdentity, backupDigest, backupCatalogSemantics, LEGACY_BACKUP_CATALOGS } from '../src/planner/plannerBackupCompatibility.ts';
-import { createPlannerBackupProtection, inspectPlannerBackupProtection } from '../src/planner/plannerBackupProtection.ts';
-import { restorePlannerBackup } from '../src/planner/plannerBackupStorage.ts';
-import { savePlannerState, recoverPlannerState, PLANNER_WRITE_LOCK } from '../src/planner/storage.ts';
-import PlannerBackupPanel from '../src/components/planner/PlannerBackupPanel.tsx';
-import { createPlannerBackup, parsePlannerBackup, validateBackupState, backupSummary } from '../src/planner/plannerBackup.ts';
-import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
+import CommittedInput from '../src/components/planner/common/CommittedInput.tsx';
+import { backupCatalogIdentity, backupDigest, backupCatalogSemantics, LEGACY_BACKUP_CATALOGS } from '../src/planner/backup/plannerBackupCompatibility.ts';
+import { createPlannerBackupProtection, inspectPlannerBackupProtection } from '../src/planner/backup/plannerBackupProtection.ts';
+import { restorePlannerBackup } from '../src/planner/backup/plannerBackupStorage.ts';
+import { savePlannerState, recoverPlannerState, PLANNER_WRITE_LOCK } from '../src/planner/backup/storage.ts';
+import PlannerBackupPanel from '../src/components/planner/backup/PlannerBackupPanel.tsx';
+import { createPlannerBackup, parsePlannerBackup, validateBackupState, backupSummary } from '../src/planner/backup/plannerBackup.ts';
+import GraduationProgressUI from '../src/components/planner/graduation/GraduationProgress.tsx';
 import PlannerPage from '../src/pages/PlannerPage.tsx';
-import ThesisGuidance from '../src/components/planner/ThesisGuidance.tsx';
-import ProgramSettings from '../src/components/planner/ProgramSettings.tsx';
-import { plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
-import PlannedCourseList from '../src/components/planner/PlannedCourseList.tsx';
-import { GradeImportApplyActions, GradeImportPreviewUnit } from '../src/components/planner/GradeImportPanel.tsx';
-import { importedExamDate } from '../src/planner/gradeImportApply.ts';
-import ImportedSourceDetails from '../src/components/planner/ImportedSourceDetails.tsx';
-import MediaSchoolingProgress from '../src/components/planner/MediaSchoolingProgress.tsx';
-import CorrespondenceProgress from '../src/components/planner/CorrespondenceProgress.tsx';
-import CourseEvaluations from '../src/components/planner/CourseEvaluations.tsx';
+import ThesisGuidance from '../src/components/planner/graduation/ThesisGuidance.tsx';
+import ProgramSettings from '../src/components/planner/profile/ProgramSettings.tsx';
+import { plannerItemsWithoutOfficialEarned } from '../src/planner/graduation/officialCourseCredits.ts';
+import PlannedCourseList from '../src/components/planner/courses/PlannedCourseList.tsx';
+import { GradeImportApplyActions, GradeImportPreviewUnit } from '../src/components/planner/gradeImport/GradeImportPanel.tsx';
+import { importedExamDate } from '../src/planner/gradeImport/gradeImportApply.ts';
+import ImportedSourceDetails from '../src/components/planner/gradeImport/ImportedSourceDetails.tsx';
+import MediaSchoolingProgress from '../src/components/planner/progress/MediaSchoolingProgress.tsx';
+import CorrespondenceProgress from '../src/components/planner/progress/CorrespondenceProgress.tsx';
+import CourseEvaluations from '../src/components/planner/progress/CourseEvaluations.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import FuturePlanNotice from '../src/components/planner/FuturePlanNotice.tsx';
-import AnnualCreditLimitNotice from '../src/components/planner/AnnualCreditLimitNotice.tsx';
-import BrowserExtensionEntrySection, { PLANNER_EXTENSION_PUBLIC_URL } from '../src/components/planner/BrowserExtensionEntrySection.tsx';
-import PlannerProfileTab from '../src/components/planner/PlannerProfileTab.tsx';
-import { futurePlanNote, planningTermLabel } from '../src/planner/futurePlanning.ts';
+import FuturePlanNotice from '../src/components/planner/planning/FuturePlanNotice.tsx';
+import AnnualCreditLimitNotice from '../src/components/planner/planning/AnnualCreditLimitNotice.tsx';
+import BrowserExtensionEntrySection, { PLANNER_EXTENSION_PUBLIC_URL } from '../src/components/planner/gradeImport/BrowserExtensionEntrySection.tsx';
+import PlannerProfileTab from '../src/components/planner/profile/PlannerProfileTab.tsx';
+import { futurePlanNote, planningTermLabel } from '../src/planner/planning/futurePlanning.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { curriculumCatalog } from '../src/planner/curriculumCatalog.ts';
-import { catalog, offeringsById } from '../src/planner/catalog.ts';
-import { manualMappingOverrideLedger, officialMappingOverrideLedger } from '../src/planner/manualMappingOverrides.ts';
+import { curriculumCatalog } from '../src/planner/catalog/curriculumCatalog.ts';
+import { catalog, offeringsById } from '../src/planner/catalog/catalog.ts';
+import { manualMappingOverrideLedger, officialMappingOverrideLedger } from '../src/planner/catalog/manualMappingOverrides.ts';
 import { validateCatalog, validateState } from '../src/planner/validation.ts';
 import { summarizeCredits, searchOfferings } from '../src/planner/calculations.ts';
-import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, saveRecoveredState, recoverState } from '../src/planner/storage.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
-import { THESIS_CREDIT_METADATA_2026, sourcesForGraduationCard, thesisCreditsForDepartment } from '../src/planner/graduationSources.ts';
-import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/repeatableRules.ts';
-import { allocateGeographyTransfers } from '../src/planner/geographyTransferRules.ts';
-import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/removeUndo.ts';
-import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/publicCourseRules.ts';
-import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/publicCourses.ts';
-import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/yearEligibility.ts';
-import { setThesisProgressForScope, shouldShowThesisGuidance, stateForScopeChange, supportsThesisSelection, thesisPolicyForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
-import { addAssessment, completeVideosThroughLesson, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaSharePresentation, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/mediaSchooling.ts';
-import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, usesLegacyReportEvaluation } from '../src/planner/courseEvaluations.ts';
-import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/correspondenceProgress.ts';
-import { correspondenceRequirementFor, structuredRequirementCount } from '../src/planner/correspondenceRequirements.ts';
-import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planTable.ts';
-import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/plannerExport.ts';
-import { isHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
-import { academicYearFromDate, applyImport, autoPlannerOfferingIdForImport, groupImportedAchievements, hasCorrespondenceEvidence, importedEarnedCreditsTotal, importFingerprint, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImportApply.ts';
-import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/directGradeHandoff.ts';
-import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/importedAchievementCalculations.ts';
-import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/importedAchievementRepair.ts';
-import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/unifiedCourseView.ts';
-import { effectiveRecognitionForAdmission, graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from '../src/planner/graduationProfile.ts';
-import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/plannerItemState.ts';
-import { annualCreditLimitReferences, annualCreditLimitStatus } from '../src/planner/annualPlan.ts';
-import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/thesisGuidance.ts';
+import { STORAGE_KEY, BACKUP_KEY, initialState, loadState, saveState, saveRecoveredState, recoverState } from '../src/planner/backup/storage.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { THESIS_CREDIT_METADATA_2026, sourcesForGraduationCard, thesisCreditsForDepartment } from '../src/planner/graduation/graduationSources.ts';
+import { REPEATABLE_CREDIT_RULES, repeatableRule } from '../src/planner/graduation/repeatableRules.ts';
+import { allocateGeographyTransfers } from '../src/planner/graduation/geographyTransferRules.ts';
+import { removePlannerItem, removePublicCourse, restorePlannerItem, restorePublicCourse } from '../src/planner/planning/removeUndo.ts';
+import { evaluatePublicCourseLimit, publicCourseLimitFor } from '../src/planner/graduation/publicCourseRules.ts';
+import { createPublicCourse, isValidPublicCourseTitle, matchesPublicCourseSearch, normalizePublicCourseTitle, PUBLIC_COURSE_TITLE } from '../src/planner/planning/publicCourses.ts';
+import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility } from '../src/planner/planning/yearEligibility.ts';
+import { setThesisProgressForScope, shouldShowThesisGuidance, stateForScopeChange, supportsThesisSelection, thesisPolicyForScope, thesisProgressForScope } from '../src/planner/graduation/thesisSelection.ts';
+import { addAssessment, completeVideosThroughLesson, completedMediaLessons, isMediaSchooling, mediaPlanItems, mediaProgressSummary, mediaShareIntentUrl, mediaSharePost, mediaSharePresentation, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment } from '../src/planner/progress/mediaSchooling.ts';
+import { COURSE_GRADES, evaluationFor, evaluationIsUnrated, evaluationItems, evaluationSummary, usesLegacyReportEvaluation } from '../src/planner/progress/courseEvaluations.ts';
+import { correspondenceCreditResult, progressForCorrespondence, setReportStatus } from '../src/planner/progress/correspondenceProgress.ts';
+import { correspondenceRequirementFor, structuredRequirementCount } from '../src/planner/progress/correspondenceRequirements.ts';
+import { correspondenceProgressSummary, isStandardTerm, mediaProgressText, offeringFormLabel, progressSummaryForOffering } from '../src/planner/planning/planTable.ts';
+import { plannerExportCsv, plannerExportFileName, plannerExportPresentation } from '../src/planner/exports/plannerExport.ts';
+import { isHoseiGradeImportV1 } from '../src/planner/gradeImport/gradeImportContract.ts';
+import { academicYearFromDate, applyImport, autoPlannerOfferingIdForImport, groupImportedAchievements, hasCorrespondenceEvidence, importedEarnedCreditsTotal, importFingerprint, importPreview, inferredCorrespondenceYear, schoolingAcademicYear } from '../src/planner/gradeImport/gradeImportApply.ts';
+import { gradeHandoffToken, isGradeHandoffResponse, previewDirectGradeHandoff } from '../src/planner/gradeImport/directGradeHandoff.ts';
+import { deriveImportedAchievements, managedImportedMedia } from '../src/planner/gradeImport/importedAchievementCalculations.ts';
+import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievements } from '../src/planner/gradeImport/importedAchievementRepair.ts';
+import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/progress/unifiedCourseView.ts';
+import { effectiveRecognitionForAdmission, graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from '../src/planner/graduation/graduationProfile.ts';
+import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/planning/plannerItemState.ts';
+import { annualCreditLimitReferences, annualCreditLimitStatus } from '../src/planner/planning/annualPlan.ts';
+import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/graduation/thesisGuidance.ts';
 import {
   mediaPngKey,
   currentMediaPng,
   prepareMediaPngData,
   shareMediaPng,
   shareResultMessage,
-} from '../src/planner/mediaImageExport.ts';
+} from '../src/planner/exports/mediaImageExport.ts';
 import {
   currentPng,
   preparePngData,
-} from '../src/planner/pngExport.ts';
+} from '../src/planner/exports/pngExport.ts';
 
 test('planner PNG becomes stale when presentation changes', () => {
   const presentation = {
@@ -694,7 +694,7 @@ test('one offering with duplicate matching mappings is counted once and outside-
 test('graduation progress copy never asserts graduation eligibility', () => {
   const source = [
     readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../src/components/planner/GraduationProgress.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/components/planner/graduation/GraduationProgress.tsx', import.meta.url), 'utf8'),
   ].join('\n');
   assert.doesNotMatch(source, /卒業できます|卒業可能|卒業不可/);
   assert.match(source, /卒業可否を保証しません/);
@@ -917,7 +917,7 @@ test('existing scope and todos survive state changes without adding todo UI', ()
   assert.equal(validateState({ ...state, todos: [state.todos[0], state.todos[0]] }, catalog), false);
 });
 
-const { selectablePrograms, termOptions, groupAnnualPlan, createCreditClassifier, summarizeCategories } = await import('../src/planner/annualPlan.ts');
+const { selectablePrograms, termOptions, groupAnnualPlan, createCreditClassifier, summarizeCategories } = await import('../src/planner/planning/annualPlan.ts');
 
 test('all eight affiliations round-trip with year, catalog term, legacy term and todos', () => {
   assert.equal(selectablePrograms(catalog).length, 8);
@@ -1129,7 +1129,7 @@ test('information and computer offerings preserve distinct names while only hist
 
 
 test('outside selected scope is a reference row and never contributes to normal curriculum categories', async () => {
-  const { isCreditCategory } = await import('../src/planner/annualPlan.ts');
+  const { isCreditCategory } = await import('../src/planner/planning/annualPlan.ts');
   const scope = selectablePrograms(catalog)[0].scopeId;
   const classify = createCreditClassifier(catalog, scope);
   const offering = catalog.offerings.find(o => classify(o) === '選択した所属のカリキュラム対象外' && o.credits > 0);
@@ -3330,7 +3330,7 @@ test('out-of-range and inconsistent recognition combinations are isolated by fie
 });
 
 test('recognized-credit controls expose explicit prefill, allocation, and safe professional search', () => {
-  const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/components/planner/profile/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
   assert.match(source, /公式標準値を適用して保存/);
   assert.match(source, /外国語認定のうちスクーリング相当/);
   assert.match(source, /公式認定結果に記載がある場合のみ入力/);
@@ -3570,7 +3570,7 @@ test('round2: current study year and geography report survive v20 reload without
       assert.equal(guidanceForScope(loaded.state, geography).geographyReportSubmitted, geographyReportSubmitted);
     }
   }
-  const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/components/planner/profile/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
   assert.match(source, /現在の在学年次/);
   assert.match(source, /aria-label="現在の在学年次"/);
 });
@@ -3683,7 +3683,7 @@ test('open university recognition migrates, recovers independently, and is rende
   assert.equal(recovered.error, null);
   assert.equal(recovered.state.graduationProfile.recognizedCredits.openUniversityCredits, null);
   assert.ok(recovered.invalidRecognitionPaths.includes('recognizedCredits.openUniversityCredits'));
-  const source = readFileSync(new URL('../src/components/planner/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/components/planner/profile/GraduationProfileSettings.tsx', import.meta.url), 'utf8');
   assert.match(source, /放送大学認定単位（一般教育・その他）/);
   assert.match(source, /公式に認定された単位のみ入力/);
   assert.match(source, /外国語・保健体育を除き、最大10単位/);
@@ -3824,7 +3824,7 @@ test('future annual limits explicitly reference 2026 while normal 2026 wording r
 
 
 test('planner desktop/mobile and progress screens show future references without borrowing official periods', async () => {
-  const { createCreditClassifier } = await import('../src/planner/annualPlan.ts');
+  const { createCreditClassifier } = await import('../src/planner/planning/annualPlan.ts');
   const classify = createCreditClassifier(catalog, null);
   const media = catalog.offerings.find(isMediaSchooling);
   const correspondence = catalog.offerings.find(value => value.method === 'correspondence');
@@ -3852,8 +3852,8 @@ test('planner desktop/mobile and progress screens show future references without
 
 test('planner exposes annual, media, and profile as accessible responsive tabs with one profile settings UI', () => {
   const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
-  const profileTab = readFileSync(new URL('../src/components/planner/PlannerProfileTab.tsx', import.meta.url), 'utf8');
-  const program = readFileSync(new URL('../src/components/planner/ProgramSettings.tsx', import.meta.url), 'utf8');
+  const profileTab = readFileSync(new URL('../src/components/planner/profile/PlannerProfileTab.tsx', import.meta.url), 'utf8');
+  const program = readFileSync(new URL('../src/components/planner/profile/ProgramSettings.tsx', import.meta.url), 'utf8');
   assert.equal((page.match(/role="tab"/g) ?? []).length, 3);
   assert.match(page, /'annual' \| 'media' \| 'profile'/);
   for (const label of ['年間履修計画', 'メディア', 'プロフィール']) assert.match(page, new RegExp(label));
@@ -3933,8 +3933,8 @@ test('profile edits persist through the existing planner state and feed graduati
   assert.equal(progress.referenceProgress.find(row => row.id === 'overall-reference-progress')?.recognizedCredits, 12);
   const source = [
     readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../src/components/planner/PlannerProfileTab.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../src/components/planner/ProfileBasicSettings.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/components/planner/profile/PlannerProfileTab.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../src/components/planner/profile/ProfileBasicSettings.tsx', import.meta.url), 'utf8'),
   ].join('\n');
   assert.match(source, /scopeId=\{state\.selectedScopeId\}/);
   assert.match(source, /profile=\{state\.graduationProfile\}/);
@@ -4152,7 +4152,7 @@ test('auto import: direct handoff and manual JSON use the same application behav
   assert.equal(fromDirect.importedStudyRecords.length, manual.importedStudyRecords.length);
   assert.equal(fromDirect.importedCourseAchievements.length, manual.importedCourseAchievements.length);
   const page = readFileSync(new URL('../src/pages/PlannerPage.tsx', import.meta.url), 'utf8');
-  const panel = readFileSync(new URL('../src/components/planner/GradeImportPanel.tsx', import.meta.url), 'utf8');
+  const panel = readFileSync(new URL('../src/components/planner/gradeImport/GradeImportPanel.tsx', import.meta.url), 'utf8');
   assert.match(page, /onApply=\{applyGradeImport\} directImport=\{directImport\}/);
   assert.match(page, /applyImport\(state, units, catalog\.offerings\)/);
   assert.match(panel, /setUnits\(importPreview\(directImport, offerings, existing, existingCourses\)\)/);
@@ -5507,7 +5507,7 @@ test('planner backup protection preserves invalid JSON, recognition shadow and o
 test('planner backup rejects a rehashed incompatible source snapshot rather than trusting its self-declared semantics', async () => {
   const backup = await createPlannerBackup(null, catalog);
   const altered = structuredClone(catalog); altered.offerings[0].credits = (altered.offerings[0].credits ?? 0) + 1;
-  const { createBackupCatalogSnapshot } = await import('../src/planner/plannerBackupCompatibility.ts');
+  const { createBackupCatalogSnapshot } = await import('../src/planner/backup/plannerBackupCompatibility.ts');
   backup.catalog = await createBackupCatalogSnapshot(altered);
   const store = backupTestStore('original', 'old recovery');
   await assert.rejects(restorePlannerBackup(store, JSON.stringify(backup), 'original', catalog, backupTestLocks()), /互換性のない/);
@@ -5515,7 +5515,7 @@ test('planner backup rejects a rehashed incompatible source snapshot rather than
 });
 
 test('planner backup protection guidance is separate from normal restore and never offers automatic normalization', () => {
-  const panel = readFileSync(new URL('../src/components/planner/PlannerBackupPanel.tsx', import.meta.url), 'utf8');
+  const panel = readFileSync(new URL('../src/components/planner/backup/PlannerBackupPanel.tsx', import.meta.url), 'utf8');
   assert.match(panel, /createPlannerBackupProtection\(raw, recoveryRaw, catalog\)/);
   assert.match(panel, /保護が済むまで/);
   assert.match(panel, /修復目的の無関係な保存/);

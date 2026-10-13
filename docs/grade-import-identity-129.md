@@ -79,8 +79,8 @@ native証拠による通常更新では、構成単位・認定免除・追加�
 
 | ファイル | 変更 |
 | --- | --- |
-| `src/planner/gradeImportApply.ts` | 共通identity判定・apply再検証・保留時の計画追加抑止 |
-| `src/components/planner/GradeImportPanel.tsx` | 保留理由・選択不可・要確認件数 |
+| `src/planner/gradeImport/gradeImportApply.ts` | 共通identity判定・apply再検証・保留時の計画追加抑止 |
+| `src/components/planner/gradeImport/GradeImportPanel.tsx` | 保留理由・選択不可・要確認件数 |
 | `tests/grade-import-identity.test.mjs` | 合成fixtureによる34ケースの新規回帰 |
 | `tests/planner.test.mjs` | 根拠のない旧更新契約を保留へ変更 |
 | `tests/curriculum-foundation.test.mjs` | 手動情報保持を検証する安全な更新fixture |

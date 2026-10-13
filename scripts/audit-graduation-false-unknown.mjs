@@ -8,17 +8,17 @@
  * Synthetic inputs only; no saved learner state, catalog files or network writes.
  */
 import { test } from 'node:test';
-import { attachCurriculumCatalog } from '../src/planner/curriculumCatalog.ts';
+import { attachCurriculumCatalog } from '../src/planner/catalog/curriculumCatalog.ts';
 import { validateCatalog } from '../src/planner/validation.ts';
 import { createMappingResolver } from '../src/planner/plannerHelpers.ts';
 import assert from 'node:assert/strict';
-import { catalog } from '../src/planner/catalog.ts';
-import { initialState } from '../src/planner/storage.ts';
-import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
-import { exactImportedCurriculumId } from '../src/planner/officialCourseCredits.ts';
-import { guidanceEligibilityCreditResult } from '../src/planner/thesisGuidance.ts';
-import { graduationProfileValidationError } from '../src/planner/graduationProfile.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { initialState } from '../src/planner/backup/storage.ts';
+import { deriveOfficialGraduationFacts } from '../src/planner/graduation/officialGraduationFacts.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { exactImportedCurriculumId } from '../src/planner/graduation/officialCourseCredits.ts';
+import { guidanceEligibilityCreditResult } from '../src/planner/graduation/thesisGuidance.ts';
+import { graduationProfileValidationError } from '../src/planner/graduation/graduationProfile.ts';
 
 function fixture() {
   const c = structuredClone(catalog);

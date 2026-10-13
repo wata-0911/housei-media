@@ -18,11 +18,11 @@ for (const program of programs) for (const [label, items] of minimalCases) test(
   assert.deepEqual([partial(x)[0].label, partial(x)[0].earned, partial(x)[0].target, partial(x)[0].evidence], ['書道実技', 1, 2, 'learner']);
 });
 
-import { catalog } from '../src/planner/catalog.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
 import { referenceCases } from './fixtures/calligraphy-state-references.mjs';
 import { profile } from './fixtures/calligraphy-progress.mjs';
-import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
+import GraduationProgressUI from '../src/components/planner/graduation/GraduationProgress.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 for (const program of programs) for (const scenario of referenceCases) test(`calligraphy partial contract ${program.course}: ${scenario.label}`, () => {

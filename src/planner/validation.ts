@@ -1,13 +1,13 @@
-import { isCalligraphyCorrespondence } from './calligraphyProgress';
+import { isCalligraphyCorrespondence } from './progress/calligraphyProgress';
 import Ajv2020 from 'ajv/dist/2020';
 import schema from './planner_catalog_2026.schema.json';
 import type { PlannerCatalog, PlannerState } from './plannerCatalog';
-import { isHistoryCompletionOrderCourse, validHistoricalSourceOrders, validHistorySeminarOrders } from './historySeminar';
-import { isMediaSchooling } from './mediaSchooling';
-import { isCorrespondenceOffering, validCorrespondenceProgress } from './correspondenceProgress';
-import { isValidGraduationProfile } from './graduationProfile';
-import { validImportedCurriculumIdentity } from './curriculumIdentityValidation';
-import { thesisPolicyForScope } from './thesisSelection';
+import { isHistoryCompletionOrderCourse, validHistoricalSourceOrders, validHistorySeminarOrders } from './graduation/historySeminar';
+import { isMediaSchooling } from './progress/mediaSchooling';
+import { isCorrespondenceOffering, validCorrespondenceProgress } from './progress/correspondenceProgress';
+import { isValidGraduationProfile } from './graduation/graduationProfile';
+import { validImportedCurriculumIdentity } from './catalog/curriculumIdentityValidation';
+import { thesisPolicyForScope } from './graduation/thesisSelection';
 
 const ajv = new Ajv2020({ allErrors: true });
 ajv.addFormat('uuid', /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);

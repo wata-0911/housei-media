@@ -62,8 +62,8 @@ nullは元aggregateがnullのまま、完成判定はunknown。明示0は元aggr
 
 ## 変更ファイル・関数
 
-- `src/planner/calligraphyProgress.ts`：`deriveCalligraphyProgress`がS1の寄与をearned / waiting / in_progress / plannedから個別取得。計算専用の`inProgressCredits` / `plannedCredits` / `waitingCredits`を返す。`schoolingReferences`が修得済み構成優先の共通2単位枠を配分。公式優先の早期returnでは三参考値を0にする。
-- `src/planner/graduationProgress.ts`：`professionalCards`が`entry.inProgress`と`entry.planned`へ明示された参考値を接続。予定込み差分からの推測を削除。ほかの科目の経路は変更しない。
+- `src/planner/progress/calligraphyProgress.ts`：`deriveCalligraphyProgress`がS1の寄与をearned / waiting / in_progress / plannedから個別取得。計算専用の`inProgressCredits` / `plannedCredits` / `waitingCredits`を返す。`schoolingReferences`が修得済み構成優先の共通2単位枠を配分。公式優先の早期returnでは三参考値を0にする。
+- `src/planner/graduation/graduationProgress.ts`：`professionalCards`が`entry.inProgress`と`entry.planned`へ明示された参考値を接続。予定込み差分からの推測を削除。ほかの科目の経路は変更しない。
 - `tests/fixtures/calligraphy-state-references.mjs`：独立した期待値の表。単独4状態、添削単独、添削＋4状態、S1＋S1全16組み合わせ、添削＋S1＋S1全16組み合わせ、旧通信4状態、公式5条件×混在3パターンで各コース60ケース。
 - `tests/calligraphy-state-references.test.mjs`：最小3件、状態表180件（逆順の数量も確認）、状態変更3件、save/load/backup30件、公式nullと0の区別1件。合計217件。
 - `tests/planner-save-lock.browser.mjs`：既存27件をそのまま保持。3コースの全状態表を実Chromiumのカード表示でassertする3テスト（計180ケース）、実UI状態変更・reload・JSON復元の3テストを追加。

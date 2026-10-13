@@ -6,7 +6,7 @@ Plannerの「成績データを取り込む」→「成績JSONの取得方法」
 
 - `shared/grade-import/extractor.js` が唯一のparser sourceです。既存の date / report / numberField / schooling / course / cellsForRow / isCategoryRow / isCourseRow / extractRows / inspectTable / selectCandidate / extractCurrentDocument の処理を変更せず移しています。
 - extension: `extension/hosei-planner-import/parser/entry.js` → 同じextractor → `extension/hosei-planner-import/parser/extractor.js`。既存のisolated-world global API、popup・content bridge・background・manifestはそのまま利用します。
-- bookmarklet: `bookmarklet/entry.js` → 同じextractor + Plannerの `src/planner/gradeImportContract.ts` validator + `serialize.ts` + `clipboard.js` → `src/generated/gradeImportBookmarklet.json`。
+- bookmarklet: `bookmarklet/entry.js` → 同じextractor + Plannerの `src/planner/gradeImport/gradeImportContract.ts` validator + `serialize.ts` + `clipboard.js` → `src/generated/gradeImportBookmarklet.json`。
 - 両成果物を `npm run build:grade-import`（別名 `npm run build:bookmarklet`）で再生成します。esbuildをlockfileで固定し、source mapや実行時の外部依存は生成しません。既存extensionがcheckout直後に利用できる方針を維持するため、成果物をcommitします。
 - `npm run check:grade-import` はソースから再生成した内容との完全一致を検査します。`npm run build` と `npm run build:extension-dev` もこのcheckを実行します。生成物を直接編集しないでください。
 - `npm run test:bookmarklet` は生成物をVMで実行し、32科目fixtureで拡張との出力一致、validator、diagnostics、コピーの成功/失敗、ローカルfallback、importPreviewの同一性、禁止API不在、Planner表示を検査します。既存 `npm run test:extension` も実行してください。

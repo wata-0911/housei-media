@@ -3,12 +3,12 @@
  */
 import fs from 'node:fs';
 import ts from 'typescript';
-import { catalog } from '../src/planner/catalog.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
-import { initialState } from '../src/planner/storage.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { initialState } from '../src/planner/backup/storage.ts';
 
 const read = path => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
-const source = ts.createSourceFile('graduationProgress.ts', read('../src/planner/graduationProgress.ts'), ts.ScriptTarget.Latest, true);
+const source = ts.createSourceFile('graduationProgress.ts', read('../src/planner/graduation/graduationProgress.ts'), ts.ScriptTarget.Latest, true);
 function initializer(name) {
   let result;
   function visit(node) {

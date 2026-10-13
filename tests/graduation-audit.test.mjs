@@ -1,33 +1,33 @@
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { validateCatalog } from '../src/planner/validation.ts';
-import { attachCurriculumCatalog } from '../src/planner/curriculumCatalog.ts';
-import { isHistorySeminar, historySeminarField } from '../src/planner/historySeminar.ts';
+import { attachCurriculumCatalog } from '../src/planner/catalog/curriculumCatalog.ts';
+import { isHistorySeminar, historySeminarField } from '../src/planner/graduation/historySeminar.ts';
 import { createMappingResolver } from '../src/planner/plannerHelpers.ts';
-import { generateCurriculumCatalog } from '../src/planner/curriculumGeneration.ts';
-import { applyManualMappingOverrides, manualMappingOverrideLedger, officialMappingOverrideLedger } from '../src/planner/manualMappingOverrides.ts';
+import { generateCurriculumCatalog } from '../src/planner/catalog/curriculumGeneration.ts';
+import { applyManualMappingOverrides, manualMappingOverrideLedger, officialMappingOverrideLedger } from '../src/planner/catalog/manualMappingOverrides.ts';
 import assert from 'node:assert/strict';
-import { catalog } from '../src/planner/catalog.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
-import { deriveImportedAchievements } from '../src/planner/importedAchievementCalculations.ts';
-import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '../src/planner/officialCourseCredits.ts';
-import { importedEarnedCreditsTotal, importPreview, applyImport } from '../src/planner/gradeImportApply.ts';
-import { parseHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { deriveImportedAchievements } from '../src/planner/gradeImport/importedAchievementCalculations.ts';
+import { exactImportedCurriculumId, plannerItemsWithoutOfficialEarned } from '../src/planner/graduation/officialCourseCredits.ts';
+import { importedEarnedCreditsTotal, importPreview, applyImport } from '../src/planner/gradeImport/gradeImportApply.ts';
+import { parseHoseiGradeImportV1 } from '../src/planner/gradeImport/gradeImportContract.ts';
 import { extractRows } from '../shared/grade-import/extractor.js';
-import { deriveOfficialGraduationFacts } from '../src/planner/officialGraduationFacts.ts';
-import { resolveRecognizedProfessionalCurriculumIdentity } from '../src/planner/recognizedProfessionalIdentity.ts';
-import { unresolvedOfficialImpact, officialImpactsRequirement } from '../src/planner/unresolvedOfficialImpact.ts';
-import { unresolvedSchoolingImpact } from '../src/planner/unresolvedSchoolingImpact.ts';
-import { heldOfficialSchoolingContributions } from '../src/planner/heldOfficialSchooling.ts';
-import { lawExcludedOfficialSchoolingContributions } from '../src/planner/lawExcludedOfficialSchooling.ts';
-import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from '../src/planner/graduationSources.ts';
-import { initialState } from '../src/planner/storage.ts';
-import { setThesisProgressForScope, thesisProgressForScope } from '../src/planner/thesisSelection.ts';
-import { graduationProfileValidationError } from '../src/planner/graduationProfile.ts';
-import { matchImportedCurriculumCourse } from '../src/planner/curriculumImportMatch.ts';
+import { deriveOfficialGraduationFacts } from '../src/planner/graduation/officialGraduationFacts.ts';
+import { resolveRecognizedProfessionalCurriculumIdentity } from '../src/planner/graduation/recognizedProfessionalIdentity.ts';
+import { unresolvedOfficialImpact, officialImpactsRequirement } from '../src/planner/graduation/unresolvedOfficialImpact.ts';
+import { unresolvedSchoolingImpact } from '../src/planner/graduation/unresolvedSchoolingImpact.ts';
+import { heldOfficialSchoolingContributions } from '../src/planner/graduation/heldOfficialSchooling.ts';
+import { lawExcludedOfficialSchoolingContributions } from '../src/planner/graduation/lawExcludedOfficialSchooling.ts';
+import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from '../src/planner/graduation/graduationSources.ts';
+import { initialState } from '../src/planner/backup/storage.ts';
+import { setThesisProgressForScope, thesisProgressForScope } from '../src/planner/graduation/thesisSelection.ts';
+import { graduationProfileValidationError } from '../src/planner/graduation/graduationProfile.ts';
+import { matchImportedCurriculumCourse } from '../src/planner/gradeImport/curriculumImportMatch.ts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import GraduationProgressUI from '../src/components/planner/GraduationProgress.tsx';
+import GraduationProgressUI from '../src/components/planner/graduation/GraduationProgress.tsx';
 
 // H20 production-level reproductions intentionally precede the production fix.
 function h20Profile(x, recognizedS) {
@@ -2126,7 +2126,7 @@ test('H31 named candidate without resolved annual match retains known zero + tar
   assert.equal(x.calc().requirements.find(r => r.requirementId === '11111111-1111-4111-8111-000000000003').earned, 0);
 });
 test('H31 method intersection matches existing method gate, while unsupported condition guard stays unchanged', async () => {
-  const { unresolvedEarnedImpact, impactsRequirement } = await import('../src/planner/unresolvedEarnedImpact.ts');
+  const { unresolvedEarnedImpact, impactsRequirement } = await import('../src/planner/graduation/unresolvedEarnedImpact.ts');
   const x = h31Fixture(); x.set({ course: x.course });
   const requirement = { ...catalog.requirements.find(r => r.status === 'structured' && r.ruleType === 'min_credits'), id: '11111111-1111-4111-8111-000000000004', scopeId: x.scope, value: 4, target: { curriculum_category: '専門教育' }, conditions: { method: 'schooling' } };
   const matching = (m, r) => m.category === r.target.curriculum_category;

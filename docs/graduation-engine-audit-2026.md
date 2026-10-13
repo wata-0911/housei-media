@@ -297,7 +297,7 @@ deriveOfficialGraduationFacts({ achievements, records, catalog, selectedScopeId 
 
 |項目|次sliceの具体内容|
 |---|---|
-|affected files|新 `src/planner/officialGraduationFacts.ts`（仮）、`graduationProgress.ts` の入口/通常bucket集計、`officialCourseCredits.ts`の共通identity利用、`importedAchievementCalculations.ts`の卒業consumer切離し、`tests/graduation-audit.test.mjs` とplanner関連tests。必要なら新allocation helper。category/media consumerの互換経路は別に維持|
+|affected files|新 `src/planner/graduation/officialGraduationFacts.ts`（仮）、`graduationProgress.ts` の入口/通常bucket集計、`officialCourseCredits.ts`の共通identity利用、`importedAchievementCalculations.ts`の卒業consumer切離し、`tests/graduation-audit.test.mjs` とplanner関連tests。必要なら新allocation helper。category/media consumerの互換経路は別に維持|
 |migration impact|なし。PlannerState22、import contract、storage key、永続データshape不変。migration/v23追加禁止|
 |expected tests|今回18 characterization中GAPを新契約へ更新。exact Course/no Offering→通常卒業4、legacy courseIdなし4、official4/component2+2→4かつschooling evidence2、official4+earned→4、planned/in_progress projection、waiting明示、C/D warning、B1回、common+department unknown、scope違い、8program（6学科+日本文3）実catalog、入力immutable、row重複/null/0、特殊sequence/transfer保留|
 |risks|公式schooling列意味未完全検証、複数公式rowの重複、CurriculumCourseのscope/構成単位、認定・manual卒論・repeatとのsource重複、既存cardとgeneric requirement結果の不一致|
@@ -600,7 +600,7 @@ UUIDとruleIdは現catalog値を省略せず掲載。official rule欄はcatalog�
 
 ### Calculation-only API と入力境界
 
-`src/planner/officialGraduationFacts.ts`:
+`src/planner/graduation/officialGraduationFacts.ts`:
 
 ```ts
 deriveOfficialGraduationFacts(

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { catalog } from '../src/planner/catalog.ts';
-import { initialState, loadState, saveState, STORAGE_KEY } from '../src/planner/storage.ts';
-import { projectUnresolvedConditions } from '../src/planner/unresolvedConditions.ts';
-import GraduationProgress from '../src/components/planner/GraduationProgress.tsx';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { initialState, loadState, saveState, STORAGE_KEY } from '../src/planner/backup/storage.ts';
+import { projectUnresolvedConditions } from '../src/planner/graduation/unresolvedConditions.ts';
+import GraduationProgress from '../src/components/planner/graduation/GraduationProgress.tsx';
 import { scenarios, calculateScenario, plannerItem } from './fixtures/unresolved-condition-scenarios.mjs';
 
 const cases = scenarios();
