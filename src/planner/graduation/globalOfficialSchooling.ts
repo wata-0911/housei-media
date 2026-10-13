@@ -22,9 +22,10 @@ export function safePositiveOfficialSchooling(
   catalog: PlannerCatalog, scopeId: string, profile: GraduationProfile,
 ) {
   profile = { ...profile, recognizedCredits: effectiveRecognitionForAdmission(profile) };
-  // A newly proven contradiction in a native repeat row also blocks fallback
-  // global S credit; H19/H43 must not bypass the aggregate/detail contract.
-  if (fact.diagnostics.some(code => ['repeatable_aggregate_conflict', 'repeatable_source_conflict'].includes(code))) return null;
+  // A native repeat row held by the new proof contract stays held for global
+  // S as well. H19/H43 cannot bypass missing or contradictory attempt evidence.
+  // Legacy opaque rows keep their existing diagnostics and reference policy.
+  if (fact.diagnostics.some(code => code.startsWith('repeatable_'))) return null;
   // H20 separates the profile's global S budget from normal source-row S.
   // Professional recognition overlap remains held here, including disjoint
   // H14 identities: H14's release applies only to ordinary allocations.

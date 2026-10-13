@@ -62,7 +62,7 @@
 - `attempts.length` は個々に証明した修得回数。aggregate÷2ではない。`countedCredits` は既存の単位上限・回数上限の内側、`excessCredits` は修得総量との差。
 - 計算用 `OfficialAllocationInput` に上限内数量だけを渡す。professionalCardsは通常の1科目完成枠へ押し込まず、既存repeatablesのfamily枠を共有する。超過は選択必修超過や別科目、S枠へ流用しない。
 - 既存の `plannerItemsWithoutOfficialEarned` がexact制度科目とsource linkのmanual earnedを除外する。planned / in_progress / waitingは記録に残り、修得量には加算しない。既存手動の参考値規則は変更しない。
-- 全体S参考にも今回の上限内数量だけを入れる。法律総合特講は公式＊印除外集合によって法律専門S8へ加算しない。新たに検出したaggregate/sourceの矛盾をH19/H43 fallbackで再算入しない。
+- 全体S参考にも今回の上限内数量だけを入れる。法律総合特講は公式＊印除外集合によって法律専門S8へ加算しない。新しいnative反復証拠判定で保留した行は、矛盾・証拠不足のどちらもH19/H43 fallbackで再算入しない。旧opaque行の診断・参考値規則は維持する。
 - 保留は既存 `special_rule_evidence_required` と日本語の詳細理由で示す。旧opaque fingerprintは従来の保守的経路・診断を維持する。超過には既存の通知UIを1グループ追加した。
 
 ## schema変更の要否
@@ -77,7 +77,7 @@ schemaVersion=22、backup形式、state migration、import contract v1を変更�
 - `gradeImportApply.ts`: 既存の原行decoder・native内訳照合をexport。取込・重複・refreshの挙動は変更しない。
 - `officialGraduationFacts.ts`: 証明済み反復だけ専用配分へ接続、矛盾する0の保留。
 - `graduationProgress.ts`: 既存反復family枠へ接続、証拠に基づく回数、法律専門S除外。
-- `globalOfficialSchooling.ts` / `unresolvedSchoolingImpact.ts`: 新たに証明した矛盾をfallback算入せず、S0の矛盾も未確定として保持。
+- `globalOfficialSchooling.ts` / `unresolvedSchoolingImpact.ts`: 新規のnative反復保留をfallback算入せず、S0の矛盾も未確定として保持。
 - `importedGraduationNotices.ts` / `components/planner/graduation/GraduationProgress.tsx`: 限定した日本語通知・超過表示。
 - 専用fixture / `official-repeatable.test.mjs` / `planner-save-lock.browser.mjs` / `package.json`: 回帰テストと通常CIへの登録。
 
@@ -85,10 +85,43 @@ schemaVersion=22、backup形式、state migration、import contract v1を変更�
 
 - P1監査観点: 独立した公式S2行の組合せとaggregateの権威、同一ID/slot/年度/日付の重複、公式manual二重算入、上限超過が他区分に入らないこと。
 - P2監査観点: 法律＊印のglobal S / 専門S8、null/0の矛盾通知、保存・再取込で証拠が変わらないこと。現時点で自己検証により既知の未修正不具合を断定したものではない。
+- P3監査観点: 保留理由と超過通知の分かりやすさ。同一年度内の算入拡張や旧名称対応は、公式の追加証拠を得てから別途検討する。既知のP3不具合を確定したものではない。
 - 未対応: 同一年度内の複数修得、通信との混合、履修回の一部しか表示されないaggregate、原行と一致しない内訳、旧演習名、歴史資料学の番号別名称・旧名称の自動対応、専門認定との複合。
 - #149の検索追加、#154の地理特殊配分、#155ほか無関係な判定拡張、旧課程全体、2027年度Offering/日程管理は行わない。
 - `graduationCheckComplete=false` / `sourceLinksReverified=false` を維持。独立監査が完了するまでReady変更・mergeしない。
 
+## 必須回帰条件との対応
+
+`tests/official-repeatable.test.mjs` の新規125件とbrowser新規2件で、次を検証する。
+
+| Issue条件 | 回帰対象 |
+| --- | --- |
+| 1〜4、16 | 既存16学科/family規則ごとに1回・2回・上限・上限+1、算入/S/超過、商業と経済の異なる上限 |
+| 5〜7 | 同データ再取込、評価refresh、同一ID/slotのコピー、重複公式行、年度の異なる行/slot、同一年度別期の保留 |
+| 8〜10 | 年度・日付不明、不正日付、年度不整合、aggregate null/0/部分/過大、S不明/矛盾、内訳欠落 |
+| 11、14、15 | 正確な制度ID、曖昧/欠落ID、Mapping競合・複数owner、同一原行IDの矛盾、旧演習名の拒否 |
+| 12〜13 | 手動earnedとの重複除外、planned/in_progress/waiting併存時も公式修得量は不変 |
+| 17 | 実際のimportPreview/applyImport、save/load、backup作成/parse/restore、browser再読込後の原行・内訳保存 |
+| 18 | 他学科、通常科目、認定、地理特殊科目、法律学演習Offering0、日本文学3コース、既存全回帰 |
+
 ## 検証記録
 
-最終実行結果とCI対象HEADはPR本文および本節へ記録する。既存snapshot・既存期待値は変更しない。
+2026-10-14、通常merge後の実装とH19保留修正を検証。Node 24.13.0。browserは外部PlaywrightとChromium headless shell 1243を明示して実行した。
+
+| コマンド | 結果 |
+| --- | --- |
+| `npm run test:planner` | 2,993 / 2,993成功（新規125件を含む） |
+| `npm run typecheck` | 成功 |
+| `npm run lint` | 成功 |
+| `npm run build` | 成功（既存のchunk size警告あり） |
+| `npm run catalog:check` | 成功 |
+| `npm run test:extension` | 54 / 54成功 |
+| `npm run test:bookmarklet` | 168 / 168成功 |
+| `npm run test:planner-browser` | 38 / 38成功（新規2件、既存36件） |
+| `git diff --check` | 成功 |
+
+既存168ケースbaseline、PR #156通信部分修得、#157書道実技、H57、公式null/0保護を既存期待値のまま通過。新規テストの保留数量の期待値は、既存仕様に合わせ0からnullへ修正した。既存snapshot・既存期待値は変更していない。途中実行の成否で完了とせず、統合後に全指定コマンドを成功させた。
+
+自己点検で、native総合特講の年度不明/D評価をH19が全体S2へ算入する経路を再現したため、新しいnative反復診断が付いた保留行に限りfallbackを遮断し、5件の回帰を追加した。従来のopaque行のH19/H43仕様は変更しない。
+
+[Draft PR #162](https://github.com/wata-0911/housei-media/pull/162)に最終HEADとGitHub Actionsの実行URL・結果を記録する。GitHub CIはNode 22でtypecheck、lint、planner、extension、bookmarklet、build（catalog:checkを含む）を実行する。ブラウザー検証はローカル実行。自己テスト・CI成功は独立監査の完了を意味しない。

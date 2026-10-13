@@ -261,3 +261,18 @@ for (const name of ['政治学', '総合特講']) test(`${name}: conflicting nat
   assert.equal(schooling(progress(state)).earned, null);
   assert.equal(schooling(progress(state)).status, 'unknown');
 });
+
+for (const variant of ['year unknown', 'date unknown', 'grade D', 'old snapshot', 'missing component']) test(`native 総合特講 ${variant} cannot bypass held proof through H19`, () => {
+  const data = payload([nativeRow('総合特講', [2025])]), slot = data.courses[0].schoolings[0];
+  if (variant === 'year unknown') { slot.year = null; slot.rawYear = ''; }
+  if (variant === 'date unknown') { slot.date = null; slot.rawDate = ''; }
+  if (variant === 'grade D') { slot.grade = 'D'; slot.rawGrade = 'D'; }
+  const state = importRepeated(data);
+  if (variant === 'old snapshot') state.importedStudyRecords.push({ ...state.importedStudyRecords[0], id: 'old', grade: 'D' });
+  if (variant === 'missing component') state.importedStudyRecords = [];
+  assertHeld(state);
+  const p = progress(state);
+  assert.equal(total(p).earned, null);
+  assert.equal(schooling(p).earned, null);
+  assert.equal(schooling(p).status, 'unknown');
+});
