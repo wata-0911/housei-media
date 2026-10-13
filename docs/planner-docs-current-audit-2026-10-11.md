@@ -4,6 +4,8 @@
 
 状態: **現行仕様の照合と目標設計の監査。年度非依存化・卒業エンジンの実装監査完了ではない。** 過去のH/F項目、PASS記録、公式資料確認履歴はそのまま保存する。H01〜H66を全件再評価した記録ではない。
 
+注: 本文中の `src/planner/` / `src/components/planner/` 参照パスは、PR #159（`322198a`）以降の責務別配置に合わせて更新済みである。監査日・基準 commit・監査事実・未実装判定は書き換えない。ディレクトリ現状は [architecture.md 第16節](planner/architecture.md) を参照。
+
 ## 今回の照合範囲
 
 確認したのはdocs全体の版・年度・backup・未実装表現、型/schema、runtime catalog/generator、storage/validation、import source/年度、BackupPanel/Pageの保存経路、進捗/評価/Undo/年度計画、既存テストである。GitHubで#95、#129、#133、#132、#134、#137、#98とPR #126/#138の状態・本文も確認した。個人のlocalStorage・実成績、公式PDFの再取得・全リンク再検証は対象外。iPhone実機についてはPR #138のユーザー報告を参照したが、Workによる再検証はしていない。

@@ -1,11 +1,12 @@
 # 履修プランナー Architecture v1
 
-> **2026-10-11 最新追記:** 現状基準はPR #138後のdev `05dac8c`。第15節と[現状監査](../planner-docs-current-audit-2026-10-11.md)を参照。以下の旧基準に紐づくH/F評価は履歴として保持する。目標仕様は[年度非依存化方針](../planner-curriculum-release-policy.md)に定め、新モデルは未実装、実値・公式読替等は未確定。
+> **2026-10-13 最新追記:** 現状基準はPR #159後のdev（`34416ca`）。PR #159により `src/planner/` および `src/components/planner/` のファイル群が責務別のサブディレクトリへ整理された。第16節にディレクトリ構造・モジュール配置・依存関係境界を記録する。第15節の保存・復元仕様、旧基準に紐づくH/F評価は履歴として保持する。目標仕様は[年度非依存化方針](../planner-curriculum-release-policy.md)に定め、新モデルは未実装、実値・公式読替等は未確定。
 
 ## 1. Document Status
 
 - 状態: 現行実装の Architecture v1（2026-10-08、Asia/Tokyo）。将来設計の確定書ではない。
 - 基準: `origin/dev` の `1b14ff44f93ef665c0677d4d36b5077fa2cd8deb`（PR #87 `fix(planner): enforce grade import trust boundary` merge）。H41/H42 とその review follow-up を含む。H43の限定schooling経路はPR #88後の `6ab100abcc7d9cdc4b29ea0204b7799c8bd4c9ee` をbaseに追加。H19のLaw S30/S8分離はPR #91後の `7643130971246768624fe486a1fbb0d4d1cc8cd1` をbaseに追加。H14の専門認定overlap局所化は `dfb92b2c15aaccd7a3e86e7e466f2d9bbc51de79` をbaseに追加。H20の認定S budget分離は `3d79f463929de282c29578aae99d6280a491ca2b` をbaseに追加。
+- ディレクトリ配置の現状基準は第16節（PR #159 / `34416ca`）。本節の基準 commit は H/F 評価の履歴照合用であり、ファイル配置は書き換えない。
 - `PlannerState.schemaVersion = 22`。catalog metadata の `graduationCheckComplete = false`、`sourceLinksReverified = false` を維持する。
 - `graduationCheckComplete` は engine/catalog の開発上の完成度であり、個別学生の卒業可否ではない。個別の充足表示を合成して最終卒業判定を返すエンジンではない。
 - 本書の「official」は取り込まれた成績表行の**計算上の authority**を指す。大学による署名・真正性を認証したデータという意味ではない。
@@ -14,7 +15,7 @@
 
 ## 2. Purpose / Scope
 
-対象は `/planner`、`src/planner`、Planner UI、および成績 capture/import の bounded context。第三者が、数量・制度 identity・年度開講・利用者状態・算入・unknown の違いを理解できることを目的とする。Home / Q&A / Contact 等の一般サイト機能は対象外。
+対象は `/planner`、`src/planner/`（ドメインロジック・計算・カタログ）、`src/components/planner/`（UIコンポーネント）、および成績 capture/import の bounded context。第三者が、数量・制度 identity・年度開講・利用者状態・算入・unknown の違い、および責務別のモジュール分割（第16節）を理解できることを目的とする。Home / Q&A / Contact 等の一般サイト機能は対象外。
 
 成績の取り込み、利用者が管理する履修状態、現在のカタログとの接続、卒業要件の部分評価、参考進捗・診断・卒論手続の境界を扱う。Auth / Cloud / Profile SNS、multi-year 基盤、UI 再設計の採用は本書では決めない。
 
@@ -354,3 +355,252 @@ The public 2026 guide printed p.133 / PDF p.135 defines admission recognition an
 **未実装:** Offering非依存の手動Attempt保存、同Openingの複数回、Placement/Version、年度非依存migration・新計算consumer。**未確定:** ID実値・改正読替・具体schema/backup次版。[詳細設計](../planner-year-independent-design.md)と[移行計画](../planner-year-independent-migration.md)を参照。年度別registryを新規導入する工程は採用しない。
 
 **継続する制約:** state22、graduationCheckComplete=false、sourceLinksReverified=false、earnedCreditsTotal正本、null/0と原文/手動情報保護。PR #138について利用者からiPhone Safari実機のbackup/restore全項目と入力修正後4項目のPASS報告あり。Workの独立再現ではなく、PR #139での再検証もしていない。年度非依存の新モデル/schema/migrationは未実装で、実機検証も未実施。全H最終監査は未完。今回の検証範囲は[現状監査](../planner-docs-current-audit-2026-10-11.md)に記録する。
+
+## 16. ディレクトリ構造とモジュール配置（PR #159 責務別再編）
+
+基準: PR #159（commit `322198a`）マージ後 dev `34416ca`。
+
+### 16.1 再編の背景とスコープ
+
+PR #159 において、`src/planner/`（61ファイル）および `src/components/planner/`（39ファイル）の合計100ファイルを、責務別のサブディレクトリへと移動・再配置した。ルートに残る `plannerCatalog.ts` / `validation.ts` / `calculations.ts` / `plannerHelpers.ts` / schema は移動対象外である。
+この変更はコードベースの保守性と責務境界を明確化するリファクタリングであり、**ドメインモデル、計算アルゴリズム、保存仕様（schemaVersion 22）、卒業要件判定仕様、成績取り込み契約等の外部仕様・ビジネスロジックは一切変更していない**。
+
+### 16.2 ディレクトリ構成
+
+現行のファイル配置は以下のとおりである。
+
+#### ドメイン層・ロジック（`src/planner/`）
+
+```text
+src/planner/
+├── calculations.ts                  # 単位集計・サマリー計算共通関数
+├── plannerCatalog.ts                # ドメイン型定義（CurriculumCourse, Mapping, Offering 等）
+├── plannerHelpers.ts                # カタログ探索・判定ヘルパー
+├── planner_catalog_2026.schema.json # カタログ・保存状態の JSON Schema (Draft 2020-12)
+├── validation.ts                    # 保存状態の Ajv バリデーション
+├── backup/                          # 保存・バックアップ・復元・保護
+│   ├── plannerBackup.ts             # バックアップ生成（v1/v2）
+│   ├── plannerBackupCompatibility.ts# バックアップ互換性検証・SHA照合
+│   ├── plannerBackupProtection.ts   # 原文保護・RAW/SHA保持
+│   ├── plannerBackupStorage.ts      # バックアップ復元実行（Web Locks・expectedRaw検証）
+│   └── storage.ts                   # localStorage アクセス・保存ロック排他
+├── catalog/                         # カリキュラム・開講カタログ構築
+│   ├── catalog.ts                   # ランタイムカタログのロード・検証パイプライン
+│   ├── curriculumCatalog.ts         # 制度科目（CurriculumCourse）カタログ結合
+│   ├── curriculumGeneration.ts      # カリキュラムカタログ生成（制度科目ID等）
+│   ├── curriculumIdentityValidation.ts # 制度科目ID検証・stale解決
+│   ├── curriculumMigration.ts       # カリキュラム移行・整合性検査
+│   └── manualMappingOverrides.ts    # 手動/公式マッピングオーバーライド適用
+├── exports/                         # データ・画像エクスポート
+│   ├── mediaImageExport.ts          # メディア進捗画像出力
+│   ├── plannerExport.ts             # CSV / テキストエクスポート
+│   └── pngExport.ts                 # プランナー画面 PNG 出力
+├── gradeImport/                     # 成績取り込み・パース・照合・反映
+│   ├── curriculumImportMatch.ts     # Stage A 制度科目照合（exact_unique 等）
+│   ├── directGradeHandoff.ts        # 拡張機能 direct 受信ハンドラ
+│   ├── gradeImportApply.ts          # Stage B 開講照合・反映・同一性再検証
+│   ├── gradeImportContract.ts       # 成績 JSON バリデーション契約
+│   ├── importNameNormalization.ts   # 科目名正規化ユーティリティ
+│   ├── importNavigation.ts          # 取り込みナビゲーション・URL fragment
+│   ├── importedAchievementCalculations.ts # 取り込み成績の集計・表示ステータス
+│   ├── importedAchievementIdentity.ts     # 成績行・内訳の同一性判定・フィンガープリント
+│   ├── importedAchievementManagement.ts   # 取り込み成績の管理・手動関連付け
+│   ├── importedAchievementRepair.ts       # 取り込み成績の修復
+│   └── importedGraduationNotices.ts       # 取り込み成績に関する卒業警告・通知
+├── graduation/                      # 卒業要件判定エンジン・ルール・保留
+│   ├── geographyTransferRules.ts    # 地理学科振替ルール
+│   ├── globalOfficialSchooling.ts   # スクーリング単位グローバル証明（H19/H43共有）
+│   ├── graduationProfile.ts         # 卒業プロファイル（入学区分・認定単位等）
+│   ├── graduationProgress.ts        # 卒業要件判定メインパイプライン
+│   ├── graduationSources.ts         # 出典・卒論単位数メタデータ
+│   ├── heldOfficialSchooling.ts     # 保留スクーリング単位の安全算入（H43）
+│   ├── historySeminar.ts            # 史学科演習修得順・5科目ゲート
+│   ├── lawExcludedOfficialSchooling.ts # 法律学科専門S8除外のS30算入（H19）
+│   ├── officialCourseCredits.ts     # 公式成績集計・公式優先除外処理
+│   ├── officialGraduationFacts.ts   # 公式成績計算用プロジェクション（Fact）
+│   ├── publicCourseRules.ts         # 公開科目上限・算入ルール
+│   ├── recognizedProfessionalIdentity.ts # 専門認定の制度科目ID解決・重複判定（H14）
+│   ├── repeatableRules.ts           # 再履修可能科目上限ルール
+│   ├── specialLectureProgress.ts    # 特講（基礎・総合）進捗・上限計算
+│   ├── thesisGuidance.ts            # 卒業論文指導資格判定
+│   ├── thesisSelection.ts           # 卒業論文選択・必修分岐判定
+│   ├── unresolvedConditions.ts      # 未解決条件分類・集約（Issue #56）
+│   ├── unresolvedEarnedImpact.ts    # プランナー側未解決影響分析
+│   ├── unresolvedOfficialImpact.ts  # 公式成績未解決影響分析（H41）
+│   └── unresolvedSchoolingImpact.ts # スクーリング軸未解決影響分析（H42）
+├── institutional/                   # 制度科目・コード体系・baseline（YI-01/02）
+│   ├── canonicalName.ts             # 正式科目名正規化
+│   ├── legacyArchive.ts             # 過去アーカイブ
+│   ├── loader.ts                    # 制度カタログロード
+│   ├── query.ts                     # 制度科目検索・クエリ
+│   ├── registryBaseline.ts          # レジストリベースライン
+│   ├── types.ts                     # 制度カタログ型定義
+│   ├── validation.ts                # 制度カタログバリデーション
+│   └── yi01.ts                      # YI-01 仕様ローダー
+├── planning/                        # 履修計画・年次計画・履修資格
+│   ├── annualPlan.ts                # 年間履修計画導出
+│   ├── futurePlanning.ts            # 将来計画（暦年）管理
+│   ├── planTable.ts                 # 計画テーブル表示ロジック
+│   ├── plannerItemState.ts          # 履修項目状態遷移
+│   ├── publicCourses.ts             # 公開科目計画・管理
+│   ├── removeUndo.ts                # 科目削除・Undo 操作
+│   └── yearEligibility.ts           # 学年・履修資格判定
+└── progress/                        # 進捗管理・ビューモデル・評価
+    ├── calligraphyProgress.ts       # 書道実技進捗計算
+    ├── correspondenceProgress.ts    # 通信学習進捗計算
+    ├── correspondenceRequirements.ts# 通信学習必要要件
+    ├── courseEvaluations.ts         # 科目評価（成績・自己評価）
+    ├── curriculumCourseProgress.ts  # 制度科目進捗集計
+    ├── curriculumCourseView.ts      # カリキュラム中心統合ビューモデル
+    ├── mediaSchooling.ts            # メディアスクーリング進捗管理
+    ├── plannerItemCredits.ts        # 履修項目単位集計
+    └── unifiedCourseView.ts         # 統合コースビュー補助
+```
+
+#### UIコンポーネント層（`src/components/planner/`）
+
+```text
+src/components/planner/
+├── backup/                          # バックアップ・復元UI
+│   └── PlannerBackupPanel.tsx       # バックアップ・復元パネル
+├── common/                          # 共通UI部品
+│   ├── ClassificationLabel.tsx      # 区分・所属ラベル
+│   └── CommittedInput.tsx           # 確定時保存入力部品（IME対応）
+├── courses/                         # 制度科目・履修一覧UI
+│   ├── CurriculumCourseCard.tsx     # 制度科目カード表示
+│   ├── CurriculumCourseList.tsx     # 制度科目中心履修・修得一覧
+│   ├── CurriculumCourseList.types.ts# 一覧の型定義
+│   ├── CurriculumCourseProgress.tsx # 制度科目進捗表示
+│   ├── OfficialAchievementChild.tsx # 公式成績行子コンポーネント
+│   ├── PlannedCourseList.tsx        # 計画科目一覧（互換）
+│   ├── PlannerAttemptChild.tsx      # 履修試行子コンポーネント
+│   ├── PlannerRowControls.tsx       # 履修項目操作コントロール
+│   ├── PublicCourseList.tsx         # 公開科目一覧・編集
+│   └── UnresolvedCurriculumSection.tsx # 未解決項目表示セクション
+├── exports/                         # エクスポート操作UI
+│   └── PlannerExportActions.tsx     # CSV/PNG エクスポートボタン・メニュー
+├── gradeImport/                     # 成績取り込みUI
+│   ├── BrowserExtensionEntrySection.tsx # 拡張機能連携案内
+│   ├── GradeImportBookmarklet.tsx   # ブックマークレット連携案内
+│   ├── GradeImportPanel.tsx         # 成績取り込みメインパネル
+│   ├── ImportedAchievements.tsx     # 取り込み成績一覧・関連付け管理
+│   ├── ImportedCourseRepair.tsx     # 取り込み成績修復UI
+│   ├── ImportedSourceDetails.tsx    # 取り込み元詳細（原行・内訳）モーダル
+│   └── ImportedStudyRecordEditor.tsx# 学習記録（リポート・試験）編集
+├── graduation/                      # 卒業要件進捗UI
+│   ├── GraduationProgress.tsx       # 卒業要件進捗カード・要件・参照表示
+│   ├── ThesisGuidance.tsx           # 卒業論文指導資格・手続表示
+│   └── UnresolvedConditions.tsx     # 未解決条件一覧・アクション案内
+├── planning/                        # 計画・集計サマリーUI
+│   ├── AnnualCreditLimitNotice.tsx  # 年間登録上限（49単位）注意表示
+│   ├── CategorySummary.tsx          # 区分別単位集計表示
+│   ├── CreditSummary.tsx            # 単位サマリー表示
+│   └── FuturePlanNotice.tsx         # 将来計画注意表示
+├── profile/                         # プロファイル設定UI
+│   ├── GraduationProfileSettings.tsx# 卒業プロファイル設定
+│   ├── PlannerProfileTab.tsx        # プロファイルタブ全体
+│   ├── ProfileBasicSettings.tsx     # 基本情報設定（所属・入学区分）
+│   └── ProgramSettings.tsx          # 適用課程設定
+├── progress/                        # 学習進捗・評価UI
+│   ├── CorrespondenceProgress.tsx   # 通信学習進捗表示
+│   ├── CorrespondenceStudyMethod.tsx# 通信学習方式表示
+│   ├── CourseEvaluations.tsx        # 科目評価入力・表示
+│   ├── MediaProgressShareModal.tsx  # メディア進捗共有モーダル
+│   ├── MediaSchoolingProgress.tsx   # メディアスクーリング進捗表示
+│   └── SavedAttemptProgress.tsx     # 保存済み試行進捗表示
+└── search/                          # 検索UI
+    └── CourseSearch.tsx             # 開講科目検索コンポーネント
+```
+
+### 16.3 レイヤー構造と依存関係の境界
+
+層の向き（UI→ドメイン、ページがオーケストレーション）は固定する。ドメインサブパッケージ同士は型・ヘルパー共有のため相互参照があり、下図は主要依存の概観である（全辺の列挙ではない）。
+
+```mermaid
+flowchart TD
+  subgraph Page[ページ層]
+    PlannerPage[src/pages/PlannerPage.tsx]
+  end
+
+  subgraph UI[UIコンポーネント層 src/components/planner/]
+    UI_courses[courses/]
+    UI_graduation[graduation/]
+    UI_gradeImport[gradeImport/]
+    UI_progress[progress/]
+    UI_planning[planning/]
+    UI_profile[profile/]
+    UI_backup[backup/]
+    UI_exports[exports/]
+    UI_search[search/]
+    UI_common[common/]
+  end
+
+  subgraph Domain[ドメイン層 src/planner/]
+    D_progress[progress/]
+    D_graduation[graduation/]
+    D_planning[planning/]
+    D_gradeImport[gradeImport/]
+    D_catalog[catalog/]
+    D_backup[backup/]
+    D_exports[exports/]
+    D_inst[institutional/ 孤立 read model]
+    D_root[ルート: plannerCatalog.ts / validation.ts / calculations.ts]
+  end
+
+  PlannerPage --> UI
+  PlannerPage --> D_backup
+  PlannerPage --> D_catalog
+  PlannerPage --> D_graduation
+  PlannerPage --> D_progress
+  PlannerPage --> D_gradeImport
+  PlannerPage --> D_planning
+  PlannerPage --> D_exports
+  PlannerPage --> D_root
+
+  UI --> Domain
+
+  D_graduation --> D_catalog
+  D_graduation --> D_gradeImport
+  D_graduation --> D_progress
+  D_graduation --> D_root
+
+  D_progress --> D_gradeImport
+  D_progress --> D_graduation
+  D_progress --> D_root
+
+  D_gradeImport --> D_catalog
+  D_gradeImport --> D_graduation
+  D_gradeImport --> D_planning
+  D_gradeImport --> D_progress
+  D_gradeImport --> D_root
+
+  D_planning --> D_gradeImport
+  D_planning --> D_progress
+  D_planning --> D_root
+
+  D_catalog --> D_gradeImport
+  D_catalog --> D_root
+
+  D_backup --> D_catalog
+  D_backup --> D_gradeImport
+  D_backup --> D_graduation
+  D_backup --> D_root
+
+  D_exports --> D_planning
+  D_exports --> D_progress
+  D_exports --> D_root
+```
+
+1. **ドメイン層のUI非依存性（一方向依存）**:
+   - `src/planner/` 配下のモジュールは TypeScript/JSON であり、React / DOM / CSS、および UI層（`src/components/planner/`）をインポートしない。
+2. **オーケストレーターとしての `PlannerPage`**:
+   - `src/pages/PlannerPage.tsx` が状態管理（`state`）、カタログ、ストレージ（`backup/storage.ts`）、卒業要件計算（`calculateGraduationProgress`）、ビューモデル導出（`deriveCurriculumCourseView`）、取り込み apply などを統合し、UIへ props / コールバックとして配分する。
+3. **UI層のコールバック駆動（backup は例外）**:
+   - 通常の UI は表示用プロジェクションを描画し、追加・状態変更・削除・取り込み反映は `PlannerPage` の `commit()` 等へ依頼する。
+   - 例外: `backup/PlannerBackupPanel.tsx` は復元・原文保護のため `localStorage` の raw 読取と Web Lock 付き restore API を直接扱う。通常の履修状態編集の正本更新経路ではない。
+4. **ドメインサブパッケージの責務（現行）**:
+   - `catalog/` は制度科目・開講カタログの構築と identity / migration 補助を担う。卒業判定エンジン本体は置かない。
+   - `gradeImport/` は取込データの契約検証・照合・反映用 PlannerItem 生成と identity 補助を担う。`calculateGraduationProgress` は実行しないが、公式優先除外や Fact 型など `graduation/` の一部ヘルパーは参照する。
+   - `graduation/` は Fact プロジェクションと純粋関数で進捗・参考値を導出する。
+   - `backup/` は storage / lock / backup 完全性を管理する。load 時に profile 検証や curriculum migration など保存整合のためのドメイン補助は呼び得るが、卒業充足判定そのものは行わない。
+   - `institutional/` は YI-01/02 の孤立 read model であり、現行の `PlannerPage` / 卒業 consumer には未接続（[YI-02 README](../planner-yi-02/README.md)）。
