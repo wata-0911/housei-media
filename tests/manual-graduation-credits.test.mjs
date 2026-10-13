@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catalog } from '../src/planner/catalog.ts';
-import { calculateGraduationProgress } from '../src/planner/graduationProgress.ts';
-import { deriveCurriculumCourseProgress } from '../src/planner/curriculumCourseProgress.ts';
-import { initialState, loadState, saveState } from '../src/planner/storage.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { deriveCurriculumCourseProgress } from '../src/planner/progress/curriculumCourseProgress.ts';
+import { initialState, loadState, saveState } from '../src/planner/backup/storage.ts';
 import { validateState } from '../src/planner/validation.ts';
-import { createPlannerBackup, parsePlannerBackup } from '../src/planner/plannerBackup.ts';
+import { createPlannerBackup, parsePlannerBackup } from '../src/planner/backup/plannerBackup.ts';
 
 // Synthetic quantities/identities, but real department requirements and engine.
 function fixture(program = catalog.programs.find(p => p.department === '法律学科')) {

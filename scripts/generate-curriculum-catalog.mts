@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import { generateCurriculumCatalog } from '../src/planner/curriculumGeneration';
-import { applyManualMappingOverrides } from '../src/planner/manualMappingOverrides';
+import { generateCurriculumCatalog } from '../src/planner/catalog/curriculumGeneration';
+import { applyManualMappingOverrides } from '../src/planner/catalog/manualMappingOverrides';
 import type { PlannerCatalog } from '../src/planner/plannerCatalog';
 const read = (path: string) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url), 'utf8'));
 const catalog = applyManualMappingOverrides(read('../src/data/planner_catalog_2026.json') as PlannerCatalog);

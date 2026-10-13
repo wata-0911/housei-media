@@ -1,4 +1,4 @@
-import { diagnoseHoseiGradeImportV1, type HoseiGradeImportValidationIssue } from '../src/planner/gradeImportContract';
+import { diagnoseHoseiGradeImportV1, type HoseiGradeImportValidationIssue } from '../src/planner/gradeImport/gradeImportContract';
 
 export class GradeImportSerializationError extends Error {
   constructor(readonly code: 'GI_SERIALIZE_INPUT' | 'GI_SERIALIZE_ENCODE' | 'GI_SERIALIZE_PARSE' | 'GI_SERIALIZE_FINAL', readonly issue: HoseiGradeImportValidationIssue | null = null) {

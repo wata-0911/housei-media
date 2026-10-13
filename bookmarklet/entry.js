@@ -1,5 +1,5 @@
 import { extractCurrentDocument, isSafeExtractionFailure } from '../shared/grade-import/extractor.js';
-import { diagnoseHoseiGradeImportV1 } from '../src/planner/gradeImportContract.ts';
+import { diagnoseHoseiGradeImportV1 } from '../src/planner/gradeImport/gradeImportContract.ts';
 import { GradeImportSerializationError, serializeGradeImport } from './serialize.ts';
 import { copyText } from './clipboard.js';
 

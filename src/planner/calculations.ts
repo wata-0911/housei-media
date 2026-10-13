@@ -1,5 +1,5 @@
 import type { Offering, PlannerItem, PublicCourse } from './plannerCatalog';
-import { plannerItemCreditContribution } from './plannerItemCredits';
+import { plannerItemCreditContribution } from './progress/plannerItemCredits';
 
 export function summarizeCredits(items: PlannerItem[], offerings: Map<string, Offering>, publicCourses: PublicCourse[] = []) {
   const summary = { earned: 0, in_progress: 0, planned: 0, unknownCreditItems: 0 };

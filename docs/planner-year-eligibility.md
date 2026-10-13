@@ -22,7 +22,7 @@ schema は両方を「1〜4のユニークな整数配列または null」とだ
 
 ## 判定方針
 
-`src/planner/yearEligibility.ts` が検索用判定と表示文言の共通実装である。
+`src/planner/planning/yearEligibility.ts` が検索用判定と表示文言の共通実装である。
 
 1. `manual_review` / `outside_mapping_scope`、null、不正値、解決不能edge は `unknown`。
 2. 所属未選択では offering の non-null 値だけを使う。mapping を跨いで合成しない。

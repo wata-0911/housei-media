@@ -1,7 +1,7 @@
-import { catalog } from '../../src/planner/catalog.ts';
-import { initialState } from '../../src/planner/storage.ts';
-import { officialRecognitionPrefill } from '../../src/planner/graduationProfile.ts';
-import { calculateGraduationProgress } from '../../src/planner/graduationProgress.ts';
+import { catalog } from '../../src/planner/catalog/catalog.ts';
+import { initialState } from '../../src/planner/backup/storage.ts';
+import { officialRecognitionPrefill } from '../../src/planner/graduation/graduationProfile.ts';
+import { calculateGraduationProgress } from '../../src/planner/graduation/graduationProgress.ts';
 
 export const plannerItem = (offering, status = 'earned') => ({ offeringId: offering.id, status, plannedYear: 2026, plannedTerm: null, studyYear: null, earnedOrder: null });
 export function officialRow(course, amount = 4) {

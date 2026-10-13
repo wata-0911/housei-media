@@ -1,4 +1,4 @@
-import { catalog } from '../../src/planner/catalog.ts';
+import { catalog } from '../../src/planner/catalog/catalog.ts';
 import { course, item } from './calligraphy-progress.mjs';
 export const summer = catalog.offerings.find(o => o.curriculumCourseId === course.id && o.method === 'schooling' && o.name.includes('夏期'));
 export const gw = catalog.offerings.find(o => o.curriculumCourseId === course.id && o.method === 'schooling' && o.name.includes('ゴールデンウィーク'));

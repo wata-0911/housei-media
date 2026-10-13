@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {test} from 'node:test';
 import {harness, cells, rows32} from './fixtures/extraction-dom.mjs';
-import {isHoseiGradeImportV1} from '../../src/planner/gradeImportContract.ts';
+import {isHoseiGradeImportV1} from '../../src/planner/gradeImport/gradeImportContract.ts';
 
 const extension = readFileSync(new URL('../../extension/hosei-planner-import/parser/extractor.js', import.meta.url), 'utf8');
 const artifact = JSON.parse(readFileSync(new URL('../../src/generated/gradeImportBookmarklet.json', import.meta.url), 'utf8'));

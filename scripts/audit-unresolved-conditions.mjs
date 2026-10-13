@@ -1,7 +1,7 @@
 /** Read-only synthetic audit. --write regenerates the checked-in report only. */
 import { writeFileSync } from 'node:fs';
 import { scenarios, calculateScenario } from '../tests/fixtures/unresolved-condition-scenarios.mjs';
-import { projectUnresolvedConditions } from '../src/planner/unresolvedConditions.ts';
+import { projectUnresolvedConditions } from '../src/planner/graduation/unresolvedConditions.ts';
 
 const escape = value => String(value ?? '—').replaceAll('|', '\\|').replaceAll('\n', ' ');
 const table = rows => rows.map(row => `| ${row.map(escape).join(' | ')} |`).join('\n');

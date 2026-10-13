@@ -299,7 +299,7 @@ roll-out案:
 
 ## 10. Unified View target model — 今回のpure foundation
 
-`src/planner/curriculumCourseView.ts`に`deriveCurriculumCourseView(state, catalog)`を追加する。既存`deriveCurriculumCourseProgress`の集計・completion・repeatability・warningを再利用し、新たな単位policyを作らない。`PlannerPage`からはまだ呼ばない。
+`src/planner/progress/curriculumCourseView.ts`に`deriveCurriculumCourseView(state, catalog)`を追加する。既存`deriveCurriculumCourseProgress`の集計・completion・repeatability・warningを再利用し、新たな単位policyを作らない。`PlannerPage`からはまだ呼ばない。
 
 ```ts
 CurriculumCourseViewResult {

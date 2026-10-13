@@ -42,7 +42,7 @@ flowchart TD
 
 これは主要経路の概観であり、consumer は完全な sibling ではない。Cards→overall reference、Law professional Cards→一部 Structured Requirements などの依存を第10・11章で区別する。年度計画・CourseProgress・通信/メディア学習進捗・成績表示・卒論 guidance も PlannerState を読むが、各表示の数量を卒業算入へそのまま転用しない。
 
-根拠: [PlannerPage](../../src/pages/PlannerPage.tsx)、[storage](../../src/planner/storage.ts)、[graduationProgress](../../src/planner/graduationProgress.ts)。
+根拠: [PlannerPage](../../src/pages/PlannerPage.tsx)、[storage](../../src/planner/backup/storage.ts)、[graduationProgress](../../src/planner/graduation/graduationProgress.ts)。
 
 ## 4. Core Domain Objects
 
@@ -63,7 +63,7 @@ flowchart TD
 
 PlannerItem の `courseCreditContribution` は CourseProgress、summary、年度通信等のための値であり、official aggregate や卒業配分を上書きしない。`CourseEvaluation.finalGrade` は利用者管理で、component gradeやimportが自動決定しない。
 
-根拠: [domain types](../../src/planner/plannerCatalog.ts)、[import objects / apply](../../src/planner/gradeImportApply.ts)、[official facts](../../src/planner/officialGraduationFacts.ts)。
+根拠: [domain types](../../src/planner/plannerCatalog.ts)、[import objects / apply](../../src/planner/gradeImport/gradeImportApply.ts)、[official facts](../../src/planner/graduation/officialGraduationFacts.ts)。
 
 ## 5. Authority Hierarchy
 
@@ -93,7 +93,7 @@ recognition の重複制御はこのofficial優先処理と同一ではない。
 
 このruntime catalogを消費するので、未加工snapshotだけでは実際の関係を説明できない。recognition、schooling reference、卒論guidance等に `courseId` が残り、CurriculumCourseへの全面移行は未完。
 
-根拠: [official priority](../../src/planner/officialCourseCredits.ts)、[loadCatalog](../../src/planner/catalog.ts)、[overrides](../../src/planner/manualMappingOverrides.ts)、[attach](../../src/planner/curriculumCatalog.ts)。
+根拠: [official priority](../../src/planner/graduation/officialCourseCredits.ts)、[loadCatalog](../../src/planner/catalog/catalog.ts)、[overrides](../../src/planner/catalog/manualMappingOverrides.ts)、[attach](../../src/planner/catalog/curriculumCatalog.ts)。
 
 ## 6. Grade Import Trust Boundary
 
@@ -124,7 +124,7 @@ handoffの有効期限は5分。production Extensionの有効targetは `https://
 - 既に保存済みのlegacy stateを洗浄するmigrationではない。state保存・手編集・任意に合成したpreview objectすべてを無条件にsanitizeする保証でもない。
 - `source`、`capturedAt`、UUID、origin/path制約はcryptographic provenanceの証明ではない。成績の真正性を認証しない。
 
-根拠: [contract/parser](../../src/planner/gradeImportContract.ts)、[importPreview/apply](../../src/planner/gradeImportApply.ts)、[Panel](../../src/components/planner/GradeImportPanel.tsx)、[direct helper](../../src/planner/directGradeHandoff.ts)、[Bookmarklet](../../bookmarklet/entry.js)、[capture guard](../../extension/hosei-planner-import/capture-origin.js)、[popup](../../extension/hosei-planner-import/popup.js)、[handoff store](../../extension/hosei-planner-import/handoff-store.js)、[background](../../extension/hosei-planner-import/background.js)、[bridge](../../extension/hosei-planner-import/planner-bridge.js)。
+根拠: [contract/parser](../../src/planner/gradeImport/gradeImportContract.ts)、[importPreview/apply](../../src/planner/gradeImport/gradeImportApply.ts)、[Panel](../../src/components/planner/gradeImport/GradeImportPanel.tsx)、[direct helper](../../src/planner/gradeImport/directGradeHandoff.ts)、[Bookmarklet](../../bookmarklet/entry.js)、[capture guard](../../extension/hosei-planner-import/capture-origin.js)、[popup](../../extension/hosei-planner-import/popup.js)、[handoff store](../../extension/hosei-planner-import/handoff-store.js)、[background](../../extension/hosei-planner-import/background.js)、[bridge](../../extension/hosei-planner-import/planner-bridge.js)。
 
 ## 7. Identity Resolution
 
@@ -138,7 +138,7 @@ official factでは同じrow IDの再入力は冪等化する。exactな同一Cu
 
 Mappingの候補から任意の1件を自動採用しない。ただし選択scope/common内の全候補が同一allocation signature（scope種別、category、field、requirementType、curriculumCredits、schoolingOnly、mediaOnly）なら `equivalent` allocationが可能。代表descriptorは同値性を証明した後だけ選び、全Mapping IDsを保持する。
 
-根拠: [Stage A / manual selection](../../src/planner/curriculumImportMatch.ts)、[identity validation](../../src/planner/curriculumIdentityValidation.ts)、[Stage B](../../src/planner/gradeImportApply.ts)、[fact grouping/allocation](../../src/planner/officialGraduationFacts.ts)。
+根拠: [Stage A / manual selection](../../src/planner/gradeImport/curriculumImportMatch.ts)、[identity validation](../../src/planner/catalog/curriculumIdentityValidation.ts)、[Stage B](../../src/planner/gradeImport/gradeImportApply.ts)、[fact grouping/allocation](../../src/planner/graduation/officialGraduationFacts.ts)。
 
 ## 8. Credit Axes
 
@@ -163,7 +163,7 @@ media evidenceは `source='hosei_import'` かつ同じ `sourceCourseId` の実�
 
 数量、算入量、評価statusを別々に読む必要がある。known earnedとevaluation/completion unknownは共存できる。
 
-根拠: [OfficialGraduationFact / OfficialAllocationInput](../../src/planner/officialGraduationFacts.ts)、[consumer calculation](../../src/planner/graduationProgress.ts)。
+根拠: [OfficialGraduationFact / OfficialAllocationInput](../../src/planner/graduation/officialGraduationFacts.ts)、[consumer calculation](../../src/planner/graduation/graduationProgress.ts)。
 
 ### H20: schooling source ownership
 
@@ -210,7 +210,7 @@ safe Mapping candidatesを使い、外国語の同一言語S、法律専門S8、
 
 overall referenceはH41の未解決source guardを保持し、局所consumerのminimumがsatisfiedでもunknownになり得る。Planner側 `unresolvedEarnedImpact` にofficial側のsaturation規則をそのまま適用しない。
 
-根拠: [Planner impact](../../src/planner/unresolvedEarnedImpact.ts)、[H41 / officialEvaluationCanChange](../../src/planner/unresolvedOfficialImpact.ts)、[H42](../../src/planner/unresolvedSchoolingImpact.ts)、[H43](../../src/planner/heldOfficialSchooling.ts)、[H19](../../src/planner/lawExcludedOfficialSchooling.ts)、[共有S証明](../../src/planner/globalOfficialSchooling.ts)、[integration](../../src/planner/graduationProgress.ts)。
+根拠: [Planner impact](../../src/planner/graduation/unresolvedEarnedImpact.ts)、[H41 / officialEvaluationCanChange](../../src/planner/graduation/unresolvedOfficialImpact.ts)、[H42](../../src/planner/graduation/unresolvedSchoolingImpact.ts)、[H43](../../src/planner/graduation/heldOfficialSchooling.ts)、[H19](../../src/planner/graduation/lawExcludedOfficialSchooling.ts)、[共有S証明](../../src/planner/graduation/globalOfficialSchooling.ts)、[integration](../../src/planner/graduation/graduationProgress.ts)。
 
 ## 10. Graduation Calculation Pipeline
 
@@ -227,7 +227,7 @@ overall referenceはH41の未解決source guardを保持し、局所consumerのm
 
 これは純粋な計算経路であり、facts / impact / consumer結果をPlannerStateへ保存しない。一般のearned PlannerItemはOffering単位等で計算され、official factsだけのエンジンではない。planned / in_progressは参考projectionであり、現在のearned completionに加算しない。
 
-根拠: [calculateGraduationProgress](../../src/planner/graduationProgress.ts)。
+根拠: [calculateGraduationProgress](../../src/planner/graduation/graduationProgress.ts)。
 
 ## 11. Consumer Model
 
@@ -247,7 +247,7 @@ overall referenceはH41の未解決source guardを保持し、局所consumerのm
 
 UIのCourseProgressや年度単位、成績表示、学習・評価・guidanceはそれぞれの目的で情報を消費する。特に共通科目の免除相当の扱いなど、guidance用credit gateと卒業earned creditを同一視しない。
 
-根拠: [consumer types / reference / coverage](../../src/planner/graduationProgress.ts)、[import notices](../../src/planner/importedGraduationNotices.ts)、[guidance](../../src/planner/thesisGuidance.ts)、[Planner UI integration](../../src/pages/PlannerPage.tsx)。
+根拠: [consumer types / reference / coverage](../../src/planner/graduation/graduationProgress.ts)、[import notices](../../src/planner/gradeImport/importedGraduationNotices.ts)、[guidance](../../src/planner/graduation/thesisGuidance.ts)、[Planner UI integration](../../src/pages/PlannerPage.tsx)。
 
 ## 12. Special Rules / Overlays
 
@@ -266,7 +266,7 @@ UIのCourseProgressや年度単位、成績表示、学習・評価・guidance�
 
 共通認定はCards中心、専門認定はcalculation-items経由でStructured/Cardsにも届く。H14はoverlap guardだけを局所化し、synthetic recognized PlannerItem、既存itemsによるdedupe、official aggregate数量、その他のspecial/partial/method等のguardは維持する。H20ではsynthetic認定の通常単位経路を保持し、Sを推定する入力から分離する。Law S8、structured S、共通CardsのS、S依存completion、史学の実schooling diagnostic、文学部partial候補にsynthetic Offering.methodをS証拠として渡さない。H19/H43共有guardは専門認定が1件でもあれば閉じたまま。通常allocationが復活した結果の既存S算入と、held-S contributionは区別する。
 
-根拠: [recognition identity projection](../../src/planner/recognizedProfessionalIdentity.ts)、[official overlap guard](../../src/planner/officialGraduationFacts.ts)、[synthetic items / consumers](../../src/planner/graduationProgress.ts)。
+根拠: [recognition identity projection](../../src/planner/graduation/recognizedProfessionalIdentity.ts)、[official overlap guard](../../src/planner/graduation/officialGraduationFacts.ts)、[synthetic items / consumers](../../src/planner/graduation/graduationProgress.ts)。
 
 ### Special official facts と Planner専用配分
 
@@ -284,7 +284,7 @@ Planner側にはrepeatableの回数/単位上限、史学演習の利用者確�
 
 `PublicCourse` は利用者入力を専用上限で評価し、算入分を専門選択へ渡す。`public_course_limit` cardのsatisfiedは達成必須minimumではなく上限処理の表示。`thesis_progress` は所属別ThesisProgressから算出し、guidance / procedureの通過を自動証明しない。史学 `history_seminar_sequence` は修得順と5科目gateを扱う。文学部80＋部分修得2は既存Planner入力・専門Cards・卒論等の条件を満たしたときの **manual_review candidate** に留まり、自動的に82単位達成へ昇格しない。
 
-根拠: [recognition/profile](../../src/planner/graduationProfile.ts)、[recognition/専用Cards/配分](../../src/planner/graduationProgress.ts)、[official special guards](../../src/planner/officialGraduationFacts.ts)、[repeatable](../../src/planner/repeatableRules.ts)、[public course cap](../../src/planner/publicCourseRules.ts)、[history](../../src/planner/historySeminar.ts)、[geography](../../src/planner/geographyTransferRules.ts)。
+根拠: [recognition/profile](../../src/planner/graduation/graduationProfile.ts)、[recognition/専用Cards/配分](../../src/planner/graduation/graduationProgress.ts)、[official special guards](../../src/planner/graduation/officialGraduationFacts.ts)、[repeatable](../../src/planner/graduation/repeatableRules.ts)、[public course cap](../../src/planner/graduation/publicCourseRules.ts)、[history](../../src/planner/graduation/historySeminar.ts)、[geography](../../src/planner/graduation/geographyTransferRules.ts)。
 
 ## 13. Invariants
 
@@ -298,7 +298,7 @@ Planner側にはrepeatableの回数/単位上限、史学演習の利用者確�
 8. `autoPlannerItemsForImport()` はpreview全体でsource↔Offeringの安全な1対1を確認してearned生成する。positive aggregateが条件で、detail gradeやcomponent creditsから決めない。完全修得sourceを安全に1つのOfferingへ帰属できない場合はplanned fallbackも作らない。許容される不完全source等はplanned仮登録になり得る。
 9. facts / allocations / impactsは派生値。個別要件のsatisfiedやreference target到達を最終卒業可否へ合成しない。
 
-根拠: [types/constants](../../src/planner/plannerCatalog.ts)、[schema](../../src/planner/planner_catalog_2026.schema.json)、[import generation](../../src/planner/gradeImportApply.ts)、[official priority](../../src/planner/officialCourseCredits.ts)、[engine](../../src/planner/graduationProgress.ts)。
+根拠: [types/constants](../../src/planner/plannerCatalog.ts)、[schema](../../src/planner/planner_catalog_2026.schema.json)、[import generation](../../src/planner/gradeImport/gradeImportApply.ts)、[official priority](../../src/planner/graduation/officialCourseCredits.ts)、[engine](../../src/planner/graduation/graduationProgress.ts)。
 
 ## 14. Current Limitations / Future Boundaries
 
@@ -312,7 +312,7 @@ Planner側にはrepeatableの回数/単位上限、史学演習の利用者確�
 - `graduationCheckComplete=false` のまま部分判定を提供する。本sliceのscope前提として、Public Betaにmulti-year対応は必須ではない。
 - 本書は基準commitのcurrent implementationを記録する。将来のmigration、cloud保存、認証、multi-year、UIを確定する文書ではない。既存のfuture design資料も現行機能の証明には使わない。
 
-根拠: [current types](../../src/planner/plannerCatalog.ts)、[official guards](../../src/planner/officialGraduationFacts.ts)、[H42 boundary](../../src/planner/unresolvedSchoolingImpact.ts)、[既存監査inventory / follow-up](../graduation-false-unknown-audit-2026.md)。
+根拠: [current types](../../src/planner/plannerCatalog.ts)、[official guards](../../src/planner/graduation/officialGraduationFacts.ts)、[H42 boundary](../../src/planner/graduation/unresolvedSchoolingImpact.ts)、[既存監査inventory / follow-up](../graduation-false-unknown-audit-2026.md)。
 
 ## H21 research / implementation — recognizedExemption semantics — 2026-10-08
 

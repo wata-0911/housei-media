@@ -340,9 +340,9 @@ export type PlannerState = {
   /** Kept after plan removal so a later re-add/Undo restores the learner's progress. */
   correspondenceProgress: Record<string, CorrespondenceCourseProgress>;
   /** Raw component-level records from the grade table; they never assert graduation mapping. */
-  importedStudyRecords: Array<import('./gradeImportApply').ImportedStudyRecord>;
+  importedStudyRecords: Array<import('./gradeImport/gradeImportApply').ImportedStudyRecord>;
   /** One official grade-table row per course, including rows with no detail slots. */
-  importedCourseAchievements: Array<import('./gradeImportApply').ImportedCourseAchievement>;
+  importedCourseAchievements: Array<import('./gradeImport/gradeImportApply').ImportedCourseAchievement>;
   /** User-managed lifecycle context keyed by immutable imported achievement id. */
   importedCourseUserMeta: Record<string, ImportedCourseUserMeta>;
   /** Personal context for graduation-rule prerequisites, separate from official source facts. */
