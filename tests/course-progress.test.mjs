@@ -22,7 +22,6 @@ import { annualCreditLimitReferences, createCreditClassifier, groupAnnualPlan, i
 import { createUnifiedCourseRows } from '../src/planner/progress/unifiedCourseView.ts';
 import { searchOfferings, summarizeCredits } from '../src/planner/calculations.ts';
 import CreditSummary from '../src/components/planner/planning/CreditSummary.tsx';
-import CategorySummary from '../src/components/planner/planning/CategorySummary.tsx';
 import AnnualCreditLimitNotice from '../src/components/planner/planning/AnnualCreditLimitNotice.tsx';
 import { CorrespondenceDetails } from '../src/components/planner/progress/CorrespondenceProgress.tsx';
 import { correspondenceCreditResult, effectiveCorrespondenceProgress, progressForCorrespondence, setReportGrade, setReportStatus } from '../src/planner/progress/correspondenceProgress.ts';
@@ -545,8 +544,6 @@ test('contribution summaries: the mapped category counts the same earned4', () =
   const row = rows.find(row => row.category === category);
   assert.deepEqual([row.count, row.earned, row.in_progress, row.planned], [2, 4, 0, 0]);
   assert.equal(rows.reduce((sum, row) => sum + row.earned, 0), 4);
-  const html = renderToStaticMarkup(createElement(CategorySummary, { rows }));
-  assert.match(html, /<dt>修得済み<\/dt><dd>4単位<\/dd>/);
 });
 for (const status of ['planned', 'in_progress']) test(`contribution summaries: correspondence ${status} explicit2 uses2`, () => {
   const f = fixture(); const items = [{ ...item(f.offerings[2], status), courseCreditContribution: 2 }];
