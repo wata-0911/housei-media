@@ -1,16 +1,9 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  useLocation,
-  useNavigationType,
-} from 'react-router-dom';
-
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigationType, } from 'react-router-dom';
 // 共通部品の読み込み
 import Header from './components/Header';
 import Footer from './components/Footer';
-
+import PageEdgeNavigation from './components/PageEdgeNavigation';
 // 各ページの読み込み
 import Home from './pages/Home';
 import QA from './pages/QA';
@@ -166,6 +159,8 @@ export default function App() {
         <Footer />
 
       </div>
+
+      <PageEdgeNavigation />
     </Router>
   );
 }
