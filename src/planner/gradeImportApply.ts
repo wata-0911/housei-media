@@ -151,7 +151,7 @@ function sameSourceFingerprint(a: ImportedCourseAchievement, b: ImportedCourseAc
 function sameSourceFacts(a: ImportedCourseAchievement, b: ImportedCourseAchievement) { return a.earnedCreditsTotal === b.earnedCreditsTotal && a.schoolingCreditsTotal === b.schoolingCreditsTotal && a.compositionCredits === b.compositionCredits && a.recognizedExemption === b.recognizedExemption && a.additionalEnrollment === b.additionalEnrollment; }
 
 type SourceEvidence = [string, string, string | null, string[][], unknown[][], unknown[], number];
-function sourceEvidence(source: ImportedCourseAchievement): SourceEvidence | null {
+export function sourceEvidence(source: ImportedCourseAchievement): SourceEvidence | null {
   try {
     const value = JSON.parse(source.fingerprint);
     if (!Array.isArray(value) || value.length !== 7 || value[0] !== 'source-v2'
@@ -523,7 +523,7 @@ function nativeGrade(raw: unknown): string | null {
 
 /** Only native payloads can be added to a proven parent. The bounded explicit
  * year extension may retain another undated slot snapshot as source history. */
-function isNativeComponentSnapshot(record: ImportedStudyRecord, source: ImportedCourseAchievement): boolean {
+export function isNativeComponentSnapshot(record: ImportedStudyRecord, source: ImportedCourseAchievement): boolean {
   const slot = componentSlot(record); const evidence = sourceEvidence(source);
   if (!slot || !evidence || record.sourceCourseId !== source.id
     || normalizeImportName(record.rawName) !== normalizeImportName(source.rawName)) return false;

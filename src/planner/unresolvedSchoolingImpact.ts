@@ -34,7 +34,8 @@ export function unresolvedSchoolingImpact(
     if (allocation && allocation.schoolingCredits !== null) continue;
     // An explicit zero has no missing S increment. Conflicting media evidence
     // is not a confirmed zero, even though the original source row says zero.
-    if (fact.schoolingEvidence.credits === 0 && !fact.diagnostics.includes('media_schooling_credits_conflict')) continue;
+    if (fact.schoolingEvidence.credits === 0 && !fact.diagnostics.some(code =>
+      ['media_schooling_credits_conflict', 'repeatable_aggregate_conflict', 'repeatable_source_conflict'].includes(code))) continue;
     if (!globallyAccounted.has(fact)) impact.globalReferenceUnknown = true;
     const mappings = allocation
       ? validOfficialImpactMapping(allocation.mapping, catalog) ? [allocation.mapping] : null

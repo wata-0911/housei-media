@@ -1,11 +1,13 @@
 import { effectiveRecognitionForAdmission } from './graduationProfile';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
+import { sourceEvidence } from './gradeImportApply';
 import type { CurriculumCourse, GraduationProfile, Mapping, PlannerCatalog } from './plannerCatalog';
 import { exactImportedCurriculumId } from './officialCourseCredits';
 import { REPEATABLE_CREDIT_RULES } from './repeatableRules';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources';
 import { resolveRecognizedProfessionalCurriculumIdentity } from './recognizedProfessionalIdentity';
 import { officialCandidateMappings } from './unresolvedOfficialImpact';
+import { deriveOfficialRepeatableEvidence, officialRepeatableRule, type OfficialRepeatableEvidence } from './officialRepeatableEvidence';
 
 export type OfficialUnknownReason = 'curriculum_identity_unresolved' | 'mapping_not_found' | 'mapping_conflict'
   | 'duplicate_official_rows' | 'metadata_unknown' | 'special_rule_evidence_required' | 'out_of_scope';
@@ -30,6 +32,7 @@ export type OfficialGraduationFact = {
   allocation: { kind: 'unique' | 'equivalent'; mappingIds: string[] }
     | { kind: 'unknown' | 'out_of_scope'; reason: OfficialUnknownReason };
   diagnostics: string[];
+  repeatableEvidence?: OfficialRepeatableEvidence;
 };
 /** Final, exclusive allocation input. No annual Offering or PlannerItem is synthesized. */
 export type OfficialAllocationInput = {
@@ -47,11 +50,12 @@ export type DerivedOfficialGraduationFacts = {
 /** Credit semantics come from retained source rows, never a duplicate group's null aggregate.
  * This classifies evidence only; it does not resolve or combine official aggregates.
  */
-export function officialFactCreditState(fact: Pick<OfficialGraduationFact, 'sourceRows'>) {
+export function officialFactCreditState(fact: Pick<OfficialGraduationFact, 'sourceRows'> & Partial<Pick<OfficialGraduationFact, 'diagnostics'>>) {
+  const conflict = fact.diagnostics?.includes('repeatable_aggregate_conflict') || fact.diagnostics?.includes('repeatable_source_conflict');
   return {
-    allZero: fact.sourceRows.length > 0 && fact.sourceRows.every(row => row.earnedCreditsTotal === 0),
+    allZero: !conflict && fact.sourceRows.length > 0 && fact.sourceRows.every(row => row.earnedCreditsTotal === 0),
     hasPositive: fact.sourceRows.some(row => row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0),
-    hasUnknown: fact.sourceRows.some(row => row.earnedCreditsTotal === null),
+    hasUnknown: Boolean(conflict) || fact.sourceRows.some(row => row.earnedCreditsTotal === null),
   };
 }
 
@@ -183,7 +187,10 @@ export function deriveOfficialGraduationFacts(
       fact.diagnostics.push(reason, ...(detail ? [detail] : []));
     };
     if (!course) { hold('curriculum_identity_unresolved'); continue; }
-    if (group.length > 1) { hold('duplicate_official_rows', 'conflicting_source_rows'); continue; }
+    // Opaque legacy fingerprints keep the existing conservative path. Only a
+    // retained native snapshot can enter the new evidence-specific projection.
+    const repeatable = group.some(r => sourceEvidence(r) !== null) && officialRepeatableRule(department, course);
+    if (group.length > 1 && !repeatable) { hold('duplicate_official_rows', 'conflicting_source_rows'); continue; }
     if (course.scopeIds.slice().sort().join() !== [...new Set(course.mappingIds.flatMap(id => mappings.get(id)?.scopeId ?? []))].sort().join()) fact.diagnostics.push('scope_ids_differ_from_mapping_scopes');
     if (!course.mappingIds.length || course.mappingIds.some(id => !mappings.has(id))) { hold('mapping_not_found'); continue; }
     if (!candidates.length) { hold('out_of_scope'); continue; }
@@ -191,6 +198,17 @@ export function deriveOfficialGraduationFacts(
     if (new Set(candidates.map(signature)).size !== 1) { hold('mapping_conflict'); continue; }
     // Selecting a descriptor is safe only AFTER proving every edge has the identical allocation signature.
     const mapping = candidates[0];
+    if (repeatable) {
+      const proof = deriveOfficialRepeatableEvidence(rows.filter(r => sourceRowIds.includes(r.id)), records, course, mapping, catalog, profile);
+      if (proof.kind === 'held') { hold('special_rule_evidence_required', proof.reason); continue; }
+      fact.repeatableEvidence = proof.evidence;
+      fact.allocation = { kind: candidates.length === 1 ? 'unique' : 'equivalent', mappingIds: fact.candidateMappingIds.slice() };
+      // Keep every source aggregate (and the multi-row null) intact. The capped
+      // calculation budget is separate from the independently verified total.
+      allocations.push({ fact, mapping: { ...mapping }, credits: proof.evidence.countedCredits,
+        completedCredits: proof.evidence.countedCredits, schoolingCredits: proof.evidence.countedCredits });
+      continue;
+    }
     const composition = course.curriculumCredits;
     if (!validCredits(row.earnedCreditsTotal) || !validCredits(composition) || composition === 0
       || mapping.curriculumCredits !== composition || (row.compositionCredits !== null && row.compositionCredits !== composition)) {

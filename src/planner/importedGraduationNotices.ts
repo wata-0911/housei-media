@@ -1,9 +1,10 @@
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
 import type { ImportedAchievementWarning } from './importedAchievementCalculations';
 import { officialFactCreditState, type DerivedOfficialGraduationFacts } from './officialGraduationFacts';
+import { REPEATABLE_HOLD_MESSAGES } from './officialRepeatableEvidence';
 
 export type ImportedGraduationNotice = ImportedAchievementWarning & {
-  kind: 'allocation_held' | 'credits_unknown' | 'schooling_confirmation' | 'out_of_scope';
+  kind: 'allocation_held' | 'credits_unknown' | 'schooling_confirmation' | 'out_of_scope' | 'repeatable_limit';
   sourceRowIds: string[];
 };
 
@@ -15,12 +16,18 @@ export function importedGraduationNotices(official: DerivedOfficialGraduationFac
     // never sum/max them or mistake an all-zero group for earned credit.
     const creditState = officialFactCreditState(fact);
     if (creditState.allZero) continue;
+    const repeatableReason = fact.diagnostics.flatMap(code => REPEATABLE_HOLD_MESSAGES[code] ?? []).join(' ');
     const notice = {
       rawName: fact.canonicalName ?? rows.find(row => row.id === fact.sourceRowIds[0])?.rawName ?? '',
       sourceRowIds: fact.sourceRowIds,
-      reason: `公式実績の算入条件: ${fact.diagnostics.join(' / ')}`,
+      reason: repeatableReason || `公式実績の算入条件: ${fact.diagnostics.join(' / ')}`,
     };
-    if (!creditState.hasPositive) {
+    if (repeatableReason) {
+      notices.push({ ...notice, kind: 'allocation_held' });
+    } else if (fact.repeatableEvidence?.excessCredits) {
+      const proof = fact.repeatableEvidence;
+      notices.push({ ...notice, kind: 'repeatable_limit', reason: `公式修得${proof.earnedTotal}単位・独立した修得${proof.attempts.length}回のうち、卒業算入${proof.countedCredits}単位。上限${proof.limitCourses}回${proof.limit}単位を超える${proof.excessCredits}単位は他区分へ算入しません。` });
+    } else if (!creditState.hasPositive) {
       notices.push({ ...notice, kind: 'credits_unknown', reason: `修得単位が不明です。${notice.reason}` });
     } else if (fact.allocation.kind === 'unknown') {
       notices.push({ ...notice, kind: 'allocation_held' });

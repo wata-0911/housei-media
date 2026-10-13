@@ -266,7 +266,7 @@ function evaluateStructured(
       .map(mapping => mapping.mappingId),
   );
   const officialMatched = official.filter(a => mappingMatches(a.mapping, requirement)
-    && (names === null || names.includes(a.fact.canonicalName ?? '')));
+    && (names === null || names.includes(a.fact.canonicalName ?? '') || names.includes(a.fact.repeatableEvidence?.label ?? '')));
   const affected = impactsRequirement(impact, requirement, mappingMatches, targetMappingIds);
   const officialTargetKnown = requirement.ruleType === 'min_schooling_credits'
     ? !schoolingImpact.globalUnknown && schoolingImpactsRequirement(schoolingImpact, requirement)
@@ -319,15 +319,19 @@ function evaluateStructured(
     if (unit === 'courses') return new Set(rows.map(row => row.offering.id)).size;
     return rows.reduce((sum, row) => sum + creditsFor(row.item, row.offering)!, 0);
   };
-  const officialEarned = officialMatched.reduce((sum, a) => sum + (unit === 'courses' ? (a.completedCredits > 0 ? 1 : 0)
+  const officialCourses = (a: OfficialAllocationInput) => a.fact.repeatableEvidence
+    ? requirement.ruleType === 'max_credits' ? a.fact.repeatableEvidence.attempts.length
+      : Math.min(a.fact.repeatableEvidence.attempts.length, a.fact.repeatableEvidence.limitCourses) : a.completedCredits > 0 ? 1 : 0;
+  const officialEarned = officialMatched.reduce((sum, a) => sum + (unit === 'courses' ? officialCourses(a)
     : requirement.ruleType === 'min_schooling_credits' ? (a.schoolingCredits ?? 0)
+      : requirement.ruleType === 'max_credits' && a.fact.repeatableEvidence ? a.fact.repeatableEvidence.earnedTotal
       : requirement.conditions?.full_course_credits_required ? a.completedCredits : a.credits), 0);
   const earned = total('earned') + officialEarned;
   const inProgress = total('in_progress');
   const planned = total('planned');
   const completedCourseCount = [...completedMappings.values()].filter(entry =>
     entry.earned >= (entry.mapping.curriculumCredits ?? Number.POSITIVE_INFINITY)).length
-    + officialMatched.filter(a => a.completedCredits > 0).length;
+    + officialMatched.reduce((sum, a) => sum + officialCourses(a), 0);
   const minimumCourses = requirement.conditions?.min_courses;
   const maximumEnrollments = requirement.conditions?.max_enrollments;
   // A credit requirement with a course-count condition must meet both parts.
@@ -905,6 +909,17 @@ function professionalCards(
   }
 
   for (const a of official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育')) {
+    const proof = a.fact.repeatableEvidence;
+    if (proof) {
+      const type = a.mapping.requirementType!;
+      const key = `${type}:${proof.label}`;
+      const repeat = repeatables.get(key) ?? { name: proof.label, type, limit: proof.limit, limitCourses: proof.limitCourses,
+        earned: 0, inProgress: 0, planned: 0, courses: new Set<string>() };
+      repeat.earned += proof.earnedTotal;
+      for (const attempt of proof.attempts) repeat.courses.add(`official:${a.fact.curriculumCourseId}:${attempt.academicYear}`);
+      repeatables.set(key, repeat);
+      continue;
+    }
     entries.set(`official:${a.fact.curriculumCourseId}`, {
       ...(a.fact.curriculumCourseId === CALLIGRAPHY_CURRICULUM_ID ? { calligraphyCompletedCredits: a.completedCredits,
         calligraphyPartialProgress: { credits: a.credits, evidence: 'official' as const } } : {}),
@@ -1121,7 +1136,8 @@ function professionalCards(
           if (!canonical || LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(canonical) || maps.some(mapping => mapping.requirementType === '公開科目')) continue;
           schooling.earned += offering.credits;
         }
-        schooling.earned += official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育').reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0);
+        schooling.earned += official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
+          && !LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(a.fact.canonicalName ?? '')).reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0);
         return make('professional-law-schooling', '専門教育：スクーリング', schooling, 8, schooling.earned >= 8, undefined,
           '選択必修・選択のうち、2026年度正本 p.47 の＊印科目・他学部他学科公開科目を除く実修得スクーリング単位。4単位科目のスクーリング部分修得もここでは実修得分を数えます。');
       })(),

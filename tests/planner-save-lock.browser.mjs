@@ -635,3 +635,36 @@ for (const program of calligraphyPrograms) test(`calligraphy partial Chromium su
     }
   }
 });
+
+import { repeatProfile, repeatedPayload, importRepeated, payload as repeatPayload, nativeRow as repeatNativeRow, numeric as repeatNumeric } from './fixtures/official-repeatable.mjs';
+test('official repeatable Chromium: cap and source total remain separate after reload', async t => {
+  const imported = importRepeated(repeatedPayload('政治学', 3));
+  const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
+  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile };
+  const { page } = await open(t, '法律学科', JSON.stringify(state));
+  const section = page.locator('section[aria-labelledby="graduation-progress-heading"]');
+  for (let pass = 0; pass < 2; pass++) {
+    const notice = section.locator('[data-import-notice-kind="repeatable_limit"]');
+    await notice.locator('summary').click();
+    await notice.getByText('政治学：公式修得6単位・独立した修得3回のうち、卒業算入4単位。上限2回4単位を超える2単位は他区分へ算入しません。', { exact: true }).waitFor();
+    await section.getByText('政治学 4 / 4単位（2 / 2回）。超過2単位は卒業算入外', { exact: true }).waitFor();
+    const stored = JSON.parse(await persisted(page));
+    assert.equal(stored.schemaVersion, 22);
+    assert.deepEqual(stored.importedCourseAchievements, state.importedCourseAchievements);
+    assert.deepEqual(stored.importedStudyRecords, state.importedStudyRecords);
+    if (!pass) await page.reload();
+  }
+});
+
+test('official repeatable Chromium: explicit zero conflicting with passed detail is visibly held', async t => {
+  const data = repeatPayload([repeatNativeRow('政治学', [2025])]); data.courses[0].earnedCredits = repeatNumeric(0);
+  const imported = importRepeated(data), scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
+  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile };
+  const { page } = await open(t, '法律学科', JSON.stringify(state));
+  const notice = page.locator('[data-import-notice-kind="allocation_held"]');
+  await notice.locator('summary').click();
+  await notice.getByText('政治学：公式の修得合計・S単位と確認できる修得内訳が一致しません。公式合計を補正せず算入を保留しています。', { exact: true }).waitFor();
+  const stored = JSON.parse(await persisted(page));
+  assert.equal(stored.importedCourseAchievements[0].earnedCreditsTotal, 0);
+  assert.equal(stored.importedStudyRecords[0].credits, 2);
+});
