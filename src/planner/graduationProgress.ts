@@ -1,4 +1,4 @@
-import { deriveCalligraphyProgress, isCalligraphyCourse, type CalligraphyProgress } from './calligraphyProgress';
+import { CALLIGRAPHY_CURRICULUM_ID, deriveCalligraphyProgress, isCalligraphyCourse, type CalligraphyProgress } from './calligraphyProgress';
 import type {
   Mapping,
   Offering,
@@ -93,7 +93,7 @@ export type ProgressCard = RequirementProgress & {
   /** Internal uncapped value used when a cross-card rule needs the actual allocation. */
   normalEarned?: number;
   details?: Array<{ label: string; earned: number | null; inProgress: number; planned: number; target: number; schooling?: number; unit?: 'credits' | 'courses'; reason?: string | null }>;
-  partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number }>;
+  partialCourses?: Array<{ mappingId: string; label: string; earned: number; target: number; evidence?: 'learner' | 'official' }>;
   note?: string;
   repeatableCourses?: Array<{ label: string; earned: number; counted: number; limit: number; courses: number; limitCourses: number }>;
   specialLectures?: SpecialLectureProgress[];
@@ -647,6 +647,10 @@ function addOfferingTotals(totals: Totals, item: PlannerItem, offering: Offering
 
 type CurriculumEntry = {
   mapping: Mapping;
+  /** Exact institutional identity, separate from labels and allocation/group keys. */
+  curriculumCourseId?: string | null;
+  /** Only safely evaluated incomplete calligraphy progress belongs in partial details. */
+  calligraphyPartialProgress?: { credits: number; evidence: 'learner' | 'official' };
   /** Official completion belongs to the Course, even when it has equivalent edges. */
   completionId?: string;
   label: string;
@@ -677,7 +681,7 @@ function curriculumCourseLabel(offering: Offering) {
 }
 
 function isCalligraphyPracticum(entry: CurriculumEntry) {
-  return entry.label === '書道実技';
+  return entry.curriculumCourseId === CALLIGRAPHY_CURRICULUM_ID;
 }
 
 function completedCurriculumCredits(entry: CurriculumEntry) {
@@ -810,10 +814,13 @@ function professionalCards(
       continue;
     }
     const entry = entries.get(key) ?? {
-      mapping, completionId: key, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0, earnedSchooling: 0,
+      mapping, curriculumCourseId: offering.curriculumCourseId ?? null, completionId: key, label: curriculumCourseLabel(offering), earned: 0, inProgress: 0, planned: 0, earnedSchooling: 0,
     };
     const special = calligraphy.get(offering.curriculumCourseId ?? '');
     if (special) {
+      entry.label = catalog.curriculum!.courses.find(course => course.id === entry.curriculumCourseId)!.canonicalName;
+      entry.calligraphyPartialProgress = !special.officialPreferred && special.completion === 'incomplete'
+        ? { credits: special.earnedCredits, evidence: 'learner' } : undefined;
       entry.earned = special.officialPreferred ? 0 : special.earnedCredits;
       entry.planned = special.plannedCredits;
       entry.inProgress = special.inProgressCredits;
@@ -899,8 +906,9 @@ function professionalCards(
 
   for (const a of official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育')) {
     entries.set(`official:${a.fact.curriculumCourseId}`, {
-      ...(a.fact.canonicalName === '書道実技' ? { calligraphyCompletedCredits: a.completedCredits } : {}),
-      mapping: a.mapping, completionId: a.fact.curriculumCourseId!, label: a.fact.canonicalName!,
+      ...(a.fact.curriculumCourseId === CALLIGRAPHY_CURRICULUM_ID ? { calligraphyCompletedCredits: a.completedCredits,
+        calligraphyPartialProgress: { credits: a.credits, evidence: 'official' as const } } : {}),
+      mapping: a.mapping, curriculumCourseId: a.fact.curriculumCourseId, completionId: a.fact.curriculumCourseId!, label: a.fact.canonicalName!,
       earned: a.credits, inProgress: 0, planned: 0, earnedSchooling: a.schoolingCredits ?? 0,
     });
   }
@@ -973,11 +981,13 @@ function professionalCards(
   const publicCourseBreakdown = () => publicCourseCredits > 0 ? ` + 公開科目算入 ${publicCourseCredits}単位` : '';
   const partialCourses = (type: string): ProgressCard['partialCourses'] => [...entries.values()]
     .filter(entry => entry.mapping.requirementType === type
-      && entry.earned > 0 && completedCurriculumCredits(entry) < entry.mapping.curriculumCredits!)
+      && entry.earned > 0 && completedCurriculumCredits(entry) < entry.mapping.curriculumCredits!
+      && (!isCalligraphyPracticum(entry) || (entry.calligraphyPartialProgress?.credits ?? 0) > 0))
     .map(entry => ({
       mappingId: entry.mapping.mappingId,
       label: entry.label,
-      earned: isCalligraphyPracticum(entry) && entry.earnedSchooling < 1 ? 0 : entry.earned,
+      earned: isCalligraphyPracticum(entry) ? entry.calligraphyPartialProgress!.credits : entry.earned,
+      ...(isCalligraphyPracticum(entry) ? { evidence: entry.calligraphyPartialProgress!.evidence } : {}),
       target: entry.mapping.curriculumCredits!,
     }))
     .sort((a, b) => a.label.localeCompare(b.label, 'ja'));

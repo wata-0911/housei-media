@@ -99,3 +99,7 @@ iPhone Safari実機は未検証。今回の画面assertはChromiumで行う。�
 PR #156 P1の39件・P2の72件、H57既存50件、168ケースの既存完全出力比較は期待値やsnapshotを変更せずPASS。ローカルはNode 24.13.0、既存Playwright 1.62.1 / Chromium headless shell revision1243で実行。許可されたローカル実行環境の独立contextを使用し、本番プロフィール・データを使っていない。
 
 修正commit SHAとCIの対象HEAD・結果は、commit/push後の再監査用最終報告と同じDraft PR #157の説明に記録する。CIの既存jobはbrowser suiteを実行しないため、Chromium結果はローカル実画面検証として区別する。
+
+## 明細表示差の後続修正
+
+本書で記録した未完成明細の開講名依存差は、後続の残存P2修正で制度科目identityと明示的な証拠契約へ接続して解消した。[未完成明細の修正報告](planner-calligraphy-partial-details-p2.md)を参照。本書の検証件数と残存事項の記載は、ae13465時点の監査対応履歴として保持する。

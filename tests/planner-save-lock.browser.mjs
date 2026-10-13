@@ -564,6 +564,7 @@ for (const program of calligraphyPrograms) test(`calligraphy P2 Chromium card st
     await page.evaluate(({ raw, key }) => localStorage.setItem(key, raw), { raw, key: STORAGE_KEY });
     await page.reload();
     await assertCalligraphyReferences(page, scenario.expected, scenario.label);
+    await assertCalligraphyPartialBody(page, scenario.rows.length === 0 && scenario.expected.earned === 1);
     const courseCard = await calligraphyCard(page);
     const projectedCompletion = scenario.rows.length ? scenario.completion : scenario.expected.projected === 2 ? 'complete' : 'incomplete';
     const expectedCompletion = projectedCompletion === 'complete' ? '完成' : projectedCompletion === 'unknown' ? '判定保留' : '未完成';
@@ -600,4 +601,37 @@ for (const program of calligraphyPrograms) test(`calligraphy P2 Chromium lifecyc
   await panel.getByText('全データを置き換えて保存しました。再読み込み後も保持されます。', { exact: true }).waitFor();
   assert.deepEqual(JSON.parse(await persisted(page)), initial);
   await page.reload(); await assertCalligraphyReferences(page, { inProgress: 0, planned: 0, graduation: 2 }, 'restored earned');
+});
+
+
+import { minimalCases as calligraphyPartialMinimumCases } from './fixtures/calligraphy-partial-details.mjs';
+async function assertCalligraphyPartialBody(page, expected) {
+  const elective = page.locator('section[aria-labelledby="graduation-progress-heading"] article').filter({ has: page.getByRole('heading', { name: '専門教育：選択', exact: true }) });
+  const title = elective.getByText('未完成のカリキュラム科目（卒業算入前）', { exact: true });
+  if (expected) {
+    await title.waitFor();
+    const details = title.locator('..').locator('li');
+    assert.equal(await details.count(), 1);
+    assert.equal(await details.innerText(), '書道実技 本人記録の構成進捗 1 / 2単位（未完成・卒業算入0）');
+  } else assert.equal(await title.count(), 0, 'official priority / zero / completed structure must not create a learner partial detail');
+}
+for (const program of calligraphyPrograms) test(`calligraphy partial Chromium summer/GW exact body ${program.course}`, async t => {
+  const { page } = await open(t, '日本文学科', JSON.stringify({ ...stateForScopeChange(initialState(), catalog, program.scopeId), graduationProfile: calligraphyProfile, items: calligraphyPartialMinimumCases[0][1] }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [index, [label, items]] of calligraphyPartialMinimumCases.entries()) {
+    const state = { ...stateForScopeChange(initialState(), catalog, program.scopeId), graduationProfile: calligraphyProfile, items };
+    const raw = JSON.stringify(state);
+    await page.evaluate(({ raw, key }) => localStorage.setItem(key, raw), { raw, key: STORAGE_KEY });
+    await page.reload();
+    await assertCalligraphyPartialBody(page, true);
+    await assertCalligraphyReferences(page, { inProgress: 0, planned: items.length === 2 ? 1 : 0, graduation: 0 }, label);
+    const courseCard = await calligraphyCard(page);
+    await courseCard.getByText('修得: 1 / 2単位 · 未完成', { exact: true }).waitFor();
+    assert.equal(await persisted(page), raw);
+    const dir = process.env.CALLIGRAPHY_PARTIAL_SCREENSHOT_DIR;
+    if (dir) {
+      const elective = page.locator('section[aria-labelledby="graduation-progress-heading"] article').filter({ has: page.getByRole('heading', { name: '専門教育：選択', exact: true }) });
+      await elective.screenshot({ path: `${dir}/${program.scopeId}-${index}.png`, style: 'header { visibility: hidden !important; transition: none !important; }' });
+    }
+  }
 });
