@@ -1,3 +1,4 @@
+import { isCalligraphyCorrespondence } from './calligraphyProgress';
 import { futurePlanNote } from './futurePlanning';
 import { createCreditClassifier } from './annualPlan';
 import { correspondenceCreditResult, effectiveCorrespondenceProgress, progressForCorrespondence } from './correspondenceProgress';
@@ -78,6 +79,7 @@ export function plannerExportPresentation(state: PlannerState, catalog: PlannerC
       completedTests: null,
       assessmentSummary: null,
     };
+    if (isCalligraphyCorrespondence(offering)) return [base];
     if (offering.method === 'correspondence') {
       const course = effectiveCorrespondenceProgress(item, offering, progressForCorrespondence(offering, state.correspondenceProgress));
       const result = correspondenceCreditResult(course);

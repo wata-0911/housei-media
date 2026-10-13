@@ -255,6 +255,8 @@ export type ReportPassingGrade = Exclude<CourseGrade, 'D'>;
 export type ReportProgressStatus = 'not_submitted' | 'submitted' | 'grading' | 'resubmit' | 'passed';
 export type ReportProgress = { reportNumber: number; status: ReportProgressStatus; grade: ReportPassingGrade | null };
 export type CorrespondenceCourseProgress = {
+  /** Optional v22 explicit learner record. Absence is unconfirmed; never infer from earned or legacy reports. */
+  calligraphyBatchStatus?: 'not_submitted' | 'grading' | 'passed';
   offeringId: string;
   /** null means that the 2026 source could not be mapped safely. */
   requiredReports: number | null;

@@ -1,5 +1,6 @@
 import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImportApply';
-import type { CurriculumCourse, Offering, PlannerCatalog, PlannerItem } from './plannerCatalog';
+import { deriveCalligraphyProgress, isCalligraphyCourse } from './calligraphyProgress';
+import type { CorrespondenceCourseProgress, GraduationProfile, CurriculumCourse, Offering, PlannerCatalog, PlannerItem } from './plannerCatalog';
 import { exactImportedCurriculumId } from './officialCourseCredits';
 import { isMediaSchooling } from './mediaSchooling';
 import { repeatableRule } from './repeatableRules';
@@ -14,13 +15,14 @@ export type CurriculumCourseAttempt = {
   projectedContribution: number;
   /** True only when an earned attempt is already represented by an official aggregate. */
   officialEarnedPreferred: boolean;
-  officialEarnedPreferenceReason: 'aggregate_source_link' | 'component_source_match' | null;
+  officialEarnedPreferenceReason: 'aggregate_source_link' | 'component_source_match' | 'official_course_aggregate' | null;
 };
 export type CurriculumCourseProgress = {
   curriculumCourseId: string;
   canonicalName: string;
   curriculumCredits: number | null;
-  /** Uncapped known totals. Excess remains a candidate, never declared invalid. */
+  /** Ordinary courses use uncapped known totals. Calligraphy uses structure progress
+   * with explicit completion evidence; its batch is never a credit summand. */
   earnedCredits: number;
   projectedCredits: number;
   remainingCredits: number | null;
@@ -32,6 +34,7 @@ export type CurriculumCourseProgress = {
   attempts: CurriculumCourseAttempt[];
   officialAchievements: ImportedCourseAchievement[];
   warnings: string[];
+  completionEvidence?: 'official' | 'learner' | 'none';
 };
 export type CurriculumProgressWarning = { offeringId: string | null; sourceCourseId: string | null; name: string; reason: string };
 export type CurriculumProgressResult = { courses: CurriculumCourseProgress[]; unassigned: CurriculumProgressWarning[] };
@@ -92,6 +95,8 @@ export function deriveCurriculumCourseProgress(
   rows: ImportedCourseAchievement[] = [],
   scopeId: string | null = null,
   studyRecords: ImportedStudyRecord[] = [],
+  correspondenceProgress: Record<string, CorrespondenceCourseProgress> = {},
+  profile?: GraduationProfile,
 ): CurriculumProgressResult {
   const offerings = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const courses = new Map((catalog.curriculum?.courses ?? []).map(course => [course.id, course]));
@@ -117,6 +122,23 @@ export function deriveCurriculumCourseProgress(
   const result: CurriculumCourseProgress[] = [];
   for (const [id, group] of assigned) {
     const course = courses.get(id)!;
+    if (isCalligraphyCourse(course)) {
+      const special = deriveCalligraphyProgress(course, items, catalog, scopeId, correspondenceProgress, rows, studyRecords, profile);
+      const attempts = group.attempts.map(({ item, offering }): CurriculumCourseAttempt => {
+        const credits = offering.method === 'schooling' && offering.credits === 1 ? plannerItemCreditContribution(item, offering) ?? 0 : 0;
+        const preferred = item.status === 'earned' && special.officialPreferred;
+        return { item, offering, officialEarnedPreferred: preferred, officialEarnedPreferenceReason: preferred ? 'official_course_aggregate' : null,
+          earnedContribution: !special.officialPreferred && item.status === 'earned' ? credits : 0,
+          projectedContribution: !special.officialPreferred && ['earned', 'planned', 'in_progress', 'waiting'].includes(item.status) ? credits : 0 };
+      });
+      result.push({ curriculumCourseId: id, canonicalName: course.canonicalName, curriculumCredits: course.curriculumCredits,
+        earnedCredits: special.earnedCredits, projectedCredits: special.projectedCredits,
+        remainingCredits: special.completion === 'unknown' ? null : Math.max(0, 2 - special.earnedCredits),
+        completion: special.completion, projectedCompletion: special.projectedCompletion,
+        earnedExcessCredits: 0, projectedExcessCredits: 0, repeatable: false, attempts,
+        officialAchievements: group.official, warnings: special.warnings, completionEvidence: special.evidence });
+      continue;
+    }
     const repeatable = isRepeatableCourse(course, catalog, scopeId);
     const warnings: string[] = [];
     let unknownEarned = group.official.some(row => row.earnedCreditsTotal === null);

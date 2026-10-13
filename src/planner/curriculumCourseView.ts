@@ -34,14 +34,14 @@ export type CurriculumCourseViewResult = {
   orphanStudyRecords: ImportedStudyRecord[];
 };
 
-export type CurriculumCourseViewInput = Pick<PlannerState, 'items' | 'importedCourseAchievements' | 'importedStudyRecords' | 'importedCourseUserMeta' | 'correspondenceProgress' | 'mediaSchoolingProgress' | 'courseEvaluations' | 'selectedScopeId'>;
+export type CurriculumCourseViewInput = Pick<PlannerState, 'items' | 'importedCourseAchievements' | 'importedStudyRecords' | 'importedCourseUserMeta' | 'correspondenceProgress' | 'mediaSchoolingProgress' | 'courseEvaluations' | 'selectedScopeId'> & Partial<Pick<PlannerState, 'graduationProfile'>>;
 
 /** Presentation projection of v22 identities, not an identity resolver or a graduation
  * allocator. Input source objects are borrowed: consumers must treat them as read-only.
  * Only exact CourseProgress groups are displayed; unresolved facts remain first-class.
  */
 export function deriveCurriculumCourseView(state: CurriculumCourseViewInput, catalog: PlannerCatalog): CurriculumCourseViewResult {
-  const progress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId, state.importedStudyRecords);
+  const progress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId, state.importedStudyRecords, state.correspondenceProgress, state.graduationProfile);
   const coursesById = new Map(catalog.curriculum?.courses.map(course => [course.id, course]) ?? []);
   const offeringsById = new Map(catalog.offerings.map(offering => [offering.id, offering]));
   const detailsBySource = new Map<string, ImportedStudyRecord[]>();

@@ -558,7 +558,10 @@ test('graduation: all eight scopes retain pre-foundation calculations across sta
   const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'first_year', curriculumApplicability: 'current_2026', currentStudyYear: 4 };
   for (const program of catalog.programs.filter(program => !program.isCommon)) {
     for (const status of ['planned', 'in_progress', 'earned', 'waiting', 'failed', 'dropped']) {
-      const items = catalog.offerings.map(offering => ({ offeringId: offering.id, status, plannedYear: 2026, plannedTerm: null, studyYear: 4, earnedOrder: null }));
+      // 書道実技 now requires exact 2026 identity and explicit batch acceptance.
+      // Its intentional divergence from the pre-foundation catalog is covered in calligraphy-progress.test.mjs.
+      const calligraphyIds = new Set(catalog.offerings.filter(o => o.curriculumCourseId === 'curriculum:5e8b0825-7ba9-4a53-847c-7e56283718e5').map(o => o.id));
+      const items = catalog.offerings.filter(o => !calligraphyIds.has(o.id)).map(offering => ({ offeringId: offering.id, status, plannedYear: 2026, plannedTerm: null, studyYear: 4, earnedOrder: null }));
       const publicCourses = [{ id: 'public-foundation', title: '公開科目', status, plannedYear: 2026, plannedTerm: null, studyYear: 4, finalGrade: null, credits: 2 }];
       const recognized = { ...profile, admissionType: 'other_transfer', recognizedCredits: { ...profile.recognizedCredits, totalCredits: 12, openUniversityCredits: 4 } };
       for (const candidate of [profile, recognized]) for (const thesis of ['undecided', 'selected', 'not_selected']) {

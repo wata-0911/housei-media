@@ -3487,7 +3487,9 @@ test('official-audit: calligraphy needs earned schooling and never uses planned 
   const calligraphy = catalog.offerings.filter(offering => offering.courseId === '27fce75b-3bfa-4190-99c9-3419efa03380');
   const correspondence = calligraphy.find(offering => offering.method === 'correspondence');
   const schooling = calligraphy.filter(offering => offering.method === 'schooling');
-  const elective = rows => calculateGraduationProgress(rows, catalog, scope).cards.find(card => card.requirementId === 'professional-elective');
+  const saved = { [correspondence.id]: { offeringId: correspondence.id, requiredReports: null, reports: [], examGrade: null, calligraphyBatchStatus: 'passed' } };
+  const elective = (rows, progress = saved) => calculateGraduationProgress(rows, catalog, scope, [], 'undecided', [], [], initialGraduationProfile(), null, progress).cards.find(card => card.requirementId === 'professional-elective');
+  assert.equal(elective([item(correspondence.id, 'earned'), item(schooling[0].id, 'earned')], {}).earned, 0, 'legacy T2 is not inferred batch acceptance');
   assert.equal(elective([item(correspondence.id, 'earned')]).earned, 0);
   assert.equal(elective([item(correspondence.id, 'earned'), item(schooling[0].id, 'earned')]).earned, 2);
   assert.equal(elective([item(schooling[0].id, 'earned'), item(schooling[1].id, 'earned')]).earned, 2);

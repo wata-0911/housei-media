@@ -1,3 +1,4 @@
+import { isCalligraphyCorrespondence } from './calligraphyProgress';
 import Ajv2020 from 'ajv/dist/2020';
 import schema from './planner_catalog_2026.schema.json';
 import type { PlannerCatalog, PlannerState } from './plannerCatalog';
@@ -49,7 +50,8 @@ export function validateState(value: unknown, catalog: PlannerCatalog): value is
       && new Set(course.lessons.map(lesson => lesson.lesson)).size === course.lessons.length
       && course.lessons.every(lesson => course.totalLessons === null || lesson.lesson <= course.totalLessons))
     && evaluations.every(([id, evaluation]) => id === evaluation.offeringId && offerings.has(id))
-    && correspondence.every(([id, progress]) => id === progress.offeringId && offerings.has(id) && isCorrespondenceOffering(offeringMap.get(id)) && validCorrespondenceProgress(progress))
+    && correspondence.every(([id, progress]) => id === progress.offeringId && offerings.has(id) && isCorrespondenceOffering(offeringMap.get(id)) && validCorrespondenceProgress(progress)
+      && (progress.calligraphyBatchStatus === undefined || isCalligraphyCorrespondence(offeringMap.get(id))))
     && importedMeta.every(([id, meta]) => importedIds.has(id)
       && (meta.plannedYear === null || (Number.isInteger(meta.plannedYear) && meta.plannedYear >= 1000 && meta.plannedYear <= 9999)))
     && value.items.every(item => {

@@ -10,7 +10,7 @@ import FuturePlanNotice from './FuturePlanNotice';
 import SavedAttemptProgress from './SavedAttemptProgress';
 import { CompletionOrderInput, GradeSelect, StatusSelect, StudyYearSelect, TermSelect, YearInput } from './PlannerRowControls';
 
-type Contributions = { earnedContribution: number; projectedContribution: number; officialEarnedPreferred: boolean; officialEarnedPreferenceReason: 'aggregate_source_link' | 'component_source_match' | null };
+type Contributions = { earnedContribution: number; projectedContribution: number; officialEarnedPreferred: boolean; officialEarnedPreferenceReason: 'aggregate_source_link' | 'component_source_match' | 'official_course_aggregate' | null };
 export default function PlannerAttemptChild({ attempt, editor, contributions }: { attempt: PlannerAttemptView; editor: AttemptEditorProps; contributions?: Contributions }) {
   const { plannerItem: item, offering, progress } = attempt;
   const evaluation = attempt.evaluation ?? { offeringId: item.offeringId, finalGrade: null, reportGrade: null, schoolingGrade: null };
@@ -23,6 +23,7 @@ export default function PlannerAttemptChild({ attempt, editor, contributions }: 
     {item.courseCreditContribution !== undefined && <p className="mt-1 text-sm">保存済み寄与設定 {item.courseCreditContribution}単位{!(offering?.method === 'correspondence' && offering.credits === 4 && [2, 4].includes(item.courseCreditContribution)) && '（要確認）'}</p>}
     {contributions && <p className="mt-1 text-xs text-gray-600">{contributions.officialEarnedPreferenceReason === 'component_source_match'
       ? '公式成績表の履修内訳に対応するため、公式集計を優先し重複加算しない'
+      : contributions.officialEarnedPreferenceReason === 'official_course_aggregate' ? '書道実技の修得単位は公式科目集計を優先（手動の重複加算なし）'
       : contributions.officialEarnedPreferred ? '修得単位は取込元の公式集計を優先（重複加算なし）'
         : `修得に加算 ${contributions.earnedContribution}単位 / 予定込みに加算 ${contributions.projectedContribution}単位`}</p>}
     {offering && <p className="mt-2 text-sm">{progressSummaryForOffering(item, offering, progress.correspondence ? { [item.offeringId]: progress.correspondence } : {}, progress.mediaSchooling ? { [item.offeringId]: progress.mediaSchooling } : {})}</p>}
