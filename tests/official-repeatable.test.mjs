@@ -11,7 +11,7 @@ import { restorePlannerBackup } from '../src/planner/backup/plannerBackupStorage
 import { plannerItemFromCourseSearch } from '../src/planner/planning/plannerItemState.ts';
 import { importFingerprint } from '../src/planner/gradeImport/gradeImportApply.ts';
 import { importedGraduationNotices } from '../src/planner/gradeImport/importedGraduationNotices.ts';
-import { repeatProfile, numeric, nativeRow, payload, repeatedPayload, importRepeated, slot, auditConflictPayload } from './fixtures/official-repeatable.mjs';
+import { repeatProfile, numeric, nativeRow, payload, repeatedPayload, importRepeated, slot, auditConflictPayload, nonzeroAggregateBoundaryPayload } from './fixtures/official-repeatable.mjs';
 const program = department => catalog.programs.find(p => p.department === department);
 const facts = (state, department = '法律学科', input = catalog, profile = repeatProfile) => deriveOfficialGraduationFacts(state.importedCourseAchievements, state.importedStudyRecords, input, program(department).scopeId, profile);
 const progress = (state, department = '法律学科', input = catalog) => calculateGraduationProgress(state.items, input, program(department).scopeId, [], 'not_selected', state.importedStudyRecords, state.importedCourseAchievements, repeatProfile);
@@ -349,4 +349,61 @@ for (const kind of ['R1 S null', 'R2 year absent']) test(`audit ${kind}: save, r
   assert.deepEqual(again.importedCourseAchievements, state.importedCourseAchievements);
   assert.deepEqual(again.importedStudyRecords, state.importedStudyRecords);
   assertAuditConflict(again, auditMissingReasons[kind]);
+});
+
+// Nonzero aggregates: one explicit passed S2 is a known lower bound, never an allocation budget.
+for (const name of ['政治学', '総合特講']) for (const caseId of ['A', 'B', 'C', 'D', 'E']) test(`nonzero boundary ${caseId}/${name}: aggregate diagnosis, hold and source authority`, () => {
+  const data = nonzeroAggregateBoundaryPayload(caseId, name), state = importRepeated(data), before = structuredClone(state);
+  const row = state.importedCourseAchievements[0], record = state.importedStudyRecords[0];
+  assert.equal(row.earnedCreditsTotal, data.courses[0].earnedCredits.value);
+  assert.equal(row.schoolingCreditsTotal, data.courses[0].schoolingCredits.value);
+  assert.equal(record.rawYear, null); assert.equal(record.credits, 2);
+  assert.equal(record.grade, caseId === 'E' ? 'D' : 'A');
+  const f = facts(state), fact = f.facts[0], creditState = officialFactCreditState(fact), p = progress(state);
+  assert.equal(f.allocations.length, 0, 'unknown source year never authorizes a repeat completion');
+  const conflict = caseId === 'A' || caseId === 'B';
+  assert.equal(fact.diagnostics.includes('repeatable_aggregate_conflict'), conflict);
+  assert.equal(fact.diagnostics.includes(caseId === 'D' ? 'repeatable_aggregate_unknown' : 'repeatable_attempt_unconfirmed'), true);
+  assert.deepEqual(creditState, { allZero: caseId === 'E', hasPositive: caseId !== 'E', hasUnknown: conflict });
+  const notices = importedGraduationNotices(f, state.importedCourseAchievements, state.importedStudyRecords);
+  assert.deepEqual(p.importedWarnings, notices);
+  if (caseId === 'E') {
+    assert.equal(total(p).earned, 0); assert.notEqual(total(p).status, 'unknown');
+    assert.equal(schooling(p).earned, 0); assert.notEqual(schooling(p).status, 'unknown');
+    assert.deepEqual(notices, []);
+  } else {
+    assert.equal(total(p).earned, null); assert.equal(total(p).status, 'unknown');
+    assert.equal(schooling(p).earned, null); assert.equal(schooling(p).status, 'unknown');
+    assert.equal(notices.length, 1); assert.equal(notices[0].kind, 'allocation_held');
+    assert.equal(notices[0].reason.includes('一致しません'), conflict);
+    assert.ok(notices[0].reason.includes(caseId === 'D' ? '不明' : '独立した修得回を確認できません'));
+  }
+  const lawS = p.cards.find(c => c.requirementId === 'professional-law-schooling');
+  assert.equal(lawS.earned, 0, 'neither the detail nor H19/H43 may add2');
+  if (name === '政治学') assert.equal(lawS.status === 'unknown', caseId !== 'E');
+  else assert.notEqual(lawS.status, 'unknown', 'Law general lecture remains outside professional S8');
+  assert.deepEqual(state, before, 'diagnosis must preserve source aggregate, fingerprint, raw year and detail');
+});
+
+for (const name of ['政治学', '総合特講']) test(`nonzero boundary multiple rows/${name}: later contradiction survives an earlier year hold and reversal`, () => {
+  const first = nonzeroAggregateBoundaryPayload('C', name), later = nonzeroAggregateBoundaryPayload('A', name);
+  // Both rows have unknown source years; different source dates alone cannot prove independent attempts.
+  later.courses[0].schoolings[0].rawDate = '2025/09/01'; later.courses[0].schoolings[0].date = '2025-09-01';
+  const state = importRepeated(payload([...first.courses, ...later.courses]));
+  assert.equal(state.importedCourseAchievements.length, 2);
+  for (const [i, row] of state.importedCourseAchievements.entries()) {
+    const oldId = row.id; row.id = `nonzero-row-${i}`;
+    for (const record of state.importedStudyRecords.filter(r => r.sourceCourseId === oldId)) record.sourceCourseId = row.id;
+  }
+  const course = catalog.curriculum.courses.find(c => c.id === state.importedCourseAchievements[0].curriculumCourseId);
+  const mapping = catalog.mappings.find(m => course.mappingIds.includes(m.mappingId) && m.scopeId === program('法律学科').scopeId);
+  const proof = deriveOfficialRepeatableEvidence(state.importedCourseAchievements, state.importedStudyRecords, course, mapping, catalog, repeatProfile);
+  assert.equal(proof.kind, 'held');
+  assert.ok(proof.diagnostics.includes('repeatable_attempt_unconfirmed'));
+  assert.ok(proof.diagnostics.includes('repeatable_aggregate_conflict'));
+  const f = assertAuditConflict(state, 'repeatable_attempt_unconfirmed', name);
+  const reverse = { ...state, importedCourseAchievements: [...state.importedCourseAchievements].reverse(), importedStudyRecords: [...state.importedStudyRecords].reverse() };
+  assert.deepEqual(deriveOfficialRepeatableEvidence(reverse.importedCourseAchievements, reverse.importedStudyRecords, course, mapping, catalog, repeatProfile), proof);
+  assert.deepEqual(assertAuditConflict(reverse, 'repeatable_attempt_unconfirmed', name), f);
+  assert.deepEqual(progress(reverse), progress(state));
 });

@@ -34,7 +34,7 @@ export const REPEATABLE_HOLD_MESSAGES: Record<string, string> = {
 
 /** Known aggregate contradictions do not require proof of independent attempts.
  * Inspect EVERY retained native row before eligibility can return early. A raw
- * passing S2 proves that a reported zero conflicts, even with no year/date or
+ * passing S2 proves a known aggregate below2 conflicts, even with no year/date or
  * composition metadata. It never authorizes credit or reconstructs an aggregate.
  * D, pending/unknown credits and opaque snapshots do not prove a contradiction.
  */
@@ -47,7 +47,8 @@ export function officialRepeatableAggregateDiagnostics(
     if (row.source !== 'hosei_import' || exactImportedCurriculumId(row, catalog) !== course.id || !native) continue;
     const passedS2 = native[3].some(slot => /^2(?:\.0+)?$/.test(slot[3].trim())
       && ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'].includes(slot[4].trim()));
-    if ((passedS2 && (row.earnedCreditsTotal === 0 || row.schoolingCreditsTotal === 0))
+    if ((passedS2 && ((row.earnedCreditsTotal !== null && row.earnedCreditsTotal < 2)
+      || (row.schoolingCreditsTotal !== null && row.schoolingCreditsTotal < 2)))
       || (row.earnedCreditsTotal !== null && row.schoolingCreditsTotal !== null
         && row.schoolingCreditsTotal > row.earnedCreditsTotal)) conflict = true;
   }

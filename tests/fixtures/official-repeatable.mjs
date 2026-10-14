@@ -25,3 +25,13 @@ export function auditConflictPayload(kind, name = '政治学') {
   if (kind === 'R2 year absent') { row.schoolingCredits = numeric(0); row.schoolings[0].year = null; row.schoolings[0].rawYear = ''; }
   return data;
 }
+
+export function nonzeroAggregateBoundaryPayload(caseId, name = '政治学') {
+  const aggregates = { A: [2, 1], B: [1, 1], C: [2, 2], D: [2, null], E: [0, 0] };
+  const [earned, schooling] = aggregates[caseId];
+  const data = payload([nativeRow(name, [2025])]), row = data.courses[0];
+  row.earnedCredits = numeric(earned); row.schoolingCredits = numeric(schooling);
+  row.schoolings[0].rawYear = ''; row.schoolings[0].year = null;
+  if (caseId === 'E') { row.schoolings[0].rawGrade = 'D'; row.schoolings[0].grade = 'D'; }
+  return data;
+}

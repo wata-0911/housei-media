@@ -166,3 +166,29 @@ R2: 原文年度が不足するとattempt保留が先に返り、S0と合格S2�
 既存168ケースbaseline、上限超過、manual earnedとの二重算入抑止、通常算入、保存/backup/reimport、H19/H43保留ガードを既存期待値のまま通過。関連browserはPlaywrightとChromium executableを明示して実行した。extension/bookmarkletの実装は変更せず、GitHub CIで更新HEADの両テストも確認する。最終HEAD・CI URLと結果はPR本文に記録する。
 
 自己テスト成功は独立再監査完了を意味しない。既存の同一年度/旧名称/証拠不足の保留制約は残る。
+
+
+## 非ゼロaggregateの境界検証と最小修正
+
+監査対象HEAD `2c81aa4084a7a3a28509a6b805e80c3b92931b5f` で、合格済みS2原文と非ゼロaggregateの不一致を追加検証した。既存ブランチ・Draft PR #162を使用する。
+
+原文年度を空にしたimport contract準拠fixtureで、政治学・法律総合特講それぞれにA〜Eを検証した（10件）。さらに、先頭に年度不足のみの原行、後続に既知の非ゼロ矛盾原行を置き、Fact/proof/卒業進捗の配列反転一致を各科目で検証した（2件）。
+
+| ケース | earned / S aggregate | 原文内訳 | 修正前 | 修正後の期待結果 |
+| --- | --- | --- | --- | --- |
+| A | 2 / 1 | 合格S2・原文年度不明 | 2科目ともFAIL: aggregate矛盾診断が欠落 | 年度不足とaggregate矛盾を保持 |
+| B | 1 / 1 | 同上 | 2科目ともFAIL: aggregate矛盾診断が欠落 | 年度不足とaggregate矛盾を保持 |
+| C | 2 / 2 | 同上 | 2科目ともPASS | 年度不足のみ。矛盾を確定しない |
+| D | 2 / null | 同上 | 2科目ともPASS | aggregate不明の保留。矛盾を確定しない |
+| E | 0 / 0 | D評価・原文年度不明 | 2科目ともPASS | 確定0。矛盾・通知・unknownを誤って追加しない |
+| 複数原行 | 先頭C、後続A | 両方の原文年度不明 | 2科目ともFAIL | 不足理由と矛盾を保持し、配列反転でも一致。算入なし |
+
+修正前は追加12件中6件FAIL・6件PASSを記録した。根本原因は、独立した矛盾走査の比較がearned0/S0だけに限定されていたこと。`officialRepeatableAggregateDiagnostics` の当該条件だけを、**明示された合格S2が存在し、既知のearnedまたはS aggregateが2未満**へ広げた。nullを明示的に除外し、年度・日付・構成不足とは別に診断する。
+
+これは単一の明示S2から分かる既知下限との比較であり、複数内訳の合計、回数推定、独立性認定、卒業算入・aggregateの生成には使用しない。複数S枠があっても本走査では無条件に合計しない。原行・内訳・出典・schema・監査フラグ・算入条件は変更しない。
+
+A/BではallZero誤認を防ぎ、既知矛盾としてhasUnknownを保持する。全体所要単位とglobal Sは未確定、政治学の法律専門Sもunknown、通知には証拠不足と矛盾の両方が出る。H19/H43から加算されない。総合特講は法律専門S8の対象外を維持する。C/Dは証拠不足の保留、Eは確定0を維持し、いずれも原行・aggregate・rawYear・grade・credits不変を検証した。
+
+今回の追加は単体12件。通知投影と卒業進捗を単体で直接検証でき、UI変更もないため、browserは追加・再実行を行わない。R1/R2、通常算入、上限・公式優先、再取込、保存・復元、null/0を含む全plannerテストを実行する。
+
+2026-10-14、Node 24.13.0で追加12件すべてPASS、`npm run test:planner` 3,016件すべてPASS（反復専用148件）、`npm run typecheck`・`npm run lint`・`npm run build`（catalog:check含む）・`git diff --check`をPASS。buildには既存chunk size警告がある。R1/R2・168ケースbaseline・既存の期待値/snapshotは変更していない。更新HEADのCI結果はPR本文へ記録する。独立再監査は未完了。同一年度の反復、旧名称、native原行や正確なidentityを検証できない実績、aggregateが2以上で独立回を証明できない内訳等は引き続き保留する。
