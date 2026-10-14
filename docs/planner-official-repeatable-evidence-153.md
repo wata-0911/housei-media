@@ -1,6 +1,6 @@
 # Issue #153: 公式反復科目の証拠契約と実装範囲
 
-対象は2026年度現行課程。開始devは `483a4ab725bb44cfd1d61f76fdc83e9582e9f642`、ブランチは `feature/153-official-repeatable-evidence`。PR #156・#157・#148は開始時点でdevへマージ済み。自己検証は独立監査ではなく、Draft PRで監査を待つ。Refs #153。
+対象は2026年度現行課程。開始devは `483a4ab725bb44cfd1d61f76fdc83e9582e9f642`、ブランチは `feature/153-official-repeatable-evidence`。PR #156・#157・#148は開始時点でdevへマージ済み。自己検証は独立監査ではない。以下の監査記録は各実施時点の状態であり、最終判断は末尾「最終監査・統合検証」を参照。Refs #153。
 
 2026-10-14再開時、devは `fe47963a1273768443e8e0ecec369adef35f54b7` へ進んでいたため、通常mergeで取り込んだ（PR #158〜#161）。#159の責務別ディレクトリ変更に合わせ、新モジュールを `src/planner/graduation/`、既存モジュール参照を移動後のパスへ統合した。履歴の書換えはしていない。
 
@@ -214,7 +214,7 @@ nativeを選んで競合するコピーを無視することはない。競合�
 
 両aggregateが既知でこの完全照合を満たす原行だけ、個別に検証した内訳量との不一致を先行診断する。年度・日付・内訳・構成不足、opaque原行、旧スナップショット混在等では「S2が1件だから4は矛盾」と推定しない。以前の単一合格S2に対する既知下限比較（0/1との矛盾）は維持する。
 
-全原行の不足理由・aggregate矛盾を先に集め、診断集合を重複除外・安定順序で保持する。scope/recognition/同一IDの保留でも収集済み診断を消さない。原行間の独立性判定、上限配分、公式優先はその後の既存経路を維持する。完全照合による内訳量は比較専用で、公式aggregateの再構築・永続化・自動算入には使用しない。
+`deriveOfficialRepeatableEvidence` に到達した反復候補では、全原行それぞれの照合保留理由・aggregate矛盾を先に集め、診断集合を重複除外・安定順序で保持する。この関数内のscope/recognition/同一IDの保留でも収集済み診断を消さない。identity・Mappingに関する上流の早期保留とは区別する（末尾の契約補足を参照）。原行間の独立性判定、上限配分、公式優先はその後の既存経路を維持する。完全照合による内訳量は比較専用で、公式aggregateの再構築・永続化・自動算入には使用しない。
 
 ### 新規テストと修正前後
 
@@ -243,3 +243,54 @@ nativeを選んで競合するコピーを無視することはない。競合�
 native原行・exact identity・完全な内訳を証明できない実績は引き続き保留。同一年度の複数修得や旧名称の自動読替は拡張しない。同一IDコピーの競合解消・削除・自動正本選択も行わない。
 
 再監査では、(1) 元のコピー集合で競合検出する時点、(2) native判定が代表行だけに依存しないこと、(3) 同一IDの複数authority/identityを確定0や算入へ変えないこと、(4) 共通の完全照合条件と不完全対照、(5) 各原行の診断集合が原行/生成ID順に依存しないこと、(6) 保存bytes・手動重複抑止・H19/H43保留・上限を重点確認する。自己テスト・CI成功は独立再監査の完了を意味しない。
+
+
+## 最終監査・統合検証（2026-10-14）
+
+### 残存P3候補の判定: 算入不具合ではなく、診断契約の説明不足
+
+開始HEADは `37a715df1cee47d914c0c719bf9502d3e7494041`。PR #162はDraft、baseはdev、既存CIは成功、GitHub上のレビュー・未解決レビュースレッドは0件だった。依頼者からF1/F2の独立再監査で主要修正は妥当・重大な確定不具合なしとの結果と、最終検証後のReady/merge/Issue完了の明示的な承認を受けた。今回の自己検証を新たな独立監査完了とは扱わない。
+
+P3候補の表示省略自体は再現する。正確な制度identityなし、競合するidentity、Mapping欠落、配分signature競合で上流が保留した場合、年度・内訳不足の詳細診断を追加せず、先行する保留理由を示す。これは未確定の制度科目・配分に反復専用の照合契約を適用しない段階的な判定であり、今回の範囲では実装変更を必要とする不具合とは判定しない。
+
+契約と責務を次のように明確化する。
+
+- `officialGraduationFacts` は元の原行集合で同一ID競合・native存在を判定し、制度identityとMappingを先に検証する。前提が未確定なら算入しない。異なるidentityのコピーを片方の制度科目へ確定しない。
+- `officialRepeatableAggregateDiagnostics` は正確な制度identityを確認できるnative反復原行について、Mapping保留より前にも検証可能な矛盾を収集する。生の科目名だけから反復対象や所属を推定しない。既知S2の下限矛盾と、完全照合時だけの厳密比較を区別する。
+- 「全原行の不足理由を収集」は、identity・Mappingを通過して `deriveOfficialRepeatableEvidence` に入る候補集合の契約。全原行それぞれの照合結果（原行内では最初の照合保留理由）とaggregate診断を保持する。全段階・全項目の診断を網羅列挙する契約ではない。F2の行A年度不足と行B完全aggregate不一致はこの範囲で両方保持される。
+- `unresolvedOfficialImpact` / `unresolvedSchoolingImpact` は配分先・Sの不確定影響を伝播する責務を持ち、履修回の認定・aggregate補完・算入を行わない。先行保留の通知とunknownで安全な判断が可能なため、詳細診断の表示を目的に未確定identityや仮Mappingで反復証明を呼ばない。
+
+既存import fixtureを使い、政治学/総合特講 × 原文年度不足/内訳欠落 × identity未確定/identityコピー競合/Mapping欠落/Mapping競合の16通り、さらに正確な政治学identityのearned0/S0・合格S2とMapping欠落/競合の2通りを検証した（監査用一時スクリプト、リポジトリ外）。全18件で期待どおり、通常算入0、全体/global Sはunknown、対象法律専門Sのunknown、H19/H43寄与なし、保留通知あり、入力の原行・内訳不変。後者2件ではaggregate矛盾とunknownを維持した。診断省略は再現するが誤算入・不確定影響の消失は再現しなかったため、新規実装・新規永続回帰テスト・期待値変更は行わない。RED→GREEN対象の実装変更はない。
+
+### 最新devとの統合と重点確認
+
+最新dev `1e5497bbae3d79aca52f1cc9f18a84141f14a770`（PR #163の未確定条件表示、#164のページ表示アニメーション）を既存featureブランチへ通常mergeした。統合commitは `cf1c9b4`。競合なし。dev側の変更を保持し、このPRの通知区分追加と共存することを確認した。force-push・履歴書換え・新規ブランチは使用しない。
+
+F1/F2、R1/R2、非ゼロ境界12件、同一ID/異なるID/原行順/ID順/生成UUID順、完全一致冪等性、不完全対照、同一年度保留、学科別上限と超過排他、manual earned重複抑制、planned/in_progress/waitingの分離、H19/H43保留、法律総合特講の専門S8除外、null/明示0/D、保存/再読込/再取込/backupを既存テストとコードで再確認した。schemaVersion=22、両監査フラグfalseを維持し、公式aggregate・fingerprint・原行・内訳を変更しない。
+
+今回の作業による独自変更は本設計書の契約補足・最終検証記録だけ。最新dev由来の5ファイルは通常mergeで取り込んだもので、反復科目の実装・テストは変更していない。
+
+### 残存する対象外の制約
+
+同一年度内の複数修得、旧科目名の自動読替、競合コピーの自動正本選択、証拠不明の算入、地理の段階的特殊配分は実装しない。旧opaque経路の仕様は維持する。詳細な不足理由は上流のidentity/Mappingを確定した後に表示される。この制約をP1/P2や算入不具合と混同しない。
+
+最終検証結果と更新HEADのCI URL・PR/Issue完了状態は、以下とPR本文に記録する。すべての検証とマージ条件を満たした場合のみ、今回の依頼に基づきReadyへ変更してdevへマージし、Issue #153の完了条件を確認して閉じる。未解決の重大な問題があればDraftを維持する。カタログ全体の監査フラグをtrueにはしない。
+
+
+### 最終ローカル検証結果
+
+最新dev統合後、Node 24.13.0で以下を実行し、すべて成功した。
+
+| 検証 | 結果 |
+| --- | --- |
+| `npm run test:planner` | 3,040件PASS（反復専用172件、既存168ケースbaselineを含む） |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS（grade-import生成物確認・catalog:check含む、既存chunk size警告のみ） |
+| `npm run test:extension` | 54件PASS |
+| `npm run test:bookmarklet` | 168件PASS |
+| 関連browser `--test-name-pattern='official repeatable'` | 8件PASS、skip/failなし |
+| P3監査プローブ | 統合前18件/統合後18件ともPASS |
+| `git diff --check` / `git diff origin/dev --check` | PASS |
+
+ローカルbrowserは外部Playwright/Chromium headless shell 1243を明示した実ブラウザ実行。最新devの画面変更と共存する超過表示・F1/F2/R1/R2保留・再読込の原行不変を確認した。新規テストは追加していない。更新HEADに対応するGitHub Actions全工程の成功を確認した後のPR/Issue完了記録はPR本文に残す。
