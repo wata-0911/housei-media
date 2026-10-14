@@ -1,11 +1,12 @@
 import { effectiveRecognitionForAdmission } from './graduationProfile';
-import type { ImportedCourseAchievement, ImportedStudyRecord } from '../gradeImport/gradeImportApply';
+import { sourceEvidence, type ImportedCourseAchievement, type ImportedStudyRecord } from '../gradeImport/gradeImportApply';
 import type { CurriculumCourse, GraduationProfile, Mapping, PlannerCatalog } from '../plannerCatalog';
 import { exactImportedCurriculumId } from './officialCourseCredits';
 import { REPEATABLE_CREDIT_RULES } from './repeatableRules';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources';
 import { resolveRecognizedProfessionalCurriculumIdentity } from './recognizedProfessionalIdentity';
 import { officialCandidateMappings } from './unresolvedOfficialImpact';
+import { deriveOfficialRepeatableEvidence, officialRepeatableAggregateDiagnostics, officialRepeatableRule, officialRepeatableSourceSignature, type OfficialRepeatableEvidence } from './officialRepeatableEvidence';
 
 export type OfficialUnknownReason = 'curriculum_identity_unresolved' | 'mapping_not_found' | 'mapping_conflict'
   | 'duplicate_official_rows' | 'metadata_unknown' | 'special_rule_evidence_required' | 'out_of_scope';
@@ -30,6 +31,7 @@ export type OfficialGraduationFact = {
   allocation: { kind: 'unique' | 'equivalent'; mappingIds: string[] }
     | { kind: 'unknown' | 'out_of_scope'; reason: OfficialUnknownReason };
   diagnostics: string[];
+  repeatableEvidence?: OfficialRepeatableEvidence;
 };
 /** Final, exclusive allocation input. No annual Offering or PlannerItem is synthesized. */
 export type OfficialAllocationInput = {
@@ -47,11 +49,12 @@ export type DerivedOfficialGraduationFacts = {
 /** Credit semantics come from retained source rows, never a duplicate group's null aggregate.
  * This classifies evidence only; it does not resolve or combine official aggregates.
  */
-export function officialFactCreditState(fact: Pick<OfficialGraduationFact, 'sourceRows'>) {
+export function officialFactCreditState(fact: Pick<OfficialGraduationFact, 'sourceRows'> & Partial<Pick<OfficialGraduationFact, 'diagnostics'>>) {
+  const conflict = fact.diagnostics?.includes('repeatable_aggregate_conflict') || fact.diagnostics?.includes('repeatable_source_conflict');
   return {
-    allZero: fact.sourceRows.length > 0 && fact.sourceRows.every(row => row.earnedCreditsTotal === 0),
+    allZero: !conflict && fact.sourceRows.length > 0 && fact.sourceRows.every(row => row.earnedCreditsTotal === 0),
     hasPositive: fact.sourceRows.some(row => row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0),
-    hasUnknown: fact.sourceRows.some(row => row.earnedCreditsTotal === null),
+    hasUnknown: Boolean(conflict) || fact.sourceRows.some(row => row.earnedCreditsTotal === null),
   };
 }
 
@@ -153,8 +156,22 @@ export function deriveOfficialGraduationFacts(
   const recognitionIdentities = (profile?.recognizedCredits.professionalCourses ?? [])
     .map(row => resolveRecognizedProfessionalCurriculumIdentity(row, catalog));
   const groups = new Map<string, ImportedCourseAchievement[]>();
-  // Repeated input of the very same source row is idempotent. Different ids are never deduped by fingerprint.
-  for (const row of [...new Map(rows.map(row => [row.id, row])).values()].sort((a, b) => a.id.localeCompare(b.id))) {
+  // F1: detect evidence conflicts on the ORIGINAL set, before selecting any
+  // calculation representative. Persisted rows and their order remain untouched.
+  const copiesById = new Map<string, ImportedCourseAchievement[]>();
+  for (const row of rows) copiesById.set(row.id, [...(copiesById.get(row.id) ?? []), row]);
+  const conflictingIds = new Set([...copiesById].filter(([, copies]) =>
+    new Set(copies.map(officialRepeatableSourceSignature)).size > 1).map(([id]) => id));
+  const representatives = [...copiesById.values()].map(copies => {
+    const nativeRepeats = copies.filter(row => {
+      const course = courses.get(exactImportedCurriculumId(row, catalog) ?? '');
+      return course && sourceEvidence(row) !== null && officialRepeatableRule(department, course);
+    });
+    // Restrict the new representative policy to this Issue's native repeat path.
+    if (!nativeRepeats.length) return copies[copies.length - 1];
+    return nativeRepeats.sort((a, b) => officialRepeatableSourceSignature(a).localeCompare(officialRepeatableSourceSignature(b)))[0];
+  });
+  for (const row of representatives.sort((a, b) => a.id.localeCompare(b.id))) {
     const id = exactImportedCurriculumId(row, catalog);
     const key = id ? `course:${id}` : `row:${row.id}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
@@ -163,19 +180,27 @@ export function deriveOfficialGraduationFacts(
   for (const group of groups.values()) {
     const row = group[0], id = exactImportedCurriculumId(row, catalog), course = id ? courses.get(id) : undefined;
     const sourceRowIds = group.map(r => r.id);
+    const originalGroup = sourceRowIds.flatMap(id => copiesById.get(id) ?? []);
+    const repeatable = course && originalGroup.some(r => sourceEvidence(r) !== null) && officialRepeatableRule(department, course);
+    const identityConflict = repeatable && originalGroup.some(r => exactImportedCurriculumId(r, catalog) !== id);
+    // Exact evidence copies collapse. Competing copies retain every authority
+    // tuple in the calculation fact; no aggregate is selected by input order.
+    const retained = repeatable ? [...new Map(originalGroup.map(r => [`${r.id}:${officialRepeatableSourceSignature(r)}`, r])).values()]
+      .sort((a, b) => a.id.localeCompare(b.id) || officialRepeatableSourceSignature(a).localeCompare(officialRepeatableSourceSignature(b))) : group;
     const candidates = course ? [...new Set(course.mappingIds)].flatMap(id => mappings.get(id) ?? [])
       .filter(m => m.scopeId === selectedScopeId || common.has(m.scopeId)).sort((a, b) => a.mappingId.localeCompare(b.mappingId)) : [];
     const fact: OfficialGraduationFact = {
-      sourceRowIds, curriculumCourseId: id, canonicalName: course?.canonicalName ?? null,
-      sourceRows: group.map(r => ({ id: r.id, earnedCreditsTotal: r.earnedCreditsTotal, compositionCredits: r.compositionCredits, schoolingCreditsTotal: r.schoolingCreditsTotal })),
-      earnedCreditsTotal: group.length === 1 ? row.earnedCreditsTotal : null,
-      compositionCredits: group.length === 1 ? row.compositionCredits : null,
-      schoolingEvidence: { credits: group.length === 1 ? row.schoolingCreditsTotal : null,
-        source: group.length === 1 && row.schoolingCreditsTotal !== null ? 'official_row' : 'unknown',
+      sourceRowIds, curriculumCourseId: identityConflict ? null : id, canonicalName: identityConflict ? null : course?.canonicalName ?? null,
+      sourceRows: retained.map(r => ({ id: r.id, earnedCreditsTotal: r.earnedCreditsTotal, compositionCredits: r.compositionCredits, schoolingCreditsTotal: r.schoolingCreditsTotal })),
+      earnedCreditsTotal: retained.length === 1 ? row.earnedCreditsTotal : null,
+      compositionCredits: retained.length === 1 ? row.compositionCredits : null,
+      schoolingEvidence: { credits: retained.length === 1 ? row.schoolingCreditsTotal : null,
+        source: retained.length === 1 && row.schoolingCreditsTotal !== null ? 'official_row' : 'unknown',
         recordIds: [...new Set(records.filter(r => sourceRowIds.includes(r.sourceCourseId ?? '') && r.method === 'schooling').map(r => r.id))].sort() },
       methodEvidence: { media: 'unknown', allEarnedCreditsAreMedia: false, recordIds: [], rawTerms: [] },
       candidateMappingIds: candidates.map(m => m.mappingId),
-      allocation: { kind: 'unknown', reason: 'curriculum_identity_unresolved' }, diagnostics: [],
+      allocation: { kind: 'unknown', reason: 'curriculum_identity_unresolved' },
+      diagnostics: repeatable && sourceRowIds.some(id => conflictingIds.has(id)) ? ['repeatable_source_conflict'] : [],
     };
     facts.push(fact);
     const hold = (reason: OfficialUnknownReason, detail?: string) => {
@@ -183,7 +208,13 @@ export function deriveOfficialGraduationFacts(
       fact.diagnostics.push(reason, ...(detail ? [detail] : []));
     };
     if (!course) { hold('curriculum_identity_unresolved'); continue; }
-    if (group.length > 1) { hold('duplicate_official_rows', 'conflicting_source_rows'); continue; }
+    // Opaque legacy fingerprints keep the existing conservative path. Only a
+    // retained native snapshot can enter the new evidence-specific projection.
+    const repeatableRows = repeatable ? originalGroup : [];
+    // R1/R2: metadata/Mapping holds cannot erase known native aggregate conflicts.
+    if (repeatable) fact.diagnostics.push(...officialRepeatableAggregateDiagnostics(repeatableRows, course, catalog, records));
+    if (identityConflict) { hold('curriculum_identity_unresolved'); continue; }
+    if (group.length > 1 && !repeatable) { hold('duplicate_official_rows', 'conflicting_source_rows'); continue; }
     if (course.scopeIds.slice().sort().join() !== [...new Set(course.mappingIds.flatMap(id => mappings.get(id)?.scopeId ?? []))].sort().join()) fact.diagnostics.push('scope_ids_differ_from_mapping_scopes');
     if (!course.mappingIds.length || course.mappingIds.some(id => !mappings.has(id))) { hold('mapping_not_found'); continue; }
     if (!candidates.length) { hold('out_of_scope'); continue; }
@@ -191,6 +222,21 @@ export function deriveOfficialGraduationFacts(
     if (new Set(candidates.map(signature)).size !== 1) { hold('mapping_conflict'); continue; }
     // Selecting a descriptor is safe only AFTER proving every edge has the identical allocation signature.
     const mapping = candidates[0];
+    if (repeatable) {
+      const proof = deriveOfficialRepeatableEvidence(repeatableRows, records, course, mapping, catalog, profile);
+      if (proof.kind === 'held') {
+        hold('special_rule_evidence_required');
+        fact.diagnostics.push(...proof.diagnostics.filter(code => !fact.diagnostics.includes(code)));
+        continue;
+      }
+      fact.repeatableEvidence = proof.evidence;
+      fact.allocation = { kind: candidates.length === 1 ? 'unique' : 'equivalent', mappingIds: fact.candidateMappingIds.slice() };
+      // Keep every source aggregate (and the multi-row null) intact. The capped
+      // calculation budget is separate from the independently verified total.
+      allocations.push({ fact, mapping: { ...mapping }, credits: proof.evidence.countedCredits,
+        completedCredits: proof.evidence.countedCredits, schoolingCredits: proof.evidence.countedCredits });
+      continue;
+    }
     const composition = course.curriculumCredits;
     if (!validCredits(row.earnedCreditsTotal) || !validCredits(composition) || composition === 0
       || mapping.curriculumCredits !== composition || (row.compositionCredits !== null && row.compositionCredits !== composition)) {

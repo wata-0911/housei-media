@@ -29,12 +29,16 @@ export function unresolvedSchoolingImpact(
   const allocations = new Map(official.allocations.map(a => [a.fact, a]));
   const globallyAccounted = new Set(globalSchooling.map(c => c.fact));
   for (const fact of official.facts) {
-    if (fact.allocation.kind === 'out_of_scope' || officialFactCreditState(fact).allZero) continue;
+    const creditState = officialFactCreditState(fact);
+    if (fact.allocation.kind === 'out_of_scope' || creditState.allZero) continue;
     const allocation = allocations.get(fact);
     if (allocation && allocation.schoolingCredits !== null) continue;
     // An explicit zero has no missing S increment. Conflicting media evidence
     // is not a confirmed zero, even though the original source row says zero.
-    if (fact.schoolingEvidence.credits === 0 && !fact.diagnostics.includes('media_schooling_credits_conflict')) continue;
+    // The native aggregate conflict pass is independent of missing attempt years.
+    const schoolingConflict = fact.diagnostics.some(code =>
+      ['media_schooling_credits_conflict', 'repeatable_aggregate_conflict', 'repeatable_source_conflict'].includes(code));
+    if (fact.schoolingEvidence.credits === 0 && !schoolingConflict) continue;
     if (!globallyAccounted.has(fact)) impact.globalReferenceUnknown = true;
     const mappings = allocation
       ? validOfficialImpactMapping(allocation.mapping, catalog) ? [allocation.mapping] : null

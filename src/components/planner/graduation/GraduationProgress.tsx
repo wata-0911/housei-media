@@ -17,6 +17,7 @@ const importNoticeGroups = [
   { kind: 'credits_unknown', label: '修得単位の確認が必要', info: false },
   { kind: 'schooling_confirmation', label: 'スクーリング算入の確認が必要', info: false },
   { kind: 'out_of_scope', label: '卒業算入対象外（自動除外）', info: true },
+  { kind: 'repeatable_limit', label: '反復科目の上限超過', info: true },
 ] as const;
 
 function SpecialLectureSupplement({ lecture }: { lecture: SpecialLectureProgress }) {
