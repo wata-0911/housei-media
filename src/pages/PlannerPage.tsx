@@ -29,6 +29,7 @@ import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/plann
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/gradeImport/directGradeHandoff';
 import { guidanceEligibilityCredits, guidanceForScope } from '../planner/graduation/thesisGuidance';
 import { missingGraduationProfilePrerequisites } from '../planner/graduation/graduationProfile';
+import { motion } from 'framer-motion';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -229,9 +230,15 @@ export default function PlannerPage() {
 
   return <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen" style={{ fontFamily: '"Noto Serif JP", serif' }}>
     <section className="bg-[#002255] text-white py-12 sm:py-16 text-center px-4">
-      <p className="text-orange-400 text-sm tracking-[0.2em] mb-3">2026 PLANNER</p>
-      <h1 className="text-3xl sm:text-4xl font-light tracking-wider">履修プランナー</h1>
-      <p className="mt-4 text-sm text-white/80">科目を探し、学びの予定と進捗を記録する。</p>
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <p className="text-orange-400 text-sm tracking-[0.2em] mb-3">PLANNER</p>
+        <h1 className="text-3xl sm:text-4xl font-light tracking-wider">履修計画表</h1>
+        <p className="mt-4 text-sm text-white/80">学生生活の様々なことを整理しましょう</p>
+      </motion.div>
     </section>
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <div className="border-l-4 border-[#E65C00] bg-orange-50 p-4 text-sm leading-relaxed">
@@ -254,7 +261,24 @@ export default function PlannerPage() {
         setLoaded(next); setUndoItem(null); setUndoImport(null); setDirectImport(undefined);
         setImportEpoch(epoch => epoch + 1); setSaveError(null); setNotice('バックアップで全データを置き換えました。');
       }} onBusyChange={busy => { writePending.current = busy; setSaving(busy); }} />
-      <CreditSummary summary={summarizeCredits(importedDerived.plannerItems, offeringsById, state.publicCourses)} importedEarnedCredits={importedEarnedCreditsTotal(state.importedCourseAchievements)} />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          delay: 0.2
+        }}
+      >
+        <CreditSummary
+          summary={summarizeCredits(
+            importedDerived.plannerItems,
+            offeringsById,
+            state.publicCourses
+          )}
+          importedEarnedCredits={importedEarnedCreditsTotal(
+            state.importedCourseAchievements
+          )}
+        />
+      </motion.div>
       <div className="min-h-5 text-sm text-[#002255]">
         <p role="status" aria-live="polite" className="inline">{saving ? '保存処理を待っています。完了後に編集できます。' : notice}</p>
         {undoItem && <button type="button" disabled={loaded.error !== null || saving} onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
