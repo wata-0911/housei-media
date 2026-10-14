@@ -192,3 +192,54 @@ A/BではallZero誤認を防ぎ、既知矛盾としてhasUnknownを保持する
 今回の追加は単体12件。通知投影と卒業進捗を単体で直接検証でき、UI変更もないため、browserは追加・再実行を行わない。R1/R2、通常算入、上限・公式優先、再取込、保存・復元、null/0を含む全plannerテストを実行する。
 
 2026-10-14、Node 24.13.0で追加12件すべてPASS、`npm run test:planner` 3,016件すべてPASS（反復専用148件）、`npm run typecheck`・`npm run lint`・`npm run build`（catalog:check含む）・`git diff --check`をPASS。buildには既存chunk size警告がある。R1/R2・168ケースbaseline・既存の期待値/snapshotは変更していない。更新HEADのCI結果はPR本文へ記録する。独立再監査は未完了。同一年度の反復、旧名称、native原行や正確なidentityを検証できない実績、aggregateが2以上で独立回を証明できない内訳等は引き続き保留する。
+
+
+## 独立再監査F1（P2）/F2（P3）の修正
+
+監査対象HEAD `5b0b73320d91952d9eb9e55323e0a8c4711f8df7`。既存ブランチ・Draft PR #162内で修正する。再開時はdevにPR #163が追加されていたが、本修正との競合はなく、今回devの無関係なUI変更は取り込まず、PRのCIで統合結果を確認する。
+
+### F1: 同一IDの競合を代表行選択より前に検出
+
+原因は、同一原行IDをMapでlast-wins集約してから代表行だけでnativeを判定したこと。native earned0/S0/合格S2と、同じID・数値のopaqueコピーがあると、入力順によってnative矛盾やsource競合が消え、確定0となっていた。schema22のvalidateStateと保存/再読込がこのコピー集合を受理するため、入力段階で拒否されると仮定できない。
+
+計算時に元の原行集合をID別に保持し、公式source/identity/fingerprint/aggregateの署名を比較して、代表行選択より前に競合IDを記録する。native反復経路では元集合からnativeの存在を確認し、完全一致の証拠コピーだけを冪等に縮約する。競合コピーは全authority tupleをFact.sourceRowsに保持し、複数authorityの計算用aggregateをnullにする。大学の原行aggregate、コピー、内訳、並び順を保存上で変更しない。
+
+nativeを選んで競合するコピーを無視することはない。競合はsource_conflict診断で保留し、allZeroを禁止、global/法律専門Sへunknownを伝播、H19/H43の再算入も遮断する。同一IDが異なる制度identityを指す境界も、片方のidentityを採用せず未確定とし、通知には元の名称集合を順序不変で表示する。この新しい代表行方針は本Issueのnative反復経路に限定する。
+
+### F2: 原行単位の完全照合と全原行の診断収集
+
+原因は、aggregate診断の独立走査が単一S2の既知下限とS>earnedだけを扱い、完全な内訳との厳密な一致比較は算入ループの最後にしかなかったこと。行Aの年度不足が先にreturnすると、行B（aggregate4/S4・完全なS2が1件・他枠空）の確定できる不一致を失っていた。逆順では、行Bでreturnして行Aの年度不足を失っていた。
+
+`inspectRepeatableRowDetails` に既存の原行単位の完全照合条件を共通化する。exact制度ID、native occurrence0、構成2、原行名、認定/通信/リポートなし、全occupied slotと全リンク内訳の対応、明示原文年度/期、実在日付と大学年度の一致、明示2単位、合格評価、年度/日付の非重複を要求する。record IDの競合も完全照合を妨げる。年度・日付を補完しない。
+
+両aggregateが既知でこの完全照合を満たす原行だけ、個別に検証した内訳量との不一致を先行診断する。年度・日付・内訳・構成不足、opaque原行、旧スナップショット混在等では「S2が1件だから4は矛盾」と推定しない。以前の単一合格S2に対する既知下限比較（0/1との矛盾）は維持する。
+
+全原行の不足理由・aggregate矛盾を先に集め、診断集合を重複除外・安定順序で保持する。scope/recognition/同一IDの保留でも収集済み診断を消さない。原行間の独立性判定、上限配分、公式優先はその後の既存経路を維持する。完全照合による内訳量は比較専用で、公式aggregateの再構築・永続化・自動算入には使用しない。
+
+### 新規テストと修正前後
+
+- 単体はF1/F2追加24件（反復専用合計172件）。最初の22件は監査HEADで10件FAIL/12件PASS。後続のidentity競合2件もガード導入前に2件FAILを記録。修正後は全24件PASS。対照のPASSを不具合の再現FAILと混同しない。
+- F1: native→legacy / legacy→native、earned0/2、完全一致コピー、異なるIDの独立反復、validateState受理、両順序のsave/load、manual earned重複抑止、異なる制度identityの競合と通知順序不変。
+- F2: A単独/B単独/A+B、原行反転、ID昇降両順、通常importのUUID生成順を固定した昇降両順、年度/日付/内訳/構成不足・opaque/旧snapshotの対照。Fact/proof/卒業進捗と通知に不足と矛盾が共存し、算入されないことを検証。
+- browser追加3件（native→legacy、逆順、A+B）で通知、全体/global S/法律専門Sの保留、再読込後の原行bytes不変を検証。既存の関連5件を併せて実行する。
+
+2026-10-14、最終コードのローカル検証（Node 24.13.0）:
+
+| 検証 | 結果 |
+| --- | --- |
+| `npm run test:planner` | 3,040件すべてPASS（反復専用172件、新規24件） |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build`（catalog:check含む） | PASS。既存chunk size警告あり |
+| `git diff --check` | PASS |
+| 関連browser `--test-name-pattern='official repeatable'` | 8件すべてPASS（新規3件、既存5件） |
+
+既存R1/R2、非ゼロ12件、168ケースbaseline、null/0/D、旧名、同一年度、上限・再取込の期待値は変更していない。関連browserはPlaywrightとChromium headless shell 1243を明示して実行した。更新HEADのCI全工程（extension/bookmarklet含む）と実行URL・結果はPR本文へ記録する。
+
+変更7ファイル: `officialGraduationFacts.ts`、`officialRepeatableEvidence.ts`、`importedGraduationNotices.ts`、専用fixture、単体テスト、browserテスト、本設計書。保存schema、原行、aggregate、内訳、両監査フラグは変更していない。
+
+### 残存制約・独立再監査の重点
+
+native原行・exact identity・完全な内訳を証明できない実績は引き続き保留。同一年度の複数修得や旧名称の自動読替は拡張しない。同一IDコピーの競合解消・削除・自動正本選択も行わない。
+
+再監査では、(1) 元のコピー集合で競合検出する時点、(2) native判定が代表行だけに依存しないこと、(3) 同一IDの複数authority/identityを確定0や算入へ変えないこと、(4) 共通の完全照合条件と不完全対照、(5) 各原行の診断集合が原行/生成ID順に依存しないこと、(6) 保存bytes・手動重複抑止・H19/H43保留・上限を重点確認する。自己テスト・CI成功は独立再監査の完了を意味しない。

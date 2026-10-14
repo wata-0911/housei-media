@@ -18,7 +18,9 @@ export function importedGraduationNotices(official: DerivedOfficialGraduationFac
     if (creditState.allZero) continue;
     const repeatableReason = fact.diagnostics.flatMap(code => REPEATABLE_HOLD_MESSAGES[code] ?? []).join(' ');
     const notice = {
-      rawName: fact.canonicalName ?? rows.find(row => row.id === fact.sourceRowIds[0])?.rawName ?? '',
+      rawName: fact.canonicalName ?? (fact.diagnostics.includes('repeatable_source_conflict')
+        ? [...new Set(rows.filter(row => fact.sourceRowIds.includes(row.id)).map(row => row.rawName))].sort().join(' / ')
+        : rows.find(row => row.id === fact.sourceRowIds[0])?.rawName ?? ''),
       sourceRowIds: fact.sourceRowIds,
       reason: repeatableReason || `公式実績の算入条件: ${fact.diagnostics.join(' / ')}`,
     };

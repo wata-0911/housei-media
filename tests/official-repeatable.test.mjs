@@ -4,6 +4,7 @@ import { catalog } from '../src/planner/catalog/catalog.ts';
 import { deriveOfficialGraduationFacts, officialFactCreditState } from '../src/planner/graduation/officialGraduationFacts.ts';
 import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
 import { deriveOfficialRepeatableEvidence } from '../src/planner/graduation/officialRepeatableEvidence.ts';
+import { validateState } from '../src/planner/validation.ts';
 import { REPEATABLE_CREDIT_RULES } from '../src/planner/graduation/repeatableRules.ts';
 import { saveState, loadState, STORAGE_KEY } from '../src/planner/backup/storage.ts';
 import { createPlannerBackup, parsePlannerBackup } from '../src/planner/backup/plannerBackup.ts';
@@ -11,7 +12,7 @@ import { restorePlannerBackup } from '../src/planner/backup/plannerBackupStorage
 import { plannerItemFromCourseSearch } from '../src/planner/planning/plannerItemState.ts';
 import { importFingerprint } from '../src/planner/gradeImport/gradeImportApply.ts';
 import { importedGraduationNotices } from '../src/planner/gradeImport/importedGraduationNotices.ts';
-import { repeatProfile, numeric, nativeRow, payload, repeatedPayload, importRepeated, slot, auditConflictPayload, nonzeroAggregateBoundaryPayload } from './fixtures/official-repeatable.mjs';
+import { repeatProfile, numeric, nativeRow, payload, repeatedPayload, importRepeated, slot, auditConflictPayload, nonzeroAggregateBoundaryPayload, sameIdNativeLegacyConflict, completeRowMismatchPayload } from './fixtures/official-repeatable.mjs';
 const program = department => catalog.programs.find(p => p.department === department);
 const facts = (state, department = '法律学科', input = catalog, profile = repeatProfile) => deriveOfficialGraduationFacts(state.importedCourseAchievements, state.importedStudyRecords, input, program(department).scopeId, profile);
 const progress = (state, department = '法律学科', input = catalog) => calculateGraduationProgress(state.items, input, program(department).scopeId, [], 'not_selected', state.importedStudyRecords, state.importedCourseAchievements, repeatProfile);
@@ -406,4 +407,129 @@ for (const name of ['政治学', '総合特講']) test(`nonzero boundary multipl
   assert.deepEqual(deriveOfficialRepeatableEvidence(reverse.importedCourseAchievements, reverse.importedStudyRecords, course, mapping, catalog, repeatProfile), proof);
   assert.deepEqual(assertAuditConflict(reverse, 'repeatable_attempt_unconfirmed', name), f);
   assert.deepEqual(progress(reverse), progress(state));
+});
+
+function assertF1Held(state) {
+  const f = assertHeld(state, 'repeatable_source_conflict');
+  assert.equal(officialFactCreditState(f.facts[0]).allZero, false);
+  assert.equal(officialFactCreditState(f.facts[0]).hasUnknown, true);
+  const p = progress(state);
+  assert.equal(total(p).earned, null); assert.equal(total(p).status, 'unknown');
+  assert.equal(schooling(p).earned, null); assert.equal(schooling(p).status, 'unknown');
+  const lawS = p.cards.find(c => c.requirementId === 'professional-law-schooling');
+  assert.equal(lawS.earned, 0); assert.equal(lawS.status, 'unknown');
+  assert.ok(p.importedWarnings.some(w => w.kind === 'allocation_held' && w.reason.includes('同じ公式行ID')));
+  return f;
+}
+for (const earned of [0, 2]) for (const reverse of [false, true]) test(`audit F1 earned${earned} ${reverse ? 'legacy-native' : 'native-legacy'} retains source conflict`, () => {
+  const state = sameIdNativeLegacyConflict(earned, reverse), before = structuredClone(state);
+  assert.equal(validateState(state, catalog), true);
+  const f = assertF1Held(state);
+  if (!earned) assert.ok(f.facts[0].diagnostics.includes('repeatable_aggregate_conflict'));
+  const flipped = { ...state, importedCourseAchievements: [...state.importedCourseAchievements].reverse() };
+  assert.deepEqual(assertF1Held(flipped), f);
+  assert.deepEqual(progress(flipped), progress(state)); assert.deepEqual(state, before);
+});
+
+test('audit F1 exact same-ID copies remain idempotent and never add a completion', () => {
+  const original = importRepeated(repeatedPayload('政治学', 1));
+  const copied = { ...original, importedCourseAchievements: [...original.importedCourseAchievements, structuredClone(original.importedCourseAchievements[0])] };
+  assert.equal(validateState(copied, catalog), true);
+  assert.deepEqual(facts(copied), facts(original)); assert.deepEqual(progress(copied), progress(original));
+  assert.equal(facts(copied).allocations[0].credits, 2);
+});
+test('audit F1 different-ID independent native rows remain two verified completions', () => {
+  const state = importRepeated(repeatedPayload('政治学', 2));
+  assert.notEqual(state.importedCourseAchievements[0].id, state.importedCourseAchievements[1].id);
+  const f = facts(state); assert.equal(f.allocations[0].credits, 4);
+  assert.equal(f.allocations[0].fact.repeatableEvidence.attempts.length, 2);
+  assert.equal(f.facts[0].diagnostics.includes('repeatable_source_conflict'), false);
+});
+for (const reverse of [false, true]) test(`audit F1 accepted duplicate ID survives save/reload, reverse=${reverse}`, () => {
+  const state = sameIdNativeLegacyConflict(0, reverse), values = new Map();
+  const store = { getItem: k => values.get(k) ?? null, setItem: (k,v) => values.set(k,v) };
+  assert.equal(validateState(state, catalog), true); const raw = saveState(store, state, null, catalog);
+  const loaded = loadState(store, catalog); assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 22);
+  assert.deepEqual(loaded.state.importedCourseAchievements, state.importedCourseAchievements);
+  assert.deepEqual(loaded.state.importedStudyRecords, state.importedStudyRecords);
+  assert.equal(store.getItem(STORAGE_KEY), raw); assertF1Held(loaded.state);
+});
+for (const reverse of [false, true]) test(`audit F1 manual earned cannot re-count a competing official source, reverse=${reverse}`, () => {
+  const state = sameIdNativeLegacyConflict(0, reverse), courseId = state.importedCourseAchievements[0].curriculumCourseId;
+  const offering = catalog.offerings.find(o => o.curriculumCourseId === courseId && o.resolutionStatus === 'matched');
+  state.items = [{ ...plannerItemFromCourseSearch(offering.id), status: 'earned' }];
+  assertF1Held(state); assert.equal(state.items[0].status, 'earned');
+});
+
+function f2Proof(state) {
+  const course = catalog.curriculum.courses.find(c => c.id === state.importedCourseAchievements[0].curriculumCourseId);
+  const mapping = catalog.mappings.find(m => course.mappingIds.includes(m.mappingId) && m.scopeId === program('法律学科').scopeId);
+  return deriveOfficialRepeatableEvidence(state.importedCourseAchievements, state.importedStudyRecords, course, mapping, catalog, repeatProfile);
+}
+function assertF2Held(state, conflict, yearMissing) {
+  const f = assertHeld(state), proof = f2Proof(state);
+  assert.equal(proof.kind, 'held'); assert.equal(f.facts[0].diagnostics.includes('repeatable_aggregate_conflict'), conflict);
+  assert.equal(proof.diagnostics.includes('repeatable_aggregate_conflict'), conflict);
+  if (yearMissing) {
+    assert.ok(f.facts[0].diagnostics.includes('repeatable_attempt_unconfirmed'));
+    assert.ok(proof.diagnostics.includes('repeatable_attempt_unconfirmed'));
+  }
+  const p = progress(state); assert.equal(total(p).earned, null); assert.equal(total(p).status, 'unknown');
+  assert.equal(schooling(p).earned, null); assert.equal(schooling(p).status, 'unknown');
+  const notice = p.importedWarnings.find(w => w.kind === 'allocation_held'); assert.ok(notice);
+  assert.equal(notice.reason.includes('一致しません'), conflict);
+  if (yearMissing) assert.ok(notice.reason.includes('独立した修得回を確認できません'));
+  return { f, proof };
+}
+test('audit F2 row A alone retains year hold without claiming aggregate conflict', () => {
+  assertF2Held(importRepeated(completeRowMismatchPayload(true, false)), false, true);
+});
+test('audit F2 row B alone proves a complete local aggregate mismatch', () => {
+  assertF2Held(importRepeated(completeRowMismatchPayload(false, true)), true, false);
+});
+for (const idOrder of ['A-first', 'B-first']) test(`audit F2 A+B source ID order ${idOrder} retains both diagnostics and input reversal`, () => {
+  const state = importRepeated(completeRowMismatchPayload());
+  for (const row of state.importedCourseAchievements) {
+    const oldId = row.id, isA = row.earnedCreditsTotal === 2;
+    row.id = `f2-${(isA === (idOrder === 'A-first')) ? 'a' : 'z'}`;
+    for (const r of state.importedStudyRecords.filter(r => r.sourceCourseId === oldId)) r.sourceCourseId = row.id;
+  }
+  const before = structuredClone(state), results = assertF2Held(state, true, true);
+  const reverse = { ...state, importedCourseAchievements: [...state.importedCourseAchievements].reverse(), importedStudyRecords: [...state.importedStudyRecords].reverse() };
+  assert.deepEqual(assertF2Held(reverse, true, true), results); assert.deepEqual(progress(reverse), progress(state));
+  assert.deepEqual(state, before);
+});
+for (const descending of [false, true]) test(`audit F2 normal import generated UUID order descending=${descending} retains all row diagnostics`, t => {
+  let n = 0;
+  t.mock.method(globalThis.crypto, 'randomUUID', () => `00000000-0000-4000-8000-${(descending ? 1000 - n++ : n++).toString(16).padStart(12, '0')}`);
+  const state = importRepeated(completeRowMismatchPayload());
+  const [a, b] = state.importedCourseAchievements;
+  assert.equal(a.earnedCreditsTotal, 2); assert.equal(b.earnedCreditsTotal, 4);
+  assert.equal(a.id < b.id, !descending); assert.equal(validateState(state, catalog), true);
+  assertF2Held(state, true, true);
+});
+for (const missing of ['year', 'date', 'component', 'opaque source', 'old snapshot', 'composition']) test(`audit F2 incomplete row B ${missing} cannot prove its total4 mismatch`, () => {
+  const data = completeRowMismatchPayload(false, true), raw = data.courses[0];
+  if (missing === 'year') { raw.schoolings[0].rawYear = ''; raw.schoolings[0].year = null; }
+  if (missing === 'date') { raw.schoolings[0].rawDate = ''; raw.schoolings[0].date = null; }
+  if (missing === 'composition') raw.compositionCredits = numeric(null);
+  const state = importRepeated(data);
+  if (missing === 'component') state.importedStudyRecords = [];
+  if (missing === 'opaque source') state.importedCourseAchievements[0].fingerprint = 'legacy-f2-opaque';
+  if (missing === 'old snapshot') state.importedStudyRecords.push({ ...state.importedStudyRecords[0], id: 'old-f2', grade: 'D' });
+  assertF2Held(state, false, missing === 'year');
+});
+
+for (const reverse of [false, true]) test(`audit F1 different institutional identities under one source ID remain unresolved, reverse=${reverse}`, () => {
+  const state = sameIdNativeLegacyConflict(0), otherData = payload([nativeRow('総合特講', [2023])]);
+  otherData.courses[0].earnedCredits = numeric(0); otherData.courses[0].schoolingCredits = numeric(0);
+  const other = importRepeated(otherData), native = state.importedCourseAchievements[0], copy = other.importedCourseAchievements[0];
+  copy.id = native.id;
+  state.importedCourseAchievements = reverse ? [copy, native] : [native, copy];
+  state.importedStudyRecords.push(...other.importedStudyRecords.map(r => ({ ...r, sourceCourseId: native.id })));
+  assert.equal(validateState(state, catalog), true);
+  const f = assertF1Held(state); assert.equal(f.facts[0].curriculumCourseId, null);
+  assert.equal(f.facts[0].canonicalName, null);
+  const flipped = { ...state, importedCourseAchievements: [...state.importedCourseAchievements].reverse() };
+  assert.deepEqual(assertF1Held(flipped), f); assert.deepEqual(progress(flipped), progress(state));
 });

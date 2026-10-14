@@ -32,14 +32,69 @@ export const REPEATABLE_HOLD_MESSAGES: Record<string, string> = {
   repeatable_recognition_overlap: '認定済み専門科目と反復実績の重複を確認できないため算入を保留しています。',
 };
 
+/** Only source/identity evidence participates; editable planning metadata is not authority. */
+export const officialRepeatableSourceSignature = (row: ImportedCourseAchievement) => JSON.stringify([
+  row.source, row.fingerprint, row.rawName, row.categoryRaw, row.earnedCreditsTotal,
+  row.schoolingCreditsTotal, row.compositionCredits, row.recognizedExemption,
+  row.additionalEnrollment, row.curriculumCourseId, row.curriculumMatch, row.candidateCurriculumCourseIds,
+]);
+
+/** Row-local complete matching, shared by diagnostics and allocation proof.
+ * Unknown years/dates, missing snapshots and mixed/opaque evidence cannot prove
+ * an exact detail total. Disjointness between DIFFERENT rows is checked later.
+ */
+function inspectRepeatableRowDetails(
+  row: ImportedCourseAchievement, records: ImportedStudyRecord[], course: CurriculumCourse, catalog: PlannerCatalog,
+): { kind: 'verified'; attempts: OfficialRepeatableEvidence['attempts'] } | { kind: 'held'; reason: string } {
+  const hold = (reason: string) => ({ kind: 'held' as const, reason });
+  const native = sourceEvidence(row);
+  if (row.source !== 'hosei_import' || exactImportedCurriculumId(row, catalog) !== course.id || !native || native[6] !== 0
+    || normalizeImportBaseName(row.rawName) !== normalizeImportBaseName(course.canonicalName)
+    || row.compositionCredits !== 2 || course.curriculumCredits !== 2
+    || (row.recognizedExemption !== null && row.recognizedExemption !== 0)
+    || (row.additionalEnrollment !== null && row.additionalEnrollment !== 0)
+    || native[4].some(report => report[0] !== '' || report[1] !== 'none' || report[2] !== null)
+    || native[5].some(value => value !== '' && value !== false)) return hold('repeatable_source_unconfirmed');
+  const linked = records.filter(r => r.sourceCourseId === row.id);
+  if (linked.some(r => r.source !== 'hosei_import' || r.method !== 'schooling'
+    || normalizeImportName(r.rawName) !== normalizeImportName(row.rawName) || !isNativeComponentSnapshot(r, row))) {
+    return hold('repeatable_source_unconfirmed');
+  }
+  // Competing ownership of a record ID is not a fully verified local snapshot.
+  if (linked.some(record => records.some(other => other.id === record.id
+    && (other.sourceCourseId !== row.id || other.fingerprint !== record.fingerprint)))) {
+    return hold('repeatable_source_conflict');
+  }
+  const occupied = native[3].map((slot, index) => ({ slot, index })).filter(({ slot }) => slot.some(value => value !== ''));
+  if (!occupied.length) return hold('repeatable_attempt_unconfirmed');
+  const attempts: OfficialRepeatableEvidence['attempts'] = [];
+  const years = new Set<number>(), dates = new Set<string>();
+  for (const { slot, index } of occupied) {
+    const snapshots = linked.filter(r => r.fingerprint.endsWith(`:${index}`)), record = snapshots[0];
+    const year = schoolingAcademicYear(slot[0]);
+    if (!record || year === null || !slot[1].trim() || !record.date
+      || academicYearFromDate(record.date) !== year || record.credits !== 2 || !/^2(?:\.0+)?$/.test(slot[3].trim())
+      || !['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'].includes(record.grade ?? '')) {
+      return hold('repeatable_attempt_unconfirmed');
+    }
+    if (years.has(year) || dates.has(record.date)) return hold('repeatable_attempt_overlap');
+    years.add(year); dates.add(record.date);
+    attempts.push({ sourceRowId: row.id, recordIds: [...new Set(snapshots.map(r => r.id))].sort(), academicYear: year, date: record.date });
+  }
+  return { kind: 'verified', attempts };
+}
+
 /** Known aggregate contradictions do not require proof of independent attempts.
  * Inspect EVERY retained native row before eligibility can return early. A raw
  * passing S2 proves a known aggregate below2 conflicts, even with no year/date or
  * composition metadata. It never authorizes credit or reconstructs an aggregate.
+ * An exact total comparison additionally requires EVERY occupied native slot
+ * to pass the same complete row matching as allocation. Never infer a missing
+ * history from one partial/opaque S2 snapshot.
  * D, pending/unknown credits and opaque snapshots do not prove a contradiction.
  */
 export function officialRepeatableAggregateDiagnostics(
-  rows: ImportedCourseAchievement[], course: CurriculumCourse, catalog: PlannerCatalog,
+  rows: ImportedCourseAchievement[], course: CurriculumCourse, catalog: PlannerCatalog, records: ImportedStudyRecord[],
 ): string[] {
   let conflict = false;
   for (const row of rows) {
@@ -51,6 +106,9 @@ export function officialRepeatableAggregateDiagnostics(
       || (row.schoolingCreditsTotal !== null && row.schoolingCreditsTotal < 2)))
       || (row.earnedCreditsTotal !== null && row.schoolingCreditsTotal !== null
         && row.schoolingCreditsTotal > row.earnedCreditsTotal)) conflict = true;
+    const details = inspectRepeatableRowDetails(row, records, course, catalog);
+    if (details.kind === 'verified' && row.earnedCreditsTotal !== null && row.schoolingCreditsTotal !== null
+      && (row.earnedCreditsTotal !== details.attempts.length * 2 || row.schoolingCreditsTotal !== details.attempts.length * 2)) conflict = true;
   }
   return conflict ? ['repeatable_aggregate_conflict'] : [];
 }
@@ -64,8 +122,14 @@ export function deriveOfficialRepeatableEvidence(
   rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], course: CurriculumCourse,
   mapping: Mapping, catalog: PlannerCatalog, profile: GraduationProfile | undefined,
 ): { kind: 'verified'; evidence: OfficialRepeatableEvidence } | { kind: 'held'; reason: string; diagnostics: string[] } {
-  const aggregateDiagnostics = officialRepeatableAggregateDiagnostics(rows, course, catalog);
-  const hold = (reason: string) => ({ kind: 'held' as const, reason, diagnostics: [...new Set([reason, ...aggregateDiagnostics])] });
+  const aggregateDiagnostics = officialRepeatableAggregateDiagnostics(rows, course, catalog, records);
+  const rowDiagnostics = rows.flatMap(row => {
+    const details = inspectRepeatableRowDetails(row, records, course, catalog);
+    return [...(details.kind === 'held' ? [details.reason] : []),
+      ...(row.earnedCreditsTotal === null || row.schoolingCreditsTotal === null ? ['repeatable_aggregate_unknown'] : [])];
+  });
+  const diagnostics = [...new Set([...aggregateDiagnostics, ...rowDiagnostics])].sort();
+  const hold = (reason: string) => ({ kind: 'held' as const, reason, diagnostics: [...new Set([reason, ...diagnostics])].sort() });
   const rule = officialRepeatableRule(mapping.department, course);
   if (!rule || catalog.curriculum?.source !== 'official_curriculum_mappings_2026'
     || profile?.curriculumApplicability !== 'current_2026'
@@ -79,57 +143,33 @@ export function deriveOfficialRepeatableEvidence(
   }
   if ((profile.recognizedCredits.professionalCourses?.length ?? 0) > 0) return hold('repeatable_recognition_overlap');
   // Preserve reimport idempotence without choosing the last conflicting ID.
-  const signature = (row: ImportedCourseAchievement) => JSON.stringify([row.source, row.fingerprint, row.rawName,
-    row.categoryRaw, row.earnedCreditsTotal, row.schoolingCreditsTotal, row.compositionCredits,
-    row.recognizedExemption, row.additionalEnrollment, row.curriculumCourseId, row.curriculumMatch, row.candidateCurriculumCourseIds]);
   const uniqueRows = new Map<string, ImportedCourseAchievement>();
   for (const row of rows) {
     const previous = uniqueRows.get(row.id);
-    if (previous && signature(previous) !== signature(row)) return hold('repeatable_source_conflict');
+    if (previous && officialRepeatableSourceSignature(previous) !== officialRepeatableSourceSignature(row)) return hold('repeatable_source_conflict');
     uniqueRows.set(row.id, row);
   }
+  if (diagnostics.length) return hold(diagnostics[0]);
   const attempts: OfficialRepeatableEvidence['attempts'] = [];
   const years = new Set<number>(), dates = new Set<string>();
   const recordOwners = new Map<string, string>();
   let earnedTotal = 0;
   for (const row of [...uniqueRows.values()].sort((a, b) => a.id.localeCompare(b.id))) {
-    const native = sourceEvidence(row);
-    if (row.source !== 'hosei_import' || exactImportedCurriculumId(row, catalog) !== course.id || !native || native[6] !== 0
-      || normalizeImportBaseName(row.rawName) !== normalizeImportBaseName(course.canonicalName)
-      || row.compositionCredits !== 2
-      || (row.recognizedExemption !== null && row.recognizedExemption !== 0)
-      || (row.additionalEnrollment !== null && row.additionalEnrollment !== 0)
-      || native[4].some(report => report[0] !== '' || report[1] !== 'none' || report[2] !== null)
-      || native[5].some(value => value !== '' && value !== false)) return hold('repeatable_source_unconfirmed');
+    const details = inspectRepeatableRowDetails(row, records, course, catalog);
+    if (details.kind === 'held') return hold(details.reason);
     if (row.earnedCreditsTotal === null || row.schoolingCreditsTotal === null) return hold('repeatable_aggregate_unknown');
     const linked = records.filter(r => r.sourceCourseId === row.id);
-    if (linked.some(r => r.source !== 'hosei_import' || r.method !== 'schooling'
-      || normalizeImportName(r.rawName) !== normalizeImportName(row.rawName) || !isNativeComponentSnapshot(r, row))) {
-      return hold('repeatable_source_unconfirmed');
-    }
     for (const record of linked) {
       const owner = JSON.stringify([row.id, record.fingerprint]);
       if (recordOwners.has(record.id) && recordOwners.get(record.id) !== owner) return hold('repeatable_source_conflict');
       recordOwners.set(record.id, owner);
     }
-    const occupied = native[3].map((slot, index) => ({ slot, index })).filter(({ slot }) => slot.some(value => value !== ''));
-    if (!occupied.length) return hold('repeatable_attempt_unconfirmed');
-    for (const { slot, index } of occupied) {
-      const snapshots = linked.filter(r => r.fingerprint.endsWith(`:${index}`));
-      const record = snapshots[0];
-      const year = schoolingAcademicYear(slot[0]);
-      if (!record || year === null || !slot[1].trim() || !record.date
-        || academicYearFromDate(record.date) !== year || record.credits !== 2 || !/^2(?:\.0+)?$/.test(slot[3].trim())
-        || !['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'].includes(record.grade ?? '')) {
-        return hold('repeatable_attempt_unconfirmed');
-      }
-      // Slot position and differing grades are not additional attempts. Exact
-      // copies of a verified native slot collapse; competing slots/rows hold.
-      if (years.has(year) || dates.has(record.date)) return hold('repeatable_attempt_overlap');
-      years.add(year); dates.add(record.date);
-      attempts.push({ sourceRowId: row.id, recordIds: [...new Set(snapshots.map(r => r.id))].sort(), academicYear: year, date: record.date });
+    for (const attempt of details.attempts) {
+      // Different row/slot positions never prove independence by themselves.
+      if (years.has(attempt.academicYear) || dates.has(attempt.date)) return hold('repeatable_attempt_overlap');
+      years.add(attempt.academicYear); dates.add(attempt.date); attempts.push(attempt);
     }
-    if (row.earnedCreditsTotal !== occupied.length * 2 || row.schoolingCreditsTotal !== row.earnedCreditsTotal) {
+    if (row.earnedCreditsTotal !== details.attempts.length * 2 || row.schoolingCreditsTotal !== row.earnedCreditsTotal) {
       return hold('repeatable_aggregate_conflict');
     }
     earnedTotal += row.earnedCreditsTotal;

@@ -35,3 +35,17 @@ export function nonzeroAggregateBoundaryPayload(caseId, name = '政治学') {
   if (caseId === 'E') { row.schoolings[0].rawGrade = 'D'; row.schoolings[0].grade = 'D'; }
   return data;
 }
+
+export function sameIdNativeLegacyConflict(earned = 0, reverse = false) {
+  const data = payload([nativeRow('政治学', [2025])]);
+  data.courses[0].earnedCredits = numeric(earned); data.courses[0].schoolingCredits = numeric(earned);
+  const state = importRepeated(data), native = state.importedCourseAchievements[0];
+  const legacy = { ...structuredClone(native), fingerprint: 'legacy-f1-audit-copy' };
+  state.importedCourseAchievements = reverse ? [legacy, native] : [native, legacy];
+  return state;
+}
+export function completeRowMismatchPayload(includeA = true, includeB = true) {
+  const a = nativeRow('政治学', [2024]); a.schoolings[0].rawYear = ''; a.schoolings[0].year = null;
+  const b = nativeRow('政治学', [2025]); b.earnedCredits = numeric(4); b.schoolingCredits = numeric(4);
+  return payload([...(includeA ? [a] : []), ...(includeB ? [b] : [])]);
+}

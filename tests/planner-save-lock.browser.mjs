@@ -636,7 +636,7 @@ for (const program of calligraphyPrograms) test(`calligraphy partial Chromium su
   }
 });
 
-import { repeatProfile, repeatedPayload, importRepeated, payload as repeatPayload, nativeRow as repeatNativeRow, numeric as repeatNumeric, auditConflictPayload } from './fixtures/official-repeatable.mjs';
+import { repeatProfile, repeatedPayload, importRepeated, payload as repeatPayload, nativeRow as repeatNativeRow, numeric as repeatNumeric, auditConflictPayload, sameIdNativeLegacyConflict, completeRowMismatchPayload } from './fixtures/official-repeatable.mjs';
 test('official repeatable Chromium: cap and source total remain separate after reload', async t => {
   const imported = importRepeated(repeatedPayload('政治学', 3));
   const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
@@ -689,6 +689,29 @@ for (const kind of ['R1 S null', 'R1 composition null', 'R2 year absent']) test(
     const lawS = section.locator('article').filter({ has: page.getByRole('heading', { name: '専門教育：スクーリング', exact: true }) });
     await lawS.getByText('判定保留', { exact: true }).waitFor();
     assert.equal(await persisted(page), raw, 'reading or reload must not amend official aggregates or infer source years');
+    if (!pass) await page.reload();
+  }
+});
+
+for (const kind of ['F1 native-legacy', 'F1 legacy-native', 'F2 A+B']) test(`official repeatable ${kind} Chromium holds and preserves conflicting source bytes`, async t => {
+  const imported = kind.startsWith('F1') ? sameIdNativeLegacyConflict(0, kind === 'F1 legacy-native') : importRepeated(completeRowMismatchPayload());
+  const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
+  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile,
+    thesisSelection: 'not_selected', thesisProgressByScope: { [scope]: { selection: 'not_selected', status: 'not_started' } } };
+  const raw = JSON.stringify(state), { page } = await open(t, '法律学科', raw);
+  const section = page.locator('section[aria-labelledby="graduation-progress-heading"]');
+  for (let pass = 0; pass < 2; pass++) {
+    const notice = section.locator('[data-import-notice-kind="allocation_held"]');
+    await notice.locator('summary').click();
+    await notice.getByText('公式の修得合計・S単位と確認できる修得内訳が一致しません。', { exact: false }).waitFor();
+    await notice.getByText(kind.startsWith('F1') ? '同じ公式行IDの内容が矛盾しています。' : '独立した修得回を確認できません。', { exact: false }).waitFor();
+    for (const name of ['全体所要単位（参考）', 'スクーリング（参考）']) {
+      const card = section.locator('article').filter({ has: page.getByRole('heading', { name, exact: true }) });
+      await card.getByText('修得済み —', { exact: true }).waitFor();
+    }
+    const lawS = section.locator('article').filter({ has: page.getByRole('heading', { name: '専門教育：スクーリング', exact: true }) });
+    await lawS.getByText('判定保留', { exact: true }).waitFor();
+    assert.equal(await persisted(page), raw);
     if (!pass) await page.reload();
   }
 });
