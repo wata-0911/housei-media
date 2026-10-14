@@ -14,7 +14,7 @@ const project = (s, p = calculateScenario(s)) => projectUnresolvedConditions(p, 
 const base = cases.find(s => s.program.department === '法律学科' && s.name.endsWith('/B'));
 const unknown = (id, reason) => ({ requirementId: id, label: id, ruleType: 'unsupported', status: 'unknown', reason, earned: null, target: null, planned: null, inProgress: null, unit: null });
 const empty = () => ({ graduationCheckComplete: false, requirements: [], cards: [], referenceProgress: [], importedWarnings: [], unknownReasons: [], unknownCount: 0, evaluableCount: 0, coverageSummary: { supported: 0, partial: 0, unknown: 0 }, importedContributionCount: 0, historySchoolingDiagnostic: null });
-const html = (s, p = calculateScenario(s)) => renderToStaticMarkup(createElement(GraduationProgress, { progress: p, context: context(s), onOpenProfile() {} }));
+const html = (s, p = calculateScenario(s)) => renderToStaticMarkup(createElement(GraduationProgress, { progress: p, context: context(s), onOpenProfile() { } }));
 
 for (const s of cases) test(`projection preserves engine and accounts for every unknown: ${s.name}`, () => {
   const p = calculateScenario(s), before = structuredClone(p);
@@ -29,9 +29,43 @@ for (const s of cases) test(`projection preserves engine and accounts for every 
   assert.equal(new Set([...q.learner, ...q.automatic].map(x => x.id)).size, q.learner.length + q.automatic.length);
   for (const row of q.delegated) assert.ok(p.cards.some(c => c.requirementId === row.cardId));
   const rendered = html(s, p);
-  assert.equal(rendered.includes('aria-label="確認が必要な条件"'), q.learner.length > 0);
-  assert.equal(rendered.includes('aria-label="自動判定できない条件"'), q.automatic.length > 0);
-  assert.match(rendered, new RegExp(`判定保留 ${p.unknownCount}件`));
+  const profileConditions = q.learner.filter(
+    condition => condition.destination === 'profile'
+  );
+
+  const otherLearnerConditions = q.learner.filter(
+    condition => condition.destination !== 'profile'
+  );
+
+  assert.equal(
+    rendered.includes('aria-label="確認が必要な条件"'),
+    profileConditions.length > 0
+  );
+
+  assert.equal(
+    rendered.includes('aria-label="その他の確認が必要な条件"'),
+    otherLearnerConditions.length > 0
+  );
+
+
+  const profileButtons = rendered.match(
+    /<button\b[^>]*>プロフィールを開く<\/button>/g
+  ) ?? [];
+
+  assert.equal(
+    profileButtons.length,
+    profileConditions.length > 0 ? 1 : 0
+  );
+
+  assert.equal(
+    rendered.includes('aria-label="自動判定できない条件"'),
+    q.automatic.length > 0
+  );
+
+  assert.match(
+    rendered,
+    new RegExp(`判定保留 ${p.unknownCount}件`)
+  );
 });
 
 test('first-year and confirmed recognition do not resurrect #115 input requirements', () => {
@@ -54,12 +88,30 @@ test('empty UI and internal unknown with zero learner actions do not claim compl
 });
 
 test('learner conditions are expanded initially while automatic conditions remain collapsible', () => {
-  const s = cases.find(scenario => project(scenario).learner.length > 0 && project(scenario).automatic.length > 0);
+  const s = cases.find(scenario => {
+    const q = project(scenario);
+    return q.learner.some(c => c.destination === 'profile')
+      && q.automatic.length > 0;
+  });
+
   assert.ok(s);
+
   const rendered = html(s);
-  assert.match(rendered, /<details open="" aria-label="確認が必要な条件"/);
-  assert.match(rendered, /<details aria-label="自動判定できない条件"/);
-  assert.doesNotMatch(rendered, /<details open="" aria-label="自動判定できない条件"/);
+
+  assert.match(
+    rendered,
+    /<details open="" aria-label="確認が必要な条件"/
+  );
+
+  assert.match(
+    rendered,
+    /<details aria-label="自動判定できない条件"/
+  );
+
+  assert.doesNotMatch(
+    rendered,
+    /<details open="" aria-label="自動判定できない条件"/
+  );
 });
 
 test('scope audit excludes proven other courses only; unknown scope is conservative', () => {
@@ -128,9 +180,19 @@ test('persisted and fresh valid profiles project identically', () => {
 });
 
 test('long reasons retain readable wrapping and separate accessible disclosure labels', () => {
-  const p = empty(); p.requirements = [unknown('long', '確認できない根拠'.repeat(150)), unknown('input', '卒業論文を履修するか未定です。')];
-  const s = html(base, p); assert.match(s, /break-words/); assert.match(s, /leading-relaxed/);
-  assert.match(s, /aria-label="確認が必要な条件"/); assert.match(s, /aria-label="自動判定できない条件"/); assert.match(s, /プロフィールを開く/);
+  const p = empty();
+  p.requirements = [
+    unknown('long', '確認できない根拠'.repeat(150)),
+    unknown('input', '卒業論文を履修するか未定です。')
+  ];
+
+  const s = html(base, p);
+
+  assert.match(s, /break-words/);
+  assert.match(s, /leading-relaxed/);
+  assert.match(s, /aria-label="確認が必要な条件"/);
+  assert.match(s, /aria-label="自動判定できない条件"/);
+  assert.match(s, /プロフィールを開く/);
 });
 
 test('schema and incomplete metadata remain unchanged', () => {
