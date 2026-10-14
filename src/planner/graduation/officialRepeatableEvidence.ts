@@ -32,6 +32,28 @@ export const REPEATABLE_HOLD_MESSAGES: Record<string, string> = {
   repeatable_recognition_overlap: '認定済み専門科目と反復実績の重複を確認できないため算入を保留しています。',
 };
 
+/** Known aggregate contradictions do not require proof of independent attempts.
+ * Inspect EVERY retained native row before eligibility can return early. A raw
+ * passing S2 proves that a reported zero conflicts, even with no year/date or
+ * composition metadata. It never authorizes credit or reconstructs an aggregate.
+ * D, pending/unknown credits and opaque snapshots do not prove a contradiction.
+ */
+export function officialRepeatableAggregateDiagnostics(
+  rows: ImportedCourseAchievement[], course: CurriculumCourse, catalog: PlannerCatalog,
+): string[] {
+  let conflict = false;
+  for (const row of rows) {
+    const native = sourceEvidence(row);
+    if (row.source !== 'hosei_import' || exactImportedCurriculumId(row, catalog) !== course.id || !native) continue;
+    const passedS2 = native[3].some(slot => /^2(?:\.0+)?$/.test(slot[3].trim())
+      && ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'].includes(slot[4].trim()));
+    if ((passedS2 && (row.earnedCreditsTotal === 0 || row.schoolingCreditsTotal === 0))
+      || (row.earnedCreditsTotal !== null && row.schoolingCreditsTotal !== null
+        && row.schoolingCreditsTotal > row.earnedCreditsTotal)) conflict = true;
+  }
+  return conflict ? ['repeatable_aggregate_conflict'] : [];
+}
+
 /** Minimal proof: complete native S2 rows, with disjoint source academic years AND
  * dates. Same-year sessions are deliberately held until a stronger attempt key
  * exists. Capture time, editable years/terms and annual Offering IDs prove nothing.
@@ -40,8 +62,9 @@ export const REPEATABLE_HOLD_MESSAGES: Record<string, string> = {
 export function deriveOfficialRepeatableEvidence(
   rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], course: CurriculumCourse,
   mapping: Mapping, catalog: PlannerCatalog, profile: GraduationProfile | undefined,
-): { kind: 'verified'; evidence: OfficialRepeatableEvidence } | { kind: 'held'; reason: string } {
-  const hold = (reason: string) => ({ kind: 'held' as const, reason });
+): { kind: 'verified'; evidence: OfficialRepeatableEvidence } | { kind: 'held'; reason: string; diagnostics: string[] } {
+  const aggregateDiagnostics = officialRepeatableAggregateDiagnostics(rows, course, catalog);
+  const hold = (reason: string) => ({ kind: 'held' as const, reason, diagnostics: [...new Set([reason, ...aggregateDiagnostics])] });
   const rule = officialRepeatableRule(mapping.department, course);
   if (!rule || catalog.curriculum?.source !== 'official_curriculum_mappings_2026'
     || profile?.curriculumApplicability !== 'current_2026'
@@ -68,7 +91,7 @@ export function deriveOfficialRepeatableEvidence(
   const years = new Set<number>(), dates = new Set<string>();
   const recordOwners = new Map<string, string>();
   let earnedTotal = 0;
-  for (const row of uniqueRows.values()) {
+  for (const row of [...uniqueRows.values()].sort((a, b) => a.id.localeCompare(b.id))) {
     const native = sourceEvidence(row);
     if (row.source !== 'hosei_import' || exactImportedCurriculumId(row, catalog) !== course.id || !native || native[6] !== 0
       || normalizeImportBaseName(row.rawName) !== normalizeImportBaseName(course.canonicalName)
@@ -78,11 +101,6 @@ export function deriveOfficialRepeatableEvidence(
       || native[4].some(report => report[0] !== '' || report[1] !== 'none' || report[2] !== null)
       || native[5].some(value => value !== '' && value !== false)) return hold('repeatable_source_unconfirmed');
     if (row.earnedCreditsTotal === null || row.schoolingCreditsTotal === null) return hold('repeatable_aggregate_unknown');
-    if (row.schoolingCreditsTotal > row.earnedCreditsTotal
-      || (row.earnedCreditsTotal === 0 && native[3].some(slot => /^2(?:\.0+)?$/.test(slot[3].trim())
-        && ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'].includes(slot[4].trim())))) {
-      return hold('repeatable_aggregate_conflict');
-    }
     const linked = records.filter(r => r.sourceCourseId === row.id);
     if (linked.some(r => r.source !== 'hosei_import' || r.method !== 'schooling'
       || normalizeImportName(r.rawName) !== normalizeImportName(row.rawName) || !isNativeComponentSnapshot(r, row))) {
@@ -115,6 +133,7 @@ export function deriveOfficialRepeatableEvidence(
     }
     earnedTotal += row.earnedCreditsTotal;
   }
+  if (aggregateDiagnostics.length) return hold('repeatable_aggregate_conflict');
   const [, label, limit, limitCourses] = rule;
   const countedCredits = Math.min(earnedTotal, limit, Math.min(attempts.length, limitCourses) * 2);
   return { kind: 'verified', evidence: { label, attempts: attempts.sort((a, b) => a.date.localeCompare(b.date)),

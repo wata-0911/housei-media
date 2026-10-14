@@ -17,3 +17,11 @@ export const repeatedPayload = (name, count) => payload(Array.from({ length: cou
 export function importRepeated(data, state = initialState()) {
   return applyImport(state, importPreview(data, catalog.offerings, state.importedStudyRecords, state.importedCourseAchievements), catalog.offerings);
 }
+
+export function auditConflictPayload(kind, name = '政治学') {
+  const data = payload([nativeRow(name, [2025])]), row = data.courses[0];
+  if (kind === 'R1 S null') { row.earnedCredits = numeric(0); row.schoolingCredits = numeric(null); }
+  if (kind === 'R1 composition null') { row.earnedCredits = numeric(0); row.schoolingCredits = numeric(0); row.compositionCredits = numeric(null); }
+  if (kind === 'R2 year absent') { row.schoolingCredits = numeric(0); row.schoolings[0].year = null; row.schoolings[0].rawYear = ''; }
+  return data;
+}

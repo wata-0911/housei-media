@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { catalog } from '../src/planner/catalog/catalog.ts';
 import { deriveOfficialGraduationFacts, officialFactCreditState } from '../src/planner/graduation/officialGraduationFacts.ts';
 import { calculateGraduationProgress } from '../src/planner/graduation/graduationProgress.ts';
+import { deriveOfficialRepeatableEvidence } from '../src/planner/graduation/officialRepeatableEvidence.ts';
 import { REPEATABLE_CREDIT_RULES } from '../src/planner/graduation/repeatableRules.ts';
 import { saveState, loadState, STORAGE_KEY } from '../src/planner/backup/storage.ts';
 import { createPlannerBackup, parsePlannerBackup } from '../src/planner/backup/plannerBackup.ts';
@@ -10,7 +11,7 @@ import { restorePlannerBackup } from '../src/planner/backup/plannerBackupStorage
 import { plannerItemFromCourseSearch } from '../src/planner/planning/plannerItemState.ts';
 import { importFingerprint } from '../src/planner/gradeImport/gradeImportApply.ts';
 import { importedGraduationNotices } from '../src/planner/gradeImport/importedGraduationNotices.ts';
-import { repeatProfile, numeric, nativeRow, payload, repeatedPayload, importRepeated, slot } from './fixtures/official-repeatable.mjs';
+import { repeatProfile, numeric, nativeRow, payload, repeatedPayload, importRepeated, slot, auditConflictPayload } from './fixtures/official-repeatable.mjs';
 const program = department => catalog.programs.find(p => p.department === department);
 const facts = (state, department = '法律学科', input = catalog, profile = repeatProfile) => deriveOfficialGraduationFacts(state.importedCourseAchievements, state.importedStudyRecords, input, program(department).scopeId, profile);
 const progress = (state, department = '法律学科', input = catalog) => calculateGraduationProgress(state.items, input, program(department).scopeId, [], 'not_selected', state.importedStudyRecords, state.importedCourseAchievements, repeatProfile);
@@ -275,4 +276,77 @@ for (const variant of ['year unknown', 'date unknown', 'grade D', 'old snapshot'
   assert.equal(total(p).earned, null);
   assert.equal(schooling(p).earned, null);
   assert.equal(schooling(p).status, 'unknown');
+});
+
+// Independent audit R1/R2: conflict cases fail at c2d305f; definite-zero controls pass.
+function assertAuditConflict(state, missingReason, name = '政治学') {
+  const f = assertHeld(state, 'repeatable_aggregate_conflict');
+  assert.ok(f.facts[0].diagnostics.includes(missingReason));
+  assert.equal(officialFactCreditState(f.facts[0]).allZero, false);
+  assert.equal(officialFactCreditState(f.facts[0]).hasUnknown, true);
+  const p = progress(state);
+  assert.equal(total(p).earned, null);
+  assert.equal(total(p).status, 'unknown');
+  assert.equal(schooling(p).earned, null);
+  assert.equal(schooling(p).status, 'unknown');
+  const lawS = p.cards.find(c => c.requirementId === 'professional-law-schooling');
+  assert.equal(lawS.earned, 0, 'held detail must not add2 to professional S');
+  if (name === '政治学') assert.equal(lawS.status, 'unknown');
+  const notice = p.importedWarnings.find(w => w.kind === 'allocation_held');
+  assert.ok(notice?.reason.includes('一致しません'), JSON.stringify(p.importedWarnings));
+  assert.deepEqual(p.importedWarnings, importedGraduationNotices(f, state.importedCourseAchievements, state.importedStudyRecords));
+  return f;
+}
+const auditMissingReasons = { 'R1 S null': 'repeatable_aggregate_unknown', 'R1 composition null': 'repeatable_source_unconfirmed', 'R2 year absent': 'repeatable_attempt_unconfirmed' };
+for (const name of ['政治学', '総合特講']) for (const [kind, reason] of Object.entries(auditMissingReasons)) test(`audit ${kind}/${name}: missing evidence cannot erase an aggregate conflict`, () => {
+  const state = importRepeated(auditConflictPayload(kind, name)), before = structuredClone(state);
+  assertAuditConflict(state, reason, name);
+  assert.deepEqual(state, before, 'diagnostics must leave official source and aggregate untouched');
+});
+
+test('audit R1: all earned0 rows are checked even after an earlier incomplete row, in either order', () => {
+  const data = auditConflictPayload('R1 S null');
+  const incomplete = nativeRow('政治学', []); incomplete.earnedCredits = numeric(0); incomplete.schoolingCredits = numeric(null);
+  data.courses.unshift(incomplete);
+  const state = importRepeated(data);
+  // Ensure the incomplete source is visited first by the existing stable ID sort.
+  for (const [i, row] of state.importedCourseAchievements.entries()) {
+    const oldId = row.id; row.id = `audit-row-${i}`;
+    for (const record of state.importedStudyRecords.filter(r => r.sourceCourseId === oldId)) record.sourceCourseId = row.id;
+  }
+  const course = catalog.curriculum.courses.find(c => c.id === state.importedCourseAchievements[0].curriculumCourseId);
+  const mapping = catalog.mappings.find(m => course.mappingIds.includes(m.mappingId) && m.scopeId === program('法律学科').scopeId);
+  const proof = deriveOfficialRepeatableEvidence(state.importedCourseAchievements, state.importedStudyRecords, course, mapping, catalog, repeatProfile);
+  assert.equal(proof.kind, 'held'); assert.ok(proof.diagnostics.includes('repeatable_aggregate_conflict'));
+  const first = assertAuditConflict(state, 'repeatable_aggregate_unknown');
+  const reverse = { ...state, importedCourseAchievements: [...state.importedCourseAchievements].reverse(), importedStudyRecords: [...state.importedStudyRecords].reverse() };
+  assert.deepEqual(assertAuditConflict(reverse, 'repeatable_aggregate_unknown'), first);
+  assert.deepEqual(progress(reverse), progress(state));
+  assert.deepEqual(deriveOfficialRepeatableEvidence(reverse.importedCourseAchievements, reverse.importedStudyRecords, course, mapping, catalog, repeatProfile), proof);
+});
+
+for (const composition of [2, null]) test(`audit R1/R2 control: explicit0 and D with missing year, composition ${composition} remain definite0`, () => {
+  const data = auditConflictPayload('R2 year absent'), row = data.courses[0];
+  row.earnedCredits = numeric(0); row.compositionCredits = numeric(composition);
+  row.schoolings[0].rawGrade = 'D'; row.schoolings[0].grade = 'D';
+  const state = importRepeated(data), f = facts(state), p = progress(state);
+  assert.deepEqual(officialFactCreditState(f.facts[0]), { allZero: true, hasPositive: false, hasUnknown: false });
+  assert.equal(f.facts[0].diagnostics.includes('repeatable_aggregate_conflict'), false);
+  assert.equal(total(p).earned, 0); assert.notEqual(total(p).status, 'unknown');
+  assert.equal(schooling(p).earned, 0); assert.notEqual(schooling(p).status, 'unknown');
+  const lawS = p.cards.find(c => c.requirementId === 'professional-law-schooling');
+  assert.equal(lawS.earned, 0); assert.notEqual(lawS.status, 'unknown');
+  assert.deepEqual(p.importedWarnings, []);
+});
+
+for (const kind of ['R1 S null', 'R2 year absent']) test(`audit ${kind}: save, reload and identical reimport retain source and unknown`, () => {
+  const data = auditConflictPayload(kind), state = importRepeated(data), values = new Map();
+  const store = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  saveState(store, state, null, catalog);
+  const loaded = loadState(store, catalog); assert.equal(loaded.error, null); assert.equal(loaded.state.schemaVersion, 22);
+  const again = importRepeated({ ...data, capturedAt: '2026-10-14T06:00:00.000Z' }, loaded.state);
+  assert.deepEqual(again, loaded.state);
+  assert.deepEqual(again.importedCourseAchievements, state.importedCourseAchievements);
+  assert.deepEqual(again.importedStudyRecords, state.importedStudyRecords);
+  assertAuditConflict(again, auditMissingReasons[kind]);
 });

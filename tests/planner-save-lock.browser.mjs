@@ -636,7 +636,7 @@ for (const program of calligraphyPrograms) test(`calligraphy partial Chromium su
   }
 });
 
-import { repeatProfile, repeatedPayload, importRepeated, payload as repeatPayload, nativeRow as repeatNativeRow, numeric as repeatNumeric } from './fixtures/official-repeatable.mjs';
+import { repeatProfile, repeatedPayload, importRepeated, payload as repeatPayload, nativeRow as repeatNativeRow, numeric as repeatNumeric, auditConflictPayload } from './fixtures/official-repeatable.mjs';
 test('official repeatable Chromium: cap and source total remain separate after reload', async t => {
   const imported = importRepeated(repeatedPayload('政治学', 3));
   const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
@@ -669,4 +669,26 @@ test('official repeatable Chromium: explicit zero conflicting with passed detail
   const stored = JSON.parse(await persisted(page));
   assert.equal(stored.importedCourseAchievements[0].earnedCreditsTotal, 0);
   assert.equal(stored.importedStudyRecords[0].credits, 2);
+});
+
+for (const kind of ['R1 S null', 'R1 composition null', 'R2 year absent']) test(`official repeatable audit Chromium: ${kind} retains conflict, global/law S hold and saved bytes`, async t => {
+  const imported = importRepeated(auditConflictPayload(kind));
+  const scope = catalog.programs.find(p => p.department === '法律学科').scopeId;
+  const state = { ...stateForScopeChange(initialState(), catalog, scope), ...imported, selectedScopeId: scope, graduationProfile: repeatProfile,
+    thesisSelection: 'not_selected', thesisProgressByScope: { [scope]: { selection: 'not_selected', status: 'not_started' } } };
+  const raw = JSON.stringify(state), { page } = await open(t, '法律学科', raw);
+  const section = page.locator('section[aria-labelledby="graduation-progress-heading"]');
+  for (let pass = 0; pass < 2; pass++) {
+    const notice = section.locator('[data-import-notice-kind="allocation_held"]');
+    await notice.locator('summary').click();
+    await notice.getByText('公式の修得合計・S単位と確認できる修得内訳が一致しません。', { exact: false }).waitFor();
+    for (const name of ['全体所要単位（参考）', 'スクーリング（参考）']) {
+      const card = section.locator('article').filter({ has: page.getByRole('heading', { name, exact: true }) });
+      await card.getByText('修得済み —', { exact: true }).waitFor();
+    }
+    const lawS = section.locator('article').filter({ has: page.getByRole('heading', { name: '専門教育：スクーリング', exact: true }) });
+    await lawS.getByText('判定保留', { exact: true }).waitFor();
+    assert.equal(await persisted(page), raw, 'reading or reload must not amend official aggregates or infer source years');
+    if (!pass) await page.reload();
+  }
 });

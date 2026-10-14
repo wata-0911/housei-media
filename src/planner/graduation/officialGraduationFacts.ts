@@ -6,7 +6,7 @@ import { REPEATABLE_CREDIT_RULES } from './repeatableRules';
 import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources';
 import { resolveRecognizedProfessionalCurriculumIdentity } from './recognizedProfessionalIdentity';
 import { officialCandidateMappings } from './unresolvedOfficialImpact';
-import { deriveOfficialRepeatableEvidence, officialRepeatableRule, type OfficialRepeatableEvidence } from './officialRepeatableEvidence';
+import { deriveOfficialRepeatableEvidence, officialRepeatableAggregateDiagnostics, officialRepeatableRule, type OfficialRepeatableEvidence } from './officialRepeatableEvidence';
 
 export type OfficialUnknownReason = 'curriculum_identity_unresolved' | 'mapping_not_found' | 'mapping_conflict'
   | 'duplicate_official_rows' | 'metadata_unknown' | 'special_rule_evidence_required' | 'out_of_scope';
@@ -189,6 +189,9 @@ export function deriveOfficialGraduationFacts(
     // Opaque legacy fingerprints keep the existing conservative path. Only a
     // retained native snapshot can enter the new evidence-specific projection.
     const repeatable = group.some(r => sourceEvidence(r) !== null) && officialRepeatableRule(department, course);
+    const repeatableRows = repeatable ? rows.filter(r => sourceRowIds.includes(r.id)) : [];
+    // R1/R2: metadata/Mapping holds cannot erase known native aggregate conflicts.
+    if (repeatable) fact.diagnostics.push(...officialRepeatableAggregateDiagnostics(repeatableRows, course, catalog));
     if (group.length > 1 && !repeatable) { hold('duplicate_official_rows', 'conflicting_source_rows'); continue; }
     if (course.scopeIds.slice().sort().join() !== [...new Set(course.mappingIds.flatMap(id => mappings.get(id)?.scopeId ?? []))].sort().join()) fact.diagnostics.push('scope_ids_differ_from_mapping_scopes');
     if (!course.mappingIds.length || course.mappingIds.some(id => !mappings.has(id))) { hold('mapping_not_found'); continue; }
@@ -198,8 +201,12 @@ export function deriveOfficialGraduationFacts(
     // Selecting a descriptor is safe only AFTER proving every edge has the identical allocation signature.
     const mapping = candidates[0];
     if (repeatable) {
-      const proof = deriveOfficialRepeatableEvidence(rows.filter(r => sourceRowIds.includes(r.id)), records, course, mapping, catalog, profile);
-      if (proof.kind === 'held') { hold('special_rule_evidence_required', proof.reason); continue; }
+      const proof = deriveOfficialRepeatableEvidence(repeatableRows, records, course, mapping, catalog, profile);
+      if (proof.kind === 'held') {
+        hold('special_rule_evidence_required');
+        fact.diagnostics.push(...proof.diagnostics.filter(code => !fact.diagnostics.includes(code)));
+        continue;
+      }
       fact.repeatableEvidence = proof.evidence;
       fact.allocation = { kind: candidates.length === 1 ? 'unique' : 'equivalent', mappingIds: fact.candidateMappingIds.slice() };
       // Keep every source aggregate (and the multi-row null) intact. The capped

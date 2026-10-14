@@ -125,3 +125,44 @@ schemaVersion=22、backup形式、state migration、import contract v1を変更�
 自己点検で、native総合特講の年度不明/D評価をH19が全体S2へ算入する経路を再現したため、新しいnative反復診断が付いた保留行に限りfallbackを遮断し、5件の回帰を追加した。従来のopaque行のH19/H43仕様は変更しない。
 
 [Draft PR #162](https://github.com/wata-0911/housei-media/pull/162)に最終HEADとGitHub Actionsの実行URL・結果を記録する。GitHub CIはNode 22でtypecheck、lint、planner、extension、bookmarklet、build（catalog:checkを含む）を実行する。ブラウザー検証はローカル実行。自己テスト・CI成功は独立監査の完了を意味しない。
+
+
+## 独立監査R1/R2（P2）の修正
+
+監査対象HEADは `c2d305f6f0137143ea559d5ab759744857110b17`。既存ブランチとDraft PR #162で修正する。
+
+### 根本原因
+
+R1: 証拠検証が単一の最初の保留理由でreturnしていた。構成nullのsource保留やS aggregate nullのunknownが先に返ると、earned0と原行の合格S2の矛盾が診断に残らなかった。後続原行も確認されず、`officialFactCreditState` が全0原行を `allZero=true, hasUnknown=false` と扱い、未確定の配分影響と利用者通知を消していた。
+
+R2: 原文年度が不足するとattempt保留が先に返り、S0と合格S2の矛盾が診断に残らなかった。`unresolvedSchoolingImpact` がS0の早期除外を適用し、global Sと法律専門Sの未確定影響が消えていた。
+
+### 修正契約
+
+- 新しい計算用 `officialRepeatableAggregateDiagnostics` が、対象制度科目の**全原行**の検証可能なnative証拠を先に走査する。合格評価・明示2単位のS原文とearned0/S0の矛盾、両aggregate既知でSがearnedを超える矛盾を記録する。構成・年度・日付不足はこの検出を止めない。
+- この検出は独立回の認定とは別。矛盾の検出に年度を補完せず、S2を算入せず、aggregateを内訳から生成・補正しない。D評価、pending単位、opaque原行だけではこの矛盾を認定しない。
+- Fact導出はMapping/メタデータの早期保留より前に診断を保持する。反復証明のheld結果も、最初の保留理由と独立に検出した矛盾の両方を返す。行ID順の検証と全原行の矛盾走査により、配列反転でも結果が同じ。
+- `officialFactCreditState` と通知は蓄積済みの診断を使うため、矛盾する全0原行は `allZero=false, hasUnknown=true`。通知には矛盾と不足理由の双方が出る。
+- S0の早期除外は、蓄積した矛盾診断がない場合だけ適用する。global Sと対象の法律専門Sへunknownを伝播し、H19/H43からの再算入も既存のnative保留ガードで遮断する。法律＊印の総合特講は引き続き専門S8の対象外。
+- 矛盾のないearned0/S0/D評価は、構成null・原文年度不足があっても確定0を維持する。nullと0、正確なidentity、公式優先、既存上限、schema22、両監査フラグfalseは維持する。
+
+### 回帰と再監査
+
+単体11件を実装修正前に追加して、R1/R2の9件がFAIL、明示0/Dの対照2件がPASSすることを確認した。修正後は全11件をPASSさせる。R1のS null/構成null、政治学と総合特講、複数earned0原行の順序反転（Fact・proofの両方）、R2原文年度不足/S0、保存・再読込・同一原行再取込を検証する。browserは新規3件で保留通知・global/law S・再読込後の保存bytes不変を確認する。
+
+独立再監査では、(1) 原行走査がメタデータ/Mappingの保留より前に全原行を検査すること、(2) heldの不足理由と矛盾が共存すること、(3) 全0判定とS0早期除外が矛盾を消さないこと、(4) 原文年度の補完と2単位の加算がないこと、(5) D/確定0の対照、上限・二重算入・再取込を重点確認する。
+
+2026-10-14のローカル検証（Node 24.13.0）:
+
+| コマンド | R1/R2修正後の結果 |
+| --- | --- |
+| `npm run test:planner` | 3,004件すべてPASS。反復専用136件（追加11件） |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS。catalog:checkを含む。既存chunk size警告あり |
+| `git diff --check` | PASS |
+| 関連browser（`node --import tsx --test --test-name-pattern='official repeatable' tests/planner-save-lock.browser.mjs`） | 5件すべてPASS。既存2件、新規3件 |
+
+既存168ケースbaseline、上限超過、manual earnedとの二重算入抑止、通常算入、保存/backup/reimport、H19/H43保留ガードを既存期待値のまま通過。関連browserはPlaywrightとChromium executableを明示して実行した。extension/bookmarkletの実装は変更せず、GitHub CIで更新HEADの両テストも確認する。最終HEAD・CI URLと結果はPR本文に記録する。
+
+自己テスト成功は独立再監査完了を意味しない。既存の同一年度/旧名称/証拠不足の保留制約は残る。
