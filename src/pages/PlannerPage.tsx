@@ -257,10 +257,6 @@ export default function PlannerPage() {
         </div>
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
-      <PlannerBackupPanel catalog={catalog} loaded={loaded} disabled={saving} onRestored={next => {
-        setLoaded(next); setUndoItem(null); setUndoImport(null); setDirectImport(undefined);
-        setImportEpoch(epoch => epoch + 1); setSaveError(null); setNotice('バックアップで全データを置き換えました。');
-      }} onBusyChange={busy => { writePending.current = busy; setSaving(busy); }} />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -296,6 +292,10 @@ export default function PlannerPage() {
         <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null || saving} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
         <CurriculumCourseList key={importEpoch} catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null || saving} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
         <PlannerExportActions presentation={exportPresentation} />
+        <PlannerBackupPanel catalog={catalog} loaded={loaded} disabled={saving} onRestored={next => {
+          setLoaded(next); setUndoItem(null); setUndoImport(null); setDirectImport(undefined);
+          setImportEpoch(epoch => epoch + 1); setSaveError(null); setNotice('バックアップで全データを置き換えました。');
+        }} onBusyChange={busy => { writePending.current = busy; setSaving(busy); }} />
         <details
           open={gradeImportOpen}
           onToggle={event => setGradeImportOpen(event.currentTarget.open)}
