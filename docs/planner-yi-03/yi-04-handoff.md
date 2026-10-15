@@ -40,3 +40,25 @@ Web Lock・expectedRaw・最終確認・一回保存、保存失敗/容量/旧�
 - 合成fixtureのPASSは実利用者のデータ移行・ブラウザ保存・iPhone Safari・全卒業算入のPASSではない。
 
 `schemaVersion=22`、`graduationCheckComplete=false`、`sourceLinksReverified=false`、公式 `earnedCreditsTotal` 正本性を維持。独立監査の後に後続工程を判断する。
+
+## 既存v22の試験日付とtarget検証の差
+
+PR #168独立監査フォローアップで確認した追加条件。監査対象HEADは `1320c98408c9b6c8d06afd89702cbd3e7a02bc88`。[YI-03追加検証](README.md#p2-2候補-v22との日付差分と判断)に再現方法と結果を記録する。以下は将来の移行契約であり、移行・修正UI・永続化の実装結果ではない。
+
+**確認済みの事実:** 既存v22のmedia assessment `scheduledDate`はnullまたはYYYY-MM-DDの形式を検証する。追加の暦日検証はなく、`2027-02-30`と`2027-99-99`は現行 `validateState`で受理される。一方、YI-03はどちらも `assessment_date`で拒否する。`2027-02-28`、閏日`2028-02-29`、nullは双方が受理する。合成fixtureを両validatorへ直接渡して確認した。実利用者に該当データが存在するかは未確認であり、今回取得・調査していない。
+
+**採用判断:** 新Attempt側で実在する暦日を要求する契約は維持する。旧v22として正常なsourceにも、targetへの変換を保留すべき日付があり得る。sourceの受理条件とtargetの受理条件を同一とみなさず、旧validatorの変更やtargetの無根拠な弱体化で解決しない。
+
+YI-04では少なくとも次を実装・検証する必要がある。
+
+1. source側decoderが受理した元のstate/backup原文、原版、旧Offering owner、assessment ID・label/type/completedと日付文字列を完全保持する。旧データ自体を壊れたv22と再定義しない。
+2. targetが `assessment_date`を返したら、元の日付・旧owner/assessmentへの参照・問題の理由をpreviewで示し、**target全体の移行成功を保留**する。失敗を無視した一部保存・補正・null化・field/assessment削除・移行成功扱いを禁止する。
+3. 利用者が原値と修正案を比較して明示確認するまではprimary/recovery/元backupへ書かない。修正が必要な場合も、原文を別に保持した明示修正と全体再preview/再検証を経る。既存の原文保護と通常復元の契約を維持する。
+4. 無副作用previewの反復・取消・拒否では元日付と全payload/数量/owner/IDが一致し、primary/recoveryへの書込みが0であることを検証する。明示修正の許可は他fieldの変更許可に拡張しない。
+5. 不実在日（`2027-02-30`）、不正月（`2027-99-99`）のsource受理/target保留、通常日、実在閏日、nullの成功・原値保持をtest matrixへ含める。バックアップv1/v2それぞれのsource検証・原版・数量不変・失敗保護と、明示修正後のtarget全体再検証も必要。
+
+現在のYI-03 graphへ不実在日を通すescape fieldや新schemaは導入しない。別のlossless unresolved表現を将来選ぶ場合も、target契約・失敗保護・原値保持を別途レビューする。今回の5比較テストはこの受理差と入力非変更だけを検証しており、上記の将来のpreview/UI/書込み保護が実装済みであることは証明しない。
+
+## active-plan順序の追加引き継ぎ
+
+削除/Undoの提案検証では操作対象を除いたactive Attempt ID列の前後一致が必要。Undo対象はticketの元active位置へ戻す。detached owner registryの位置は表示順序ではなく、合法な並び替えで進捗/TODO/評価を失わない。独立したsource→target migrationの原順序保存比較も、この区別を明示すること。並行変更時の位置調整・ticket失効を自動実装する契約は今回追加していない。

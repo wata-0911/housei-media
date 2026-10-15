@@ -35,6 +35,12 @@ export function validateAttemptPlanTransition(before: unknown, after: unknown, c
       : a;
     if (!sameAttemptData(b, expected)) error('attempt_snapshot_changed', `/attempts/${a.id}`, 'Only the selected membership may change');
   }
+  // Only active-plan order is meaningful here. The selected row is removed/restored
+  // at its ticket position; every other active row must retain relative order.
+  // Detached owner registry positions carry no plan-order meaning.
+  const otherActiveIds = (graph: AttemptGraph) => graph.attempts
+    .filter(a => a.membership.kind === 'active' && a.id !== action.attemptId).map(a => a.id);
+  if (!sameAttemptData(otherActiveIds(previous), otherActiveIds(next))) error('active_plan_order_changed', '/attempts', 'Unrelated active Attempts must preserve their relative plan order');
   // Compare by immutable resource ID, so harmless registry reordering cannot reassign a payload.
   const resources = new Map(next.ownedRecords.map(r => [r.id, r]));
   if (previous.ownedRecords.length !== next.ownedRecords.length) error('owned_records_changed', '/ownedRecords', 'Plan deletion/Undo must preserve all progress, evaluation and TODO records');

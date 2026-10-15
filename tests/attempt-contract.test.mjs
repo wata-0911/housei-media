@@ -5,6 +5,10 @@ import { validateAttemptGraph } from '../src/planner/attempts/validation.ts';
 import { validateAttemptPlanTransition } from '../src/planner/attempts/planTransition.ts';
 import { attemptFixture, deletedFixture, unresolved, legacyRef, uuid, attemptId, operationId, recordId } from './fixtures/attempt-fixture.mjs';
 import { loadYi01InstitutionalCatalog } from '../src/planner/institutional/yi01.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { initialState } from '../src/planner/backup/storage.ts';
+import { validateState } from '../src/planner/validation.ts';
+import { isMediaSchooling } from '../src/planner/progress/mediaSchooling.ts';
 
 const check = (graph, context) => validateAttemptGraph(graph, context);
 const valid = (graph, context) => assert.deepEqual(check(graph, context), { valid: true, issues: [] });
@@ -311,3 +315,110 @@ test('attempt: deletion/Undo keep unrelated orphan owners and unowned TODOs too'
   assert.deepEqual(validateAttemptPlanTransition(graph, deleted, context, action), { valid: true, issues: [] });
   assert.deepEqual(validateAttemptPlanTransition(deleted, graph, context, { ...action, kind: 'undo_plan' }), { valid: true, issues: [] });
 });
+
+// P2 follow-up: active-plan position is defined by filtering the owner registry.
+// Detached registry entries may move freely; their complete owned data must survive.
+const activeIds = graph => graph.attempts.filter(a => a.membership.kind === 'active').map(a => a.id);
+function orderedPlanFixture() {
+  const f = attemptFixture(), [a, b] = f.graph.attempts;
+  const c = f.makeAttempt(2002), orphan = f.makeAttempt(2003);
+  orphan.membership = { kind: 'detached', reason: 'legacy_orphan', deletionOperationId: null }; orphan.plan = null;
+  f.graph.attempts = [a, orphan, b, c];
+  for (const [index, source] of [f.graph.ownedRecords[0], f.graph.ownedRecords[3], f.graph.ownedRecords[4]].entries()) {
+    f.graph.ownedRecords.push({ ...structuredClone(source), id: recordId(4006 + index),
+      owner: { kind: 'attempt', attemptId: orphan.id },
+      payload: source.kind === 'todo' ? { ...source.payload, id: 'orphan-todo', text: 'detached TODO' } : structuredClone(source.payload) });
+  }
+  return { ...f, a, b, c, orphan };
+}
+function transitionResult(before, after, context, action) {
+  valid(before, context); valid(after, context); // Rule out an unrelated static-graph rejection.
+  const originalBefore = structuredClone(before), originalAfter = structuredClone(after);
+  const checked = validateAttemptPlanTransition(freeze(before), freeze(after), freeze(context), action);
+  assert.deepEqual(before, originalBefore); assert.deepEqual(after, originalAfter);
+  return checked;
+}
+for (const target of ['a', 'b']) test(`P2 order: delete ${target.toUpperCase()} from [A,B,C] rejects reversed remaining active IDs`, () => {
+  const f = orderedPlanFixture(), { graph, context } = f;
+  const { deleted, action } = deletedFixture(graph, graph.attempts.indexOf(f[target]));
+  const remaining = deleted.attempts.filter(a => a.membership.kind === 'active');
+  const detached = deleted.attempts.filter(a => a.membership.kind === 'detached');
+  deleted.attempts = [...detached, ...remaining.reverse()];
+  assert.deepEqual(activeIds(deleted), target === 'a' ? [f.c.id, f.b.id] : [f.c.id, f.a.id]);
+  const checked = transitionResult(graph, deleted, context, action);
+  assert.equal(checked.valid, false);
+  assert.ok(checked.issues.some(i => i.code === 'active_plan_order_changed'), JSON.stringify(checked));
+});
+for (const target of ['a', 'b', 'c']) test(`P2 order: legal ${target.toUpperCase()} deletion and Undo preserve [A,B,C] and all owned data`, () => {
+  const f = orderedPlanFixture(), { graph, context } = f;
+  const { deleted, action } = deletedFixture(graph, graph.attempts.indexOf(f[target]));
+  assert.deepEqual(activeIds(deleted), [f.a, f.b, f.c].filter(a => a.id !== action.attemptId).map(a => a.id));
+  assert.deepEqual(transitionResult(graph, deleted, context, action), { valid: true, issues: [] });
+  assert.deepEqual(transitionResult(deleted, graph, context, { ...action, kind: 'undo_plan' }), { valid: true, issues: [] });
+  assert.deepEqual(activeIds(graph), [f.a.id, f.b.id, f.c.id]);
+  assert.deepEqual(deleted.ownedRecords, graph.ownedRecords);
+  for (const attempt of graph.attempts) {
+    const saved = deleted.attempts.find(a => a.id === attempt.id);
+    assert.equal(saved.creationOperationId, attempt.creationOperationId);
+  }
+  assert.deepEqual(deleted.removals[0].attemptSnapshot, f[target]);
+  assert.equal(deleted.removals[0].previousPosition, ['a', 'b', 'c'].indexOf(target));
+});
+for (const target of ['a', 'b']) test(`P2 order: Undo ${target.toUpperCase()} at the correct index still rejects reordered unrelated active IDs`, () => {
+  const f = orderedPlanFixture(), { graph, context } = f;
+  const { deleted, action } = deletedFixture(graph, graph.attempts.indexOf(f[target]));
+  const restored = structuredClone(graph), byId = new Map(restored.attempts.map(a => [a.id, a]));
+  const wrongOrder = target === 'a' ? [f.a, f.c, f.b] : [f.c, f.b, f.a];
+  restored.attempts = [byId.get(f.orphan.id), ...wrongOrder.map(a => byId.get(a.id))];
+  assert.equal(activeIds(restored).indexOf(action.attemptId), deleted.removals[0].previousPosition);
+  const checked = transitionResult(deleted, restored, context, { ...action, kind: 'undo_plan' });
+  assert.equal(checked.valid, false);
+  assert.ok(checked.issues.some(i => i.code === 'active_plan_order_changed'), JSON.stringify(checked));
+  assert.ok(!checked.issues.some(i => i.code === 'invalid_undo_ticket'), JSON.stringify(checked));
+});
+test('P2 order: detached registry reordering is legal on deletion and Undo; unrelated removal ticket survives', () => {
+  const f = orderedPlanFixture();
+  const { deleted: before } = deletedFixture(f.graph, f.graph.attempts.indexOf(f.c));
+  const { deleted: after, action } = deletedFixture(before, before.attempts.findIndex(a => a.id === f.b.id));
+  const afterMap = new Map(after.attempts.map(a => [a.id, a]));
+  after.attempts = [f.c, f.b, f.orphan, f.a].map(a => afterMap.get(a.id));
+  after.ownedRecords.reverse(); after.removals.reverse();
+  assert.deepEqual(transitionResult(before, after, f.context, action), { valid: true, issues: [] });
+  const restored = structuredClone(before), restoredMap = new Map(restored.attempts.map(a => [a.id, a]));
+  restored.attempts = [f.orphan, f.a, f.c, f.b].map(a => restoredMap.get(a.id));
+  assert.deepEqual(transitionResult(after, restored, f.context, { ...action, kind: 'undo_plan' }), { valid: true, issues: [] });
+  assert.deepEqual(after.removals.find(r => r.attemptSnapshot.id === f.c.id), before.removals[0]);
+});
+for (const kind of ['media', 'evaluation', 'todo']) test(`P2 order: detached ${kind} payload is still protected while detached positions move`, () => {
+  const f = orderedPlanFixture(), { deleted, action } = deletedFixture(f.graph, f.graph.attempts.indexOf(f.b));
+  const orphanRecords = deleted.ownedRecords.filter(r => r.owner?.attemptId === f.orphan.id);
+  const record = orphanRecords.find(r => r.kind === kind);
+  if (kind === 'media') record.payload.lessons[0].videoCompleted = false;
+  if (kind === 'evaluation') record.payload.finalGrade = 'B';
+  if (kind === 'todo') record.payload.text = '変更してはいけない';
+  const checked = transitionResult(f.graph, deleted, f.context, action);
+  assert.ok(checked.issues.some(i => i.code === 'owned_payload_changed' && i.path.endsWith(record.id)), JSON.stringify(checked));
+});
+
+// Cross-validator observation only: this constructs a synthetic legacy state and
+// reuses its date string in a separate synthetic Attempt, not a migration API.
+for (const [date, acceptedByAttempt] of [['2027-02-30', false], ['2027-99-99', false], ['2027-02-28', true], ['2028-02-29', true], [null, true]]) {
+  test(`P2 date compatibility: v22 accepts ${date}; Attempt ${acceptedByAttempt ? 'accepts' : 'holds'} it without rewriting`, () => {
+    const legacyState = initialState(), offering = catalog.offerings.find(isMediaSchooling);
+    assert.ok(offering, 'A real existing media Offering is required for the v22 validation path');
+    legacyState.mediaSchoolingProgress[offering.id] = { offeringId: offering.id, totalLessons: null, lessons: [],
+      assessments: [{ id: 'date-compatibility-assessment', type: 'other', label: 'synthetic date', scheduledDate: date, completed: false }] };
+    const originalLegacy = structuredClone(legacyState);
+    assert.equal(validateState(freeze(legacyState), catalog), true);
+    const { graph, context } = attemptFixture(); graph.ownedRecords[0].payload.assessments[0].scheduledDate = date;
+    const originalGraph = structuredClone(graph), checked = check(freeze(graph), context);
+    assert.equal(checked.valid, acceptedByAttempt, JSON.stringify(checked));
+    if (!acceptedByAttempt) {
+      assert.deepEqual(checked.issues.map(i => i.code), ['assessment_date']);
+      assert.equal(checked.issues[0].path, `/ownedRecords/${graph.ownedRecords[0].id}/assessments/old-assessment-A`);
+    }
+    assert.deepEqual(legacyState, originalLegacy); assert.deepEqual(graph, originalGraph);
+    assert.equal(legacyState.mediaSchoolingProgress[offering.id].assessments[0].scheduledDate, date);
+    assert.equal(graph.ownedRecords[0].payload.assessments[0].scheduledDate, date);
+  });
+}

@@ -148,3 +148,56 @@ IDの形式検証はUUIDの乱数発行を証明しない。今回ID発行器・
 validatorは構造・資料版/参照・記録の保存を検証し、大学の真正性、履修方式の許可、実績年度の真偽、科目完成・卒業算入を認証しない。source decoderが提示した公式IDと、値/年度/方式の証拠内容の突合はYI-04で明示的なassociation/原field保存比較として検証する。未知原版のlegacy refは自動的に現在の版へ通さず、原文を保持して拒否/個別対応とする。
 
 独立監査では、confirmedの資料版ゲート、IC未確定/配置確定の組合せ、原版digest集合、二重操作ID、旧ownerと別Attemptの競合境界、削除/Undoの完全保存、既存consumerへ依存が逆流しないことを確認する。型の形式だけでID不変や未来のmigration安全性が保証されるとは扱わない。Draft解除・merge・Issue closeは行わない。
+
+## PR #168 独立監査P2フォローアップ（監査対象1320c98）
+
+この節は初回提出HEAD `1320c98408c9b6c8d06afd89702cbd3e7a02bc88` に対する追加検証。上の初回116/3,156件やbuild比較の記録は履歴のまま保持し、今回の実施結果へ置換しない。開始時に最新 `origin/dev=27bb75d273fc717731a56694f1b7a9326a62d401`、既存PR HEADとの一致、Draft/Open、初回CI success、作業ツリーcleanを確認した。同じIssue #167・featureブランチ・Draft PR #168を更新する。
+
+### P2-1: active-plan相対順序
+
+監査対象実装はAttemptをIDで比較し、Undo対象のactive位置だけをticketで確認していた。他のactive Attemptの相対順序を検証していなかったため、`[A,B,C]`からA削除後`[C,B]`、B削除後`[C,A]`がともにvalidになった。Undoで対象A/Bを元のactive位置に戻して他の2行だけを反転させるケースもvalidになった。今回の4拒否テストは、変更前のproductionコードでは `true !== false` でFAILした。
+
+`planTransition.ts`に、操作対象を除外した **active Attempt ID列** の前後比較を追加した。差があれば `active_plan_order_changed`。削除対象がdetachedになること・Undoの元位置・ID/作成操作/owner/payload/ticketの既存検証は維持する。全Attempt配列の一致は要求せず、detached行の相対位置やactive行への挿入位置、ownedRecord/ticket registryの並び替えは引き続き許可する。
+
+追加した順序/保存テストは11件。active A/B削除後の逆転、A/Bの正しい位置へのUndo＋他行逆転の4拒否、A/B/Cの合法削除・Undo3件、detached再配置と別削除ticket保持1件、detached media/評価/TODOのpayload変更拒否3件。すべて前後graphのstatic検証が通ることを先に確認し、無関係なdangling等による拒否を排除する。frozenな前後入力の不変、元ID/作成操作ID、全ownedRecord、ticket snapshotとactive位置を確認する。
+
+static graphのregistry順序非依存と、transitionのactive表示順序保存は別契約。後者では操作対象を除くactive行の相対順序が意味を持つ。
+
+### P2-2候補: v22との日付差分と判断
+
+`src/planner/planner_catalog_2026.schema.json`のmedia assessment `scheduledDate`はnullまたは `^[0-9]{4}-[0-9]{2}-[0-9]{2}$`。`src/planner/validation.ts`の `validateState`も実在暦日を追加検証していない。実在する既存media Offeringと `initialState()` の合成stateを使い、実際のv22 `validateState`へ通した。同じ日付文字列を別の合成Attemptへ置いて比較し、元入力の完全な不変も確認した。これは移行処理の実装ではない。
+
+| scheduledDate | 既存v22 | YI-03 |
+| --- | --- | --- |
+| `2027-02-30` | 受理 | `assessment_date`で拒否 |
+| `2027-99-99` | 受理 | `assessment_date`で拒否 |
+| `2027-02-28` | 受理 | 受理 |
+| `2028-02-29` | 受理 | 受理（閏日） |
+| null | 受理 | 受理、nullを保持 |
+
+新validatorは初回から実在暦日を検証しており、記録された試験日を有効な暦日として扱うtarget契約として維持する。形式だけ有効な旧データは旧v22として正常でも、そのままtargetへ移行可能とは限らない。互換性の差は実在するため、無条件に正常v22を全件移行可能とは宣言しない。旧validatorを強化したり新validatorを弱めたりせず、補正/null化/field削除を行わない。今回、日付の型・schema・validatorと本番保存経路のコード変更はない。
+
+YI-04は [日付互換引き継ぎ](yi-04-handoff.md#既存v22の試験日付とtarget検証の差) のとおり、原値・原文・原版を保持し、明示的な修正確認までtarget全体の移行成功を保留する必要がある。そのpreview・修正/再検証・書込み保護は今回は未実装。
+
+### フォローアップ検証記録
+
+同じ追加16テストをproductionコード変更の前後で実行した。変更前は12 PASS / 4 FAIL（順序拒否4件）、変更後は16 PASS / 0 FAIL。日付差分5件と合法操作/保存7件は変更前からPASS。既存116件や他suiteの期待値は緩めていない。
+
+今回の最終ローカル結果は次のとおり。初回検証とは別に実行した。
+
+| 検証 | フォローアップ結果 |
+| --- | --- |
+| `npm run test:attempts` | PASS 132件（初回116＋追加16）、fail/skip 0 |
+| `npm run test:institutional` | PASS 36件、fail/skip 0 |
+| `npm run test:planner` | PASS 3,172件（前回3,156＋追加16）、fail/skip 0 |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS。grade-import生成物・catalog:check 321/686を含む。既存chunk size警告あり |
+| `git diff --check` / staged diff check | PASS |
+| 初回README/handoffの原文prefix照合 | PASS。以前の結果・判断を保持して末尾追記のみ |
+| 変更境界・本番非接続 | PASS。4ファイルのみ。既存保存・UI・engine・日付schema/validator・データ・依存/lockfile無変更。既存srcからAttempt moduleへの新importなしもテストで確認 |
+| 実利用者移行、修正UI、ブラウザ保存・iPhone実機 | 未実施。新しい移行/保存機能のPASSを主張しない |
+
+卒業168完全出力の既存baseline検査、成績再取込、公式優先処理、backup v1/v2と保存保護を含む既存回帰もPASS。既存のsix reviewed P2の期待値や他テストを変更していない。
+
+変更対象は `planTransition.ts`、`tests/attempt-contract.test.mjs`、このREADMEとYI-04 handoffの4ファイル。初回の9ファイル変更一覧とは別の差分範囲である。schema22・両false flag・公式aggregate・型/ID/unknown/null/0/旧参照・既存保存/UI/成績取込/卒業計算は無変更。新Issue/PR/ブランチ・migration/CRUD・新保存は追加せず、独立再監査前のDraftを維持する。
