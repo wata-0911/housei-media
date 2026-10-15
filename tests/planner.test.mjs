@@ -5402,11 +5402,23 @@ test('planner backup and every browser write path share a lock and reject queued
   assert.ok(locks.names.every(name => name === PLANNER_WRITE_LOCK));
 });
 
-test('planner backup panel renders privacy, replacement, pre-backup, file input and format guidance', () => {
-  const html = renderToStaticMarkup(createElement(PlannerBackupPanel, { catalog, loaded: { state: initialState(), raw: null, error: null }, disabled: false, onRestored: () => { }, onBusyChange: () => { } }));
-  assert.match(html, /個人/); assert.match(html, /外部サーバーに送信しません/);
-  assert.match(html, /事前バックアップ/); assert.match(html, /type="file"/);
-  assert.match(html, /application\/json,.json/); assert.match(html, /schema 22/);
+test('planner backup panel renders backup, protection and restore controls', () => {
+  const html = renderToStaticMarkup(
+    createElement(PlannerBackupPanel, {
+      catalog,
+      loaded: { state: initialState(), raw: null, error: null },
+      disabled: false,
+      onRestored: () => { },
+      onBusyChange: () => { },
+    })
+  );
+
+  assert.match(html, /全データのJSONバックアップ・復元/);
+  assert.match(html, /事前バックアップ/);
+  assert.match(html, /原文と旧退避を保護用ファイルに保存/);
+  assert.match(html, /復元するJSONファイル/);
+  assert.match(html, /type="file"/);
+  assert.match(html, /application\/json,.json/);
 });
 
 test('planner backup serializes a queued restore against a simultaneous ordinary save', async () => {
