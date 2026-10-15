@@ -94,9 +94,6 @@ export default function PlannerBackupPanel({ catalog, loaded, disabled, onRestor
   }
   return <section aria-label="プランナー全データのバックアップ・復元" className="min-w-0 space-y-3 border border-[#002255] bg-white p-4 sm:p-5">
     <h2 className="text-lg text-[#002255]">全データのJSONバックアップ・復元</h2>
-    <p className="text-sm">形式: hosei-planner-backup v2（旧v1も読込対応）/ state schema 22 / 作成時カタログを保持し、互換性を検証。成績未取り込みでも使えます。</p>
-    <p className="text-sm">個人の成績・計画・メモを含みます。保管先・共有先にご注意ください。処理は端末内で行い、外部サーバーに送信しません。</p>
-    <p className="text-sm">復元前に、このサイトの他のタブ・画面を閉じてください。旧版の画面は排他制御に参加できません。Web Locks非対応環境では復元を停止します。</p>
     <div className="flex flex-wrap gap-2">
       <button type="button" className={buttonClass} disabled={disabled || working} onClick={prepareBackup}>現在の全データをJSONで準備（事前バックアップ）</button>
       <button type="button" className={buttonClass} disabled={disabled || working} onClick={prepareOriginal}>原文と旧退避を保護用ファイルに保存</button>
