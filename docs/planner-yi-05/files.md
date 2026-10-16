@@ -1,0 +1,36 @@
+# YI-05 変更ファイル一覧
+
+全30ファイル。既存v22のPage・storage・backup・卒業計算とデータJSON、lockfile、extension/bookmarkletはYI-05として変更しない。
+
+- [`dev/attempts/AttemptForm.tsx`](../../dev/attempts/AttemptForm.tsx)
+- [`dev/attempts/Fields.tsx`](../../dev/attempts/Fields.tsx)
+- [`dev/attempts/MigrationPanel.tsx`](../../dev/attempts/MigrationPanel.tsx)
+- [`dev/attempts/ProgressEditor.tsx`](../../dev/attempts/ProgressEditor.tsx)
+- [`dev/attempts/TodoPanel.tsx`](../../dev/attempts/TodoPanel.tsx)
+- [`dev/attempts/Workbench.tsx`](../../dev/attempts/Workbench.tsx)
+- [`dev/attempts/env.d.ts`](../../dev/attempts/env.d.ts)
+- [`dev/attempts/fixtures.ts`](../../dev/attempts/fixtures.ts)
+- [`dev/attempts/formHelpers.ts`](../../dev/attempts/formHelpers.ts)
+- [`dev/attempts/gate.ts`](../../dev/attempts/gate.ts)
+- [`dev/attempts/main.tsx`](../../dev/attempts/main.tsx)
+- [`dev/attempts/progressDefaults.ts`](../../dev/attempts/progressDefaults.ts)
+- [`dev/attempts/style.css`](../../dev/attempts/style.css)
+- [`dev/attempts/tailwind.config.js`](../../dev/attempts/tailwind.config.js)
+- [`docs/planner-yi-05/README.md`](../../docs/planner-yi-05/README.md)
+- [`docs/planner-yi-05/acceptance.md`](../../docs/planner-yi-05/acceptance.md)
+- [`docs/planner-yi-05/build-comparison.json`](../../docs/planner-yi-05/build-comparison.json)
+- [`docs/planner-yi-05/files.md`](../../docs/planner-yi-05/files.md)
+- [`docs/planner-yi-05/handoff.md`](../../docs/planner-yi-05/handoff.md)
+- [`docs/planner-yi-05/plan.md`](../../docs/planner-yi-05/plan.md)
+- [`docs/planner-yi-05/screenshots/desktop.png`](../../docs/planner-yi-05/screenshots/desktop.png)
+- [`docs/planner-yi-05/screenshots/mobile.png`](../../docs/planner-yi-05/screenshots/mobile.png)
+- [`package.json`](../../package.json)
+- [`src/planner/attempts/workbench/catalogView.ts`](../../src/planner/attempts/workbench/catalogView.ts)
+- [`src/planner/attempts/workbench/migrationSession.ts`](../../src/planner/attempts/workbench/migrationSession.ts)
+- [`src/planner/attempts/workbench/operations.ts`](../../src/planner/attempts/workbench/operations.ts)
+- [`tests/attempt-workbench.browser.mjs`](../../tests/attempt-workbench.browser.mjs)
+- [`tests/attempt-workbench.test.mjs`](../../tests/attempt-workbench.test.mjs)
+- [`tsconfig.json`](../../tsconfig.json)
+- [`vite.config.js`](../../vite.config.js)
+
+GitHub PRのFiles changedを最終差分の正本とする。
