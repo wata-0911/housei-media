@@ -93,9 +93,18 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
     case 'undo': {
       const ticket = graph.removals.find(r => r.operationId === command.removalOperationId && r.attemptSnapshot.id === command.attemptId);
       if (!ticket) throw new Error('unknown_removal');
+      // Ticket positions are relative to their deletion-time active list. Only
+      // reversing the proven deletion history makes those positions composable.
+      const history = workspace.receipts.filter(r => r.kind === 'remove' && graph.removals.some(t => t.operationId === r.operationId));
+      if (history.length !== graph.removals.length || history.some((r, i) => r.kind !== 'remove'
+        || r.operationId !== graph.removals[i].operationId || r.attemptId !== graph.removals[i].attemptSnapshot.id)) {
+        throw new Error('undo_history_unproven: 削除順を操作履歴で確認できないため、Undoを停止しました。');
+      }
+      const latest = graph.removals.at(-1)!;
+      if (ticket !== latest) throw new Error(`undo_order_conflict: 最後に削除した履修回「${latest.attemptSnapshot.originalTitle}」(${latest.attemptSnapshot.id})を先にUndoしてください。削除した逆順で復元します。`);
       const remaining = graph.attempts.filter(a => a.id !== command.attemptId);
       const active = remaining.filter(a => a.membership.kind === 'active');
-      if (ticket.previousPosition > active.length) throw new Error('undo_position_conflict: 先に後続の削除をUndoしてください');
+      if (ticket.previousPosition > active.length) throw new Error('undo_position_conflict: 元の位置への復元を確認できないため、Undoを停止しました。');
       const position = ticket.previousPosition === active.length ? remaining.length : remaining.findIndex(a => a.id === active[ticket.previousPosition].id);
       remaining.splice(position, 0, structuredClone(ticket.attemptSnapshot)); graph.attempts = remaining;
       graph.removals = graph.removals.filter(r => r !== ticket); break;

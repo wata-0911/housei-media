@@ -6,6 +6,8 @@ YI-05 Workspace、receipt、使用済みTODO ID、migration session/cacheはペ�
 
 保存工程では原raw/raw6/sourceCatalog・binding・発行履歴・receiptと新旧owner対応を監査し、Web Lock/expectedRaw/競合/原子的保存/失敗保護を設計する。YI-04発行receiptをJSONコピーから復元できるとは扱わない。永続的な同操作再送、旧タブ、別タブ、quota、長期Undo、容量上限、transactionは未実装。
 
+独立監査P2により、YI-05のUndoは操作receiptで証明した削除の逆順だけを許可する。ticket単独のpreviousPositionや配列順から履歴を再構成してはならない。現在は削除receiptを失ったgraphからのUndoをfail-closedにするため、YI-06で履歴を永続化・復元する場合は順序の証明も保護する。YI-03 transition validator単独では複数ticket間の元順序を保証しない。
+
 日付訂正は新source・新割当の方針。履歴を永続化するには原値・提案・明示確認・訂正前後のbinding/tableを保護する。安全なID継承が必要なら別の証明付き契約を監査する。現行は元rawを維持し、IDを引き継いだと表示しない。
 
 YI-05のrecord編集は既存rowの消失を禁止する。必要なら将来、誤作成lesson/assessment/report削除を独立した明示操作として追加する。新履修回は過去進捗をコピーしない。TODO owner変更はexpectedOwner付きの専用操作を維持する。

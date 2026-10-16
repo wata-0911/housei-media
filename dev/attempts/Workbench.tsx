@@ -68,7 +68,7 @@ export function Workbench() {
       {form && <AttemptForm key={form === 'new' ? 'new' : form.id} context={context} attempt={form === 'new' ? undefined : form} submit={submit} close={() => setForm(null)} />}
       <div className="space-y-4">{active.map(card)}</div>{active.length === 0 && <p>制度科目を選択するか、未確定の名称で追加できます。</p>}
     </section>
-    <section className="space-y-4" aria-labelledby="detached-heading"><h2 className="text-xl font-bold" id="detached-heading">detached / 計画外のowner {detached.length}件</h2><p>削除しても進捗・評価・TODOは元Attemptに残ります。Undoと新しい履修回の追加は別操作です。</p>{detached.map(card)}</section>
+    <section className="space-y-4" aria-labelledby="detached-heading"><h2 className="text-xl font-bold" id="detached-heading">detached / 計画外のowner {detached.length}件</h2><p>削除しても進捗・評価・TODOは元Attemptに残ります。Undoと新しい履修回の追加は別操作です。複数削除した場合は、最後に削除した履修回から逆順にUndoしてください。削除順を確認できない場合は復元を停止します。</p>{detached.map(card)}</section>
     <section className="space-y-3"><h2 className="text-xl font-bold">未解決の旧ownerの進捗</h2>{graph.ownedRecords.filter(r => r.owner?.kind === 'unresolved_legacy' && r.kind !== 'todo').map(r => r.kind !== 'todo' && <div key={r.id}><p className="break-all text-sm">{ownerLabel(r.owner, graph)}</p><ProgressEditor key={JSON.stringify(r)} record={r} submit={submit} /></div>)}</section>
     <TodoPanel graph={graph} submit={submit} />
     <footer className="border-t pt-4 text-sm text-slate-600">ページ内操作receipt: {workspace.receipts.length}件。保存はYI-06、卒業計算adapterはYI-07、公開判断はYI-08の対象です。</footer>

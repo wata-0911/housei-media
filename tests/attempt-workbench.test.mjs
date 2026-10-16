@@ -9,6 +9,7 @@ import { attemptWorkbenchEnabled } from '../dev/attempts/gate.ts';
 import { nullableText } from '../dev/attempts/formHelpers.ts';
 import { env, catalog, mixed, media } from './fixtures/migration-fixture.mjs';
 import { verifyMigrationPreservation } from '../src/planner/attempts/migration/preview.ts';
+import { validateAttemptPlanTransition } from '../src/planner/attempts/planTransition.ts';
 
 const blank = () => ({ attempts: [], ownedRecords: [], removals: [] });
 const plan = () => ({ status: 'planned', plannedYear: 2030, plannedTerm: '本人希望', studyYear: null, earnedOrder: null });
@@ -92,12 +93,97 @@ test('delete and Undo retain original active position, ID, snapshots, every owne
   const request = undo(a, deletion), restored = applyCommand(deleted, request, context);
   assert.deepEqual(restored.graph, workspace.graph); assert.strictEqual(applyCommand(restored, request, context), restored);
 });
-test('Undo conflicts refuse clamping; restoring later deletions allows exact original position', () => {
+test('Undo refuses an older deletion; reversing deletion order restores exact original positions', () => {
   const { workspace, context, a, b } = setup(); const da = remove(a), db = remove(b);
   let w = applyCommand(workspace, db, context); w = applyCommand(w, da, context);
-  assert.throws(() => applyCommand(w, undo(b, db), context), /undo_position_conflict/);
+  assert.throws(() => applyCommand(w, undo(b, db), context), /undo_order_conflict/);
   w = applyCommand(w, undo(a, da), context); w = applyCommand(w, undo(b, db), context);
   assert.deepEqual(w.graph, workspace.graph);
+});
+const undoScenarios = [
+  [2, [0, 1]], [2, [1, 0]],
+  [3, [0, 1, 2]], [3, [0, 2, 1]], [3, [1, 0, 2]],
+  [3, [1, 2, 0]], [3, [2, 0, 1]], [3, [2, 1, 0]],
+  [3, [0, 2]], [3, [2, 0]],
+  [2, [0, 1], 1], [3, [2, 0, 1], 1], [3, [0, 1, 2], 2],
+];
+for (const [count, order, addAfter] of undoScenarios) test(`Undo stack: ${count} rows, delete ${order}, add after ${addAfter ?? 'none'}`, () => {
+  const { graph, context, makeAttempt: fixtureAttempt } = attemptFixture();
+  if (count === 3) graph.attempts.push(fixtureAttempt(2002));
+  let w = createWorkspace(graph, context);
+  const originals = graph.attempts, added = [];
+  const activeIds = g => g.attempts.filter(a => a.membership.kind === 'active').map(a => a.id);
+  const tickets = [], requests = new Map();
+  for (const [index, row] of order.entries()) {
+    const command = remove(originals[row]), before = w;
+    w = applyCommand(w, command, context);
+    assert.equal(validateAttemptPlanTransition(before.graph, w.graph, context, { kind: 'delete_plan', attemptId: command.attemptId, operationId: command.operationId }).valid, true);
+    assert.deepEqual(w.graph.removals.slice(0, -1), tickets);
+    tickets.push(structuredClone(w.graph.removals.at(-1)));
+    assert.deepEqual(w.graph.ownedRecords, graph.ownedRecords);
+    assert.deepEqual(w.receipts.slice(0, -1), before.receipts);
+    if (addAfter === index + 1) {
+      const next = created(context); added.push(next);
+      w = applyCommand(w, add(next), context);
+      assert.deepEqual(w.graph.removals, tickets);
+      assert.equal(w.graph.ownedRecords.some(r => r.owner?.attemptId === next.id), false);
+    }
+  }
+  if (count === 2 && order[0] === 0) assert.deepEqual(tickets.map(t => t.previousPosition), [0, 0]);
+  while (w.graph.removals.length) {
+    for (const ticket of w.graph.removals.slice(0, -1)) {
+      const request = requests.get(ticket.operationId) ?? undo(ticket.attemptSnapshot, { operationId: ticket.operationId });
+      requests.set(ticket.operationId, request);
+      const untouched = structuredClone(w);
+      assert.throws(() => applyCommand(w, request, context), /undo_order_conflict:.*最後に削除した履修回/);
+      assert.deepEqual(w, untouched); // Failed requests consume neither receipt nor ticket.
+    }
+    const ticket = w.graph.removals.at(-1), before = w;
+    const request = requests.get(ticket.operationId) ?? undo(ticket.attemptSnapshot, { operationId: ticket.operationId });
+    requests.set(ticket.operationId, request);
+    w = applyCommand(w, request, context);
+    assert.equal(validateAttemptPlanTransition(before.graph, w.graph, context, { kind: 'undo_plan', attemptId: ticket.attemptSnapshot.id, operationId: ticket.operationId }).valid, true);
+    assert.deepEqual(activeIds(before.graph), activeIds(w.graph).filter(id => id !== ticket.attemptSnapshot.id));
+    assert.deepEqual(w.graph.removals, before.graph.removals.slice(0, -1));
+    assert.deepEqual(w.graph.ownedRecords, graph.ownedRecords);
+    assert.deepEqual(w.receipts, [...before.receipts, request]);
+    assert.strictEqual(applyCommand(w, request, context), w);
+  }
+  assert.deepEqual(activeIds(w.graph), [...originals, ...added].map(a => a.id));
+  assert.deepEqual(w.graph.attempts, [...originals, ...added]);
+  // A successful Undo retry remains a no-op even after a new deletion of that row.
+  const nextDeletion = remove(originals[0]); w = applyCommand(w, nextDeletion, context);
+  for (const request of requests.values()) assert.strictEqual(applyCommand(w, request, context), w);
+});
+test('Undo fails closed when deletion receipt history is missing or ticket order is unproven', () => {
+  const { workspace, context, a, b } = setup();
+  const once = applyCommand(workspace, remove(a), context), twice = applyCommand(once, remove(b), context);
+  const unproven = [createWorkspace(once.graph, context), createWorkspace(twice.graph, context),
+    { ...twice, graph: { ...twice.graph, removals: [...twice.graph.removals].reverse() } }];
+  for (const w of unproven) {
+    const ticket = w.graph.removals.at(-1), untouched = structuredClone(w);
+    assert.throws(() => applyCommand(w, undo(ticket.attemptSnapshot, { operationId: ticket.operationId }), context), /undo_history_unproven/);
+    assert.deepEqual(w, untouched);
+  }
+});
+test('multiple deletions retain detached owners and edited payloads through refused and reverse Undo', () => {
+  const { workspace, context, a, b } = setup(), da = remove(a), db = remove(b);
+  let w = applyCommand(applyCommand(workspace, da, context), db, context);
+  const snapshots = structuredClone(w.graph.removals);
+  for (const index of [0, 3, 4, 5]) {
+    const r = w.graph.ownedRecords[index], payload = structuredClone(r.payload);
+    if (r.kind === 'media') payload.lessons[0].testCompleted = true;
+    if (r.kind === 'evaluation') payload.finalGrade = 'A';
+    if (r.kind === 'todo') { payload.text += ' detached編集'; payload.done = !payload.done; }
+    w = applyCommand(w, update(r, payload), context);
+  }
+  const records = structuredClone(w.graph.ownedRecords), before = structuredClone(w);
+  assert.throws(() => applyCommand(w, undo(a, da), context), /undo_order_conflict/);
+  assert.deepEqual(w, before); assert.deepEqual(w.graph.removals, snapshots);
+  w = applyCommand(w, undo(b, db), context); w = applyCommand(w, undo(a, da), context);
+  assert.deepEqual(w.graph.attempts, workspace.graph.attempts);
+  assert.deepEqual(w.graph.ownedRecords, records);
+  assert.deepEqual(w.graph.ownedRecords.map(r => r.owner), workspace.graph.ownedRecords.map(r => r.owner));
 });
 test('detached plan edit is refused; new enrollment has fresh ID/no copied records', () => {
   const { workspace, context, a } = setup(); let w = applyCommand(workspace, remove(a), context);

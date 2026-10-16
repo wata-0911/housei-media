@@ -1,10 +1,10 @@
 # YI-05 実施検証
 
-検証日: 2026-10-15〜16 (JST)。過去の監査PASSの転記ではなく、この作業cloneで実行。独立監査は未実施。
+検証日: 2026-10-15〜16 (JST)。過去の監査PASSの転記ではなく、この作業cloneで実行。初回実装時点では独立監査は未実施。後続の独立監査P2への対応を末尾に追記する。
 
 ## 新規検証
 
-新規は **77件 = ドメイン・adapter 69件 + 実React Chromium 8件**。`test:planner`にも69件を含めるため、全コマンドの件数を単純合算しない。
+初回実装の新規は **77件 = ドメイン・adapter 69件 + 実React Chromium 8件**。独立監査P2修正後は単体84件・ブラウザ9件（計93件）。`test:planner`にも当該単体suiteを含めるため、全コマンドの件数を単純合算しない。
 
 - CRUD: UUIDv4独立発行、同じ制度科目/年度/方式/旧Offeringの別Attempt、同一操作の再送と衝突、immutable ID・実績/原版/owner、数量/状態/参照の拒否。
 - payload: media/correspondence/evaluationの混在維持、番号/assessment ID/書道fieldの無断消失拒否、null/0/省略、他Attempt不変。
@@ -81,3 +81,38 @@ Safari/iPhone実機、Firefox、スクリーンリーダー実機、OSの日本�
 既存v22のCSV/PNGダウンロード、卒論/認定入力、全backup版の全組合せを今回それぞれ手動操作したとは扱わない。各既存の関数/保存回帰suiteとproduction成果物一致を根拠とし、実ブラウザsuiteの操作範囲を区別する。本番ユーザーの実storage・実個人成績は使用しない。
 
 永続保存、新backup、長期/複数タブ再送、Web Lock/expectedRaw、新卒業算入は対象外。[YI-06/07・監査重点](handoff.md)へ引き継ぐ。
+
+
+## 独立監査P2: 複数削除後のUndo順序（2026-10-16）
+
+初回HEAD `6a2d93e` は `[A,B]` からA→Bと削除した両ticketがpreviousPosition=0となり、A→BのUndoを許して `[B,A]` にしてしまう。初回の位置範囲チェックとYI-03の操作単位のvalidatorだけでは、この複数ticket間の順序を証明できなかった。
+
+修正はYI-05のUndoに限定する。未復元ticketをremove receiptの順・操作ID・Attempt IDと照合し、一致した最後のticketだけUndoする。古いticketは先に復元すべき履修回の名前/IDと逆順Undoを案内して拒否する。履歴がない/順序を証明できない場合も拒否する。removeのsnapshot・previousPosition、Attempt ID、既存receipt、YI-03 validatorは変更しない。拒否時は元Workspace全体を不変とし、成功済み再送のno-op契約も維持する。
+
+追加回帰は単体15件・実Reactブラウザ1件。単体は `[A,B]` の2削除順、`[A,B,C]` の全6削除順、部分削除2順、削除途中の新Attempt追加3ケース、履歴欠落/順序不一致の拒否、複数detached ownerのmedia/evaluation/TODO編集保持を検証する。各成功remove/undoを既存 `validateAttemptPlanTransition()` でも直接検証する。拒否要求の同ID再実行、成功Undoの再送、snapshot/他ticket/全payload/無関係なactive相対順も検証する。
+
+ReactではA→B削除、A先行Undo拒否とBの名前/ID案内、X追加後もA先行拒否、B→Aで `[A,B,X]` を操作する。Aの評価・TODO ownerは保持し、Xには記録を移動しない。storage trapも適用する。
+
+追加した単体15件は修正前15件fail、修正後15件PASSを確認した。修正後の単体suite全84件と新UIブラウザ全9件もPASS。ブラウザ試験の初回では途中追加XのIDを取るlocatorがdetached行を指したため、active欄から取得するよう修正して全9件を再実行した。製品コードの判定を緩めていない。
+
+既存v22ブラウザsuite全44件を今回も再実行し、43 PASS / 1 fail / skip 0。失敗は既知の#145 `restore invalidates an unsaved media draft even when the stored value is identical`（315行、メディア表示中にbackup file inputを待つtimeout）のみ。P2修正とは別件として維持し、当該Page/backup/既存ブラウザtestを変更していない。
+
+修正後の現ブランチで次をすべて再実行した。過去PASSの流用やskipはない。
+
+| コマンド | P2修正後の結果 |
+| --- | --- |
+| npm run test:attempt-ui | PASS 84 / fail 0 |
+| npm run test:attempt-ui-browser | PASS 9 / fail 0 |
+| npm run test:attempts | PASS 132 / fail 0 |
+| npm run test:migration | PASS 133 / fail 0 |
+| npm run test:institutional | PASS 36 / fail 0 |
+| npm run test:planner | PASS 3389 / fail 0 |
+| npm run test:extension | PASS 54 / fail 0 |
+| npm run test:bookmarklet | PASS 168 / fail 0 |
+| npm run typecheck | PASS |
+| npm run lint | PASS |
+| npm run build | PASS |
+| git diff --check | PASS |
+| npm run test:planner-browser | 43 PASS / 1 fail / skip 0（別件#145、上記） |
+
+通常buildの全12ファイルを既存の最新dev基準SHA256一覧とも再比較し、完全一致を確認した。新state schema・保存形式・YI-03 validator・#145実装には変更なし。

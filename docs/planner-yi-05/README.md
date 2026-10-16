@@ -58,7 +58,11 @@ YI05_WORKBENCH=1 npm run dev -- --host 127.0.0.1 --port 4185
 
 `remove`は元Attemptの完全snapshot、元active位置、削除操作IDを`AttemptRemoval`へ記録し、membershipだけをdetached/plan_deletedへ変更する。全record、無関係なAttempt/ticket、active相対順序は維持し、`validateAttemptPlanTransition()`で前後を検証する。
 
-`undo`は指定した削除ticketのsnapshotを元ID・元active位置へ戻し、そのticketだけを消費する。他のactive行の順序を維持する。Undoの要求操作IDと、復元対象の削除操作IDは別。元位置が現在のactive件数を超える場合は`undo_position_conflict`として停止し、先に後続の削除をUndoする案内を出す。位置の丸めやticket書換えはしない。
+`undo`は**削除した逆順（LIFO）だけ**を許可する。未復元の全ticketについて、操作receipt内のremove履歴とticket配列の順・操作ID・Attempt IDが一致することを確認し、最後のticketだけを消費する。古いticketを先に指定すると`undo_order_conflict`で停止し、先にUndoする履修回の名前とIDを案内する。履歴のないgraphから初期化した場合やticket順との一致を証明できない場合は`undo_history_unproven`で停止する。位置だけでは削除順を推測しない。
+
+許可したUndoはsnapshotを元ID・元active位置へ戻し、他のactive行の相対順・全owner/payload・他ticketを維持する。Undoの要求操作IDと、復元対象の削除操作IDは別。成功済み要求の同一再送は順序判定より前にno-opとなる。拒否した要求はreceiptを消費せず、後続削除のUndo後に同じ要求を再実行できる。元位置が現在のactive件数を超える場合も`undo_position_conflict`で停止し、位置の丸めやsnapshot/ticket書換えはしない。
+
+例: `[A,B]`→A削除→B削除では両ticketの位置が0になる。A先行Undoを拒否し、B→Aで`[A,B]`へ復元する。途中でXを新規追加しても末尾追加なのでB→Aの復元後は`[A,B,X]`になる。YI-03のtransition validatorは各成功操作で引き続き実行し、複数ticket間の順序保証はYI-05の履歴/LIFO制約で追加する。
 
 削除済みAttemptの予定編集はUndoするまで禁止する。detachedの進捗・評価・TODOは明示編集でき、Undoでもその時点の全recordを維持する。旧孤立ownerは計画を捏造しないため、計画snapshotのない`legacy_orphan`にはUndoを提供しない。新規履修回は元snapshot/旧ownerから自動コピーしない。
 
