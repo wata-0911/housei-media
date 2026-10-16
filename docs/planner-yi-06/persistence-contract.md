@@ -2,15 +2,11 @@
 
 ## 信頼境界
 
-入力state/backup JSONは信頼しない。発行表・receiptのclosed shapeやSHA一致だけでは保存/復元権限にならない。
+入力state/backup JSONは信頼しない。通常再読込と可搬復旧を別の契約にする。通常再読込はhostが確定したcheckpointの照合を必須とし、原文を直接書き込んでも自動的に認めない。
 
-隔離IndexedDB `hosei-yi06-isolated-v1` のhost管理recordは、現raw、単調なrevision、過去に確定保存したstateのcanonical SHA集合、全確定履歴の発行済みID集合を持つ。これらは**外部ファイルへexport/importする形式ではない**。controllerは、YI-04のlive発行handleからの移行か、既にhostが確定したcheckpointに由来するYI-05操作だけをcommitできる。生のJSONからcontrollerのhandle/previewを作るAPIはない。
+可搬backup v2は、原版・全割当・操作履歴・参照・数量・全namespaceの検証後にpreviewを返すだけで、まだhost証跡にならない。利用者が選択ファイル固有の採用確認を行い、原文保護と全件置換を確認した場合のみ、Lock/CAS/単一transactionで新checkpointを確定する。SHAは破損検出であり、発行者の認証ではない。WeakSetへコピー表を再登録しない。[可搬復旧契約と脅威モデル](portable-recovery.md)を参照。
 
-再読込・新backup復元では、保存済みcheckpointのSHAがhostの確定履歴に存在することを先に確認する。SHAはこのhost記録との照合キーであり、ファイルの真正性を単独で証明するものではない。ファイルに正しいSHAを付け直してもhost履歴がないため拒否する。YI-04発行表コピーはそのままYI-04へ渡すと今も`unverified_assignment_history`になる。
-
-この境界は、通常のアプリ保存領域を信頼する**同一ブラウザ・同一originの継続性**である。host DBそのものを操作できる同一originの悪意あるscript、DevTools、端末侵害、ブラウザprofile全体の改ざんを検出する暗号学的認証ではない。依存注入する`AtomicAttemptStore`もアプリ所有の信頼済みcapabilityに限る。検証対象ファイルからstore/証跡を構成してはならない。ブラウザ内の秘密鍵・署名・大学認証を主張しない。
-
-DB消失・別端末のファイルは証跡がなく拒否。別端末復旧を完了させるには、独立監査可能な外部発行authority/可搬信頼根などの別設計が必要。この制約を「ファイルのshapeが正しいから」で解除しない。
+host管理recordは現raw、revision、確定checkpoint SHA集合、永久ID予約集合を持つ。record自体のimport/reset APIはない。backup v2へ出力する予約集合は再利用禁止条件であり、checkpointの自己認証には使わない。同一originの悪意あるscript、DevTools、端末侵害への暗号学的耐性は提供しない。
 
 ## 再読込の証明手順
 
@@ -23,7 +19,7 @@ DB消失・別端末のファイルは証跡がなく拒否。別端末復旧を
 7. 最終graph、削除snapshot/previousPosition/ticket、receipt順、usedTodoIds、全発行履歴、非Attempt情報、verificationを完全比較。
 8. 訂正履歴があれば元rawと旧割当、訂正対象assessment/owner/原値、一fieldだけの変更、新raw chain、新割当の旧ID予約を再検証。
 
-replay関数単体は情報の整合性検査にすぎない。controllerの発行済みhandleや保存権限は返さない。元sourceに無関係な合法graphを持ち込んでも、checkpoint/操作再実行比較で拒否する。
+replay関数単体は情報の整合性検査であり保存権限を返さない。元sourceに無関係なgraphや改変された最終snapshotは全要求再実行との比較で拒否する。可搬復旧はその検証に加えて、利用者による復旧元採用を要求する。整合する別履歴の発行者まで証明するものではない。
 
 ## 再送・ID予約・逆順Undo
 
@@ -39,9 +35,9 @@ UndoはYI-05と同じ削除LIFO。初期targetから削除要求を再実行す�
 
 `withPlannerWriteLock(..., locks, true)`、共通`PLANNER_WRITE_LOCK=hosei-planner:v1:write`を使用。preview開始/loaded時のexpectedRawとauthority revisionを保持する。commit直前に原版・source・履歴を再検証し、Lock取得後、IDB readwrite transaction内で現raw/revision/履歴/予約集合の完全一致を確認する。
 
-一回の`put`が新rawとhost証跡を**同じrecord、同じtransaction**へ保存する。`oncomplete`だけ成功。quota、SecurityError、read failure、put同期例外、transaction abortではloaded stateを更新しない。rollback目的の追加書込み、recovery上書き、localStorage複数keyへの分割はない。Lockなしはcommitを拒否する。
+一回の`put`が新rawとhost証跡を**同じrecord、同じtransaction**へ保存する。既存DBではtransactionの`oncomplete`、初回はversionchange transactionのcommit後に発火するopenの`onsuccess`を成功条件にする。quota、SecurityError、read failure、put同期例外、transaction abortではloaded stateを更新しない。rollback目的の追加書込み、recovery上書き、localStorage複数keyへの分割はない。Lockなしはcommitを拒否する。
 
-初回previewは`indexedDB.databases()`で有無をread-only確認し、存在しないDBを作らない。DB作成は最初のcommit時のschema初期化だけで、ユーザーstateと証跡は一回put。inventory APIがなければ拒否する。対象のSafari実機対応はYI-08で確認する。
+初回previewは`indexedDB.databases()`で有無をread-only確認し、存在しないDBを作らない。最初のcommitではschema初期化・CAS・ユーザーstateと証跡の一回putを同一versionchange transaction内で行う。inventory APIがなければ拒否する。対象のSafari実機対応はYI-08で確認する。
 
 旧v22タブのうちWeb Lockに参加しないものへの排他保証はない。本sliceは旧localStorageへ触れず、新DBのみを使うため、その制限を回避した一般公開済みとは扱わない。
 
@@ -49,4 +45,4 @@ UndoはYI-05と同じ削除LIFO。初期targetから削除要求を再実行す�
 
 [capacity.json](capacity.json)は合成mixed v22を実測。raw6は1,163,528 bytes、保存stateは約3.24MB、host recordのJSON表現は約3.64MB。catalogの元版/target版を勝手に省略しない。上限はhost record JSON UTF-8で32MiB（testは注入した小上限でも拒否を検証）。IDB実ディスク使用量とは別の保守的なアプリ上限であり、ブラウザquotaの可用性保証ではない。実quota失敗はtransaction abortを正とする。
 
-過去checkpointのSHA集合・ID予約・receipt・訂正履歴を自動削除しない。増加して上限に達した場合はfail-closed。履歴compaction/可搬authority/巨大graphでの応答改善は後続課題。
+過去checkpointのSHA集合・ID予約・receipt・訂正履歴を自動削除しない。増加して上限に達した場合はfail-closed。履歴compaction/発行者認証/巨大graphでの応答改善は後続課題。

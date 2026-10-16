@@ -6,7 +6,7 @@ import type { Command } from '../workbench/operations';
 export const STATE_FORMAT = 'hosei-attempt-state';
 export const STATE_VERSION = 23;
 export const BACKUP_FORMAT = 'hosei-attempt-backup';
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 export const PERSISTENCE_RULE = { id: 'yi-06:replay', version: 1 } as const;
 // Explicit evidence representation; runtime context and decoder capabilities are never serialized.
 export type SourceEvidence = {
@@ -30,10 +30,10 @@ export type AttemptState23 = {
 };
 export type AttemptBackup = {
   format: typeof BACKUP_FORMAT; backupVersion: typeof BACKUP_VERSION; createdAt: string;
-  state: AttemptState23; sha256: string;
+  state: AttemptState23; reservedIds: string[]; sha256: string;
 };
-// This is PRIVATE host metadata, never an importable backup/state format. The
-// database is the trust boundary, not a hash claimed by an input JSON file.
+// The host checkpoint registry is never imported. Validated backup reservations
+// may only add restrictions after explicit adoption; a file hash is not authority.
 export type AuthorityRecord = { raw: string | null; revision: number; committed: string[]; issuedIds: string[] };
 export type ReadSnapshot = AuthorityRecord;
 export interface AtomicAttemptStore {

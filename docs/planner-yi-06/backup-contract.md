@@ -1,13 +1,17 @@
 # 新旧backup・原文保護・復元
 
-新形式は`hosei-attempt-backup` version1。envelopeはformat、backupVersion、UTC createdAt、schema23 state全文、envelope本体のcanonical SHA256だけを許す。stateに必要なcatalog・raw6・source原文・元版・割当・ledger・receipt・TODO ID履歴・Undo snapshotを含める。controllerが確認した**確定状態のみ**を出力する。未保存draftは別扱いで、その存在でバックアップが自動保存されることはない。
+独立監査P1修正後の新規書出しは`hosei-attempt-backup` **version2**。envelopeはformat、backupVersion、UTC createdAt、schema23 state全文、`reservedIds`、envelope本体のcanonical SHA256のみ。stateにはcatalog・raw6・source原文・元版・割当・ledger・receipt・TODO ID履歴・Undo snapshotを含める。`reservedIds`にはhostの全予約を含め、rollbackで現在stateから消えたIDも持ち出す。確定状態のみを出力する。
 
-読み込みはstrict parser、closed envelope、日時、未来版、envelope SHA、同一ブラウザの確定履歴、source原版/全履歴replayの順。改変・欠損・duplicate key・不正owner・未知fieldを捨てず拒否する。SHAを再計算した偽造も、hostに確定記録がないため拒否する。元ファイルは変更しない。新backupのcreatedAtは形式と破損を検査する作成時刻で、第三者が証明した日時ではない。
+version2は空の別profile/別originでも、対応実装と同じ信頼済み原版がある場合に復旧できる。strict parser、closed envelope、日時、未来版、SHA、固定原版、source、割当、全操作replay、全field/参照/数量、全namespace衝突を検証する。SHAを計算し直した不整合ファイルも拒否する。SHAは発行者認証ではなく、整合した別履歴を誰が作成したかは証明しない。
 
-復元は全件置換。プレビューで旧raw・新stateの件数/履歴/原情報を提示する。置換前rawとsource raw、日付訂正履歴を保護ファイルへ書き出し、保存先と比較内容の明示確認後にcommitする。同backupの再復元は同state/同ID/同数量になり、マージ・加算しない。host側の過去ID予約集合だけは減らさない。
+可搬previewは保存しない。画面で「発行者は未認証だが、このファイルを復旧元として採用する」と確認し、選択ファイル原文・置換前raw・元source・訂正履歴を保護し、全件置換確認を行う。commit時にファイル固有の採用/保護の一致を要求する。成功後だけ新hostでの再読込が可能になる。通常再読込のhost照合を解除しない。
 
-旧`hosei-planner-backup` v1/v2は既存`parsePlannerBackup`/`restorePlannerBackup`からの通常v22復元を継続する。YI-06へは別の「旧原文を移行preview」からYI-04のdecoderを使う。backup.createdAt、公式原行、手動値、原版は元rawに保持する。旧backupの互換比較を緩めず、元state22でなければ拒否する。state1〜21の推測変換、未知原版の現catalog置換はしない。
+既存DBでは未知の履歴と既存IDが重なる場合は拒否する。同一checkpointへの反復復元・過去checkpointへの巻戻しは許し、hostのID予約・過去checkpointはunionして保持する。マージや加算はしない。空DBは初期化とstate/host証跡を一つのversionchange transactionで保存し、既存DBは一つのreadwrite transactionでCASと一回putを行う。
 
-`hosei-planner-protection` v1と`hosei-yi06-protection` v1はどちらも通常復元へ渡せない。後者は隔離state/sourceの原文を失わないための出力だけで、元v22 primary/recoveryを読むものではない。保護ファイルは暗号化されない。旧primary/recoveryは触らず、既存の保護経路も変更しない。
+旧Attempt backup **version1**は完全なhost予約を収録しなかったため、従来の同一host checkpoint照合を必要とする。元hostでv1を復元してv2を書き出せる。host喪失後のv1単体について欠けた予約を推測して完全な可搬backupと扱わない。
 
-**DBを失った場合や別ブラウザでは、新backupだけから安全な再開はできない。** 原文・ID・receiptはファイルに保持されるが、履歴の真正性を証明するhost記録はファイルに含めない。外部ファイルが自己署名した鍵や証跡を受け入れる機能もない。ユーザーが「信頼する」にチェックするだけで未検証履歴を通す解除機能は提供しない。この可搬復旧の未対応はDraft PRのブロッカーであり、通常利用者向けbackupの完成とは報告しない。
+旧`hosei-planner-backup` v1/v2は既存の通常v22復元を継続する。YI-06へは別の「旧原文を移行preview」からYI-04 decoderで明示移行する。元createdAt・公式原行・手動値・原版・空白込みrawを保持する。state1〜21や未知原版を推測変換しない。
+
+`hosei-planner-protection` v1と`hosei-yi06-protection` v1は通常復元へ投入できない。後者は原文保護専用で、選択backup原文も保存する。暗号化されず、通常primary/recoveryにはアクセスしない。
+
+[可搬復旧の詳細・脅威モデル・互換制限](portable-recovery.md)、[P1受入記録](acceptance-p1.md)を参照。

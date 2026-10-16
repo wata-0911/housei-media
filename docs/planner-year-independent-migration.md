@@ -1,6 +1,6 @@
 # 年度非依存化の移行計画と受け入れ条件
 
-> YI-06実装状況（2026-10-16）: [隔離永続化・復旧基盤](planner-yi-06/README.md)でschema23と別formatのbackup v1を実装。通常v22は継続。別端末/DB消失時の発行履歴証明は未対応で拒否し、独立監査前のDraft。以下の目標設計やYI-07/08を完了済みとはしない。
+> YI-06独立監査P1修正: [隔離永続化・復旧基盤](planner-yi-06/README.md)でschema23・backup v2の明示的な可搬復旧を実装。通常再読込のhost照合と通常v22を維持。旧Attempt backup v1は同一hostのみ。[保証・脅威モデル](planner-yi-06/portable-recovery.md)。独立監査前のDraftであり、一般公開やYI-07/08の完了を意味しない。
 
 設計日: 2026-10-11（Asia/Tokyo）。基準dev: `05dac8c7deb5f9abea93c9967237aacf0427863c`。**将来の実装計画。今回は移行コード・保存schema・カタログを変更しない。** [詳細設計](planner-year-independent-design.md)の参照方向、[現行backup契約](planner-backup-compatibility.md)を前提とする。
 

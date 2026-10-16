@@ -36,7 +36,8 @@ function occupiedUuids(source: SourceArchive, reservedIds: readonly string[]): S
 const issued = new WeakSet<object>();
 
 /** Structural checks ONLY. This does not grant issuance trust or register a handle.
- * YI-06 invokes it only after checking its independent committed-history witness. */
+ * YI-06 uses this for integrity replay. Its controller separately requires a
+ * local checkpoint or explicit adoption of a fully validated portable backup. */
 export function checkMigrationAssignmentStructure(source: SourceArchive, table: IdAssignments, reservedIds: readonly string[] = []): void {
   requireDecoded(source);
   const slots = sourceSlots(source);
@@ -58,7 +59,7 @@ export function checkMigrationAssignmentStructure(source: SourceArchive, table: 
 }
 
 /** Only this session's immutable issued table is accepted. A JSON copy is not an
- * issuance receipt: YI-06 must define authenticated archive rehydration separately. */
+ * issuance receipt. YI-06 reload/portable recovery has a separate trust boundary. */
 export function validateMigrationAssignments(source: SourceArchive, table: IdAssignments, reservedIds: readonly string[] = []): void {
   checkMigrationAssignmentStructure(source, table, reservedIds);
   if (!issued.has(table)) throw new Error('unverified_assignment_history');

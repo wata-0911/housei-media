@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { env, mixed, initialState, decode, media, item, schooling } from './fixtures/migration-fixture.mjs';
 import { createAttemptPersistence } from '../src/planner/attempts/persistence/controller.ts';
 import { emptyAuthority } from '../src/planner/attempts/persistence/contracts.ts';
-import { replayState } from '../src/planner/attempts/persistence/codec.ts';
+import { encodeState, replayState } from '../src/planner/attempts/persistence/codec.ts';
 import { backupDigest } from '../src/planner/backup/plannerBackupCompatibility.ts';
 import { newOperationId, newAttemptIds, newRecordId } from '../src/planner/attempts/workbench/operations.ts';
 import { validateMigrationAssignments } from '../src/planner/attempts/migration/assignments.ts';
 import { PLANNER_WRITE_LOCK } from '../src/planner/backup/storage.ts';
+import { buildMigrationTarget } from '../src/planner/attempts/migration/transform.ts';
+import { applyCommand } from '../src/planner/attempts/workbench/operations.ts';
 import { makeAttempt } from '../src/planner/attempts/workbench/catalogView.ts';
 
 const locks = { request: async (name, options, action) => { assert.equal(name, PLANNER_WRITE_LOCK); assert.deepEqual(options, { mode: 'exclusive' }); return action(); } };
@@ -103,9 +105,10 @@ for (const change of [s=>s.history.commands.pop(), s=>s.graph.removals[0].previo
   const { api, loaded } = await start(); const p = await api.prepareEdits(loaded, loaded.workspace.graph.attempts.map(remove));
   const state = structuredClone(p.handle.state); change(state); await assert.rejects(replayState(state));
 });
-test('new backup roundtrip replaces, repeated restore does not multiply, foreign history rejects', async () => {
+test('new backup roundtrip replaces, repeated restore does not multiply, portable preview requires adoption', async () => {
   const { store, api, loaded } = await start(); const backup = await api.createBackup(loaded);
-  await assert.rejects(create(memory()).inspectBackup(backup), /unverified_assignment_history/);
+  const foreign=create(memory()), imported=await foreign.inspectBackup(backup);
+  await assert.rejects(foreign.commit(imported,true,null,imported.sourceRaw), /portable_adoption/);
   for (let i=0;i<2;i++) { const p=await api.inspectBackup(backup); const next=await api.commit(p,true,p.previousRaw,p.sourceRaw); assert.deepEqual(next.state,loaded.state); }
   assert.equal(store.writes,3);
 });
@@ -113,9 +116,9 @@ for (const mutate of [b=>b.extra=1,b=>b.backupVersion=999,b=>b.createdAt='2027-0
   const { store,api,loaded }=await start(); const before=store.snapshot(); const value=JSON.parse(await api.createBackup(loaded)); mutate(value);
   await assert.rejects(api.inspectBackup(JSON.stringify(value))); assert.deepEqual(store.snapshot(),before);
 });
-test('rehashed forged state is not authentic; duplicate JSON and protection rejected', async () => {
+test('rehashed inconsistent state, duplicate JSON and protection rejected', async () => {
   const { store,api,loaded }=await start(); const b=JSON.parse(await api.createBackup(loaded)); b.state.graph.attempts[0].originalTitle='偽造'; const {sha256,...body}=b; void sha256; b.sha256=await backupDigest(body);
-  await assert.rejects(api.inspectBackup(JSON.stringify(b)),/unverified_assignment_history/);
+  await assert.rejects(api.inspectBackup(JSON.stringify(b)),/state_replay_mismatch/);
   await assert.rejects(api.inspectBackup('{"format":"a","format":"b"}'),/duplicate_json_key/);
   await assert.rejects(api.inspectBackup('{"format":"hosei-planner-protection","protectionVersion":1}'));
   assert.equal(store.writes,1);
@@ -169,4 +172,85 @@ test('new UUIDs cannot collide with retained non-Attempt IDs or each other',asyn
  await assert.rejects(api.prepareEdits(loaded,[pending,{kind:'add_record',operationId:newOperationId(),record:todo}]),/historical_id_reused/);
  todo.payload.id=loaded.source.context.catalog.institutionalCourses[0].id.split(':').at(-1);
  await assert.rejects(api.prepareEdits(loaded,[{kind:'add_record',operationId:newOperationId(),record:todo}]),/historical_id_reused/);
+});
+
+const consent = p => ({acceptedBackupRawSha256:p.recovery.rawSha256,protectedBackupRaw:p.recovery.raw});
+async function envelope(state,reservedIds=state.history.issuedIds){const body={format:'hosei-attempt-backup',backupVersion:2,createdAt:'2026-10-16T00:00:00.000Z',state,reservedIds};return JSON.stringify({...body,sha256:await backupDigest(body)});}
+async function rehashBackup(value){const {sha256,...body}=value;void sha256;return JSON.stringify({...body,sha256:await backupDigest(body)});}
+async function externalState(loaded,commands,reserved=[]){
+ const table=structuredClone(loaded.state.assignments);table.reservedIds.push(...reserved);
+ const base=buildMigrationTarget(loaded.source,table);let workspace=loaded.workspace;
+ for(const command of commands) workspace=applyCommand(workspace,command,loaded.source.context);
+ return encodeState(loaded.source,table,base,workspace,env.target,loaded.state.corrections);
+}
+test('portable recovery requires original protection and file-specific adoption; reload still needs a host witness',async()=>{
+ const {api,loaded}=await start(),raw=await api.createBackup(loaded),store=memory(),foreign=create(store),p=await foreign.inspectBackup(raw);
+ assert.equal(JSON.parse(raw).backupVersion,2);assert.equal(p.recovery.portable,true);assert.equal(store.writes,0);assert.deepEqual(store.snapshot(),emptyAuthority());
+ await assert.rejects(foreign.commit(p,false,null,p.sourceRaw,consent(p)),/confirmation/);
+ await assert.rejects(foreign.commit(p,true,null,p.sourceRaw),/portable_adoption/);
+ await assert.rejects(foreign.commit(p,true,null,p.sourceRaw,{...consent(p),protectedBackupRaw:'other file'}),/portable_adoption/);
+ await assert.rejects(foreign.commit(p,true,'wrong original',p.sourceRaw,consent(p)),/protection/);
+ await assert.rejects(foreign.prepareEdits(p.handle,[]),/unconfirmed_recovery/);
+ await assert.rejects(foreign.createBackup(p.handle),/unconfirmed_recovery/);
+ await assert.rejects(foreign.commit({...p},true,null,p.sourceRaw,consent(p)),/confirmation/);
+ const restored=await foreign.commit(p,true,null,p.sourceRaw,consent(p));assert.deepEqual(restored.state,loaded.state);assert.equal(store.writes,1);
+ assert.deepEqual((await create(store).load()).workspace,loaded.workspace);
+ assert.throws(()=>validateMigrationAssignments(restored.source,restored.state.assignments,restored.state.assignments.reservedIds),/unverified_assignment/);
+ store.corrupt(s=>s.committed=['0'.repeat(64)]);const before=store.snapshot();await assert.rejects(create(store).load(),/unverified_assignment/);assert.deepEqual(store.snapshot(),before);
+});
+test('portable backup retains rollback tombstones, repeated replacement, original quantities and LIFO',async()=>{
+ let {store,api,loaded}=await start();const original=loaded.state,first=await api.createBackup(loaded),later=add();
+ loaded=await save(api,loaded,[later]);const todo={id:newRecordId(),kind:'todo',owner:null,payload:{id:crypto.randomUUID(),text:'deleted',done:false}};
+ loaded=await save(api,loaded,[{kind:'add_record',operationId:newOperationId(),record:todo},{kind:'delete_todo',operationId:newOperationId(),recordId:todo.id}]);
+ let p=await api.inspectBackup(first);loaded=await api.commit(p,true,p.previousRaw,p.sourceRaw);
+ const rolled=await api.createBackup(loaded);assert.ok(JSON.parse(rolled).reservedIds.includes(later.attempt.id));assert.ok(JSON.parse(rolled).reservedIds.includes(todo.payload.id));
+ loaded=await save(api,loaded,loaded.workspace.graph.attempts.map(remove));const backup=await api.createBackup(loaded),target=memory();let receiver=create(target);
+ for(let n=0;n<2;n++){p=await receiver.inspectBackup(backup);const restored=await receiver.commit(p,true,p.previousRaw,p.sourceRaw,consent(p));assert.deepEqual(restored.state,loaded.state);receiver=create(target);}
+ let restored=await receiver.load();await assert.rejects(receiver.prepareEdits(restored,[later]),/historical_id_reused/);
+ await assert.rejects(receiver.prepareEdits(restored,[{kind:'add_record',operationId:newOperationId(),record:{...todo,id:newRecordId()}}]),/historical_id_reused/);
+ await assert.rejects(receiver.prepareEdits(restored,[undo(restored.workspace.graph.removals[0])]),/undo_order/);
+ restored=await save(receiver,restored,[...restored.workspace.graph.removals].reverse().map(undo));
+ assert.deepEqual(restored.state.graph,original.graph);assert.deepEqual(restored.state.retained,original.retained);assert.deepEqual(restored.state.source,original.source);
+ assert.ok(store.snapshot().issuedIds.includes(todo.payload.id));
+});
+test('unknown overlapping host history rejects; disjoint replacement preserves the previous reservations',async()=>{
+ const a=await start(),b=await start();const before=b.store.snapshot();await assert.rejects(b.api.inspectBackup(await a.api.createBackup(a.loaded)),/recovery_host_collision/);assert.deepEqual(b.store.snapshot(),before);
+ const empty=await start(memory(),initialState()),p=await b.api.inspectBackup(await empty.api.createBackup(empty.loaded));
+ const after=await b.api.commit(p,true,p.previousRaw,p.sourceRaw,consent(p));assert.deepEqual(after.state,empty.loaded.state);
+ for(const id of before.issuedIds)assert.ok(b.store.snapshot().issuedIds.includes(id));
+});
+test('v1 compatibility remains host-only because rollback reservations were absent',async()=>{
+ const {api,loaded}=await start();const value=JSON.parse(await api.createBackup(loaded));delete value.reservedIds;value.backupVersion=1;const raw=await rehashBackup(value);
+ const p=await api.inspectBackup(raw);assert.equal(p.recovery.portable,false);assert.deepEqual((await api.commit(p,true,p.previousRaw,p.sourceRaw)).state,loaded.state);
+ await assert.rejects(create(memory()).inspectBackup(raw),/unverified_assignment_history/);
+});
+for(const kind of ['operation','attempt','record','todo'])test(`portable replay rejects ${kind} UUID colliding with an unused reservation`,async()=>{
+ const {loaded}=await start(),id=crypto.randomUUID(),reserved=`hosei:owned:${id}`;let command;
+ if(kind==='operation'){command=add();command.operationId=`hosei:attempt-op:${id}`;command.attempt.creationOperationId=command.operationId;}
+ else if(kind==='attempt'){command=add();command.attempt.id=`hosei:attempt:${id}`;}
+ else command={kind:'add_record',operationId:newOperationId(),record:{id:kind==='record'?`hosei:owned:${id}`:newRecordId(),kind:'todo',owner:null,payload:{id:kind==='todo'?id:crypto.randomUUID(),text:'collision',done:false}}};
+ const state=await externalState(loaded,[command],[reserved]),store=memory();await assert.rejects(create(store).inspectBackup(await envelope(state)),/historical_id_reused/);assert.equal(store.writes,0);
+});
+for(const pick of [h=>h.state.retained.publicCourses[0].id,h=>h.source.context.catalog.institutionalCourses[0].id.split(':').at(-1),h=>h.source.sourceCatalog.offerings[0].id,h=>h.state.assignments.attempts[0].operationId.split(':').at(-1)])test(`portable replay rejects TODO collision with source/catalog/assignment: ${pick}`,async()=>{
+ const {loaded}=await start();const id=pick(loaded),command={kind:'add_record',operationId:newOperationId(),record:{id:newRecordId(),kind:'todo',owner:null,payload:{id,text:'collision',done:false}}};
+ // Some old Offering IDs are not UUIDs; use the source catalog's first actual UUID.
+ if(!/^[0-9a-f-]{36}$/.test(id)){const {referencedUuids}=await import('../src/planner/attempts/persistence/identity.ts');command.record.payload.id=[...referencedUuids(loaded.source.sourceCatalog)][0];}
+ const state=await externalState(loaded,[command]);await assert.rejects(create(memory()).inspectBackup(await envelope(state)),/historical_id_reused/);
+});
+test('portable replay rejects a deleted record UUID reused as a TODO ID',async()=>{
+ const {loaded}=await start(),record={id:newRecordId(),kind:'todo',owner:null,payload:{id:crypto.randomUUID(),text:'first',done:false}};
+ const commands=[{kind:'add_record',operationId:newOperationId(),record},{kind:'delete_todo',operationId:newOperationId(),recordId:record.id},{kind:'add_record',operationId:newOperationId(),record:{...record,id:newRecordId(),payload:{...record.payload,id:record.id.split(':').at(-1)}}}];
+ const state=await externalState(loaded,commands);await assert.rejects(create(memory()).inspectBackup(await envelope(state)),/historical_id_reused/);
+});
+for(const change of [b=>b.reservedIds.pop(),b=>b.reservedIds.push(b.reservedIds[0]),b=>b.reservedIds.push('not-an-id'),b=>b.reservedIds.push('hosei:owned:'+b.reservedIds[0].split(':').at(-1)),b=>b.state.history.commands.push({kind:'undo',operationId:newOperationId(),attemptId:b.state.graph.attempts[0].id,removalOperationId:newOperationId()}),b=>b.state.source.rawFiles[Object.keys(b.state.source.rawFiles)[0]]+=' ',b=>b.state.schemaVersion=24,b=>b.extra=true])test(`portable rehashed malformed backup refuses without storage: ${change}`,async()=>{
+ const {api,loaded}=await start(),value=JSON.parse(await api.createBackup(loaded)),store=memory();change(value);await assert.rejects(create(store).inspectBackup(await rehashBackup(value)));assert.deepEqual(store.snapshot(),emptyAuthority());
+});
+for(const failure of ['quota','write','no-lock','stale'])test(`portable ${failure} refuses without changing current raw`,async()=>{
+ const {api,loaded}=await start(),raw=await api.createBackup(loaded),store=memory(),receiver=create(store,failure==='no-lock'?null:locks),p=await receiver.inspectBackup(raw);
+ if(failure==='stale')await start(store,initialState());else store.failure=failure;
+ const before=store.snapshot();await assert.rejects(receiver.commit(p,true,p.previousRaw,p.sourceRaw,consent(p)));assert.deepEqual(store.snapshot(),before);
+});
+test('portable source TODO cannot share the UUID of retained non-Attempt data',async()=>{
+ const state=mixed();state.todos[0].id=state.publicCourses[0].id;const api=create(memory()),p=await api.prepareMigration(await api.inspectLegacy(JSON.stringify(state)));
+ await assert.rejects(create(memory()).inspectBackup(await envelope(p.handle.state)),/source_todo_uuid_collision/);
 });

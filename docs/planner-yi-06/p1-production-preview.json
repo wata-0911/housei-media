@@ -1,0 +1,20 @@
+[
+  {
+    "path": "/__dev/persistence",
+    "status": 200,
+    "developmentCodeExposed": false,
+    "spaFallback": true
+  },
+  {
+    "path": "/dev/persistence/main.tsx",
+    "status": 200,
+    "developmentCodeExposed": false,
+    "spaFallback": true
+  },
+  {
+    "path": "/src/planner/attempts/persistence/controller.ts",
+    "status": 200,
+    "developmentCodeExposed": false,
+    "spaFallback": true
+  }
+]

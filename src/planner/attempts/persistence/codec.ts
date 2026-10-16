@@ -7,6 +7,7 @@ import { verifyMigrationPreservation } from '../migration/preview';
 import { buildMigrationTarget } from '../migration/transform';
 import { applyCommand, createWorkspace, type Workspace } from '../workbench/operations';
 import { STATE_FORMAT, STATE_VERSION, PERSISTENCE_RULE, exactKeys, type AttemptState23, type SourceEvidence, type CorrectionEvidence } from './contracts';
+import { checkFreshCommandIds, checkSourceTodoIds, idTail, sourceUuids, unionReservations, validateReservations } from './identity';
 
 export function sourceEvidence(source: SourceArchive): SourceEvidence {
   return structuredClone({ kind: source.kind, schemaVersion: 22, raw: source.raw, rawSha256: source.rawSha256,
@@ -35,9 +36,9 @@ export function requireLiveMigration(source: SourceArchive, table: IdAssignments
   const result = verifyMigrationPreservation(source, table, target, table.reservedIds);
   if (result.status !== 'ready') throw new Error(`migration_not_ready: ${JSON.stringify(result.diagnostics)}`);
 }
-/** Semantic replay, not an issuance authenticator. The controller must FIRST find
- * this exact checkpoint in its private durable authority. Never returns a YI-04
- * issuance handle, and never registers a copied table in YI-04's WeakSet. */
+/** Integrity replay, NOT issuer authentication. Callers separately require either
+ * a local checkpoint (reload) or explicit adoption of a validated portable backup.
+ * Never registers a copied table in YI-04's WeakSet. */
 export async function replayState(value: unknown) {
   exactKeys(value, ['format', 'schemaVersion', 'rule', 'binding', 'source', 'corrections', 'catalog', 'catalogSha256', 'assignments', 'ledger', 'graph', 'retained', 'history', 'verification'], 'state');
   if (value.format !== STATE_FORMAT || value.schemaVersion !== STATE_VERSION || !sameAttemptData(value.rule, PERSISTENCE_RULE)) throw new Error('unsupported_persistence_version');
@@ -50,15 +51,21 @@ export async function replayState(value: unknown) {
   if (decoded.status !== 'decoded') throw new Error(`source_revalidation: ${JSON.stringify(decoded.diagnostics)}`);
   const source = decoded.source;
   if (!sameAttemptData(state.source, sourceEvidence(source))) throw new Error('source_evidence_mismatch');
+  checkSourceTodoIds(source);
+  validateReservations(state.assignments.reservedIds);
+  unionReservations(state.assignments.reservedIds, [...sourceUuids(source)]);
   checkMigrationAssignmentStructure(source, state.assignments, state.assignments.reservedIds);
   // Only the initial source target is reconstructed with YI-04. Edited graphs
   // are verified by ordered YI-05 replay, NOT original-source equality.
   const base = buildMigrationTarget(source, state.assignments);
   let workspace = createWorkspace(base.graph, source.context);
+  const occupied = sourceUuids(source);
+  for (const id of assignmentIds(state.assignments)) occupied.add(idTail(id));
   for (const command of state.history.commands) {
+    const freshIds = checkFreshCommandIds(command, occupied);
     const next = applyCommand(workspace, command, source.context);
     if (next === workspace) throw new Error('duplicate_receipt');
-    workspace = next;
+    freshIds.forEach(id => occupied.add(idTail(id))); workspace = next;
   }
   for (let i = 0; i < state.corrections.length; i++) {
     const c = state.corrections[i];
@@ -66,6 +73,9 @@ export async function replayState(value: unknown) {
     if (c.proposedRaw !== (state.corrections[i + 1]?.originalRaw ?? source.raw)) throw new Error('correction_chain');
     const original = await decodeMigrationSource(c.originalRaw, environment, state.source.catalog);
     if (original.status !== 'decoded') throw new Error('correction_original');
+    checkSourceTodoIds(original.source);
+    validateReservations(c.originalAssignments.reservedIds);
+    unionReservations(c.originalAssignments.reservedIds, [...sourceUuids(original.source)]);
     checkMigrationAssignmentStructure(original.source, c.originalAssignments, c.originalAssignments.reservedIds);
     const originalTarget = buildMigrationTarget(original.source, c.originalAssignments);
     const issues = validateAttemptGraph(originalTarget.graph, original.source.context).issues;
@@ -83,6 +93,8 @@ export async function replayState(value: unknown) {
     const nextTable = state.corrections[i + 1]?.originalAssignments ?? state.assignments;
     if (assignmentIds(c.originalAssignments).some(id => !nextTable.reservedIds.includes(id))) throw new Error('correction_assignment_history');
   }
+  // Includes unused reservations and IDs from earlier date-correction tables.
+  unionReservations(issuedIds(state.assignments, workspace, state.corrections));
   const expected = await encodeState(source, state.assignments, base, workspace, environment.target, state.corrections);
   if (!sameAttemptData(state, expected)) throw new Error('state_replay_mismatch');
   return { state: expected, workspace, source, base, environment };

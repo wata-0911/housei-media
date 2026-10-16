@@ -1,14 +1,15 @@
 # YI-06 隔離Attempt永続化・復旧基盤
 
-Issue [#175](https://github.com/wata-0911/housei-media/issues/175)。基準は作業開始時にfetchした `origin/dev=a0fa267ca1acd4663c399da394552c46de366cbc`。専用clone・`feat/yi-06-attempt-persistence`。独立監査前のDraft。一般利用者のv22、primary/recovery、公式集計、卒業engineを切り替えない。
+Issue [#175](https://github.com/wata-0911/housei-media/issues/175)。基準は作業開始時にfetchした `origin/dev=a0fa267ca1acd4663c399da394552c46de366cbc`。専用clone・`feat/yi-06-attempt-persistence`。独立監査P1修正後もDraftを維持する。一般利用者のv22、primary/recovery、公式集計、卒業engineを切り替えない。
 
-**実装範囲は同一ブラウザの信頼済み保存履歴が残る隔離環境。別端末・DB消失後の新backupの復元は未対応であり、YI-06の無条件な完全完了とはしない。** ファイルだけから過去の乱数発行・要求履歴の真正性を証明する方法はない。自己申告のSHAや埋込み秘密鍵で代用せず、履歴のないファイルは保護して拒否する。詳細は [保存契約](persistence-contract.md)、[backup契約](backup-contract.md)、[受入結果](acceptance.md)、[引継ぎ](handoff.md)。
+**独立監査P1修正で、backup v2から別profile・別originの空DBへ可搬復旧できる契約を追加した。** 通常再読込は引き続きhostの確定履歴を必須とする。可搬復旧は未信頼ファイルの全整合性検証と利用者による明示採用を分離し、発行者認証とは表示しない。旧Attempt backup v1はstate外の予約を欠くため同一host復元のみを維持する。[可搬復旧の保証・脅威モデル](portable-recovery.md)、[保存契約](persistence-contract.md)、[backup契約](backup-contract.md)、[P1受入結果](acceptance-p1.md)、[初回実装の記録](acceptance.md)、[引継ぎ](handoff.md)。
 
 ## 実装の構成
 
 | 場所 | 責務 |
 | --- | --- |
 | `src/planner/attempts/persistence/contracts.ts` | 明示的なschema23・source evidence・history・backup・host storage契約 |
+| `identity.ts` | 旧source/両catalog/未使用予約/削除済みを含む全namespace衝突検証 |
 | `codec.ts` | strict JSON、raw6再測定、原版/source再decode、固定割当の構造検証、初期target再構築、CRUD順次再実行、全field比較 |
 | `controller.ts` | 生きた移行handle/確定履歴による権限境界、preview、訂正、保存、再読込、backup、CAS、永久ID予約 |
 | `indexedDb.ts` | 固定の隔離DB、read-only read、Web Lock内での原子的CAS・一回put |
@@ -16,7 +17,7 @@ Issue [#175](https://github.com/wata-0911/housei-media/issues/175)。基準は�
 | `dev/attempts/Workbench.tsx` | optional seed/dispatchを追加して既存CRUD画面を再利用。通常YI-05のメモリ動作を維持 |
 | `tests/attempt-persistence*` | 単体/統合と実Chromium。旧suiteのskip・削除なし |
 
-YI-04のWeakSetを削除・再登録しない。`checkMigrationAssignmentStructure`を構造検証として公開しただけで、`validateMigrationAssignments`はJSONコピーを引き続き拒否する。再読込の権限は別のYI-06 controllerに閉じる。YI-05の日付訂正提案生成を純粋helperとして共有し、両controllerの発行済みproposal＋明示確認ゲートを維持する。
+YI-04のWeakSetを削除・再登録しない。`checkMigrationAssignmentStructure`を構造検証として公開しただけで、`validateMigrationAssignments`はJSONコピーを引き続き拒否する。再読込と明示的な可搬復旧の権限は別のYI-06 controllerに閉じる。YI-05の日付訂正提案生成を純粋helperとして共有し、両controllerの発行済みproposal＋明示確認ゲートを維持する。
 
 ## 版の境界
 
@@ -25,14 +26,14 @@ YI-04のWeakSetを削除・再登録しない。`checkMigrationAssignmentStructu
 | 通常PlannerState | schema22を継続。既存型/保存schema未変更 |
 | 隔離Attempt state | `format=hosei-attempt-state`, `schemaVersion=23` |
 | 旧backup | `hosei-planner-backup`, v1/v2 → YI-04の明示migrationのみ |
-| 新backup | **別format** `hosei-attempt-backup`, `backupVersion=1`。旧backup v1と無関係 |
+| 新backup | **別format** `hosei-attempt-backup`, `backupVersion=2`（全host予約を収録）。旧Attempt v1は同一hostのみ |
 | 旧原文保護 | `hosei-planner-protection`, v1。通常復元・移行拒否 |
 | 隔離原文保護 | `hosei-yi06-protection`, v1。任意原文を持つ保護専用。復元decoderなし |
 | 旧catalog/互換性 | schema1 / compatibilityVersion1。原版full/semanticとraw6のSHAを別保持 |
 | migration | `yi-04:state22-attempt`, version1を維持 |
 | 永続replay規則 | `yi-06:replay`, version1。未知rule/版は拒否 |
 
-新backupを旧formatのv3としなかった理由は、同一ブラウザの発行証跡を要求する独立契約を、既存の可搬v1/v2復元と混同させないため。旧decoderを緩和・置換しない。
+新backupのformatは旧Planner backupと分離する。P1修正では完全な予約集合を加えるためAttempt backupをv2へ進めた。旧Planner v1/v2のdecoderや通常v22契約は緩和・置換しない。
 
 ## 保存schema23
 
