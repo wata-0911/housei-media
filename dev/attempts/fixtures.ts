@@ -8,9 +8,9 @@ import { createMigrationWorkbench } from '../../src/planner/attempts/workbench/m
 // Vite raw imports retain the exact six-file bytes checked by the YI-04 decoder.
 const rawModules = import.meta.glob('../../src/data/planner_*2026.json', { query: '?raw', import: 'default', eager: true });
 const inputModules = import.meta.glob('../../scripts/inputs/curriculum-*-2026.json', { query: '?raw', import: 'default', eager: true });
-export async function loadMigrationWorkbench() {
+export async function loadMigrationEnvironment() {
   const rawFiles = Object.fromEntries(Object.entries({ ...rawModules, ...inputModules }).map(([path, raw]) => [path.slice(6), raw as string]));
-  return createMigrationWorkbench(await prepareMigrationEnvironment(rawFiles), catalog);
+  return prepareMigrationEnvironment(rawFiles);
 }
 export type FixtureName = 'ready' | 'held-day' | 'held-month' | 'rejected';
 export function fixtureRaw(name: FixtureName) {
@@ -25,3 +25,5 @@ export function fixtureRaw(name: FixtureName) {
   state.todos = [{ id: '10000000-0000-4000-8000-000000000001', offeringId: null, text: '隔離fixture TODO', done: false }];
   return JSON.stringify(state, null, 2);
 }
+
+export async function loadMigrationWorkbench() { return createMigrationWorkbench(await loadMigrationEnvironment(), catalog); }

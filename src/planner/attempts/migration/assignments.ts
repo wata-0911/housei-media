@@ -35,8 +35,9 @@ function occupiedUuids(source: SourceArchive, reservedIds: readonly string[]): S
 
 const issued = new WeakSet<object>();
 
-/** Structural validation is separate from the immutable issuance receipt. */
-function checkAssignments(source: SourceArchive, table: IdAssignments, reservedIds: readonly string[] = []): void {
+/** Structural checks ONLY. This does not grant issuance trust or register a handle.
+ * YI-06 invokes it only after checking its independent committed-history witness. */
+export function checkMigrationAssignmentStructure(source: SourceArchive, table: IdAssignments, reservedIds: readonly string[] = []): void {
   requireDecoded(source);
   const slots = sourceSlots(source);
   if (!sameAttemptData(Object.keys(table).sort(), ['attempts', 'binding', 'records', 'reservedIds'])
@@ -59,7 +60,7 @@ function checkAssignments(source: SourceArchive, table: IdAssignments, reservedI
 /** Only this session's immutable issued table is accepted. A JSON copy is not an
  * issuance receipt: YI-06 must define authenticated archive rehydration separately. */
 export function validateMigrationAssignments(source: SourceArchive, table: IdAssignments, reservedIds: readonly string[] = []): void {
-  checkAssignments(source, table, reservedIds);
+  checkMigrationAssignmentStructure(source, table, reservedIds);
   if (!issued.has(table)) throw new Error('unverified_assignment_history');
 }
 
@@ -72,5 +73,5 @@ export function prepareMigrationIds(source: SourceArchive, reservedIds: readonly
   const table: IdAssignments = { binding: bindingFor(source), reservedIds: [...reservedIds],
     attempts: slots.attempts.map(slot => ({ ...slot, attemptId: `hosei:attempt:${crypto.randomUUID()}`, operationId: `hosei:attempt-op:${crypto.randomUUID()}` })),
     records: slots.records.map(slot => ({ ...slot, recordId: `hosei:owned:${crypto.randomUUID()}` })) };
-  checkAssignments(source, table, reservedIds); freeze(table); issued.add(table); return table;
+  checkMigrationAssignmentStructure(source, table, reservedIds); freeze(table); issued.add(table); return table;
 }
