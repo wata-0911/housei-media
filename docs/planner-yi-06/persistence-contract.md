@@ -31,6 +31,8 @@ replay関数単体は情報の整合性検査にすぎない。controllerの発�
 
 削除したTODOの元ID、削除record ID、過去のoperation/Attempt IDはreceiptとhost予約集合に残す。過去backupへ戻してもhost予約集合は縮小しないため、後で発行したIDを再利用できない。pending migrationのIDはページ内でも予約し、次の確定保存に含める。保存前にページを閉じたpreviewのIDには永続保証を主張しない（previewを無副作用にするため）。
 
+新規IDは同じ保存前draftのreceipt・使用済みTODO ID、旧stateの非Attempt情報、元/対応catalogのUUIDとも照合する。prefixの異なる操作IDとTODO IDでも同じUUIDの再利用は拒否する。
+
 UndoはYI-05と同じ削除LIFO。初期targetから削除要求を再実行するので、削除snapshot・previousPosition・順序は保存ticketの自己申告を信用しない。履歴欠落、順序逆転、owner/payload/ticket改変は一致検証で拒否。detached ownerの合法な進捗編集は保持し、Undoはその時点のrecordを戻さない/消さない。
 
 ## 原子的保存

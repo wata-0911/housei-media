@@ -36,6 +36,8 @@ Playwright + Chromium headless shell 1243、PC1280×900・390×900で実React画
 
 YI-06は単体63件の一括実行後に追加1件を対象実行して**固有64件**、Chromium10件の一括実行後に追加1件を対象実行して**固有11件**を検証した。対象実行に含む再確認ケースは重複加算しない。Planner一括実行時は新63件を含む3,452件であり、追加1件は上記の対象実行で確認。全件を64/11として一括実行済みと扱わない。
 
+最終確認で、同じ未保存draftの直前の操作UUIDを新TODO IDへ流用するケースを既存の衝突テストへ追加し、修正前に拒否漏れを再現した。draft履歴とsource/target catalogのUUIDも予約集合へ加えて修正。関連3件（再送・削除ID・衝突）は再実行でPASS。PC/390pxの移行→CRUD→backup→反復復元も2件再実行でPASS。型検査・lint・buildを再実行し、最終通常buildの12ファイルSHA一致も再確認した。固有テスト件数は単体64件/Chromium11件のまま。最新HEADのCI結果はDraft PRに記録する。
+
 ## 既知の旧ブラウザ失敗
 
 最新devを別ディレクトリにgit archiveし、`restore invalidates an unsaved media draft even when the stored value is identical`を再実行。`tests/planner-save-lock.browser.mjs:315`のbackup region内file input待機が30000ms timeoutとなる。#145でbackup欄が年間計画へ移動した一方、testはメディアタブで探す。同じ失敗を今回ブランチの全既存suiteでも区別し、skip/削除/期待値変更はしていない。[基準devの再現ログ](baseline-browser-failure.txt)。この1件を今回の保存変更に混ぜず別Issueで調整することを提案する。

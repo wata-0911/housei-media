@@ -124,6 +124,26 @@
       "cancelled": 0,
       "skipped": 0,
       "note": "One known #145 media draft restore failure; reproduced on clean latest dev, not skipped or modified."
+    },
+    {
+      "command": "node --import tsx --test --test-name-pattern='new UUIDs|CRUD replay|deleted TODO' tests/attempt-persistence.test.mjs",
+      "log": "/private/tmp/yi06-pending-collision-after.log",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Reverification after strengthening UUID reservation to include pending draft receipts and both catalogs. The existing collision case gained assertions; unique case count remains 64. The added assertion failed before the fix."
+    },
+    {
+      "command": "node --import tsx --test --test-name-pattern='Chromium .*px' tests/attempt-persistence.browser.mjs",
+      "log": "/private/tmp/yi06-collision-browser.log",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "PC/390px migration, reload, CRUD, backup and repeated restore reverified after the UUID reservation fix; repeated cases are not added to the unique count."
     }
   ],
   "uniqueYI06UnitCasesVerified": 64,

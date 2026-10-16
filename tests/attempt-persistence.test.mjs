@@ -165,4 +165,8 @@ test('new UUIDs cannot collide with retained non-Attempt IDs or each other',asyn
  const {api,loaded}=await start();const a=add();a.attempt.id=`hosei:attempt:${loaded.state.retained.publicCourses[0].id}`;await assert.rejects(api.prepareEdits(loaded,[a]),/historical_id_reused/);
  const operationId=newOperationId(),record={id:newRecordId(),kind:'todo',owner:null,payload:{id:operationId.split(':').at(-1),text:'collision',done:false}};
  await assert.rejects(api.prepareEdits(loaded,[{kind:'add_record',operationId,record}]),/historical_id_reused/);
+ const pending=add(),todo={id:newRecordId(),kind:'todo',owner:null,payload:{id:pending.operationId.split(':').at(-1),text:'pending collision',done:false}};
+ await assert.rejects(api.prepareEdits(loaded,[pending,{kind:'add_record',operationId:newOperationId(),record:todo}]),/historical_id_reused/);
+ todo.payload.id=loaded.source.context.catalog.institutionalCourses[0].id.split(':').at(-1);
+ await assert.rejects(api.prepareEdits(loaded,[{kind:'add_record',operationId:newOperationId(),record:todo}]),/historical_id_reused/);
 });

@@ -7,7 +7,7 @@ import { freeze, type IdAssignments, type SourceArchive, type MigrationTarget } 
 import { dateCorrectionProposal, type DateCorrection, type MigrationSession } from '../workbench/migrationSession';
 import { applyCommand, createWorkspace, type Command, type Workspace } from '../workbench/operations';
 import { sameAttemptData } from '../validation';
-import { assignmentIds, encodeState, replayState, requireLiveMigration } from './codec';
+import { assignmentIds, issuedIds, encodeState, replayState, requireLiveMigration } from './codec';
 import { BACKUP_FORMAT, BACKUP_VERSION, exactKeys, type AtomicAttemptStore, type AttemptBackup, type AttemptState23, type AuthorityRecord, type CorrectionEvidence } from './contracts';
 
 export type PersistenceHandle = { state: AttemptState23; workspace: Workspace; source: SourceArchive };
@@ -38,7 +38,8 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
       if (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(tail(value))) ids.add(tail(value));
       else if (value && typeof value === 'object') for (const [key, child] of Object.entries(value)) { visit(key); visit(child); }
     };
-    visit(source.state); sourceIds.set(source, ids); return ids;
+    visit(source.state); visit(source.sourceCatalog); visit(source.context.catalog);
+    sourceIds.set(source, ids); return ids;
   }
   const handles = new WeakMap<PersistenceHandle, PrivateHandle>();
   const previews = new WeakSet<PersistencePreview>();
@@ -128,7 +129,8 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     // A rollback/restore cannot make IDs from later committed checkpoints reusable.
     if (!workspace.receipts.some(c => c.operationId === command.operationId)) {
       const candidates = [command.operationId, ...(command.kind === 'add' ? [command.attempt.id] : command.kind === 'add_record' ? [command.record.id, ...(command.record.kind === 'todo' ? [command.record.payload.id] : [])] : [])];
-      if (new Set(candidates.map(tail)).size !== candidates.length || candidates.some(id => sourceUuids(handle.source).has(tail(id)) || detail.expected.issuedIds.some(old => tail(old) === tail(id)))) throw new Error('historical_id_reused');
+      const reserved = new Set([...detail.expected.issuedIds, ...issuedIds(detail.table, workspace, detail.corrections)].map(tail));
+      if (new Set(candidates.map(tail)).size !== candidates.length || candidates.some(id => sourceUuids(handle.source).has(tail(id)) || reserved.has(tail(id)))) throw new Error('historical_id_reused');
     }
     return applyCommand(workspace, command, handle.source.context);
   }
