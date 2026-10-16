@@ -1,0 +1,11 @@
+{
+  "fixture": "synthetic mixed, local schema22 source; same tests/fixtures/migration-fixture.mjs decode path",
+  "stateBytes": 3235432,
+  "raw6Bytes": 1163528,
+  "hostRecordJsonBytes": 3723487,
+  "backupV2Bytes": 3317871,
+  "hostReservationCount": 2105,
+  "backupReservationCount": 2105,
+  "maxRecordBytes": 33554432,
+  "note": "JSON UTF-8 size, not physical IndexedDB disk allocation; no real user data."
+}

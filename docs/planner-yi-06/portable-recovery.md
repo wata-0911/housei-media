@@ -20,7 +20,19 @@ Issue #175・Draft PR #176・既存featureブランチを継続。schema23と通
 
 `hosei-attempt-backup` version2は、version1のenvelopeへ`reservedIds`を加えた厳密な別版。全state、原版、raw6、割当、ledger、receipt、TODO履歴、Undo snapshotを保持し、さらにhostの全ID予約を保持する。過去backupへ戻した後に現在stateから消えているIDも含む。書出し時にhostをread-onlyで再取得するため、古いloaded handleで書き出しても既に確定した予約を落とさない。
 
-`reservedIds`は将来の再利用を禁止する集合であり、発行者や過去要求の真正性を証明する記録ではない。stateに収録された全履歴IDと旧sourceのUUIDを必ず含める。空値・未知prefix・重複・namespaceを跨ぐ同一UUIDを拒否する。未使用予約も新しい発行と衝突できない。
+`reservedIds`は将来の再利用を禁止する集合であり、発行者や過去要求の真正性を証明する記録ではない。空値・未知prefix・重複・namespaceを跨ぐ同一UUIDを拒否する。未使用予約も新しい発行と衝突できない。
+
+### P2：必須予約集合
+
+`R(state)`を、完全replayから再計算した`history.issuedIds`と、現在および全訂正前のdecoded sourceについて`sourceUuids(source)`が返すUUIDのunionと定義する。`sourceUuids`は旧`source.state`、旧`source.sourceCatalog`、制度`source.context.catalog`の全UUID（object keyも含む）を収集する。履歴側には初期Attempt/operation/record割当、全receipt、削除済みTODO/record、未使用予約、訂正前割当を含む。UUIDを新規発行して不足を補わない。
+
+- 書出し集合は`host.issuedIds ∪ R(state)`。古いloaded handleからの書出しでも現在hostの予約を落とさない。
+- v2復元では`R(state) ⊆ backup.reservedIds`を必須とする。1件欠落でも、SHAを再計算しても拒否する。unionの実行だけを収録証明にしない。
+- 通常commit/可搬commit/巻戻しcommitの次集合は`旧host.issuedIds ∪ R(state) ∪ 明示採用したbackup.reservedIds`。reloadはread-onlyで、予約を削除・保存しない。
+- catalogの必要部分集合を先に検査して欠落を拒否するが、通過後も全source・訂正chain・割当・操作replayを必須とする。事前検査は採用権限を与えない。
+- 既存hostと同じ信頼済みcatalogの同じbare UUID参照は、双方が共有する再利用禁止条件であり、新規発行IDとは区別する。未知の持込みsourceにも参照があるIDや、異なるnamespaceの同じUUID本体は従来どおり衝突として拒否する。
+
+P2ではformat/versionを2のまま厳格化する。以前の開発用v2でcatalog等の必須予約を欠くファイルは、同一hostでも空hostでも拒否し、読込み時に黙って補完しない。元hostの既知checkpointが残る場合は、従来のhost照合・全replayでread-only loadし、完全なv2を再書出しできる。次の明示commitからhost metadataにも全必須予約をunionする。元hostを失った不完全v2は直接復元できない。SHAの再計算でこの制限を回避しない。
 
 旧version1には現在state外の予約が欠ける可能性があり、ファイルだけから補えない。同一hostでv1を読み、v2を書き出す経路は維持する。hostを失ったv1単体を「完全な予約履歴」と見なして通すことはしない。この互換制限は残る。旧`hosei-planner-backup` v1/v2のv22契約とは別。
 

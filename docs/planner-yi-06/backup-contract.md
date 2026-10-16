@@ -4,6 +4,8 @@
 
 version2は空の別profile/別originでも、対応実装と同じ信頼済み原版がある場合に復旧できる。strict parser、closed envelope、日時、未来版、SHA、固定原版、source、割当、全操作replay、全field/参照/数量、全namespace衝突を検証する。SHAを計算し直した不整合ファイルも拒否する。SHAは発行者認証ではなく、整合した別履歴を誰が作成したかは証明しない。
 
+P2では、書出し・復元・commitに共通の必須集合`R(state)`を適用する。再計算した全履歴IDに、現在/全訂正前sourceと両catalogのUUIDを加える。書出しはhost全予約とのunion、復元は必須集合の完全収録を要求する。既存の開発用v2で1件でも欠けるファイルは互換対象外となり、SHAが正しくても拒否する。元hostに既知checkpointが残る場合は完全なv2を再書出しできる。版の推測変換や欠落の自動補完はしない。[P2受入記録](acceptance-p2.md)。
+
 可搬previewは保存しない。画面で「発行者は未認証だが、このファイルを復旧元として採用する」と確認し、選択ファイル原文・置換前raw・元source・訂正履歴を保護し、全件置換確認を行う。commit時にファイル固有の採用/保護の一致を要求する。成功後だけ新hostでの再読込が可能になる。通常再読込のhost照合を解除しない。
 
 既存DBでは未知の履歴と既存IDが重なる場合は拒否する。同一checkpointへの反復復元・過去checkpointへの巻戻しは許し、hostのID予約・過去checkpointはunionして保持する。マージや加算はしない。空DBは初期化とstate/host証跡を一つのversionchange transactionで保存し、既存DBは一つのreadwrite transactionでCASと一回putを行う。

@@ -9,7 +9,7 @@ import { applyCommand, createWorkspace, type Command, type Workspace } from '../
 import { sameAttemptData } from '../validation';
 import { assignmentIds, issuedIds, encodeState, replayState, requireLiveMigration } from './codec';
 import { BACKUP_FORMAT, BACKUP_VERSION, exactKeys, type AtomicAttemptStore, type AttemptBackup, type AttemptState23, type AuthorityRecord, type CorrectionEvidence } from './contracts';
-import { checkFreshCommandIds, idTail, referencedUuids, sourceUuids, unionReservations, validateReservations } from './identity';
+import { catalogUuids, checkFreshCommandIds, idTail, referencedUuids, requireReservations, sourceUuids, unionReservations, validateReservations } from './identity';
 
 export type PersistenceHandle = { state: AttemptState23; workspace: Workspace; source: SourceArchive };
 type Recovery = { raw: string; rawSha256: string; reservedIds: string[]; portable: boolean };
@@ -58,16 +58,22 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
       || !sameAttemptData(replay.environment.catalog, environment.catalog)) throw new Error('target_catalog_changed');
     return replay;
   }
-  async function checkReplacement(state: AttemptState23, reserved: string[], expected: AuthorityRecord) {
+  async function checkReplacement(state: AttemptState23, source: SourceArchive, reserved: string[], expected: AuthorityRecord) {
     // Known checkpoints can roll back, but permanent reservations survive.
     unionReservations(expected.issuedIds, reserved);
     if (expected.committed.includes(await backupDigest(state))) return;
     const occupied = new Set(expected.issuedIds.map(idTail));
+    const sharedCatalog = new Set<string>(), stateReferences = referencedUuids(source.state);
     if (expected.raw !== null) {
       const current = await witness(parseMigrationJson(expected.raw), expected);
       referencedUuids(current.source.state).forEach(id => occupied.add(id));
+      const incomingCatalog = catalogUuids(source);
+      catalogUuids(current.source).forEach(id => { if (incomingCatalog.has(id)) sharedCatalog.add(id); });
     }
-    if (reserved.some(id => occupied.has(idTail(id)))) throw new Error('recovery_host_collision: 未知の履歴が既存IDと重なります。空の隔離環境で復旧してください。');
+    // Identical bare catalog references are shared restrictions, not newly issued
+    // identities. State references and cross-namespace aliases still conflict.
+    if (reserved.some(id => occupied.has(idTail(id))
+      && !(sharedCatalog.has(id) && !stateReferences.has(id)))) throw new Error('recovery_host_collision: 未知の履歴が既存IDと重なります。空の隔離環境で復旧してください。');
   }
   async function makeHandle(source: SourceArchive, table: IdAssignments, base: MigrationTarget, workspace: Workspace, detail: PrivateHandle) {
     const state = await encodeState(source, table, base, workspace, environment.target, detail.corrections);
@@ -159,7 +165,8 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     const current = await read();
     if (!detail.expected.committed.includes(sha256) || !current.committed.includes(sha256)) throw new Error('backup_requires_committed_state');
     if (!Number.isFinite(Date.parse(createdAt)) || new Date(createdAt).toISOString() !== createdAt) throw new Error('backup_date');
-    const reservedIds = unionReservations(current.issuedIds, state.history.issuedIds, [...referencedUuids(handle.source.state)]);
+    const replay = await validateState(state);
+    const reservedIds = unionReservations(current.issuedIds, replay.requiredReservations);
     const body = { format: BACKUP_FORMAT, backupVersion: BACKUP_VERSION, createdAt, state, reservedIds } as const;
     const backup: AttemptBackup = { ...body, sha256: await backupDigest(body) };
     return JSON.stringify(backup);
@@ -173,15 +180,20 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     if (typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt)) || new Date(value.createdAt).toISOString() !== value.createdAt) throw new Error('backup_date');
     const { sha256, ...body } = value;
     if (sha256 !== await backupDigest(body)) throw new Error('backup_digest');
+    if (value.backupVersion === 2) {
+      // Necessary catalog subset only: reject missing restrictions cheaply.
+      // A passing preflight still requires the complete source/history replay.
+      const state = value.state as AttemptState23 | null;
+      requireReservations(value.reservedIds, [...referencedUuids([state?.source?.catalog, environment.catalog])]);
+    }
     const expected = await read();
     // v1 omitted the host's rollback tombstones. Do not infer missing history.
     const r = value.backupVersion === 1 ? await witness(value.state, expected) : await validateState(value.state);
     const reserved = value.backupVersion === 1 ? unionReservations(expected.issuedIds, r.state.history.issuedIds) : value.reservedIds;
-    validateReservations(reserved);
-    const required = unionReservations(r.state.history.issuedIds, value.backupVersion === 2 ? [...referencedUuids(r.source.state)] : []);
-    if (required.some(id => !reserved.includes(id))) throw new Error('backup_reservations_missing');
-    unionReservations(reserved, [...sourceUuids(r.source)]);
-    await checkReplacement(r.state, reserved, expected);
+    const required = value.backupVersion === 2 ? r.requiredReservations : r.state.history.issuedIds;
+    requireReservations(reserved, required);
+    unionReservations(reserved, r.requiredReservations);
+    await checkReplacement(r.state, r.source, reserved, expected);
     const recovery: Recovery = { raw, rawSha256: await backupRawDigest(raw), reservedIds: reserved,
       portable: !expected.committed.includes(await backupDigest(r.state)) || reserved.some(id => !expected.issuedIds.includes(id)) };
     const handle = await makeHandle(r.source, r.state.assignments, r.base, r.workspace, { expected, base: r.base, table: r.state.assignments, corrections: r.state.corrections, fresh: false, recovery });
@@ -196,7 +208,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     // Re-decode raw6/catalog/source, replay all commands and validate every field.
     if (detail.recovery) {
       if (proposed.action !== 'restore') throw new Error('unconfirmed_recovery');
-      await checkReplacement(handle.state, detail.recovery.reservedIds, detail.expected);
+      await checkReplacement(handle.state, handle.source, detail.recovery.reservedIds, detail.expected);
     } else if (detail.fresh) requireLiveMigration(handle.source, detail.table, detail.base);
     else await witness(handle.state, detail.expected).catch(async error => {
       // An edit candidate is not committed yet; authenticate the unchanged base
@@ -211,7 +223,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     if (!sameAttemptData(replay.environment.target, environment.target)) throw new Error('target_catalog_changed');
     const raw = JSON.stringify(replay.state), digest = await backupDigest(replay.state);
     const next: AuthorityRecord = { raw, revision: detail.expected.revision + 1,
-      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, replay.state.history.issuedIds, [...referencedUuids(replay.source.state)], detail.recovery?.reservedIds ?? []) };
+      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
     validateAuthority(next);
     if (utf8Bytes(JSON.stringify(next)) > maxRecordBytes) throw new Error(`capacity_limit: ${maxRecordBytes} bytes。archiveは省略しません。`);
     // Same lock as legacy Planner. IDB adds atomic CAS + one-record put; no

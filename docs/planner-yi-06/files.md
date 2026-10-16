@@ -9,6 +9,7 @@
 - `docs/planner-year-independent-migration.md`
 - `docs/planner-yi-06/README.md`
 - `docs/planner-yi-06/acceptance-p1.md`
+- `docs/planner-yi-06/acceptance-p2.md`
 - `docs/planner-yi-06/acceptance.md`
 - `docs/planner-yi-06/backup-contract.md`
 - `docs/planner-yi-06/baseline-browser-failure.txt`
@@ -22,6 +23,11 @@
 - `docs/planner-yi-06/p1-production-preview.json`
 - `docs/planner-yi-06/p1-regression-results.json`
 - `docs/planner-yi-06/p1-test-results.json`
+- `docs/planner-yi-06/p2-browser-results.json`
+- `docs/planner-yi-06/p2-build-comparison.json`
+- `docs/planner-yi-06/p2-capacity.json`
+- `docs/planner-yi-06/p2-regression-results.json`
+- `docs/planner-yi-06/p2-test-results.json`
 - `docs/planner-yi-06/persistence-contract.md`
 - `docs/planner-yi-06/portable-recovery.md`
 - `docs/planner-yi-06/production-preview.json`

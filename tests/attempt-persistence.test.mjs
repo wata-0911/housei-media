@@ -11,6 +11,7 @@ import { PLANNER_WRITE_LOCK } from '../src/planner/backup/storage.ts';
 import { buildMigrationTarget } from '../src/planner/attempts/migration/transform.ts';
 import { applyCommand } from '../src/planner/attempts/workbench/operations.ts';
 import { makeAttempt } from '../src/planner/attempts/workbench/catalogView.ts';
+import { catalogUuids, referencedUuids, requireReservations, sourceUuids } from '../src/planner/attempts/persistence/identity.ts';
 
 const locks = { request: async (name, options, action) => { assert.equal(name, PLANNER_WRITE_LOCK); assert.deepEqual(options, { mode: 'exclusive' }); return action(); } };
 function memory() {
@@ -175,7 +176,7 @@ test('new UUIDs cannot collide with retained non-Attempt IDs or each other',asyn
 });
 
 const consent = p => ({acceptedBackupRawSha256:p.recovery.rawSha256,protectedBackupRaw:p.recovery.raw});
-async function envelope(state,reservedIds=state.history.issuedIds){const body={format:'hosei-attempt-backup',backupVersion:2,createdAt:'2026-10-16T00:00:00.000Z',state,reservedIds};return JSON.stringify({...body,sha256:await backupDigest(body)});}
+async function envelope(state,reservedIds=[...new Set([...state.history.issuedIds,...referencedUuids([JSON.parse(state.source.raw),state.source.catalog,env.catalog,...state.corrections.map(c=>JSON.parse(c.originalRaw))])])]){const body={format:'hosei-attempt-backup',backupVersion:2,createdAt:'2026-10-16T00:00:00.000Z',state,reservedIds};return JSON.stringify({...body,sha256:await backupDigest(body)});}
 async function rehashBackup(value){const {sha256,...body}=value;void sha256;return JSON.stringify({...body,sha256:await backupDigest(body)});}
 async function externalState(loaded,commands,reserved=[]){
  const table=structuredClone(loaded.state.assignments);table.reservedIds.push(...reserved);
@@ -229,18 +230,18 @@ for(const kind of ['operation','attempt','record','todo'])test(`portable replay 
  if(kind==='operation'){command=add();command.operationId=`hosei:attempt-op:${id}`;command.attempt.creationOperationId=command.operationId;}
  else if(kind==='attempt'){command=add();command.attempt.id=`hosei:attempt:${id}`;}
  else command={kind:'add_record',operationId:newOperationId(),record:{id:kind==='record'?`hosei:owned:${id}`:newRecordId(),kind:'todo',owner:null,payload:{id:kind==='todo'?id:crypto.randomUUID(),text:'collision',done:false}}};
- const state=await externalState(loaded,[command],[reserved]),store=memory();await assert.rejects(create(store).inspectBackup(await envelope(state)),/historical_id_reused/);assert.equal(store.writes,0);
+ const state=await externalState(loaded,[command],[reserved]),store=memory();await assert.rejects(create(store).inspectBackup(await envelope(state)),/historical_id_reused|reservation_uuid_collision/);assert.equal(store.writes,0);
 });
 for(const pick of [h=>h.state.retained.publicCourses[0].id,h=>h.source.context.catalog.institutionalCourses[0].id.split(':').at(-1),h=>h.source.sourceCatalog.offerings[0].id,h=>h.state.assignments.attempts[0].operationId.split(':').at(-1)])test(`portable replay rejects TODO collision with source/catalog/assignment: ${pick}`,async()=>{
  const {loaded}=await start();const id=pick(loaded),command={kind:'add_record',operationId:newOperationId(),record:{id:newRecordId(),kind:'todo',owner:null,payload:{id,text:'collision',done:false}}};
  // Some old Offering IDs are not UUIDs; use the source catalog's first actual UUID.
  if(!/^[0-9a-f-]{36}$/.test(id)){const {referencedUuids}=await import('../src/planner/attempts/persistence/identity.ts');command.record.payload.id=[...referencedUuids(loaded.source.sourceCatalog)][0];}
- const state=await externalState(loaded,[command]);await assert.rejects(create(memory()).inspectBackup(await envelope(state)),/historical_id_reused/);
+ const state=await externalState(loaded,[command]);await assert.rejects(create(memory()).inspectBackup(await envelope(state)),/historical_id_reused|reservation_uuid_collision/);
 });
 test('portable replay rejects a deleted record UUID reused as a TODO ID',async()=>{
  const {loaded}=await start(),record={id:newRecordId(),kind:'todo',owner:null,payload:{id:crypto.randomUUID(),text:'first',done:false}};
  const commands=[{kind:'add_record',operationId:newOperationId(),record},{kind:'delete_todo',operationId:newOperationId(),recordId:record.id},{kind:'add_record',operationId:newOperationId(),record:{...record,id:newRecordId(),payload:{...record.payload,id:record.id.split(':').at(-1)}}}];
- const state=await externalState(loaded,commands);await assert.rejects(create(memory()).inspectBackup(await envelope(state)),/historical_id_reused/);
+ const state=await externalState(loaded,commands);await assert.rejects(create(memory()).inspectBackup(await envelope(state)),/historical_id_reused|reservation_uuid_collision/);
 });
 for(const change of [b=>b.reservedIds.pop(),b=>b.reservedIds.push(b.reservedIds[0]),b=>b.reservedIds.push('not-an-id'),b=>b.reservedIds.push('hosei:owned:'+b.reservedIds[0].split(':').at(-1)),b=>b.state.history.commands.push({kind:'undo',operationId:newOperationId(),attemptId:b.state.graph.attempts[0].id,removalOperationId:newOperationId()}),b=>b.state.source.rawFiles[Object.keys(b.state.source.rawFiles)[0]]+=' ',b=>b.state.schemaVersion=24,b=>b.extra=true])test(`portable rehashed malformed backup refuses without storage: ${change}`,async()=>{
  const {api,loaded}=await start(),value=JSON.parse(await api.createBackup(loaded)),store=memory();change(value);await assert.rejects(create(store).inspectBackup(await rehashBackup(value)));assert.deepEqual(store.snapshot(),emptyAuthority());
@@ -253,4 +254,96 @@ for(const failure of ['quota','write','no-lock','stale'])test(`portable ${failur
 test('portable source TODO cannot share the UUID of retained non-Attempt data',async()=>{
  const state=mixed();state.todos[0].id=state.publicCourses[0].id;const api=create(memory()),p=await api.prepareMigration(await api.inspectLegacy(JSON.stringify(state)));
  await assert.rejects(create(memory()).inspectBackup(await envelope(p.handle.state)),/source_todo_uuid_collision/);
+});
+
+let reservationFixturePromise;
+async function reservationFixture(){return reservationFixturePromise??=(async()=>{
+ const store=memory(),api=create(store),unusedSession=await api.inspectLegacy(JSON.stringify(mixed()));
+ const unused=unusedSession.table.attempts[0].attemptId;
+ const p=await api.prepareMigration(await api.inspectLegacy(JSON.stringify(mixed(),null,2)));
+ let loaded=await api.commit(p,true,null,p.sourceRaw);
+ const command=add(),record={id:newRecordId(),kind:'todo',owner:null,payload:{id:crypto.randomUUID(),text:'P2 deleted TODO',done:false}};
+ loaded=await save(api,loaded,[command,{kind:'add_record',operationId:newOperationId(),record},{kind:'delete_todo',operationId:newOperationId(),recordId:record.id},remove(command.attempt)]);
+ return {store,api,loaded,unused,command,record,backup:JSON.parse(await api.createBackup(loaded))};
+})();}
+test('P2 backup includes every source/catalog restriction, including institutional-only UUIDs, without issuing IDs',async()=>{
+ const {store,api,loaded,backup}=await reservationFixture(),before=store.snapshot();
+ const sourceOnly=referencedUuids(loaded.source.state),oldCatalog=referencedUuids(loaded.source.sourceCatalog);
+ const institutionalOnly=[...referencedUuids(loaded.source.context.catalog)].filter(id=>!sourceOnly.has(id)&&!oldCatalog.has(id));
+ assert.ok(institutionalOnly.length>0);
+ for(const id of sourceUuids(loaded.source))assert.ok(backup.reservedIds.includes(id),id);
+ for(const id of institutionalOnly)assert.ok(backup.reservedIds.includes(id),id);
+ const issue=crypto.randomUUID;crypto.randomUUID=()=>{throw new Error('backup must not issue UUIDs');};
+ try{await api.createBackup(loaded);}finally{crypto.randomUUID=issue;}
+ assert.deepEqual(store.snapshot(),before);
+ assert.deepEqual(backup.state.history.issuedIds,loaded.state.history.issuedIds);
+});
+test('P2 every source/catalog reservation is mandatory; rehashed source and catalog boundary omissions refuse',async t=>{
+ const {loaded,backup}=await reservationFixture(),store=memory(),receiver=create(store),allIds=[...sourceUuids(loaded.source)];
+ const required=(await replayState(loaded.state)).requiredReservations;
+ for(const id of allIds)assert.throws(()=>requireReservations(backup.reservedIds.filter(value=>value!==id),required),/backup_reservations_missing/,id);
+ const oldCatalog=[...referencedUuids(loaded.source.sourceCatalog)],institutional=[...referencedUuids(loaded.source.context.catalog)];
+ const ids=[...new Set([...referencedUuids(loaded.source.state),oldCatalog[0],oldCatalog.at(-1),institutional[0],institutional.at(-1)])];
+ for(const id of ids){
+  const raw=await rehashBackup({...backup,reservedIds:backup.reservedIds.filter(value=>value!==id)});
+  await assert.rejects(receiver.inspectBackup(raw),/backup_reservations_missing/,id);
+ }
+ assert.deepEqual(store.snapshot(),emptyAuthority());assert.equal(store.writes,0);
+ t.diagnostic(`Checked all ${allIds.length} source/catalog UUID omissions; rejected ${ids.length} rehashed source/catalog boundary files`);
+});
+for(const [label,pick] of [
+ ['initial Attempt',f=>f.loaded.state.assignments.attempts[0].attemptId],
+ ['initial operation',f=>f.loaded.state.assignments.attempts[0].operationId],
+ ['initial record',f=>f.loaded.state.assignments.records[0].recordId],
+ ['old receipt',f=>f.command.operationId],
+ ['deleted TODO',f=>f.record.payload.id],
+ ['deleted record',f=>f.record.id],
+ ['unused reservation',f=>f.unused],
+])test(`P2 missing ${label} reservation refuses without storage`,async()=>{
+ const fixture=await reservationFixture(),id=pick(fixture),store=memory();assert.ok(fixture.backup.reservedIds.includes(id));
+ const raw=await rehashBackup({...fixture.backup,reservedIds:fixture.backup.reservedIds.filter(value=>value!==id)});
+ await assert.rejects(create(store).inspectBackup(raw),/backup_reservations_missing/);assert.deepEqual(store.snapshot(),emptyAuthority());
+});
+test('P2 catalog UUID with another namespace cannot replace the required bare reservation',async()=>{
+ const {loaded,backup}=await reservationFixture(),id=[...catalogUuids(loaded.source)][0],store=memory();
+ const raw=await rehashBackup({...backup,reservedIds:[...backup.reservedIds.filter(value=>value!==id),`hosei:owned:${id}`]});
+ await assert.rejects(create(store).inspectBackup(raw),/reservation_uuid_collision/);assert.deepEqual(store.snapshot(),emptyAuthority());
+});
+test('P2 empty-host restore, reload, a new Attempt and rollback preserve the entire reservation set',async()=>{
+ const {backup}=await reservationFixture(),store=memory();let api=create(store),p=await api.inspectBackup(JSON.stringify(backup));
+ let loaded=await api.commit(p,true,null,p.sourceRaw,consent(p));
+ const restored=store.snapshot().issuedIds;assert.deepEqual(new Set(restored),new Set(backup.reservedIds));
+ api=create(store);loaded=await api.load();assert.deepEqual(store.snapshot().issuedIds,restored);
+ const command=add();loaded=await save(api,loaded,[command]);const later=store.snapshot();
+ for(const id of restored)assert.ok(later.issuedIds.includes(id),id);
+ p=await api.inspectBackup(JSON.stringify(backup));loaded=await api.commit(p,true,p.previousRaw,p.sourceRaw,consent(p));
+ assert.deepEqual(new Set(store.snapshot().issuedIds),new Set(later.issuedIds));
+ assert.deepEqual(loaded.state,backup.state);
+ await assert.rejects(api.prepareEdits(loaded,[command]),/historical_id_reused/);
+ const exported=JSON.parse(await api.createBackup(loaded));for(const id of later.issuedIds)assert.ok(exported.reservedIds.includes(id),id);
+});
+test('P2 correction sources, old assignments and their unused reservations remain mandatory',async()=>{
+ const state=mixed();state.mediaSchoolingProgress[media.id].assessments[0].scheduledDate='2027-02-30';
+ const store=memory(),api=create(store),unusedSession=await api.inspectLegacy(JSON.stringify(state));
+ const session=await api.inspectLegacy(JSON.stringify(state,null,2)),proposal=await api.proposeDate(session,media.id,'assessment/raw~id','2028-02-29');
+ const corrected=await api.confirmDate(session,proposal,true),p=await api.prepareMigration(corrected),loaded=await api.commit(p,true,null,p.sourceRaw);
+ const backup=JSON.parse(await api.createBackup(loaded)),original=await decode(state);
+ for(const id of sourceUuids(original.source))assert.ok(backup.reservedIds.includes(id),id);
+ const required=[session.table.attempts[0].attemptId,session.table.records[0].recordId,unusedSession.table.attempts[0].operationId];
+ for(const id of required){
+  assert.ok(backup.reservedIds.includes(id),id);
+  await assert.rejects(create(memory()).inspectBackup(await rehashBackup({...backup,reservedIds:backup.reservedIds.filter(value=>value!==id)})),/backup_reservations_missing/);
+ }
+ const receiver=create(memory()),restored=await receiver.inspectBackup(JSON.stringify(backup));
+ assert.deepEqual((await receiver.commit(restored,true,null,restored.sourceRaw,consent(restored))).state,loaded.state);
+});
+test('P2 incomplete older development v2 refuses; a known local checkpoint can re-export a complete v2 without writes',async()=>{
+ const {store,api,loaded}=await start(),backup=JSON.parse(await api.createBackup(loaded));
+ const oldMinimum=[...new Set([...loaded.state.history.issuedIds,...referencedUuids(loaded.source.state)])];
+ const oldRaw=await rehashBackup({...backup,reservedIds:oldMinimum}),before=store.snapshot();
+ await assert.rejects(api.inspectBackup(oldRaw),/backup_reservations_missing/);assert.deepEqual(store.snapshot(),before);
+ store.corrupt(record=>record.issuedIds=oldMinimum);const legacyHost=store.snapshot(),reader=create(store),handle=await reader.load();
+ const complete=JSON.parse(await reader.createBackup(handle));assert.deepEqual(store.snapshot(),legacyHost);
+ for(const id of sourceUuids(handle.source))assert.ok(complete.reservedIds.includes(id),id);
+ await save(reader,handle,[]);for(const id of complete.reservedIds)assert.ok(store.snapshot().issuedIds.includes(id),id);
 });

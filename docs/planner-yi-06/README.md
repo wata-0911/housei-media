@@ -4,6 +4,8 @@ Issue [#175](https://github.com/wata-0911/housei-media/issues/175)。基準は�
 
 **独立監査P1修正で、backup v2から別profile・別originの空DBへ可搬復旧できる契約を追加した。** 通常再読込は引き続きhostの確定履歴を必須とする。可搬復旧は未信頼ファイルの全整合性検証と利用者による明示採用を分離し、発行者認証とは表示しない。旧Attempt backup v1はstate外の予約を欠くため同一host復元のみを維持する。[可搬復旧の保証・脅威モデル](portable-recovery.md)、[保存契約](persistence-contract.md)、[backup契約](backup-contract.md)、[P1受入結果](acceptance-p1.md)、[初回実装の記録](acceptance.md)、[引継ぎ](handoff.md)。
 
+**追加P2で予約集合を厳格化した。** 現在/訂正前source・両catalog・全replay履歴の必須予約を共通に定義し、書出し・復元・commitへ適用する。以前の開発用v2で必須IDが欠けるファイルは拒否する。元hostが残る場合は完全なv2を再書出しできる。[P2受入結果と互換性](acceptance-p2.md)。
+
 ## 実装の構成
 
 | 場所 | 責務 |

@@ -19,6 +19,7 @@ schema23・新backupは隔離開発用。通常のPlannerPage、v22 primary/reco
 
 ## P2監査重点
 
+- 追加P2では必須予約集合を現在/全訂正前source・両catalog・全履歴から明示計算し、v2の完全収録を要求する。旧開発用v2の欠落はSHA再計算後も拒否し、元hostが残る場合の再書出しだけを案内する。[受入記録](acceptance-p2.md)。
 - 初期割当の再起動時再構成とYI-04 WeakSet非緩和。日付訂正chainの旧owner/assessment ID/原rawと全旧ID予約。
 - LIFO Undoの複数削除順、receipt欠損/重複/順序改変、snapshot/previousPosition/owner/payload、detached進捗編集。
 - rollback復元後も永久ID予約集合が縮まないこと。同操作再送no-opと同ID別内容拒否。

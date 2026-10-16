@@ -7,7 +7,7 @@ import { verifyMigrationPreservation } from '../migration/preview';
 import { buildMigrationTarget } from '../migration/transform';
 import { applyCommand, createWorkspace, type Workspace } from '../workbench/operations';
 import { STATE_FORMAT, STATE_VERSION, PERSISTENCE_RULE, exactKeys, type AttemptState23, type SourceEvidence, type CorrectionEvidence } from './contracts';
-import { checkFreshCommandIds, checkSourceTodoIds, idTail, sourceUuids, unionReservations, validateReservations } from './identity';
+import { checkFreshCommandIds, checkSourceTodoIds, idTail, requiredReservations, sourceUuids, unionReservations, validateReservations } from './identity';
 
 export function sourceEvidence(source: SourceArchive): SourceEvidence {
   return structuredClone({ kind: source.kind, schemaVersion: 22, raw: source.raw, rawSha256: source.rawSha256,
@@ -67,12 +67,14 @@ export async function replayState(value: unknown) {
     if (next === workspace) throw new Error('duplicate_receipt');
     freshIds.forEach(id => occupied.add(idTail(id))); workspace = next;
   }
+  const previousSources: SourceArchive[] = [];
   for (let i = 0; i < state.corrections.length; i++) {
     const c = state.corrections[i];
     exactKeys(c, ['originalRaw', 'proposedRaw', 'offeringId', 'assessmentId', 'oldDate', 'newDate', 'originalAssignments'], 'correction');
     if (c.proposedRaw !== (state.corrections[i + 1]?.originalRaw ?? source.raw)) throw new Error('correction_chain');
     const original = await decodeMigrationSource(c.originalRaw, environment, state.source.catalog);
     if (original.status !== 'decoded') throw new Error('correction_original');
+    previousSources.push(original.source);
     checkSourceTodoIds(original.source);
     validateReservations(c.originalAssignments.reservedIds);
     unionReservations(c.originalAssignments.reservedIds, [...sourceUuids(original.source)]);
@@ -97,5 +99,6 @@ export async function replayState(value: unknown) {
   unionReservations(issuedIds(state.assignments, workspace, state.corrections));
   const expected = await encodeState(source, state.assignments, base, workspace, environment.target, state.corrections);
   if (!sameAttemptData(state, expected)) throw new Error('state_replay_mismatch');
-  return { state: expected, workspace, source, base, environment };
+  return { state: expected, workspace, source, base, environment,
+    requiredReservations: requiredReservations(source, expected.history.issuedIds, previousSources) };
 }

@@ -109,6 +109,27 @@ test('portable A to empty B on another origin: explicit adoption, atomic initial
  const restored=await rawState(page);assert.deepEqual(restored.graph,fixture.beforeDeletion.graph);assert.deepEqual(restored.retained,fixture.state.retained);assert.deepEqual(restored.source,fixture.state.source);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  if(process.env.YI06_SCREENSHOT_DIR){await page.screenshot({path:join(process.env.YI06_SCREENSHOT_DIR,'portable-390.png'),fullPage:true});}
+ const reservations=(await storeSnapshot(page)).issuedIds;
+ await add(page);await save(page);await page.reload();await page.getByRole('status').filter({hasText:'再検証して読み込み'}).waitFor({timeout:60000});
+ const afterNewAttempt=await storeSnapshot(page);for(const id of reservations)assert.ok(afterNewAttempt.issuedIds.includes(id),id);
+ for(const id of JSON.parse(fixture.backup).reservedIds)assert.ok(afterNewAttempt.issuedIds.includes(id),id);
+});
+test('P2 source/catalog omissions and namespace aliases refuse rehashed files in Chromium',async t=>{
+ const fixture=await portableFixture(t),{page}=await open(t),backup=JSON.parse(fixture.backup);
+ const {referencedUuids}=await import('../src/planner/attempts/persistence/identity.ts');const {backupDigest}=await import('../src/planner/backup/plannerBackupCompatibility.ts');
+ const oldCatalog=referencedUuids(fixture.state.source.catalog),source=referencedUuids(JSON.parse(fixture.state.source.raw));
+ const institutional=await page.evaluate(async()=>{const {loadMigrationEnvironment}=await import('/dev/attempts/fixtures.ts');return (await loadMigrationEnvironment()).catalog;});
+ const institutionalOnly=[...referencedUuids(institutional)].find(id=>!oldCatalog.has(id)&&!source.has(id));assert.ok(institutionalOnly);
+ for(const id of referencedUuids([fixture.state.source.catalog,institutional]))assert.ok(backup.reservedIds.includes(id),id);
+ const ids=[institutionalOnly,[...source][0],fixture.state.assignments.attempts[0].attemptId,fixture.state.history.commands[0].operationId,fixture.deleted.payload.id];
+ for(const [index,id] of [...ids,institutionalOnly].entries()){
+  const body={...backup,reservedIds:backup.reservedIds.filter(value=>value!==id)};delete body.sha256;
+  if(index===ids.length)body.reservedIds.push(`hosei:owned:${id}`);
+  const raw=JSON.stringify({...body,sha256:await backupDigest(body)});
+  await page.getByLabel('新backupファイル').setInputFiles({name:'missing-reservation.json',mimeType:'application/json',buffer:Buffer.from(raw)});
+  await page.getByRole('alert').filter({hasText:index===ids.length?'reservation_uuid_collision':'backup_reservations_missing'}).waitFor({timeout:60000});
+  assert.deepEqual(await dbNames(page),[]);assert.equal(await page.getByRole('button',{name:'確認して隔離保存'}).count(),0);
+ }
 });
 test('portable malformed, rehashed receipt, raw archive and future version refuse with empty DB',async t=>{
  const fixture=await portableFixture(t),{page}=await open(t);const {backupDigest}=await import('../src/planner/backup/plannerBackupCompatibility.ts');

@@ -1,0 +1,163 @@
+{
+  "date": "2026-10-17 JST",
+  "parentCommit": "c72746d1cf0415b027e127fc513e8ef2a6ee5dd3",
+  "baselineCommit": "a0fa267ca1acd4663c399da394552c46de366cbc",
+  "finalRuns": [
+    {
+      "command": "npm run test:attempts",
+      "log": "/private/tmp/yi06-p2-test-attempts.log",
+      "tests": 132,
+      "pass": 132,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:migration",
+      "log": "/private/tmp/yi06-p2-test-migration.log",
+      "tests": 133,
+      "pass": 133,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:attempt-ui",
+      "log": "/private/tmp/yi06-p2-test-attempt-ui.log",
+      "tests": 84,
+      "pass": 84,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:institutional",
+      "log": "/private/tmp/yi06-p2-test-institutional.log",
+      "tests": 36,
+      "pass": 36,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:planner",
+      "log": "/private/tmp/yi06-p2-test-planner.log",
+      "tests": 3492,
+      "pass": 3492,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Includes all 103 YI-06 cases. At invocation, the omission case exhaustively inspected 2,094 rehashed files. After it started, the permanent version was bounded to all 2,094 set checks plus rehashed source/catalog boundary files; that final test is verified separately below. Application code unchanged. Do not sum overlapping suites."
+    },
+    {
+      "command": "npm run test:extension",
+      "log": "/private/tmp/yi06-p2-test-extension.log",
+      "tests": 54,
+      "pass": 54,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:bookmarklet",
+      "log": "/private/tmp/yi06-p2-test-bookmarklet.log",
+      "tests": 168,
+      "pass": 168,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:attempt-persistence-browser",
+      "log": "/private/tmp/yi06-p2-test-attempt-persistence-browser.log",
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:attempt-ui-browser",
+      "log": "/private/tmp/yi06-p2-test-attempt-ui-browser.log",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:planner-browser",
+      "log": "/private/tmp/yi06-p2-test-planner-browser.log",
+      "tests": 44,
+      "pass": 43,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Known #145 media draft restore timeout: 43 pass / 1 fail / 0 skip. Existing test unchanged; baseline dev is still a0fa267 and its reproduction is recorded in p1-baseline-browser-failure.txt."
+    }
+  ],
+  "earlierAndDiagnosticRuns": [
+    {
+      "command": "Targeted initial P2/replay tests",
+      "log": "/private/tmp/yi06-p2-targeted.log",
+      "tests": 14,
+      "pass": 10,
+      "fail": 4,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "10 pass / 4 fail: collision test envelopes were missing institutional catalog reservations and failed at the new preflight rather than the intended collision check. Test fixture was completed; rejection assertions retained."
+    },
+    {
+      "command": "Targeted replay and no-ID-issuance recheck",
+      "log": "/private/tmp/yi06-p2-targeted-recheck.log",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "10 pass; collision fixtures now carry all mandatory references."
+    },
+    {
+      "command": "Targeted exhaustive source/catalog omission test",
+      "log": "/private/tmp/yi06-p2-all-uuid-omissions.log",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "All 2,094 individual UUID omissions rejected by inspectBackup after recomputing SHA. This same test is included in the final Planner suite."
+    },
+    {
+      "command": "Final permanent source/catalog omission regression",
+      "log": "/private/tmp/yi06-p2-permanent-omission-regression.log",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "All 2,094 UUID omissions checked against the reservation contract; source UUIDs plus catalog boundary files rehashed and rejected by inspectBackup. Keeps every-PR CI bounded; full 2,094-file actual API proof is preserved above."
+    }
+  ],
+  "uniqueYI06UnitCasesVerified": 103,
+  "addedYI06UnitCases": 13,
+  "uniqueYI06BrowserCasesVerified": 17,
+  "addedYI06BrowserCases": 1,
+  "individualSourceCatalogOmissionsVerified": 2094,
+  "browser": "Playwright + Chromium headless shell 1243; independent contexts, distinct origins, 1280/390px",
+  "nonTestCommands": "See p2-regression-results.json; all exit 0. Flag-enabled production build also exit 0.",
+  "unperformed": [
+    "iPhone Safari / Files / Firefox / screen reader / IME devices",
+    "physical disk exhaustion",
+    "large long-term histories and low-performance devices"
+  ],
+  "limitations": [
+    "Incomplete older development v2 files are rejected even on the original host. A surviving known local checkpoint can re-export a complete v2.",
+    "No external issuer authentication or proof of unknown reservations erased together with a lost host.",
+    "No merge of unknown overlapping ID histories."
+  ],
+  "finalLintAfterTestAdjustment": {
+    "command": "npm run lint",
+    "exitCode": 0,
+    "log": "/private/tmp/yi06-p2-lint-final.log"
+  }
+}

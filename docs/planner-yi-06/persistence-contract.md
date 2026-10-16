@@ -27,6 +27,8 @@ replay関数単体は情報の整合性検査であり保存権限を返さな�
 
 削除したTODOの元ID、削除record ID、過去のoperation/Attempt IDはreceiptとhost予約集合に残す。過去backupへ戻してもhost予約集合は縮小しないため、後で発行したIDを再利用できない。pending migrationのIDはページ内でも予約し、次の確定保存に含める。保存前にページを閉じたpreviewのIDには永続保証を主張しない（previewを無副作用にするため）。
 
+P2以後のcommitは、再検証済み全履歴IDと、現在/全訂正前sourceのstate・旧catalog・制度catalogの全UUIDを共通の必須集合としてunionする。通常保存・可搬復旧・巻戻しで同じ規則を使い、既存予約を減らさない。reloadとbackup書出しはhostへ書き込まない。P2前の既知checkpointは従来どおり全replayでloadし、完全なv2を再書出しできるが、必須予約を欠く外部v2ファイルの復元は拒否する。[集合の定義と互換性](portable-recovery.md#p2必須予約集合)。
+
 新規IDは同じ保存前draftのreceipt・使用済みTODO ID、旧stateの非Attempt情報、元/対応catalogのUUIDとも照合する。prefixの異なる操作IDとTODO IDでも同じUUIDの再利用は拒否する。
 
 UndoはYI-05と同じ削除LIFO。初期targetから削除要求を再実行するので、削除snapshot・previousPosition・順序は保存ticketの自己申告を信用しない。履歴欠落、順序逆転、owner/payload/ticket改変は一致検証で拒否。detached ownerの合法な進捗編集は保持し、Undoはその時点のrecordを戻さない/消さない。
@@ -43,6 +45,6 @@ UndoはYI-05と同じ削除LIFO。初期targetから削除要求を再実行す�
 
 ## 容量
 
-[capacity.json](capacity.json)は合成mixed v22を実測。raw6は1,163,528 bytes、保存stateは約3.24MB、host recordのJSON表現は約3.64MB。catalogの元版/target版を勝手に省略しない。上限はhost record JSON UTF-8で32MiB（testは注入した小上限でも拒否を検証）。IDB実ディスク使用量とは別の保守的なアプリ上限であり、ブラウザquotaの可用性保証ではない。実quota失敗はtransaction abortを正とする。
+[p2-capacity.json](p2-capacity.json)は合成mixed v22を実測。raw6は1,163,528 bytes、保存stateは3,235,432 bytes、host recordのJSON表現は3,723,487 bytes、全予約2,105件を含むbackup v2は3,317,871 bytes。P1時点の[capacity.json](capacity.json)も履歴として保持する。catalogの元版/target版を勝手に省略しない。上限はhost record JSON UTF-8で32MiB（testは注入した小上限でも拒否を検証）。IDB実ディスク使用量とは別の保守的なアプリ上限であり、ブラウザquotaの可用性保証ではない。実quota失敗はtransaction abortを正とする。
 
 過去checkpointのSHA集合・ID予約・receipt・訂正履歴を自動削除しない。増加して上限に達した場合はfail-closed。履歴compaction/発行者認証/巨大graphでの応答改善は後続課題。

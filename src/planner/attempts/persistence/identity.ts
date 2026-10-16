@@ -16,7 +16,17 @@ export function referencedUuids(value: unknown): Set<string> {
   visit(value); return ids;
 }
 export function sourceUuids(source: SourceArchive): Set<string> {
-  return referencedUuids([source.state, source.sourceCatalog, source.context.catalog]);
+  return new Set([...referencedUuids(source.state), ...catalogUuids(source)]);
+}
+export function catalogUuids(source: SourceArchive): Set<string> {
+  return referencedUuids([source.sourceCatalog, source.context.catalog]);
+}
+/** Complete backup/commit minimum, computed only after integrity replay.
+ * Replayed history includes initial assignments, every receipt, deleted TODOs,
+ * unused reservations and all earlier correction assignments. Catalog/source
+ * references from every decoded correction source are restrictions as well. */
+export function requiredReservations(source: SourceArchive, historyIds: string[], previousSources: readonly SourceArchive[] = []): string[] {
+  return unionReservations(historyIds, [...sourceUuids(source)], ...previousSources.map(previous => [...sourceUuids(previous)]));
 }
 export function checkSourceTodoIds(source: SourceArchive): void {
   const withoutTodoIds = { ...source.state, todos: source.state.todos.map(todo => {
@@ -33,6 +43,11 @@ export function validateReservations(value: unknown): asserts value is string[] 
 }
 export function unionReservations(...groups: readonly string[][]): string[] {
   const ids = [...new Set(groups.flat())]; validateReservations(ids); return ids;
+}
+export function requireReservations(reserved: unknown, required: string[]): asserts reserved is string[] {
+  validateReservations(reserved);
+  unionReservations(reserved, required);
+  if (required.some(id => !reserved.includes(id))) throw new Error('backup_reservations_missing');
 }
 export function newCommandIds(command: Command): string[] {
   return [command.operationId, ...(command.kind === 'add' ? [command.attempt.id]
