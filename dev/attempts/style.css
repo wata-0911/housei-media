@@ -1,0 +1,7 @@
+@config "./tailwind.config.js";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+body { margin: 0; background: #f8fafc; font-family: system-ui, sans-serif; }
+button, input, select, summary { touch-action: manipulation; }
+summary { cursor: pointer; padding: .5rem 0; }
