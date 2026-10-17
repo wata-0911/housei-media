@@ -1,0 +1,163 @@
+{
+  "date": "2026-10-16 JST",
+  "baselineCommit": "a0fa267ca1acd4663c399da394552c46de366cbc",
+  "runs": [
+    {
+      "command": "npm run test:attempt-persistence",
+      "log": "/private/tmp/yi06-unit-final.log",
+      "tests": 63,
+      "pass": 63,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Full suite at invocation: 63 cases. One later UUID collision case was verified by the targeted run below."
+    },
+    {
+      "command": "node --import tsx --test --test-name-pattern=\"new UUIDs|preview and cancellation\" tests/attempt-persistence.test.mjs",
+      "log": "/private/tmp/yi06-collision.log",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Two selected cases: one new collision case and one repeated preview case. Current unique unit cases: 64."
+    },
+    {
+      "command": "npm run test:attempt-persistence-browser",
+      "log": "/private/tmp/yi06-browser-final.log",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Full suite at invocation: 10 cases. One later protection case was verified by the targeted run below."
+    },
+    {
+      "command": "node --import tsx --test --test-name-pattern=\"corrupt saved original\" tests/attempt-persistence.browser.mjs",
+      "log": "/private/tmp/yi06-protection-browser.log",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "One added browser case. Current unique browser cases: 11."
+    },
+    {
+      "command": "npm run test:attempts",
+      "log": "/private/tmp/yi06-test-attempts.log",
+      "tests": 132,
+      "pass": 132,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:migration",
+      "log": "/private/tmp/yi06-test-migration.log",
+      "tests": 133,
+      "pass": 133,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:attempt-ui",
+      "log": "/private/tmp/yi06-test-attempt-ui.log",
+      "tests": 84,
+      "pass": 84,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:attempt-ui-browser",
+      "log": "/private/tmp/yi06-legacy-ui-browser.log",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:institutional",
+      "log": "/private/tmp/yi06-test-institutional.log",
+      "tests": 36,
+      "pass": 36,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:planner",
+      "log": "/private/tmp/yi06-test-planner.log",
+      "tests": 3452,
+      "pass": 3452,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Includes 63 YI-06 cases and existing suites; do not sum overlapping suite counts. One later new UUID collision case is covered separately."
+    },
+    {
+      "command": "npm run test:extension",
+      "log": "/private/tmp/yi06-test-extension.log",
+      "tests": 54,
+      "pass": 54,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:bookmarklet",
+      "log": "/private/tmp/yi06-test-bookmarklet.log",
+      "tests": 168,
+      "pass": 168,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:planner-browser",
+      "log": "/private/tmp/yi06-legacy-planner-browser.log",
+      "tests": 44,
+      "pass": 43,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "One known #145 media draft restore failure; reproduced on clean latest dev, not skipped or modified."
+    },
+    {
+      "command": "node --import tsx --test --test-name-pattern='new UUIDs|CRUD replay|deleted TODO' tests/attempt-persistence.test.mjs",
+      "log": "/private/tmp/yi06-pending-collision-after.log",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Reverification after strengthening UUID reservation to include pending draft receipts and both catalogs. The existing collision case gained assertions; unique case count remains 64. The added assertion failed before the fix."
+    },
+    {
+      "command": "node --import tsx --test --test-name-pattern='Chromium .*px' tests/attempt-persistence.browser.mjs",
+      "log": "/private/tmp/yi06-collision-browser.log",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "PC/390px migration, reload, CRUD, backup and repeated restore reverified after the UUID reservation fix; repeated cases are not added to the unique count."
+    }
+  ],
+  "uniqueYI06UnitCasesVerified": 64,
+  "uniqueYI06BrowserCasesVerified": 11,
+  "browser": "Playwright + Chromium headless shell 1243; desktop 1280x900 and mobile-width 390x900",
+  "nonTestCommands": "See regression-results.json; all exit 0",
+  "productionArtifactCount": 12,
+  "unperformed": [
+    "iPhone Safari device",
+    "Files device workflow",
+    "Firefox",
+    "screen reader hardware",
+    "Japanese IME hardware",
+    "physical disk exhaustion",
+    "portable restore after database loss (unsupported)"
+  ]
+}

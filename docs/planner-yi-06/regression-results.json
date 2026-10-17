@@ -1,0 +1,90 @@
+[
+  {
+    "command": "npm run test:attempts",
+    "exitCode": 0,
+    "seconds": 2.85,
+    "log": "/private/tmp/yi06-test-attempts.log"
+  },
+  {
+    "command": "npm run test:migration",
+    "exitCode": 0,
+    "seconds": 283.91,
+    "log": "/private/tmp/yi06-test-migration.log"
+  },
+  {
+    "command": "npm run test:attempt-ui",
+    "exitCode": 0,
+    "seconds": 25.47,
+    "log": "/private/tmp/yi06-test-attempt-ui.log"
+  },
+  {
+    "command": "npm run test:institutional",
+    "exitCode": 0,
+    "seconds": 7.14,
+    "log": "/private/tmp/yi06-test-institutional.log"
+  },
+  {
+    "command": "npm run test:planner",
+    "exitCode": 0,
+    "seconds": 787.36,
+    "log": "/private/tmp/yi06-test-planner.log"
+  },
+  {
+    "command": "npm run test:extension",
+    "exitCode": 0,
+    "seconds": 1.01,
+    "log": "/private/tmp/yi06-test-extension.log"
+  },
+  {
+    "command": "npm run test:bookmarklet",
+    "exitCode": 0,
+    "seconds": 2.41,
+    "log": "/private/tmp/yi06-test-bookmarklet.log"
+  },
+  {
+    "command": "npm run typecheck",
+    "exitCode": 0,
+    "seconds": 10.38,
+    "log": "/private/tmp/yi06-typecheck.log"
+  },
+  {
+    "command": "npm run lint",
+    "exitCode": 0,
+    "seconds": 16.1,
+    "log": "/private/tmp/yi06-lint.log"
+  },
+  {
+    "command": "npm run build",
+    "exitCode": 0,
+    "seconds": 7.08,
+    "log": "/private/tmp/yi06-build.log"
+  },
+  {
+    "command": "git diff --check",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "command": "python3 docs/planner-yi-01/verify.py",
+    "exitCode": 0,
+    "output": "{\n  \"result\": \"PASS\",\n  \"counts\": {\n    \"CurriculumCourse\": 321,\n    \"Mapping\": 502,\n    \"Offering\": 686,\n    \"legacyCourse\": 209,\n    \"officialPhysicalRows\": 502,\n    \"officialCodeRowsSelected\": 578\n  },\n  \"classification\": {\n    \"CurriculumCourse\": {\n      \"safe\": 221,\n      \"ambiguous\": 85,\n      \"conflict\": 6,\n      \"unmatched\": 9\n    },\n    \"Mapping\": {\n      \"safe\": 273,\n      \"ambiguous\": 214,\n      \"conflict\": 6,\n      \"unmatched\": 9\n    }\n  },\n  \"officialRowLocatorMatches\": 502,\n  \"placementDefinition\": {\n    \"safe\": 496,\n    \"conflict\": 6\n  },\n  \"officialFootnotes\": 84,\n  \"changeScopeChecked\": false,\n  \"historicalContinuity\": \"unverified; no global curriculum/graduation PASS\"\n}\n"
+  },
+  {
+    "command": "npm run typecheck",
+    "exitCode": 0,
+    "log": "/private/tmp/yi06-typecheck-collision.log",
+    "note": "Reverified after the pending UUID reservation fix."
+  },
+  {
+    "command": "npm run lint",
+    "exitCode": 0,
+    "log": "/private/tmp/yi06-lint-collision.log",
+    "note": "Reverified after the pending UUID reservation fix."
+  },
+  {
+    "command": "npm run build",
+    "exitCode": 0,
+    "log": "/private/tmp/yi06-build-final.log",
+    "note": "Reverified after the pending UUID reservation fix."
+  }
+]

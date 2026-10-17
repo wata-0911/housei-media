@@ -1,0 +1,72 @@
+[
+  {
+    "command": "npm run typecheck",
+    "exitCode": 0,
+    "seconds": 33.4,
+    "log": "/private/tmp/yi06-p2-typecheck.log"
+  },
+  {
+    "command": "npm run lint",
+    "exitCode": 0,
+    "seconds": 27.96,
+    "log": "/private/tmp/yi06-p2-lint.log"
+  },
+  {
+    "command": "npm run test:attempts",
+    "exitCode": 0,
+    "seconds": 4.67,
+    "log": "/private/tmp/yi06-p2-test-attempts.log"
+  },
+  {
+    "command": "npm run test:migration",
+    "exitCode": 0,
+    "seconds": 287.1,
+    "log": "/private/tmp/yi06-p2-test-migration.log"
+  },
+  {
+    "command": "npm run test:attempt-ui",
+    "exitCode": 0,
+    "seconds": 19.92,
+    "log": "/private/tmp/yi06-p2-test-attempt-ui.log"
+  },
+  {
+    "command": "npm run test:institutional",
+    "exitCode": 0,
+    "seconds": 4.69,
+    "log": "/private/tmp/yi06-p2-test-institutional.log"
+  },
+  {
+    "command": "npm run test:planner",
+    "exitCode": 0,
+    "seconds": 1490.05,
+    "log": "/private/tmp/yi06-p2-test-planner.log"
+  },
+  {
+    "command": "npm run test:extension",
+    "exitCode": 0,
+    "seconds": 0.52,
+    "log": "/private/tmp/yi06-p2-test-extension.log"
+  },
+  {
+    "command": "npm run test:bookmarklet",
+    "exitCode": 0,
+    "seconds": 2.16,
+    "log": "/private/tmp/yi06-p2-test-bookmarklet.log"
+  },
+  {
+    "command": "npm run build",
+    "exitCode": 0,
+    "seconds": 6.73,
+    "log": "/private/tmp/yi06-p2-build.log"
+  },
+  {
+    "command": "git diff --check",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "command": "python3 docs/planner-yi-01/verify.py",
+    "exitCode": 0,
+    "output": "{\n  \"result\": \"PASS\",\n  \"counts\": {\n    \"CurriculumCourse\": 321,\n    \"Mapping\": 502,\n    \"Offering\": 686,\n    \"legacyCourse\": 209,\n    \"officialPhysicalRows\": 502,\n    \"officialCodeRowsSelected\": 578\n  },\n  \"classification\": {\n    \"CurriculumCourse\": {\n      \"safe\": 221,\n      \"ambiguous\": 85,\n      \"conflict\": 6,\n      \"unmatched\": 9\n    },\n    \"Mapping\": {\n      \"safe\": 273,\n      \"ambiguous\": 214,\n      \"conflict\": 6,\n      \"unmatched\": 9\n    }\n  },\n  \"officialRowLocatorMatches\": 502,\n  \"placementDefinition\": {\n    \"safe\": 496,\n    \"conflict\": 6\n  },\n  \"officialFootnotes\": 84,\n  \"changeScopeChecked\": false,\n  \"historicalContinuity\": \"unverified; no global curriculum/graduation PASS\"\n}\n"
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "command": "npm run test:attempt-ui-browser",
+    "exitCode": 0,
+    "seconds": 43.96,
+    "log": "/private/tmp/yi06-p1-final-test-attempt-ui-browser.log"
+  },
+  {
+    "command": "npm run test:planner-browser",
+    "exitCode": 1,
+    "seconds": 591.5,
+    "log": "/private/tmp/yi06-p1-final-test-planner-browser.log"
+  },
+  {
+    "command": "npm run test:attempt-persistence-browser",
+    "exitCode": 0,
+    "seconds": 278.35,
+    "log": "/private/tmp/yi06-p1-final-test-attempt-persistence-browser.log"
+  }
+]

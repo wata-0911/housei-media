@@ -1,0 +1,169 @@
+{
+  "date": "2026-10-17 JST",
+  "baselineCommit": "a0fa267ca1acd4663c399da394552c46de366cbc",
+  "finalRuns": [
+    {
+      "command": "npm run test:attempts",
+      "log": "/private/tmp/yi06-p1-test-attempts.log",
+      "tests": 132,
+      "pass": 132,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:migration",
+      "log": "/private/tmp/yi06-p1-test-migration.log",
+      "tests": 133,
+      "pass": 133,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:attempt-ui",
+      "log": "/private/tmp/yi06-p1-test-attempt-ui.log",
+      "tests": 84,
+      "pass": 84,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:institutional",
+      "log": "/private/tmp/yi06-p1-test-institutional.log",
+      "tests": 36,
+      "pass": 36,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:planner",
+      "log": "/private/tmp/yi06-p1-test-planner.log",
+      "tests": 3479,
+      "pass": 3479,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Includes all 90 YI-06 persistence cases plus existing suites. Do not sum overlapping suite counts."
+    },
+    {
+      "command": "npm run test:extension",
+      "log": "/private/tmp/yi06-p1-test-extension.log",
+      "tests": 54,
+      "pass": 54,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:bookmarklet",
+      "log": "/private/tmp/yi06-p1-test-bookmarklet.log",
+      "tests": 168,
+      "pass": 168,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:attempt-ui-browser",
+      "log": "/private/tmp/yi06-p1-final-test-attempt-ui-browser.log",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:planner-browser",
+      "log": "/private/tmp/yi06-p1-final-test-planner-browser.log",
+      "tests": 44,
+      "pass": 43,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Known #145 media draft restore timeout: 43 pass / 1 fail / 0 skip. Reproduced on baseline dev; test unchanged."
+    },
+    {
+      "command": "npm run test:attempt-persistence-browser",
+      "log": "/private/tmp/yi06-p1-final-test-attempt-persistence-browser.log",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    }
+  ],
+  "earlierAndDiagnosticRuns": [
+    {
+      "command": "npm run test:attempt-persistence",
+      "log": "/private/tmp/yi06-p1-unit-first.log",
+      "tests": 89,
+      "pass": 88,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Initial 89-case run: 88 pass / 1 fail. Missing source-UUID reservation rejection was then fixed. Not a final all-pass run."
+    },
+    {
+      "command": "Targeted persistence tests (12 cases)",
+      "log": "/private/tmp/yi06-p1-targeted.log",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Replay namespace, adoption, replacement and added source TODO collision cases."
+    },
+    {
+      "command": "Targeted persistence test: reservedIds.pop()",
+      "log": "/private/tmp/yi06-p1-reservation-recheck.log",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Recheck of the initial failing case after required source UUIDs were added."
+    },
+    {
+      "command": "npm run test:attempt-persistence-browser (initial run)",
+      "log": "/private/tmp/yi06-p1-browser-first.log",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "16 pass; repeated in the final full browser run above."
+    },
+    {
+      "command": "Baseline dev: targeted existing media draft restore browser test",
+      "log": "/private/tmp/yi06-p1-baseline-browser.log",
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "note": "Known #145 failure reproduced on baseline a0fa267. Kept separate from final branch test counts."
+    }
+  ],
+  "uniqueYI06UnitCasesVerified": 90,
+  "uniqueYI06BrowserCasesVerified": 16,
+  "browser": "Playwright + Chromium headless shell 1243; independent BrowserContexts and distinct origins; 1280x900 and 390x900",
+  "nonTestCommands": "See p1-regression-results.json; all exit 0. Flag-enabled production build also exit 0.",
+  "productionArtifactCount": 12,
+  "unperformed": [
+    "iPhone Safari device",
+    "Files device workflow",
+    "Firefox",
+    "screen reader hardware",
+    "Japanese IME hardware",
+    "physical disk exhaustion",
+    "large long-term histories / low-performance device load"
+  ],
+  "unsupported": [
+    "Attempt backup v1 alone after original host loss",
+    "Automatic merge of unknown overlapping ID histories",
+    "Cryptographic issuer authentication"
+  ]
+}

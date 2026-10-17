@@ -1,0 +1,12 @@
+{
+  "fixture": "synthetic mixed v22",
+  "stateUtf8Bytes": 3235432,
+  "sourceRawUtf8Bytes": 5399,
+  "rawSixUtf8Bytes": 1163528,
+  "authorityRecordUtf8Bytes": 3642055,
+  "backupUtf8Bytes": 3236439,
+  "maxRecordBytes": 33554432,
+  "previewMs": 1021.4380289999999,
+  "commitMs": 1448.23731,
+  "reloadMs": 1316.252648999999
+}

@@ -1,5 +1,7 @@
 # 年度非依存化の詳細設計
 
+> YI-06独立監査P1修正: [隔離永続化・復旧基盤](planner-yi-06/README.md)でschema23・backup v2の明示的な可搬復旧を実装。通常再読込のhost照合と通常v22を維持。旧Attempt backup v1は同一hostのみ。[保証・脅威モデル](planner-yi-06/portable-recovery.md)。独立監査前のDraftであり、一般公開やYI-07/08の完了を意味しない。
+
 設計日: 2026-10-11（Asia/Tokyo）。基準dev: `05dac8c7deb5f9abea93c9967237aacf0427863c`。状態: **参照方向・保護境界を決める目標設計。新しい型・保存モデルは未実装。** 本文の概念フィールド名は後続実装で確定する。[方針](planner-curriculum-release-policy.md)、[現状監査](planner-docs-current-audit-2026-10-11.md)、[移行計画](planner-year-independent-migration.md)と併読する。現行ファイル配置は [architecture.md 第16節](planner/architecture.md)。本文の basename は対応表の識別子であり、実装済みを意味しない。
 
 ## 現行コードと目標の対応

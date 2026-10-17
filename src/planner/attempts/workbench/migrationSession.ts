@@ -45,17 +45,7 @@ export function createMigrationWorkbench(environment: Awaited<ReturnType<typeof 
   }
   function proposeDate(session: MigrationSession, offeringId: string, assessmentId: string, newDate: string | null): DateCorrection {
     requireSession(session);
-    const row = heldDates(session).find(d => d.offeringId === offeringId && d.assessmentId === assessmentId);
-    if (!row) throw new Error('not_a_held_date');
-    if (newDate !== null) {
-      const parsed = new Date(`${newDate}T00:00:00Z`);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate) || newDate.startsWith('0000') || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== newDate) throw new Error('assessment_date: 実在日付または明示nullを指定してください');
-    }
-    const value = parseMigrationJson(session.raw) as Record<string, unknown>;
-    const state = ('format' in value ? value.state : value) as { mediaSchoolingProgress: Record<string, { assessments: { id: string; scheduledDate: string | null }[] }> };
-    const assessment = state.mediaSchoolingProgress[offeringId].assessments.find(a => a.id === assessmentId)!;
-    assessment.scheduledDate = newDate;
-    const proposal = freeze({ original: session, offeringId, assessmentId, oldDate: row.date, newDate, proposedRaw: JSON.stringify(value, null, 2) });
+    const proposal = dateCorrectionProposal(session, offeringId, assessmentId, newDate);
     proposals.add(proposal); return proposal;
   }
   async function confirmDate(proposal: DateCorrection, confirmed: boolean) {
@@ -65,4 +55,19 @@ export function createMigrationWorkbench(environment: Awaited<ReturnType<typeof 
     return inspect(proposal.proposedRaw);
   }
   return { inspect, repeat, proposeDate, confirmDate };
+}
+
+/** Pure proposal builder; confirmation still requires a controller-issued handle. */
+export function dateCorrectionProposal(session: MigrationSession, offeringId: string, assessmentId: string, newDate: string | null): DateCorrection {
+  const row = heldDates(session).find(d => d.offeringId === offeringId && d.assessmentId === assessmentId);
+  if (!row) throw new Error('not_a_held_date');
+  if (newDate !== null) {
+    const parsed = new Date(`${newDate}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate) || newDate.startsWith('0000') || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== newDate) throw new Error('assessment_date: 実在日付または明示nullを指定してください');
+  }
+  const value = parseMigrationJson(session.raw) as Record<string, unknown>;
+  const state = ('format' in value ? value.state : value) as { mediaSchoolingProgress: Record<string, { assessments: { id: string; scheduledDate: string | null }[] }> };
+  const assessment = state.mediaSchoolingProgress[offeringId].assessments.find(a => a.id === assessmentId)!;
+  assessment.scheduledDate = newDate;
+  return freeze({ original: session, offeringId, assessmentId, oldDate: row.date, newDate, proposedRaw: JSON.stringify(value, null, 2) });
 }
