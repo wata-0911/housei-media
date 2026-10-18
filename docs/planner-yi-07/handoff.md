@@ -51,5 +51,6 @@
 - P2: category単位の潜在影響closureの保守性。専門の振替を含めつつcommon/他学科に不必要なunknownを広げないこと。本人適用未確認で「他学科だから影響なし」としないこと。
 - P2: optional property、全原行/内訳順序、meta、owner/削除Undo、receipt、未編集元source回帰と合法編集後検証を混同しないこと。
 - P2: 新規則全unsupportedの表示と既存公式規則の限定supportedを区別すること。#133未確認資料・個別学籍・年度横断読替を推測しないこと。
+- P2: Chromium再読込の再現性。YI-06初回共有fixture timeoutは全17件再実行PASS、通常plannerの書道・文学コースtimeoutは単独再実行PASS。原因確定とはせず、最新devで再現した#145と分けて [acceptance.md](acceptance.md) に記録した。
 
 本PRは自己テストで独立監査完了を宣言しない。Draft解除、merge、Issue close、一般公開は後続の利用者判断。

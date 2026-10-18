@@ -1,6 +1,6 @@
 # YI-07 第1段階：卒業adapterと安全境界
 
-Issue [#177](https://github.com/wata-0911/housei-media/issues/177)。開始時のdev: `a4c9a088680b376daf7a66a22b62d755036a2107`。最終再開時dev: `1866c6b7668458a6c664d3b2461b4f78c6cc9697`（差分はroot READMEのみ、fast-forward済み）。ブランチ: `feat/yi-07-graduation-adapter`。第1段階の実装・自己検証であり、独立監査は未実施。
+Issue [#177](https://github.com/wata-0911/housei-media/issues/177)、dev向けDraft [PR #179](https://github.com/wata-0911/housei-media/pull/179)。開始時のdev: `a4c9a088680b376daf7a66a22b62d755036a2107`。最終再開時dev: `1866c6b7668458a6c664d3b2461b4f78c6cc9697`（差分はroot READMEのみ、fast-forward済み）。ブランチ: `feat/yi-07-graduation-adapter`。第1段階の実装・自己検証であり、独立監査は未実施。
 
 独立Attemptを記録できることと、その量を卒業要件に算入できることを分離する。**正の新Attempt算入は本PRの対象外**。YI-02の全CurriculumVersionは本人適用未確認で、方式/完成/反復/公式内訳との排他的associationも新Attemptの算入根拠として未実装である。省略/nullを0にせず、理由・候補・影響範囲を返す。
 

@@ -59,24 +59,40 @@ YI-06のin-memory AtomicStoreで移行commit→合法edit保存→別controller�
 
 Node 24.13.0、npm 11.6.2、ローカルmacOS。既存lockfileの依存を使用。Chromium headless shell 1243、Playwright 1.62.1、隔離contextと合成fixtureのみ。CIは既存Node22 jobの `test:planner` に新suiteを追加し、既存assertion/skip/timeoutは変更しない。
 
-新規は一括266件をPASS後、追加したmatrix/保持/公式予定13件を対象実行してPASS（固有279件）。現在の `test:planner` は279件全てを含む。コマンド間で重複する件数を単純合算しない。
+新規は一括266件をPASS後、追加したmatrix/保持/公式予定13件を対象実行してPASS（固有279件）。CIの `test:planner` では既存3,492件と新規279件の計3,771件全てPASS、FAIL/SKIPともに0。[実装commit d77e3c7のCI](https://github.com/wata-0911/housei-media/actions/runs/39120071158) でtypecheck/lint/planner/extension/bookmarklet/buildの全step成功。コマンド間で重複する件数を単純合算しない。
 
 | コマンド | 結果 |
 | --- | --- |
 | `npm run test:attempt-graduation` | 266 PASS / 0 FAIL / 0 SKIP |
 | 追加matrix/保持/公式予定の対象実行 | 13 PASS / 0 FAIL / 0 SKIP |
+| `npm run test:planner`（CI） | 3,771 PASS / 0 FAIL / 0 SKIP、うち新規279件 |
 | `npm run test:migration` | 133 PASS / 0 FAIL |
 | `npm run test:attempt-ui` | 84 PASS / 0 FAIL |
+| `npm run test:attempt-persistence` | 103 PASS / 0 FAIL / 0 SKIP |
 | `npm run build` | PASS、変更前devの全12ファイルとbyte一致 |
 | `python3 docs/planner-yi-01/verify.py` | PASS |
 | `npm run test:attempts` | 132 PASS / 0 FAIL |
 | `npm run test:institutional` | 36 PASS / 0 FAIL |
 | `npm run test:extension` | 54 PASS / 0 FAIL |
 | `npm run test:bookmarklet` | 168 PASS / 0 FAIL |
+| `npm run test:attempt-persistence-browser` | 再実行17 PASS / 0 FAIL / 0 SKIP |
 | `npm run test:attempt-ui-browser` | 9 PASS / 0 FAIL / 0 SKIP |
+| `npm run test:planner-browser` | 全44件: 42 PASS / 2 FAIL / 0 SKIP。下記に失敗と再検証を記録 |
+| 書道・文学コースの同一test単独再実行 | 1 PASS / 0 FAIL / 0 SKIP、期待値・timeout無変更 |
 | `npm run typecheck` / `npm run lint` | PASS |
+| `git diff --check` | PASS |
 
-残るsuite・CIの結果は完了後に追記する。初回の並行ブラウザ実行ではYI-06可搬復旧の共有fixtureが再読込待ちtimeoutとなり、6件に連鎖した（11 PASS / 6 FAIL）。既存問題とは分類せず、条件・期待値を変更せず再実行中。通常plannerとdev比較の並行実行は負荷調整のため終了し、完走として集計していない。
+[件数・環境・ログSHAの記録](test-results.json)。指定scriptは全て実行した。ローカルの全planner実行は中断されたため完走扱いにせず、同一実装のCIで `npm run test:planner` 全件完了を確認した。最終の変更は監査記録のみである。
+
+初回の並行ブラウザ実行ではYI-06可搬復旧の共有fixtureが再読込待ちtimeoutとなり、6件に連鎖した（11 PASS / 6 FAIL）。既存問題とは分類せず、コード・期待値・timeoutを変更せず、他ブラウザsuiteとの並行実行をやめて再実行した結果17件全てPASS。通常plannerとdev比較の並行実行は負荷調整のため終了し、完走として集計していない。
+
+## 最新devの既知ブラウザ失敗
+
+最新dev `1866c6b` をgit archiveで展開した別directoryで、#145の `restore invalidates an unsaved media draft even when the stored value is identical` を単独再実行し、同じ `tests/planner-save-lock.browser.mjs:315` のfile input待機が30000ms timeoutになることを確認した。[再現ログ](baseline-browser-failure.txt)。当該testのコード・期待値・timeout・skip設定は変更していない。今回ブランチの全suite結果と区別して記録する。
+
+今回ブランチの全44件では、上記#145と `calligraphy P2 Chromium card state matrix 文学コース` の2件が失敗した。[全体結果・両失敗ログ](feature-browser-results.txt)。後者は再読込後の卒業要件section表示待機timeout（line 549）であり、数量assertionの不一致ではない。保存suite完了後、同一testを単独再実行し1 PASSを確認した。期待値・timeout・skipは変更していない。発生原因は確定しておらず、#145と同じ既知問題には分類しない。初回失敗を成功で上書きせず記録し、独立監査時のブラウザ再現性確認へ引き継ぐ。
+
+既存src159ファイル・既存test・schema22/23・backup・YI-06 authority・通常PlannerPageは変更なし。[build比較](build-comparison.json) の全12ファイルも一致。追加adapterは通常productionから参照されない。独立監査前のReady化・merge・Issue closeは実施していない。
 
 ## 制限
 
