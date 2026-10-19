@@ -1,6 +1,6 @@
 # 第1段階の受け入れ・回帰記録
 
-2026-10-18、Issue [#177](https://github.com/wata-0911/housei-media/issues/177)。実装者による検証。独立監査は未実施、Draftのままとする。
+2026-10-18初回実装、Issue [#177](https://github.com/wata-0911/housei-media/issues/177)。初回記録は実装者による検証。独立監査で見つかったP2 2件に対する2026-10-19の修正は末尾に記録する。修正後の独立再監査待ちで、Draftのままとする。
 
 ## 固定baseline
 
@@ -97,3 +97,60 @@ Node 24.13.0、npm 11.6.2、ローカルmacOS。既存lockfileの依存を使用
 ## 制限
 
 全学科の新Attempt正値allocator・完成判定・本人適用の新証明・official detailの排他的associationは未実装。詳細は [adapter-contract.md](adapter-contract.md) と [handoff.md](handoff.md)。Chromium結果はiPhone/Safari実機・大学による公式確認・独立監査の代替ではない。既存v22との比較完了は、新Attempt特殊規則の実装完了を意味しない。
+
+## 2026-10-19 独立監査P2 2件の修正
+
+開始時に`git fetch origin`を実行し、GitHub PR #179のOpen/Draft、head branch `feat/yi-07-graduation-adapter`、最新HEAD `765401484e4b4bdf71f56a1a18699e7cc2eed309`、base dev `1866c6b7668458a6c664d3b2461b4f78c6cc9697`を照合した。作業開始時の未コミット変更は0件。Issue #177はOpen。同じブランチに追記し、別Issue/PR/ブランチ、rebase/reset/force-push、dev/mainへのcommitは行わない。
+
+### P2-1 参照閉包から公式所有への誤昇格
+
+旧実装は`plan.importedSourceCourseId`と方法/年度detailの`sourceCourseId`を無条件にexclusiveへ昇格させていた。validatorは参照IDの存在を検証するが、科目同一性や排他的対応を証明しない。`official_association_unverified`診断が残っても、その後のofficial-owned除外がordinary/Sをsupported 0へ上書きした。
+
+修正後は原行のexact旧CurriculumCourse → safe crosswalk → confirmed Attemptの同一ICだけを所有根拠にする。第1段階には、これに代わる検証済み排他的公式associationの別経路はない。リンクとdetail parentは保持し、非exclusiveの参照原行はpossibleに残す。未証明のdirect linkにもassociation診断を返す。診断に加え、ordinary/Sの両結果がheld/nullとなる。
+
+反例は行政法原行/detailを民事訴訟法のearned本人寄与4からaggregate・方法・年度・両detail経由で参照するケース。同一identity、unknown/ambiguous/conflict/unmatched、未照合/曖昧parent、parentなし、unsafe crosswalkまで検証する。同一科目の厳密な所有では公式null/0/4を手動で補完せず追加経路だけ0除外する。別科目detailが混在しても、別に存在する正当な同一科目aggregate所有は保持する。dangling aggregate linkは既存validatorが拒否する。
+
+既存の`held official matching is not completed by a manual source link`は、未照合原行のリンクだけで0除外を期待していたため、null保留とpossible-overlap診断を期待するよう修正した。このテスト自体が今回の不適切な旧契約を固定していた。固定192 baseline、legacy engineの期待出力、他の既存suiteのassertion/timeout/skipは変更していない。
+
+### P2-2 engine全警告とAttempt潜在影響の混同
+
+旧実装はselected/commonかつ非nullのdescriptorを先に絞ったうえで、見つからないdescriptorを`!r`で無条件採用した。engineは全学科のunsupported警告を返すため、法律scopeの物理学1に他学科31件を紐付けた。
+
+修正後はcatalog descriptorを起点とし、structuredの明示scope、unsupportedの既知scopeLabelを解決して、候補category/科目名との潜在依存を照合する。選択専門内の振替・上限・科目数依存は保守的に保持する。commonの自然/外国語再履修は該当categoryに限定し、一般教育から他学科専門や外国語・体育へ広げない。descriptor欠落や未知scopeLabelを全Attemptの影響へ昇格させない。既存全警告はretainedProgressにそのまま保持する。
+
+追加テストは全8scopeそれぞれで、common3categoryのrequirement ID集合の完全一致、選択専門・候補なし・本人適用未確認の他学科候補の完全一致を検証する。法律/commonの物理学1では一般教育10要件だけとなり、他学科unsupported31件を含まない。選択専門の未対応要件を除外せず、未知Attemptには選択scope/common全候補を残す。category/cardだけの確認に依存しない。
+
+### RED → GREENと検証の扱い
+
+追加64テストの最終版を監査HEADのpristine archiveへコピーし、元実装で**6 PASS / 58 FAIL / 0 SKIP**を確認。同じテストを修正実装で**64 PASS / 0 FAIL / 0 SKIP**として確認した。成功6件は同一科目・parentなし等の対照例。試験用archiveはブランチを作らず使用し、既存checkoutやsourceを巻き戻していない。
+
+初期テスト記述では既存engineが参考専用としてrequirementsから除く`common_total_min_credits`も期待していたため、24件が余分な期待IDで失敗した。engineと固定baselineを確認してテスト記述を修正し、その後、同じ最終版で上記RED/GREENを取り直した。教養42・放送大学認定上限はreference側の扱いを維持する。
+
+初回byte比較ではTailwindが追加変数の`!visible`をCSSクラスとして抽出し、CSSと参照する成果物に差分が生じた。変数名を`evaluatedRequirementIds`へ変更して再buildし、最新devのpristine archiveから同じ依存で再buildした全12ファイルとbyte一致した。初回第1段階のmanifest全12件とも一致。通常PlannerPage・CSS設定・既存productionソースを変更して差分を隠していない。
+
+| 検証 | 今回の結果 |
+| --- | --- |
+| 監査HEADの追加テストRED | 64件: 6 PASS / 58 FAIL / 0 SKIP |
+| 修正後の同じ追加テストGREEN | 64 PASS / 0 FAIL / 0 SKIP |
+| 全planner（既存scriptと同じ全22ファイル） | **3,835 PASS / 0 FAIL / 0 SKIP**、18分13秒で完走 |
+| 固定192件 | 上記に含む。全8scope×24件、gzipと非圧縮SHA不変、全field一致 |
+| YI-07 suite | 上記に含む。既存279＋追加64＝343件 |
+| extension / bookmarklet | 54 PASS / 168 PASS、いずれもFAIL/SKIP 0 |
+| typecheck / lint | PASS。CSS抽出を避ける変数名変更後にも再実行してPASS |
+| build / grade-import check / catalog check | PASS。変数名変更後にもbuildを再実行してPASS |
+| 最新devとのproduction byte比較 | **12/12一致**、[今回のmanifest](p2-build-comparison.json) |
+| YI-01 verify / diff check | PASS |
+| Chromium YI-05 | **9 PASS / 0 FAIL / 0 SKIP** |
+| Chromium YI-06 | **17 PASS / 0 FAIL / 0 SKIP**、今回初回で全件成功 |
+| Chromium 通常planner | **43 PASS / 1 FAIL / 0 SKIP**。失敗は既存#145のfile input待機timeoutのみ |
+| 最新devの#145単独再現 | **0 PASS / 1 FAIL / 0 SKIP**、同じline 315の同じselectorで30000ms timeout |
+
+通常画面の[今回全44件結果](p2-feature-browser-results.txt)と[最新devの単独再現](p2-baseline-browser-failure.txt)を保存した。devはfetch済み`1866c6b`のpristine archiveを別directoryで起動し、同じPlaywright/Chromium、同じテスト・期待値・timeoutで確認した。YI-05→YI-06→通常画面→dev単独の順で、ブラウザsuiteを並行実行していない。前回の書道・文学コースの表示timeoutは今回は再現せず、3コースの状態matrixと後続テストも初回で成功した。今回の#145失敗を成功で上書きしたりskipしたりしていない。#145の修正は本P2修正に含めない。
+
+ローカル全plannerは`package.json`の`test:planner`と同じファイル集合・既存assertionを使い、実行器に`--test-concurrency=2`だけを加えて負荷を制限した。CIは既存workflowの`npm run test:planner`をそのまま使う。新変数名への変更は算入ロジックを変えず、最終pushのCIでそのHEADの全チェックを照合する。CI結果は[同一PRのChecks](https://github.com/wata-0911/housei-media/pull/179/checks)とPR本文に最終HEADとともに記録する。
+
+[RED/GREENの全64件結果](p2-red-green.txt)と[件数・実行オプション・ログSHA](p2-test-results.json)を保存する。コマンド間の重複件数を合算しない。本PRに既に含まれていたYI-07テストのうち、不適切な旧契約を直接固定していた1件の期待値を修正した。その他の既存期待値、固定baseline、既存テストのtimeout/skipは変更していない。
+
+schema22/23、legacy engine、YI-04 projection、YI-06保存/backup/IDB authority、通常PlannerPage、公式catalogは変更なし。新Attemptの正のordinary/S・完成判定はheld/unsupportedを維持し、架空Offeringを生成せず、retained-onlyを全体判定へ接続しない。
+
+修正範囲の実装者検証では新たなP1/P2を検出していないが、独立再監査は未実施。再監査では、(1) aggregate/detailリンク単独からordinary/Sの0除外へ到達しないこと、(2) 同一ICの公式null/0と正当な重複除外が残ること、(3) 全8scopeのrequirement ID包含/非包含とretained側全警告の保持を重点に確認する。Draft・Issue Openを維持し、Ready化・merge・Issue close・一般公開は行わない。

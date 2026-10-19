@@ -65,7 +65,13 @@ if (loaded) {
 
 ## 公式優先と既知数量
 
-明示source link、参照detailのparent、またはexact旧CurriculumCourseをsafe crosswalkで同じICへ結び付けられる場合、原行がそのmanual earned incrementを所有する。原行がnull/0/partial/heldでも本人値で補完しない。未照合原行や不明Attemptはpossible overlapとして保持し、名前一致では確定しない。原行と本人を並列加算しない。
+原行のexact旧CurriculumCourseをsafe crosswalkでconfirmed Attemptと同じICへ結び付けられる場合だけ、原行がそのmanual earned incrementを所有する。原行がnull/0/partial/heldでも本人値で補完しない。ordinaryとschoolingの両追加経路に同じ所有条件を適用する。
+
+明示`plan.importedSourceCourseId`や参照detailの`sourceCourseId`は参照先の存在を示すだけで、排他的公式対応の証明ではない。第1段階にはidentityに代わる検証済みassociation契約がないため、リンクだけから`exclusiveAchievementIds`へ昇格させない。他科目、unknown/ambiguous/conflict/unmatched identity、未照合/曖昧parent、unsafe crosswalkは保留する。未証明の明示リンク先と内訳parentは`possibleAchievementIds`に残し、`official_association_unverified`を返す。parentなしdetailも保留し、存在しないaggregateへのリンクは既存validatorが拒否する。名前一致やcandidateの一致は確定根拠にしない。
+
+例えば民事訴訟法のearned本人寄与4から行政法detailを方法・年度根拠として参照しても、ordinary/Sは`held/null`のままである。同一科目の厳密な同一性が別途成立するときは、内訳の方法/年度associationが未確認でもCourse単位の公式所有による追加経路の除外は可能。これは履修回への公式量配分や完成認定ではない。
+
+非対象状態や明示本人寄与0による独立の0除外条件は維持する。その場合も未検証リンクを所有根拠へ昇格せず、schoolingを本人ordinary寄与0から推定しない。
 
 `retainedProgress`/`officialEvidence`の入力はgraphに依存しない。未解決Attemptが追加されても既知公式4は4のまま。公式側で元から存在するunknown・H19/H43・認定・卒論targetの条件は既存engineのまま保持する。本PRは既存公式heldを解除しない。
 
@@ -86,5 +92,9 @@ if (loaded) {
 | attempt_rule_unimplemented / multiple_attempt_rule_unimplemented | 特殊・通常配分、複数回完成/反復の未実装 |
 
 候補からcategory単位で影響を閉じる。専門は当該学科内の振替・上限・科目数依存を含め保守的に広げるが、無関係な一般教育・外国語・体育へ広げない。common候補は該当common categoryに局所化。候補なしは当該選択scope＋common内の不明として返す。他学科全要件をunknownにしない。未確認の他学科配置だけではこの本人への「影響なし」を証明できないため、明示適用がなければselected-scope不明に留める。
+
+`requirementIds`は既存engineの警告一覧ではない。structured descriptorの明示scope、unsupported descriptorの既知`scopeLabel`（law/history/geography/economics/commerce/日文3コース/common）を解決したうえで候補category・名前と照合する。commonの自然再履修は一般教育、外国語再履修は外国語だけに紐付ける。専門の未対応規則は選択学科の専門候補へ保守的に残す。欠落descriptorや未知scopeLabelを全Attemptへ自動展開しない。
+
+scope外・未知labelのunsupported警告を含む既存全警告は、変更しない`retainedProgress.requirements` / `unknownReasons`に保持する。影響先に含まれないことは、その規則の対応済み・達成・影響なしの証明を意味しない。固定192比較、旧engineの全警告、不明Attemptの選択scope/common内の保留は維持する。参考専用でengineのrequirementsに存在しない要件ID（教養42・放送大学認定上限）は追加せず、全体/S参考への潜在影響は`referenceIds`で返す。
 
 detached/failed/dropped/waitingは現算入incrementを作らない。owner record、元plan、receipt/Undoは削除せず、保持した記録と算入除外を別にする。impactは潜在範囲であり、既存の既知数量・statusを直接書き換えない。

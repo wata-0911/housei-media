@@ -48,7 +48,8 @@ export type AttemptGraduationInput = {
     legacyRegistration: Array<{ authority: 'legacy_offering'; offeringId: string; quantity: RecordedQuantity }>;
   };
   official: {
-    /** Ownership suppresses an earned manual increment even when the official fact is held. */
+    /** Exact Course identity proves ownership, including held official quantities.
+     * An aggregate/detail pointer alone is never an exclusive association. */
     exclusiveAchievementIds: string[];
     possibleAchievementIds: string[];
     /** References are evidence candidates, never an assigned credit budget. */

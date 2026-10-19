@@ -128,8 +128,8 @@ test('official completed4 vs incomplete2 is course evidence, never assigned to a
 });
 test('held official matching is not completed by a manual source link',async()=>{
   const row=originalRow({earnedCreditsTotal:null});const source=await sourceFor([row]);const a=newAttempt(master,placement,4);a.plan.importedSourceCourseId=row.id;
-  const result=adapt(withAttempts(a),source);assert.equal(result.attempts[0].decisions.ordinary.value,0);
-  assert.ok(codes(result.attempts[0]).includes('official_matching_held'));assert.equal(result.officialEvidence.allocations.length,0);
+  const result=adapt(withAttempts(a),source);assert.equal(result.attempts[0].decisions.ordinary.value,null);
+  assert.ok(codes(result.attempts[0]).includes('official_overlap_possible'));assert.equal(result.officialEvidence.allocations.length,0);
   assert.equal(result.retained.importedCourseAchievements[0].earnedCreditsTotal,null);
 });
 test('shared detail and conflicting method/year pointers never assign aggregate or detail budgets',async()=>{
@@ -140,6 +140,143 @@ test('shared detail and conflicting method/year pointers never assign aggregate 
   for(const a of result.attempts){assert.deepEqual(a.official.sharedStudyRecordIds,[d.id]);assert.ok(codes(a).includes('official_association_unverified'));assert.ok(codes(a).includes('official_detail_shared'));assert.equal(a.decisions.ordinary.value,0);}
   assert.equal(result.retained.importedStudyRecords[0].academicYear,2024);assert.deepEqual(result.retainedProgress,adapt(emptyGraph(),source).retainedProgress);
 });
+
+// Audit counterexamples: referential integrity is not exclusive Course ownership.
+const civil = master.placements.find(p => p.scopeId === scope && p.officialName === '民事訴訟法' && p.institutionalCourseId);
+const administrative = master.placements.find(p => p.scopeId === scope && p.officialName === '行政法' && p.institutionalCourseId);
+const courseFor = p => catalog.curriculum.courses.find(c => c.id === p.auditRecord.oldCurriculumCourseId);
+for (const link of ['aggregate', 'method-detail', 'year-detail', 'both-details']) {
+  for (const identity of ['same', 'different', 'unknown', 'ambiguous', 'conflict', 'unmatched']) {
+    test(`P2-1 ownership ${link}/${identity}: only exact Course identity excludes earned ordinary and S`, async () => {
+      const row = officialRow(courseFor(administrative), null);
+      const d = detail({ rawName: row.rawName, sourceCourseId: row.id });
+      const source = await sourceFor([row], [d]);
+      const a = newAttempt(master, identity === 'same' ? administrative : civil, 4);
+      if (!['same', 'different'].includes(identity)) {
+        a.identity = { status: identity, ref: null, candidateAuditIds: [administrative.auditRecord.oldCurriculumCourseId], reason: '未確定' };
+      }
+      if (link === 'aggregate') a.plan.importedSourceCourseId = row.id;
+      if (['method-detail', 'both-details'].includes(link)) a.method = { value: 'schooling', source: 'official_detail', evidence: { kind: 'official_detail', studyRecordId: d.id } };
+      if (['year-detail', 'both-details'].includes(link)) a.actualYear = { value: d.academicYear, source: 'source', evidence: { kind: 'official_detail', studyRecordId: d.id }, reason: null };
+      assert.equal(validateAttemptGraph(withAttempts(a), source.context).valid, true);
+      const before = adapt(withAttempts(newAttempt(master, identity === 'same' ? administrative : civil, 4)), source);
+      const result = adapt(withAttempts(a), source), out = result.attempts[0];
+      assert.deepEqual(out.official.exclusiveAchievementIds, identity === 'same' ? [row.id] : []);
+      for (const axis of ['ordinary', 'schooling']) {
+        assert.equal(out.decisions[axis].status, identity === 'same' ? 'supported' : 'held');
+        assert.equal(out.decisions[axis].value, identity === 'same' ? 0 : null);
+      }
+      if (identity !== 'same') assert.ok(codes(out).includes('official_association_unverified'));
+      assert.deepEqual(result.retainedProgress, before.retainedProgress);
+      assert.deepEqual(result.officialEvidence, before.officialEvidence);
+      assert.equal(result.retained.importedCourseAchievements[0].earnedCreditsTotal, null);
+      noPositive(out);
+    });
+  }
+}
+for (const parent of ['unmatched', 'ambiguous', 'absent']) for (const link of ['aggregate', 'detail']) {
+  test(`P2-1 unresolved parent ${parent}/${link} cannot own a confirmed Attempt`, async () => {
+    const row = parent === 'unmatched' ? originalRow({ rawName: civil.officialName }) : {
+      ...officialRow(courseFor(civil)), curriculumCourseId: null, curriculumMatch: 'ambiguous',
+      candidateCurriculumCourseIds: [courseFor(civil).id, courseFor(administrative).id],
+    };
+    const d = detail({ rawName: row.rawName, ...(parent === 'absent' ? {} : { sourceCourseId: row.id }) });
+    const source = await sourceFor(parent === 'absent' ? [] : [row], [d]);
+    const a = newAttempt(master, civil, 4);
+    if (link === 'aggregate') {
+      if (parent === 'absent') { // dangling links are rejected, not converted into ownership
+        a.plan.importedSourceCourseId = row.id;
+        assert.equal(validateAttemptGraph(withAttempts(a), source.context).valid, false);
+        return;
+      }
+      a.plan.importedSourceCourseId = row.id;
+    } else a.method = { value: 'schooling', source: 'official_detail', evidence: { kind: 'official_detail', studyRecordId: d.id } };
+    const out = adapt(withAttempts(a), source).attempts[0];
+    assert.deepEqual(out.official.exclusiveAchievementIds, []);
+    for (const axis of ['ordinary', 'schooling']) assert.equal(out.decisions[axis].status, 'held');
+    assert.ok(codes(out).includes('official_association_unverified'));
+    noPositive(out);
+  });
+}
+
+const scopeLabelFor = {
+  '法律学科': 'law', '史学科': 'history', '地理学科': 'geography', '経済学科': 'economics', '商業学科': 'commerce',
+  '言語コース': 'japanese_language', '文学コース': 'japanese_literature', '芸能文化コース': 'japanese_performance',
+};
+test('P2-1 an exact old parent with an unsafe crosswalk remains possible, never exclusive', async () => {
+  const crosswalk = master.crosswalk.find(d => d.oldEntityKind === 'CurriculumCourse' && d.status !== 'safe');
+  const c = catalog.curriculum.courses.find(c => c.id === crosswalk.oldId); assert.ok(c);
+  const row = officialRow(c), d = detail({ rawName: row.rawName, sourceCourseId: row.id });
+  const source = await sourceFor([row], [d]), a = newAttempt(master, civil, 4);
+  a.plan.importedSourceCourseId = row.id;
+  a.method = { value: 'schooling', source: 'official_detail', evidence: { kind: 'official_detail', studyRecordId: d.id } };
+  const out = adapt(withAttempts(a), source).attempts[0];
+  assert.deepEqual(out.official.exclusiveAchievementIds, []);
+  assert.deepEqual(out.official.possibleAchievementIds, [row.id]);
+  assert.equal(out.decisions.ordinary.status, 'held'); assert.equal(out.decisions.schooling.status, 'held');
+});
+test('P2-1 a wrong detail does not suppress legitimate exact aggregate ownership or alter its null/zero', async () => {
+  for (const value of [null, 0, 4]) {
+    const own = officialRow(courseFor(civil), value), other = officialRow(courseFor(administrative), 4);
+    const d = detail({ rawName: other.rawName, sourceCourseId: other.id });
+    const source = await sourceFor([other, own], [d]), a = newAttempt(master, civil, 4);
+    a.method = { value: 'schooling', source: 'official_detail', evidence: { kind: 'official_detail', studyRecordId: d.id } };
+    const result = adapt(withAttempts(a), source), out = result.attempts[0];
+    assert.deepEqual(out.official.exclusiveAchievementIds, [own.id]);
+    assert.deepEqual(out.official.possibleAchievementIds, [other.id]);
+    assert.equal(out.decisions.ordinary.value, 0); assert.equal(out.decisions.schooling.value, 0);
+    assert.ok(codes(out).includes('official_association_unverified'));
+    assert.equal(result.retained.importedCourseAchievements[1].earnedCreditsTotal, value);
+    assert.deepEqual(result.retainedProgress, adapt(emptyGraph(), source).retainedProgress);
+  }
+});
+const commonRules = {
+  '一般教育': ['common_general_exact_credits', 'common_general_max_credits', 'common_general_humanities_min_credits',
+    'common_general_social_min_credits', 'common_general_natural_min_credits', 'common_natural_per_subject_kind_max_credits',
+    'common_natural_legacy_reenrollment', 'common_already_fulfilled', 'common_legacy_rules_external', 'common_course_credit_completion'],
+  '外国語': ['common_foreign_choose_one', 'common_foreign_exact_credits', 'common_foreign_max_credits', 'common_foreign_min_schooling_credits',
+    'common_foreign_reenrollment', 'common_already_fulfilled', 'common_legacy_rules_external', 'common_course_credit_completion'],
+  '保健体育': ['common_physical_exact_credits', 'common_physical_max_credits', 'common_physical_choose_one',
+    'common_already_fulfilled', 'common_legacy_rules_external', 'common_course_credit_completion'],
+};
+const ruleIds = out => out.impact.requirementIds.map(id => {
+  const r = catalog.requirements.find(r => r.id === id); assert.ok(r, `missing descriptor ${id}`); return r.ruleId;
+}).sort();
+for (const program of programs) {
+  for (const category of Object.keys(commonRules)) test(`P2-2 exact common requirement IDs ${program.displayName}/${category}`, () => {
+    const p = master.placements.find(p => p.category === category && (category !== '一般教育' || p.officialName === '物理学1'));
+    assert.ok(p);
+    const result = adapt(withAttempts(newAttempt(master, p)), blankSource, program.scopeId), out = result.attempts[0];
+    assert.deepEqual(ruleIds(out), [...commonRules[category]].sort());
+    assert.deepEqual(out.impact.categories, [category]);
+    // The legacy warnings remain byte-for-byte in retainedProgress, including other departments.
+    assert.deepEqual(result.retainedProgress, adapt(emptyGraph(), blankSource, program.scopeId).retainedProgress);
+    assert.ok(result.retainedProgress.requirements.some(r => catalog.requirements.find(d => d.id === r.requirementId)?.status === 'unsupported'));
+    assert.equal(out.decisions.ordinary.status, 'held'); noPositive(out);
+  });
+  test(`P2-2 selected professional and unknown requirement IDs ${program.displayName}`, () => {
+    const label = scopeLabelFor[program.course ?? program.department]; assert.ok(label);
+    const p = master.placements.find(p => p.scopeId === program.scopeId && p.category === '専門教育'); assert.ok(p);
+    const result = adapt(withAttempts(newAttempt(master, p), newAttempt(master)), blankSource, program.scopeId);
+    const expectedProfessional = result.retainedProgress.requirements.filter(row => {
+      const r = catalog.requirements.find(r => r.id === row.requirementId);
+      return r.status === 'structured' ? r.scopeId === program.scopeId : r.scopeLabel === label;
+    }).map(r => r.requirementId).sort();
+    assert.deepEqual([...result.attempts[0].impact.requirementIds].sort(), expectedProfessional);
+    const expectedUnknown = result.retainedProgress.requirements.filter(row => {
+      const r = catalog.requirements.find(r => r.id === row.requirementId);
+      return r.status === 'structured' ? r.scopeId === program.scopeId || catalog.programs.some(p => p.isCommon && p.scopeId === r.scopeId)
+        : ['common', label].includes(r.scopeLabel);
+    }).map(r => r.requirementId).sort();
+    assert.deepEqual([...result.attempts[1].impact.requirementIds].sort(), expectedUnknown);
+    assert.equal(result.attempts[1].impact.extent, 'selected_scope_unknown');
+    const outside = master.placements.find(p => ![program.scopeId, ...catalog.programs.filter(p => p.isCommon).map(p => p.scopeId)].includes(p.scopeId));
+    const unverifiedOutside = adapt(withAttempts(newAttempt(master, outside)), blankSource, program.scopeId).attempts[0];
+    assert.equal(unverifiedOutside.impact.extent, 'selected_scope_unknown');
+    assert.deepEqual([...unverifiedOutside.impact.requirementIds].sort(), expectedUnknown);
+    result.attempts.forEach(noPositive);
+  });
+}
 for(const status of ['unknown','ambiguous','conflict','unmatched'])test(`identity ${status} remains unresolved even with same title`,()=>{
   const a=newAttempt(master,placement);a.identity={status,ref:null,candidateAuditIds:[placement.auditRecord.oldCurriculumCourseId],reason:'未確定'};
   const out=adapt(withAttempts(a)).attempts[0];assert.equal(out.record.identity.status,status);assert.equal(out.record.identity.ref,null);assert.ok(codes(out).includes('identity_unresolved'));noPositive(out);

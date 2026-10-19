@@ -49,6 +49,10 @@
 - P1: graph→架空Offering/PlannerItemの経路がなく、YI-04 projection条件・schema22/23・backup・IDB authority・通常PlannerPageが無変更であること。
 - P1: `retainedProgress`が旧sourceに束縛された部分評価であり、新モデル全体の判定ではないこと。将来consumerが直接全体達成表示へ流用しないこと。
 - P2: category単位の潜在影響closureの保守性。専門の振替を含めつつcommon/他学科に不必要なunknownを広げないこと。本人適用未確認で「他学科だから影響なし」としないこと。
+
+2026-10-19の独立監査P2修正後の再監査では、行政法aggregate/detailを民事訴訟法earnedへ参照させてもordinary/Sがheld/nullを維持すること、direct source link・unsafe crosswalk・unknown/ambiguous parentにも同じ境界が働くことを確認する。同一confirmed ICの公式null/0は引き続き手動補完しない。第1段階に検証済み排他的associationの別経路はなく、実装はexact identityだけで所有を証明する。
+
+影響はcategory/cardに加えrequirement ID集合まで確認する。全8scopeでcommon3category、選択専門、候補なし、未確認の他学科候補を検証する。既存engineのscope外unsupported警告はretainedProgressに保持し、Attemptの影響と混同しない。未知scopeLabelを新たに追加する際は所属・潜在依存を明示し、警告の削除や無条件の全scope影響へ置き換えない。
 - P2: optional property、全原行/内訳順序、meta、owner/削除Undo、receipt、未編集元source回帰と合法編集後検証を混同しないこと。
 - P2: 新規則全unsupportedの表示と既存公式規則の限定supportedを区別すること。#133未確認資料・個別学籍・年度横断読替を推測しないこと。
 - P2: Chromium再読込の再現性。YI-06初回共有fixture timeoutは全17件再実行PASS、通常plannerの書道・文学コースtimeoutは単独再実行PASS。原因確定とはせず、最新devで再現した#145と分けて [acceptance.md](acceptance.md) に記録した。

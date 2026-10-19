@@ -4,6 +4,15 @@ import type { PlannerCatalog } from '../../plannerCatalog';
 import type { GraduationProgress } from '../../graduation/graduationProgress';
 import type { AttemptImpact } from './types';
 
+// Unsupported descriptors have null scopeId. Resolve only the catalog's known
+// labels; never interpret an engine warning or a missing descriptor as impact.
+const scopeLabels: Record<string, [string, string | null]> = {
+  law: ['法律学科', null], history: ['史学科', null], geography: ['地理学科', null],
+  economics: ['経済学科', null], commerce: ['商業学科', null],
+  japanese_language: ['日本文学科', '言語コース'], japanese_literature: ['日本文学科', '文学コース'],
+  japanese_performance: ['日本文学科', '芸能文化コース'],
+};
+
 /** Use the union of explicit candidates, or the confirmed Course's placements.
  * Neither names, planned years nor candidate array order resolve identity. */
 export function candidatePlacements(a: Attempt, catalog: InstitutionalCatalog): CurriculumPlacement[] {
@@ -30,18 +39,29 @@ export function attemptImpact(a: Attempt, candidates: CurriculumPlacement[], cat
   const unknown = relevant.length === 0;
   const categories = [...new Set(relevant.map(p => p.category))].sort();
   const has = (category: string) => unknown || categories.includes(category);
-  const requirements = catalog.requirements.filter(r => r.scopeId === scopeId || (r.scopeId !== null && common.includes(r.scopeId)));
-  const requirementIds = progress.requirements.filter(row => {
-    const r = requirements.find(r => r.id === row.requirementId);
-    // A missing descriptor cannot safely narrow potential impact.
-    if (!r || r.status !== 'structured') return true;
+  const program = catalog.programs.find(p => p.scopeId === scopeId)!;
+  const evaluatedRequirementIds = new Set(progress.requirements.map(r => r.requirementId));
+  const requirementIds = catalog.requirements.filter(r => {
+    if (!evaluatedRequirementIds.has(r.id)) return false;
+    if (r.status === 'unsupported') {
+      if (r.scopeLabel === 'common') {
+        if (r.ruleId === 'common_natural_legacy_reenrollment') return has('一般教育');
+        if (r.ruleId === 'common_foreign_reenrollment') return has('外国語');
+        return unknown || relevant.some(p => common.includes(p.scopeId));
+      }
+      const subject = scopeLabels[r.scopeLabel];
+      return !!subject && subject[0] === program.department && subject[1] === program.course && has('専門教育');
+    }
+    if (r.scopeId !== scopeId && !common.includes(r.scopeId)) return false;
+    // An Attempt is not a recognized/Open University credit record.
+    if (r.target.credit_source) return unknown;
     if (r.target.curriculum_category) return has(r.target.curriculum_category);
     const names = r.target.course_names ?? (r.target.course_name ? [r.target.course_name] : []);
     // Named professional rules may depend on other professional transfers.
     if (names.length && !unknown) return relevant.some(p => names.includes(p.officialName))
       || (categories.includes('専門教育') && r.scopeId === scopeId);
-    return true;
-  }).map(r => r.requirementId);
+    return unknown || (common.includes(r.scopeId) ? relevant.some(p => common.includes(p.scopeId)) : has('専門教育'));
+  }).map(r => r.id);
   const cardIds = progress.cards.filter(row => {
     if (unknown) return true;
     if (row.requirementId === 'group-general') return has('一般教育');

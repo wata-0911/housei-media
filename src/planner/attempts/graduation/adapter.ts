@@ -64,12 +64,14 @@ export function adaptAttemptGraduation(input: { graph: unknown; retained: Retain
     const refs = detailRefs(a), shared = refs.filter(id => (claims.get(id)?.length ?? 0) > 1);
     const explicit = new Set([...(a.plan?.importedSourceCourseId ? [a.plan.importedSourceCourseId] : []),
       ...records.filter(r => refs.includes(r.id) && r.sourceCourseId).map(r => r.sourceCourseId!)]);
-    const exclusive = exactRows.filter(({ row, stableId }) => explicit.has(row.id)
-      || (stableId !== null && stableId === a.identity.ref?.institutionalCourseId)).map(({ row }) => row.id);
+    // A source/detail pointer proves existence only. Stage 1 has no verified
+    // exclusive association contract; ownership requires exact Course identity.
+    const exclusive = exactRows.filter(({ stableId }) => stableId !== null
+      && a.identity.status === 'confirmed' && stableId === a.identity.ref.institutionalCourseId).map(({ row }) => row.id);
     // Unresolved official matching is NEVER repaired with manual quantities.
     // Without proven identity disjointness retain possible overlap, not a match.
     const possible = exactRows.filter(({ row, stableId }) => !exclusive.includes(row.id)
-      && (stableId === null || a.identity.ref === null)).map(({ row }) => row.id);
+      && (stableId === null || a.identity.ref === null || explicit.has(row.id))).map(({ row }) => row.id);
     const diagnostics: AttemptDiagnostic[] = [];
     const add = (code: AttemptHoldCode, paths: string[] = [base], affected: GraduationAxis[] = axes) => {
       diagnostics.push({ code, axes: [...affected], sourceRefs: paths });
@@ -88,6 +90,9 @@ export function adaptAttemptGraduation(input: { graph: unknown; retained: Retain
     else if (a.plan.contribution!.value === null) add('contribution_unknown', [`${base}/plan/contribution`]);
     if (possible.length) add('official_overlap_possible', possible.map(id => `/retained/importedCourseAchievements/${pointer(id)}`));
     if (refs.length) add('official_association_unverified', refs.map(id => `/retained/importedStudyRecords/${pointer(id)}`));
+    if (a.plan?.importedSourceCourseId && !exclusive.includes(a.plan.importedSourceCourseId)) {
+      add('official_association_unverified', [`${base}/plan/importedSourceCourseId`]);
+    }
     if (shared.length) add('official_detail_shared', shared.map(id => `/retained/importedStudyRecords/${pointer(id)}`));
     if (officialEvidence.facts.some(f => f.sourceRowIds.some(id => exclusive.includes(id)) && f.allocation.kind === 'unknown')) {
       add('official_matching_held', exclusive.map(id => `/retained/importedCourseAchievements/${pointer(id)}`));
