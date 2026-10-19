@@ -6,16 +6,42 @@ import { validateAttemptGraphShape } from './schema';
 import { sameDigests, idPattern } from '../institutional/validation';
 import { validateInstitutionalLegacyArchive } from '../institutional/legacyArchive';
 
-/** Compare records without assigning meaning to object-key order. Array order remains payload data. */
+/** Compare plain data without invoking accessors or skipping array holes.
+ * Object-key order is immaterial; omissions and array order are payload data.
+ * Bare undefined still represents an omitted source path, never a data property. */
 export function sameAttemptData(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameAttemptData(v, b[i]));
-  if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
-    const left = a as Record<string, unknown>, right = b as Record<string, unknown>;
-    return Object.keys(left).length === Object.keys(right).length
-      && Object.keys(left).every(k => Object.hasOwn(right, k) && sameAttemptData(left[k], right[k]));
-  }
-  return false;
+  const leftPath = new Set<object>(), rightPath = new Set<object>();
+  const equal = (left: unknown, right: unknown, root = false): boolean => {
+    if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') {
+      return left === right && (left === null || typeof left === 'string' || typeof left === 'boolean'
+        || (typeof left === 'number' && Number.isFinite(left) && !Object.is(left, -0))
+        || (root && left === undefined));
+    }
+    const array = Array.isArray(left);
+    if (array !== Array.isArray(right) || leftPath.has(left) || rightPath.has(right)) return false;
+    for (const value of [left, right]) {
+      const prototype = Object.getPrototypeOf(value);
+      if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false;
+    }
+    const leftKeys = Reflect.ownKeys(left), rightKeys = Reflect.ownKeys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+    if (array && (leftKeys.length !== Object.getOwnPropertyDescriptor(left, 'length')!.value + 1
+      || rightKeys.length !== Object.getOwnPropertyDescriptor(right, 'length')!.value + 1)) return false;
+    leftPath.add(left); rightPath.add(right);
+    try {
+      for (const key of leftKeys) {
+        const l = Object.getOwnPropertyDescriptor(left, key), r = Object.getOwnPropertyDescriptor(right, key);
+        if (typeof key === 'symbol' || !l || !r || !('value' in l) || !('value' in r)) return false;
+        if (array && key === 'length') { if (l.value !== r.value) return false; continue; }
+        if (!l.enumerable || !r.enumerable || (array && (!/^(0|[1-9][0-9]*)$/.test(key)
+          || Number(key) >= Object.getOwnPropertyDescriptor(left, 'length')!.value))
+          || !equal(l.value, r.value)) return false;
+      }
+      return true;
+    } finally { leftPath.delete(left); rightPath.delete(right); }
+  };
+  try { return equal(a, b, true); }
+  catch { return false; }
 }
 export function ownerKey(owner: ProgressOwner | null): string {
   if (owner === null) return 'unowned';
@@ -39,15 +65,19 @@ export function validateAttemptGraph(value: unknown, context: AttemptValidationC
       || (typeof v === 'number' && !Number.isFinite(v))) error('non_json_value', path, 'Value cannot be preserved as JSON');
     else if (v && typeof v === 'object') {
       if (seen.has(v)) { error('non_json_value', path, 'Cyclic input'); return; }
-      if (!Array.isArray(v) && Object.getPrototypeOf(v) !== Object.prototype && Object.getPrototypeOf(v) !== null) {
+      const prototype = Object.getPrototypeOf(v);
+      if (Array.isArray(v) ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
         error('non_json_value', path, 'Expected a plain JSON object'); return;
+      }
+      if (Array.isArray(v) && Object.keys(v).length !== v.length) {
+        error('non_json_value', path, 'Sparse arrays are not JSON data'); return;
       }
       seen.add(v);
       for (const k of Reflect.ownKeys(v)) {
         if (Array.isArray(v) && k === 'length') continue;
         const descriptor = Object.getOwnPropertyDescriptor(v, k)!;
         if (typeof k === 'symbol' || !descriptor.enumerable || !('value' in descriptor)
-          || (Array.isArray(v) && !/^(0|[1-9][0-9]*)$/.test(k))) {
+          || (Array.isArray(v) && (!/^(0|[1-9][0-9]*)$/.test(k) || Number(k) >= v.length))) {
           error('non_json_value', path, 'Only enumerable JSON data properties are supported');
           continue;
         }
@@ -56,7 +86,8 @@ export function validateAttemptGraph(value: unknown, context: AttemptValidationC
       seen.delete(v);
     }
   };
-  json(value, '', new Set());
+  try { json(value, '', new Set()); }
+  catch { error('non_json_value', '', 'Unable to inspect JSON data'); }
   if (issues.length) return attemptValidationResult(issues);
   if (!validateAttemptGraphShape(value)) {
     for (const e of validateAttemptGraphShape.errors ?? []) error(`shape_${e.keyword}`, e.instancePath, `${e.message}: ${JSON.stringify(e.params)}`);

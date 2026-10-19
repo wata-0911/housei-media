@@ -4,7 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { adaptAttemptGraduation } from '../src/planner/attempts/graduation/adapter.ts';
-import { validateAttemptGraph } from '../src/planner/attempts/validation.ts';
+import { sameAttemptData, validateAttemptGraph } from '../src/planner/attempts/validation.ts';
+import { attemptImpact, candidatePlacements } from '../src/planner/attempts/graduation/impact.ts';
 import { freeze } from '../src/planner/attempts/migration/contracts.ts';
 import { projectLegacyState } from '../src/planner/attempts/migration/preview.ts';
 import { createWorkspace, applyCommand, newOperationId } from '../src/planner/attempts/workbench/operations.ts';
@@ -37,6 +38,200 @@ function adapt(graph, source = blankSource, scopeId = scope) {
 }
 function withAttempts(...attempts) { return { ...emptyGraph(), attempts }; }
 const codes = a => a.diagnostics.map(d => d.code);
+const scopeLabelFor = {
+  '法律学科': 'law', '史学科': 'history', '地理学科': 'geography', '経済学科': 'economics', '商業学科': 'commerce',
+  '言語コース': 'japanese_language', '文学コース': 'japanese_literature', '芸能文化コース': 'japanese_performance',
+};
+
+for (const program of programs) for (const category of ['一般教育', '外国語', '保健体育']) {
+  test(`R1 candidate addition is monotone and order independent ${program.displayName}/${category}`, () => {
+    const commonIds = catalog.programs.filter(p => p.isCommon).map(p => p.scopeId);
+    const outside = master.placements.find(p => p.scopeId !== program.scopeId && !commonIds.includes(p.scopeId));
+    const common = master.placements.find(p => commonIds.includes(p.scopeId) && p.category === category);
+    for (const applicability of ['unknown', 'unverified']) {
+    const a = newAttempt(master);
+    if (applicability === 'unverified') a.applicability = { status: 'unverified', curriculumVersionId: outside.curriculumVersionId,
+      scopeId: outside.scopeId, legacyApplicability: 'current_2026', originalValue: '未確認', evidence: null };
+    a.placement.candidatePlacementIds = [outside.id];
+    const before = adapt(withAttempts(a), blankSource, program.scopeId).attempts[0].impact;
+    const baselineProgress = adapt(emptyGraph(), blankSource, program.scopeId).retainedProgress;
+    assert.equal(before.extent, 'selected_scope_unknown');
+    assert.deepEqual(before.cardIds, baselineProgress.cards.map(card => card.requirementId));
+    const impacts = [];
+    for (const ids of [[outside.id, common.id], [common.id, outside.id]]) {
+      const candidate = structuredClone(a); candidate.placement.candidatePlacementIds = ids;
+      const result = adapt(withAttempts(candidate), blankSource, program.scopeId), after = result.attempts[0].impact;
+      impacts.push(after);
+      const lost = Object.fromEntries(['requirementIds', 'cardIds'].map(axis => [axis, before[axis].filter(id => !after[axis].includes(id))]));
+      assert.deepEqual(lost, { requirementIds: [], cardIds: [] }, 'candidate addition must not erase either impact set');
+      for (const axis of ['requirementIds', 'cardIds']) {
+        assert.ok(before[axis].length > 0);
+        for (const id of before[axis]) assert.ok(after[axis].includes(id), `${axis} lost ${id}`);
+        assert.deepEqual(after[axis], before[axis]);
+      }
+      assert.equal(after.extent, 'selected_scope_unknown');
+      assert.deepEqual(result.retainedProgress, baselineProgress);
+      for (const id of after.requirementIds) {
+        const r = catalog.requirements.find(r => r.id === id);
+        const label = scopeLabelFor[program.course ?? program.department];
+        assert.ok(r.status === 'structured' ? r.scopeId === program.scopeId || commonIds.includes(r.scopeId)
+          : ['common', label].includes(r.scopeLabel), `out-of-scope requirement ${id}`);
+      }
+    }
+    assert.deepEqual(impacts[0], impacts[1]);
+    assert.deepEqual(attemptImpact(a, [outside, common], catalog, program.scopeId, baselineProgress),
+      attemptImpact(a, [common, outside], catalog, program.scopeId, baselineProgress));
+    }
+  });
+}
+for (const category of ['一般教育', '外国語', '保健体育']) test(`R1 pure impact confirmed-applicability branch stays local ${category}`, () => {
+  // Control the pure helper's precondition only. No forged applicability is
+  // accepted by the adapter/validator or installed in the official catalog.
+  const commonIds = catalog.programs.filter(p => p.isCommon).map(p => p.scopeId);
+  const outside = master.placements.find(p => p.scopeId !== scope && !commonIds.includes(p.scopeId));
+  const common = master.placements.find(p => commonIds.includes(p.scopeId) && p.category === category);
+  const a = newAttempt(master); a.applicability.status = 'confirmed';
+  const progress = adapt(emptyGraph()).retainedProgress;
+  assert.equal(attemptImpact(a, [outside], catalog, scope, progress).extent, 'none');
+  const local = attemptImpact(a, [common], catalog, scope, progress);
+  assert.equal(local.extent, 'placements');
+  assert.deepEqual(attemptImpact(a, [outside, common], catalog, scope, progress), local);
+  assert.deepEqual(attemptImpact(a, [common, outside], catalog, scope, progress), local);
+  assert.equal(validateAttemptGraph(withAttempts(a), blankSource.context).valid, false);
+});
+test('R1 confirmed Course identity does not erase unresolved applicability of cross-course placements', () => {
+  const program = programs.find(p => p.course === '言語コース');
+  const p = master.placements.find(p => p.scopeId === program.scopeId && p.category === '専門教育');
+  const a = newAttempt(master, p), candidates = candidatePlacements(a, master);
+  assert.equal(a.identity.status, 'confirmed'); assert.equal(a.applicability.status, 'unknown');
+  assert.ok(candidates.some(p => p.scopeId !== program.scopeId));
+  const result = adapt(withAttempts(a, newAttempt(master)), blankSource, program.scopeId);
+  assert.equal(result.attempts[0].impact.extent, 'selected_scope_unknown');
+  assert.deepEqual(result.attempts[0].impact.requirementIds, result.attempts[1].impact.requirementIds);
+  assert.deepEqual(result.attempts[0].impact.cardIds, result.attempts[1].impact.cardIds);
+});
+
+const r2Source = await sourceFor([], [], { publicCourses: [{ id: '00000000-0000-4000-8000-000000099702', title: 'R2合成公開科目',
+  status: 'earned', credits: 2, plannedYear: 2026, plannedTerm: null, studyYear: null, finalGrade: null }] });
+const r2Input = () => ({ graph: emptyGraph(), retained: retained(r2Source.state) });
+const r2Run = input => adaptAttemptGraduation(input, r2Source, scope);
+for (const [name, mutate] of [
+  ['sparse deletion', r => { delete r.publicCourses[0]; }],
+  ['ordinary deletion', r => { r.publicCourses.splice(0, 1); }],
+  ['credit rewrite', r => { r.publicCourses[0].credits = 0; }],
+  ['omitted credit', r => { delete r.publicCourses[0].credits; }],
+  ['null credit', r => { r.publicCourses[0].credits = null; }],
+  ['null element', r => { r.publicCourses[0] = null; }],
+  ['undefined credit', r => { r.publicCourses[0].credits = undefined; }],
+  ['NaN credit', r => { r.publicCourses[0].credits = NaN; }],
+  ['Infinity credit', r => { r.publicCourses[0].credits = Infinity; }],
+  ['bigint credit', r => { r.publicCourses[0].credits = 2n; }],
+  ['function credit', r => { r.publicCourses[0].credits = () => 2; }],
+  ['symbol property', r => { r[Symbol('hidden')] = 2; }],
+  ['hidden property', r => { Object.defineProperty(r, 'hidden', { value: 2 }); }],
+  ['extra array property', r => { r.publicCourses.extra = 2; }],
+  ['Date in object slot', r => { r.importedCourseUserMeta = new Date(0); }],
+  ['Map in object slot', r => { r.importedCourseUserMeta = new Map(); }],
+  ['Set in object slot', r => { r.importedCourseUserMeta = new Set(); }],
+  ['custom prototype', r => { Object.setPrototypeOf(r.importedCourseUserMeta, { inherited: 2 }); }],
+  ['cycle', r => { r.publicCourses[0].self = r.publicCourses[0]; }],
+]) test(`R2 retained rejects ${name} without losing source credits`, () => {
+  const input = r2Input(); mutate(input.retained);
+  const result = r2Run(input);
+  assert.equal(result.status, 'rejected');
+  assert.equal(result.diagnostics[0].code, 'retained_source_mismatch');
+  const canonical = r2Run(r2Input()); assert.equal(canonical.status, 'adapted');
+  assert.equal(canonical.retained.publicCourses[0].credits, 2);
+  assert.deepEqual(canonical.retainedProgress, adapt(emptyGraph(), r2Source).retainedProgress);
+});
+for (const target of ['envelope-retained', 'envelope-graph', 'collection', 'array-index', 'credit', 'setter-only', 'array-extra']) {
+  test(`R2 accessor ${target} is rejected without invocation`, () => {
+    const input = r2Input(); let reads = 0, writes = 0;
+    const value = input.retained.publicCourses;
+    const descriptor = { enumerable: true, configurable: true, get() { reads++; return value; }, set() { writes++; } };
+    if (target === 'envelope-retained') Object.defineProperty(input, 'retained', descriptor);
+    if (target === 'envelope-graph') Object.defineProperty(input, 'graph', descriptor);
+    if (target === 'collection') Object.defineProperty(input.retained, 'publicCourses', descriptor);
+    if (target === 'array-index') Object.defineProperty(value, '0', { ...descriptor, get() { reads++; return r2Source.state.publicCourses[0]; } });
+    if (target === 'credit') Object.defineProperty(value[0], 'credits', { ...descriptor, get() { reads++; return 2; } });
+    if (target === 'setter-only') Object.defineProperty(value[0], 'credits', { enumerable: true, set() { writes++; } });
+    if (target === 'array-extra') Object.defineProperty(value, 'extra', descriptor);
+    assert.equal(r2Run(input).status, 'rejected');
+    assert.equal(reads, 0); assert.equal(writes, 0);
+  });
+}
+test('R2 retained reflection failure rejects; calculation never reads caller access traps', () => {
+  const input = r2Input();
+  const throwing = new Proxy(input.retained, { ownKeys() { throw new Error('invalid object'); } });
+  assert.equal(r2Run({ ...input, retained: throwing }).status, 'rejected');
+  let reads = 0;
+  const indirect = new Proxy(input.retained, { get(target, key) { reads++; if (key === 'publicCourses') return []; return Reflect.get(target, key); } });
+  const result = r2Run({ ...input, retained: indirect });
+  assert.equal(reads, 0);
+  assert.equal(result.status, 'adapted');
+  assert.equal(result.retained.publicCourses[0].credits, 2);
+  assert.deepEqual(result.retained, retained(r2Source.state));
+  assert.deepEqual(result.retainedProgress, calculateState(r2Source.state, scope));
+  assert.equal(result.retainedProgress.cards.find(c => c.publicCourse)?.publicCourse.countedCredits, 2);
+});
+test('R2 equality preserves omissions, null, zero, positive, order and plain frozen data', () => {
+  const variants = [{}, { v: null }, { v: 0 }, { v: 2 }];
+  for (const [i, a] of variants.entries()) for (const [j, b] of variants.entries()) assert.equal(sameAttemptData(a, b), i === j);
+  assert.equal(sameAttemptData(undefined, undefined), true, 'omitted source-path values remain comparable');
+  assert.equal(sameAttemptData({ a: 2, b: 0 }, Object.freeze({ b: 0, a: 2 })), true);
+  assert.equal(sameAttemptData([0, 2], [2, 0]), false);
+  assert.equal(sameAttemptData(Object.assign(Object.create(null), { v: 2 }), { v: 2 }), true);
+});
+for (const value of [undefined, NaN, Infinity, 2n, Symbol('x'), () => 2, new Date(0), new Map(), new Set(), Array(1)]) {
+  test(`R2 equality rejects non-data or sparse self-comparison ${String(value)}`, () => {
+    assert.equal(sameAttemptData({ v: value }, { v: value }), false);
+  });
+}
+test('R2 equality rejects accessors on either side, cycles and hidden data without reading values', () => {
+  let reads = 0; const accessor = { get v() { reads++; return 2; } };
+  assert.equal(sameAttemptData(accessor, { v: 2 }), false);
+  assert.equal(sameAttemptData({ v: 2 }, accessor), false);
+  assert.equal(sameAttemptData(accessor, accessor), false);
+  assert.equal(reads, 0);
+  const cyclic = {}; cyclic.self = cyclic;
+  assert.equal(sameAttemptData(cyclic, cyclic), false);
+  const hidden = Object.defineProperty({}, 'v', { value: 2 });
+  assert.equal(sameAttemptData(hidden, hidden), false);
+  const shared = { v: 2 };
+  assert.equal(sameAttemptData([shared, shared], [{ v: 2 }, { v: 2 }]), true);
+});
+test('R2 graph sparse arrays reject before inherited index accessors can execute', () => {
+  const graph = emptyGraph(); graph.attempts = Array(1); let reads = 0;
+  Object.setPrototypeOf(graph.attempts, Object.create(Array.prototype, { 0: { get() { reads++; return newAttempt(master); } } }));
+  const result = validateAttemptGraph(graph, blankSource.context);
+  assert.equal(result.valid, false); assert.equal(reads, 0);
+  assert.ok(result.issues.some(i => i.code === 'non_json_value'));
+});
+test('R2 graph custom array prototype and reflection failure reject without inherited accessor execution', () => {
+  const graph = withAttempts(newAttempt(master)); let reads = 0;
+  Object.setPrototypeOf(graph.attempts, Object.create(Array.prototype, { [Symbol.iterator]: { get() { reads++; throw new Error('must not execute'); } } }));
+  assert.ok(validateAttemptGraph(graph, blankSource.context).issues.some(i => i.code === 'non_json_value'));
+  assert.equal(reads, 0);
+  const indirect = new Proxy(emptyGraph(), { ownKeys() { throw new Error('invalid reflection'); } });
+  assert.ok(validateAttemptGraph(indirect, blankSource.context).issues.some(i => i.code === 'non_json_value'));
+  assert.equal(r2Run({ ...r2Input(), graph: indirect }).status, 'rejected');
+});
+test('R2 graph snapshots reject clone loss and uncloneable inputs instead of throwing', () => {
+  for (const branded of [new Date(0), new Map(), new Set(), /graph/]) {
+    // Changing a native object's prototype does not make structuredClone retain
+    // its own graph fields. Inspect the snapshot before any calculation uses it.
+    Object.setPrototypeOf(branded, Object.prototype); Object.assign(branded, emptyGraph());
+    assert.equal(r2Run({ ...r2Input(), graph: branded }).status, 'rejected');
+  }
+  assert.equal(r2Run({ ...r2Input(), graph: new Proxy(emptyGraph(), {}) }).status, 'rejected');
+});
+test('R2 out-of-range numeric properties cannot disguise missing array indices', () => {
+  const sparse = Array(1); sparse[4294967295] = 2;
+  assert.equal(sameAttemptData(sparse, sparse), false);
+  assert.equal(sameAttemptData(sparse, [2]), false);
+  const graph = emptyGraph(); graph.attempts = sparse;
+  assert.ok(validateAttemptGraph(graph, blankSource.context).issues.some(i => i.code === 'non_json_value'));
+});
 function noPositive(a) {
   for (const decision of Object.values(a.decisions)) {
     if (decision.status === 'supported') assert.equal(decision.value, 0);
@@ -199,10 +394,7 @@ for (const parent of ['unmatched', 'ambiguous', 'absent']) for (const link of ['
   });
 }
 
-const scopeLabelFor = {
-  '法律学科': 'law', '史学科': 'history', '地理学科': 'geography', '経済学科': 'economics', '商業学科': 'commerce',
-  '言語コース': 'japanese_language', '文学コース': 'japanese_literature', '芸能文化コース': 'japanese_performance',
-};
+
 test('P2-1 an exact old parent with an unsafe crosswalk remains possible, never exclusive', async () => {
   const crosswalk = master.crosswalk.find(d => d.oldEntityKind === 'CurriculumCourse' && d.status !== 'safe');
   const c = catalog.curriculum.courses.find(c => c.id === crosswalk.oldId); assert.ok(c);
@@ -256,7 +448,11 @@ for (const program of programs) {
   });
   test(`P2-2 selected professional and unknown requirement IDs ${program.displayName}`, () => {
     const label = scopeLabelFor[program.course ?? program.department]; assert.ok(label);
-    const p = master.placements.find(p => p.scopeId === program.scopeId && p.category === '専門教育'); assert.ok(p);
+    // A local-only control must not silently include another course's placement
+    // through the IC union. Mixed-scope candidates are covered by R1 above.
+    const p = master.placements.find(p => p.scopeId === program.scopeId && p.category === '専門教育'
+      && (!p.institutionalCourseId || master.placements.every(other => other.institutionalCourseId !== p.institutionalCourseId || other.scopeId === program.scopeId))); assert.ok(p);
+    assert.ok(candidatePlacements(newAttempt(master, p), master).every(candidate => candidate.scopeId === program.scopeId));
     const result = adapt(withAttempts(newAttempt(master, p), newAttempt(master)), blankSource, program.scopeId);
     const expectedProfessional = result.retainedProgress.requirements.filter(row => {
       const r = catalog.requirements.find(r => r.id === row.requirementId);

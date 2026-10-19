@@ -31,12 +31,16 @@ export function attemptImpact(a: Attempt, candidates: CurriculumPlacement[], cat
   const empty: AttemptImpact = { extent: 'none', scopeIds: [], placementIds: [], categories: [], requirementIds: [], cardIds: [], referenceIds: [] };
   if (a.membership.kind !== 'active' || !a.plan || ['failed', 'dropped', 'waiting'].includes(a.plan.status)) return empty;
   const common = catalog.programs.filter(p => p.isCommon).map(p => p.scopeId);
+  const unverifiedOutside = a.applicability.status !== 'confirmed'
+    && candidates.some(p => p.scopeId !== scopeId && !common.includes(p.scopeId));
   const relevant = candidates.filter(p => p.scopeId === scopeId || common.includes(p.scopeId));
   // A documented placement in another program does not confirm this student's
   // applicability. Until confirmed, it cannot prove absence of local impact.
   const outsideConfirmed = candidates.length > 0 && relevant.length === 0 && a.applicability.status === 'confirmed';
   if (outsideConfirmed) return empty;
-  const unknown = relevant.length === 0;
+  // An unresolved outside candidate keeps its potential local impact even when
+  // another (e.g. common) candidate is added. Candidate unions cannot erase holds.
+  const unknown = relevant.length === 0 || unverifiedOutside;
   const categories = [...new Set(relevant.map(p => p.category))].sort();
   const has = (category: string) => unknown || categories.includes(category);
   const program = catalog.programs.find(p => p.scopeId === scopeId)!;

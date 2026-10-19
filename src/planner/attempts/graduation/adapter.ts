@@ -35,16 +35,30 @@ export function adaptAttemptGraduation(input: { graph: unknown; retained: Retain
   scopeId: string): AttemptGraduationResult {
   try { requireDecoded(source); }
   catch { return { status: 'rejected', diagnostics: [{ code: 'unvalidated_source', path: '/source', message: 'Decode the original source or load through YI-06 first' }] }; }
-  if (!sameAttemptData(input.retained, retainedFromSource(source))) return { status: 'rejected', diagnostics: [{
+  const sourceRetained = retainedFromSource(source);
+  const mismatch = (): AttemptGraduationResult => ({ status: 'rejected', diagnostics: [{
     code: 'retained_source_mismatch', path: '/retained', message: 'Official rows, metadata and non-Attempt records must retain every original field/omission/order',
-  }] };
+  }] });
+  let graphInput: unknown;
+  try {
+    const retainedProperty = Object.getOwnPropertyDescriptor(input, 'retained'), graphProperty = Object.getOwnPropertyDescriptor(input, 'graph');
+    if (!retainedProperty || !graphProperty || !('value' in retainedProperty) || !('value' in graphProperty)
+      || !sameAttemptData(retainedProperty.value, sourceRetained)) return mismatch();
+    graphInput = graphProperty.value;
+  } catch { return mismatch(); }
   if (!source.sourceCatalog.programs.some(p => p.scopeId === scopeId && !p.isCommon)) return { status: 'rejected', diagnostics: [{
     code: 'unknown_scope', path: '/scopeId', message: 'Select an explicit known program; never infer from a planned year',
   }] };
-  const checked = validateAttemptGraph(input.graph, source.context);
-  if (!checked.valid) return { status: 'rejected', diagnostics: checked.issues };
+  let graph: AttemptGraph;
+  try {
+    const checked = validateAttemptGraph(graphInput, source.context);
+    if (!checked.valid) return { status: 'rejected', diagnostics: checked.issues };
+    graph = structuredClone(graphInput as AttemptGraph);
+    if (!sameAttemptData(graphInput, graph)) throw new Error('graph_clone_changed_data');
+  } catch { return { status: 'rejected', diagnostics: [{ code: 'invalid_graph_input', path: '/graph', message: 'Expected cloneable plain graph data' }] }; }
   // Clone BEFORE freeze/calculation, including retained optional properties and arrays.
-  const graph = structuredClone(input.graph as AttemptGraph), retained = structuredClone(input.retained);
+  // Calculation uses the decoded source, never a second read of caller retained.
+  const retained = structuredClone(sourceRetained);
   const catalog = source.sourceCatalog, master = source.context.catalog;
   const rows = retained.importedCourseAchievements, records = retained.importedStudyRecords;
   const officialEvidence = deriveOfficialGraduationFacts(rows, records, catalog, scopeId, retained.graduationProfile);

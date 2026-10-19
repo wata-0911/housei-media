@@ -19,6 +19,10 @@ if (loaded) {
 
 `retained` の全field/省略/null/配列順を元sourceの同じ非Attempt部分と完全比較する。編集可能なgraphを元sourceと比較しない。YI-04の割当表、ledgerや`projectLegacyState`を新算入用に使用しない。非Attempt情報の編集・新取込は第1段階の入力契約外であり、source再検証と別の明示contractを要する。
 
+比較は配列長だけでなく全indexのown data propertyの存在を要求する。疎配列、範囲外index・追加property、accessor、symbol/非列挙property、非JSON値、独自prototype、循環参照は一致としない。同一objectへの参照でも検査を省略しない。通常のplain objectとnull-prototype objectはキー順に依存せず、freeze前後のwritable/configurable差は値の変更としない。ledgerの省略pathを比べるためのbare `undefined`同士は維持するが、data propertyの明示`undefined`とは区別する。
+
+adapterはenvelopeのgraph/retainedもdata descriptorから取得し、getter/setterを呼び出さない。比較成功後の計算・返却に使うretainedは、検証済み・freeze済みsourceからcloneする。caller retainedを再読込・cloneして算入へ流さない。反射やgraph cloneが失敗する入力、clone前後でgraphのデータが変わる入力はrejectedとする。これは公式情報の変更を許すfallbackではなく、完全一致を要求したうえで計算元をsourceへ固定する境界である。
+
 未知scope、未検証source、retained変更、invalid graphは`status=rejected`と既存validator等の診断。構造的に正常なunknown/ambiguous/conflict/unmatched、未確認課程は`status=adapted`で情報を保持する。`adapted`は算入成功ではない。
 
 ## 出力
@@ -92,6 +96,8 @@ if (loaded) {
 | attempt_rule_unimplemented / multiple_attempt_rule_unimplemented | 特殊・通常配分、複数回完成/反復の未実装 |
 
 候補からcategory単位で影響を閉じる。専門は当該学科内の振替・上限・科目数依存を含め保守的に広げるが、無関係な一般教育・外国語・体育へ広げない。common候補は該当common categoryに局所化。候補なしは当該選択scope＋common内の不明として返す。他学科全要件をunknownにしない。未確認の他学科配置だけではこの本人への「影響なし」を証明できないため、明示適用がなければselected-scope不明に留める。
+
+選択scope/commonへの絞り込み前に、scope外候補と本人適用未確定の組合せを確認する。その候補が残っている限り、commonなど別の候補を追加しても`selected_scope_unknown`のrequirement/card保留を消さない。候補unionとその順序は潜在影響を狭める根拠にならない。本人適用がconfirmedの場合に限る既存の局所化は維持し、現行masterにない適用証拠を生成してこの条件を満たすことはしない。
 
 `requirementIds`は既存engineの警告一覧ではない。structured descriptorの明示scope、unsupported descriptorの既知`scopeLabel`（law/history/geography/economics/commerce/日文3コース/common）を解決したうえで候補category・名前と照合する。commonの自然再履修は一般教育、外国語再履修は外国語だけに紐付ける。専門の未対応規則は選択学科の専門候補へ保守的に残す。欠落descriptorや未知scopeLabelを全Attemptへ自動展開しない。
 

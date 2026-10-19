@@ -1,0 +1,271 @@
+{
+  "date": "2026-10-19",
+  "auditedHead": "7fe931dd5de407ed4cc9b0704ec84ba6c4fd212a",
+  "baseDev": "1866c6b7668458a6c664d3b2461b4f78c6cc9697",
+  "newCases": 71,
+  "previousP2Cases": 64,
+  "finalYi07SuiteCases": 414,
+  "finalPlannerCases": 3906,
+  "red": {
+    "name": "red-release",
+    "summary": {
+      "tests": 71,
+      "pass": 17,
+      "fail": 54,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 18021.922191
+    },
+    "logSha256": "013cc32a0ced50b217bc99cfc43bc055e798036d3520e02e97ad4738376ba5c0"
+  },
+  "finalTargetRegression": {
+    "name": "green-release",
+    "summary": {
+      "tests": 135,
+      "pass": 135,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 55489.371662
+    },
+    "logSha256": "d9bca2a96ca6bb2930064475fef1ee171d714f36db4a7c693ec4bfcc7d6db319"
+  },
+  "initialTargetRegression": {
+    "name": "target-regressions",
+    "summary": {
+      "tests": 134,
+      "pass": 133,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 56849.790036
+    },
+    "logSha256": "5647fd07b0e01564bdf563160bb672bcbed85c2e0a1e1b76ece096a06f090895"
+  },
+  "initialFullPlanner": {
+    "command": [
+      "node",
+      "--import",
+      "tsx",
+      "--test",
+      "--test-concurrency=2",
+      "tests/official-repeatable.test.mjs",
+      "tests/calligraphy-progress.test.mjs",
+      "tests/calligraphy-state-references.test.mjs",
+      "tests/calligraphy-partial-details.test.mjs",
+      "tests/planner.test.mjs",
+      "tests/curriculum-foundation.test.mjs",
+      "tests/course-progress.test.mjs",
+      "tests/curriculum-centered-model.test.mjs",
+      "tests/curriculum-course-ui.test.mjs",
+      "tests/component-provenance.test.mjs",
+      "tests/graduation-audit.test.mjs",
+      "tests/manual-graduation-credits.test.mjs",
+      "tests/structured-professional-credits.test.mjs",
+      "tests/grade-import-privacy.test.mjs",
+      "tests/grade-import-identity.test.mjs",
+      "tests/unresolved-conditions.test.mjs",
+      "tests/institutional-catalog.test.mjs",
+      "tests/attempt-contract.test.mjs",
+      "tests/migration.test.mjs",
+      "tests/attempt-workbench.test.mjs",
+      "tests/attempt-persistence.test.mjs",
+      "tests/attempt-graduation.test.mjs"
+    ],
+    "exitCode": 1,
+    "seconds": 1159.46,
+    "name": "planner",
+    "summary": {
+      "tests": 3905,
+      "pass": 3904,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 1159315.033688
+    },
+    "logSha256": "a522bf7f5015f4e2e49b21168af2b1e8441f274a52de92ef4c5a0577f2cf168c"
+  },
+  "initialFailureExplanation": "The original local-only language fixture included three-course placements via a shared IC. Select a local-only fixture, retain the exact expected ID assertions, and add a separate real shared-IC R1 regression. The initial full process had already loaded the old fixture and only the first 70 R tests; it records this one failure. Final target regression passes all 135. Complete final HEAD validation is the unchanged CI npm script.",
+  "finalCompleteValidation": "Final HEAD CI: PR #179 Checks and PR body. Existing npm run test:planner unchanged.",
+  "browser": [
+    {
+      "name": "attempt-ui-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-ui-browser"
+      ],
+      "exitCode": 0,
+      "seconds": 48.74,
+      "summary": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 48116.576017
+      },
+      "logSha256": "50805caecd9c1f67686645273a38fa045c33ccbe01a5fa52e6be796111da7f40"
+    },
+    {
+      "name": "attempt-persistence-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence-browser"
+      ],
+      "exitCode": 0,
+      "seconds": 313.18,
+      "summary": {
+        "tests": 17,
+        "pass": 17,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 312541.806824
+      },
+      "logSha256": "6981f657b0cdd8fd6946914072aa4d0e5f4b19b9c82fde6be33d58a2ed265d50"
+    }
+  ],
+  "localEnvironment": {
+    "node": "24.13.0",
+    "npm": "11.6.2",
+    "playwright": "1.62.1",
+    "chromiumHeadlessShellRevision": 1243
+  },
+  "checks": [
+    {
+      "name": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0,
+      "seconds": 23.37
+    },
+    {
+      "name": "lint",
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "exitCode": 0,
+      "seconds": 32.04
+    },
+    {
+      "name": "extension",
+      "command": [
+        "npm",
+        "run",
+        "test:extension"
+      ],
+      "exitCode": 0,
+      "seconds": 1.27
+    },
+    {
+      "name": "bookmarklet",
+      "command": [
+        "npm",
+        "run",
+        "test:bookmarklet"
+      ],
+      "exitCode": 0,
+      "seconds": 5.95
+    },
+    {
+      "name": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exitCode": 0,
+      "seconds": 15.59
+    },
+    {
+      "name": "yi01-verify",
+      "command": [
+        "python3",
+        "docs/planner-yi-01/verify.py"
+      ],
+      "exitCode": 0,
+      "seconds": 0.72
+    },
+    {
+      "name": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "seconds": 0.04
+    }
+  ],
+  "finalRepeatedChecks": [
+    {
+      "name": "typecheck",
+      "exitCode": 0,
+      "logSha256": "f1292e716cf206bd36a7d012b36caceaa0b3ac2d43e5b16d6f445e3f4b029f51"
+    },
+    {
+      "name": "lint",
+      "exitCode": 0,
+      "logSha256": "a2623802382957a2bcd0606d148b093c7b1e5f2f097004819d45199ee92b809c"
+    },
+    {
+      "name": "build",
+      "exitCode": 0,
+      "logSha256": "214bdcf69c64b62494507f78d8ac514d9646bb877e42f82ef4aec93ea33e1cf1"
+    }
+  ],
+  "otherSuites": [
+    {
+      "name": "extension",
+      "summary": {
+        "tests": 54,
+        "pass": 54,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 406.324316
+      },
+      "logSha256": "dd79d68cf8b09baae311fbdf4bac8a04c21a1f691bb70086f45b991c0113c9c7"
+    },
+    {
+      "name": "bookmarklet",
+      "summary": {
+        "tests": 168,
+        "pass": 168,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 4595.937059
+      },
+      "logSha256": "be0d0a8719f9f9a62b4fd42632d49f4f0f8af11babbb069213d7f121efa40772"
+    }
+  ],
+  "finalSourceSha256": {
+    "src/planner/attempts/graduation/impact.ts": "2ef041e0b2bf32fbe725221c27721d76676b57ceeac993e05eda27ad8db0cd42",
+    "src/planner/attempts/graduation/adapter.ts": "1b11cb133b94faa4968bae3972c6c5555749f93ef3a6dc5ad41c4830082be962",
+    "src/planner/attempts/validation.ts": "291b7084c32a62a7776c0950c7c2d5bef2a494bdc1316980c32d5f54f464c1e5",
+    "tests/attempt-graduation.test.mjs": "4cc1ae39bef013057d47b0b322e6ae327e693a16df1fd2062e969b82482b0aa3"
+  },
+  "fixedBaseline": {
+    "cases": 192,
+    "gzipSha256": "15fc5f7b11bf3b35fc379e0792bc257dc5cc1355e199f541fe72cf1bc37a03de",
+    "uncompressedSha256": "a0aed205de6ad027d81351ef354e677b505785de66442f137fdfc21a8af34a7c",
+    "unchanged": true
+  },
+  "displayLogFormatting": "ANSI colors and trailing whitespace removed in display txt copies only; SHA values identify the original raw logs"
+}

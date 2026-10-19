@@ -154,3 +154,54 @@ Node 24.13.0、npm 11.6.2、ローカルmacOS。既存lockfileの依存を使用
 schema22/23、legacy engine、YI-04 projection、YI-06保存/backup/IDB authority、通常PlannerPage、公式catalogは変更なし。新Attemptの正のordinary/S・完成判定はheld/unsupportedを維持し、架空Offeringを生成せず、retained-onlyを全体判定へ接続しない。
 
 修正範囲の実装者検証では新たなP1/P2を検出していないが、独立再監査は未実施。再監査では、(1) aggregate/detailリンク単独からordinary/Sの0除外へ到達しないこと、(2) 同一ICの公式null/0と正当な重複除外が残ること、(3) 全8scopeのrequirement ID包含/非包含とretained側全警告の保持を重点に確認する。Draft・Issue Openを維持し、Ready化・merge・Issue close・一般公開は行わない。
+
+## 2026-10-19 独立監査R1/R2の修正
+
+開始時にfetchし、PR #179の最新HEADが監査対象`7fe931dd5de407ed4cc9b0704ec84ba6c4fd212a`、devが`1866c6b7668458a6c664d3b2461b4f78c6cc9697`であること、既存ブランチ`feat/yi-07-graduation-adapter`がクリーンであることを確認した。同じPR・ブランチを使用し、別Issue/PR/ブランチ、rebase/reset/force-push、dev/mainへのcommitは行わない。
+
+### R1 候補追加による保留範囲の消失
+
+原因は`unknown = relevant.length === 0`で、scope外候補を捨てた後の空/非空だけから不明範囲を決めていたこと。他学科のみの未確認候補にcommon候補を追加すると、未解決の専門影響まで消えていた。
+
+修正は絞り込み前に`unverifiedOutside`（本人適用未確定かつscope外候補あり）を評価し、候補が残る間は`selected_scope_unknown`を維持すること。既存のselected/common要件filterは変更せず、前回の他学科unsupported31件混入を再発させない。confirmed時の局所化も保持する。
+
+全8scope×common3区分の24ケースで、unknown/unverifiedの両状態、候補追加前後のrequirementIds/cardIds包含、配列の完全一致、順序反転後のimpact完全一致、pure helperへ渡す候補順の反転を検証する。confirmedの3対照例はpure helperの事前条件だけを制御し、scope外だけならnone、common追加後はそのcommonだけへ局所化することを確認する。同じ偽装graphは既存validatorが拒否する。実catalogに存在しない本人適用証拠を作ってadapterに受理させるテストではない。
+
+### R2 疎配列・アクセサによるsource一致検査の回避
+
+旧`sameAttemptData`は配列に`.every()`を使い、穴のindexを検査しなかった。さらにobject同一参照の即時成功、getterを実行する値読取り、比較後のcaller retained再cloneがあり、不正入力や比較後に異なる値を返す入力から算入データを取得し得た。
+
+共有比較関数をown property descriptorによるplain data比較へ変更した。配列長・index存在・範囲・追加property、data descriptor、列挙性、prototypeを確認し、穴、accessor、symbol/非列挙property、関数・bigint・非有限数・Date/Map/Set、循環参照を一致としない。キー順やfreezeによるwritable/configurable差は比較しない。配列順と省略/null/0/正値を区別する。bare undefined同士は省略pathの比較にだけ維持し、明示undefined propertyは拒否する。
+
+adapter envelopeもdescriptorから読み、getter/setterを起動しない。sourceとの完全一致確認後に、計算と返却のretainedを検証済みsourceからcloneする。caller retainedを比較後に再利用しない。graphの反射・clone失敗はrejectedとし、graph JSON guardでも疎配列や独自array prototypeをschema検査前に拒否する。schema22/23の定義・保存形式・authorityは変更しない。
+
+公開科目2単位を持つ正規decode sourceを使い、通常削除・書換えと疎配列削除を独立に検証した。collection/index/credit/envelopeのgetter、setter-only、array追加accessorは呼出し0回で拒否する。比較に成功するdata descriptorのviewでも、caller側get trapを算入へ使わずsourceの公開2単位と既存engineの全出力を維持することを確認する。循環・反射失敗・clone不能graph・範囲外numeric propertyで穴を隠すケースも別に検証する。
+
+graphもclone前後のデータ一致を確認してから使用する。Date/Map/Set/RegExpのprototypeをObjectへ偽装すると、事前検査時に見えていたown fieldがstructuredClone後に消える入力もあるためである。このようなsnapshotの欠落も計算へ流さずrejectedとする。clone失敗をcatchするだけでなく、cloneが成功した場合の保持も確認する。
+
+### 反例のRED → GREEN
+
+追加71件の同じ最終テストを、監査HEADのpristine archiveへコピーして**17 PASS / 54 FAIL / 0 SKIP**を確認した。最後の追加1件は、実catalogの言語コースの共有ICから他コース配置も候補に入るケース。同一ブランチのcheckoutをresetせず、試験用archiveで旧実装を実行した。既存のscopeLabel対応表は新テストからも参照できるよう宣言位置だけを移した。
+
+前回P2テストとの初回同時実行は133 PASS / 1 FAILだった。「選択scopeだけの専門科目」を検証する言語コースfixtureが、日本文芸研究特講・韻文の共有ICを使い、実際には3コースの候補を含んでいたためである。R1の修正条件ではこれを専門局所化に戻してはならない。fixtureをscope内だけの候補へ限定し、前回のrequirement ID完全一致・他学科の非包含という期待値は変更していない。実共有ICの不明保留は新しい独立テストへ残し、fixture選択でこの反例を隠していない。固定baseline、既存卒業engine、schema22/23、catalog、既存のtimeout/skipは変更していない。
+
+修正後の最終sourceで、新規71＋前回P2の64件を同時実行し、**135 PASS / 0 FAIL / 0 SKIP**。R1のREDは要件・カード両方の失われたIDをまとめて表示する。[全件結果と代表反例](r1-r2-red-green.txt)、[件数・実行条件・source/log SHA](r1-r2-test-results.json)を保存した。
+
+| 検証 | R1/R2修正時の結果 |
+| --- | --- |
+| 最終反例のRED | 71件: 17 PASS / 54 FAIL / 0 SKIP |
+| 最終sourceの反例＋前回P2 | 135 PASS / 0 FAIL / 0 SKIP（新規71＋既存64） |
+| 全Plannerローカル初回 | 3,905件: 3,904 PASS / 1 FAIL / 0 SKIP、19分19秒で完走。旧fixtureの1件だけ失敗 |
+| 固定192件 | 上記全Planner内で全件PASS。全8scope×24件、gzip/非圧縮SHAとも不変 |
+| YI-04 / YI-05 / YI-06 | 全Planner内のmigration133、workbench84、persistence103は全件PASS |
+| Chromium YI-05 / YI-06 | 9 PASS / 17 PASS、いずれもFAIL/SKIP 0、初回で成功 |
+| extension / bookmarklet | 54 PASS / 168 PASS、いずれもFAIL/SKIP 0 |
+| typecheck / lint / build | PASS。最終のgraph clone保持検査後にも再実行してPASS |
+| grade-import / catalog / YI-01 verify / diff check | PASS |
+| 最終production byte比較 | 最新devのpristine archiveと双方再build、[12/12ファイル一致](r1-r2-build-comparison.json)。前回manifestとも一致 |
+
+ローカル全Plannerは既存scriptと同じ22ファイルを並列数2で実行した。このprocessは旧fixtureと追加70件の版を既に読み込んでいたため、その失敗を消さず記録する。最終suiteは既存343＋追加71＝414件、全Plannerは既存3,492＋414＝**3,906件**となる。最終の全件判定はpushしたHEADの既存CI（`npm run test:planner`無変更）で照合し、[同一PRのChecks](https://github.com/wata-0911/housei-media/pull/179/checks)とPR本文にHEAD・CI結果を記録する。部分実行の重複件数を合算して完走扱いにしない。
+
+変更はadapter、impact、共有比較/JSON guard、YI-07テスト、契約・受け入れ・検証記録に限定する。保存/復元/authorityの実装、YI-04 projection、schema22/23、固定baseline、legacy engine、公式catalog、production PlannerPageは変更しない。新Attemptの正値・完成判定はheld/unsupported、両完了flagはfalseのままとする。
+
+独立再監査は未実施。再監査は、未確認scope外候補を含むunionの要件/カード包含と順序不変性、他学科unsupported非混入、疎配列・accessor・clone欠落の拒否、計算retainedのsource固定、YI-04/05/06の有効なJSONデータ互換性を重点に確認する。PR Draft・Issue #177 Openを維持し、Ready化・merge・Issue closeは行わない。
