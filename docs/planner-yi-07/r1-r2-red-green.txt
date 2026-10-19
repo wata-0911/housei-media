@@ -1,0 +1,349 @@
+Audited HEAD 7fe931dd5de407ed4cc9b0704ec84ba6c4fd212a pristine archive
+node --import tsx --test --test-name-pattern=^R[12]  tests/attempt-graduation.test.mjs
+raw log SHA256 013cc32a0ced50b217bc99cfc43bc055e798036d3520e02e97ad4738376ba5c0
+✖ R1 candidate addition is monotone and order independent 文学部 / 史学科/一般教育 (482.651957ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 史学科/外国語 (331.118926ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 史学科/保健体育 (339.502885ms)
+✖ R1 candidate addition is monotone and order independent 経済学部 / 経済学科/一般教育 (284.115745ms)
+✖ R1 candidate addition is monotone and order independent 経済学部 / 経済学科/外国語 (299.283954ms)
+✖ R1 candidate addition is monotone and order independent 経済学部 / 経済学科/保健体育 (327.541898ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 地理学科/一般教育 (339.592718ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 地理学科/外国語 (308.6255ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 地理学科/保健体育 (297.209111ms)
+✖ R1 candidate addition is monotone and order independent 経済学部 / 商業学科/一般教育 (256.987988ms)
+✖ R1 candidate addition is monotone and order independent 経済学部 / 商業学科/外国語 (310.801246ms)
+✖ R1 candidate addition is monotone and order independent 経済学部 / 商業学科/保健体育 (303.952249ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 言語コース/一般教育 (274.553923ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 言語コース/外国語 (331.009807ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 言語コース/保健体育 (349.612652ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 芸能文化コース/一般教育 (299.102796ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 芸能文化コース/外国語 (334.369332ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 芸能文化コース/保健体育 (264.742238ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 文学コース/一般教育 (249.268252ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 文学コース/外国語 (274.865551ms)
+✖ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 文学コース/保健体育 (291.125705ms)
+✖ R1 candidate addition is monotone and order independent 法学部 / 法律学科/一般教育 (302.269064ms)
+✖ R1 candidate addition is monotone and order independent 法学部 / 法律学科/外国語 (273.234707ms)
+✖ R1 candidate addition is monotone and order independent 法学部 / 法律学科/保健体育 (263.683828ms)
+✔ R1 pure impact confirmed-applicability branch stays local 一般教育 (199.044628ms)
+✔ R1 pure impact confirmed-applicability branch stays local 外国語 (164.527884ms)
+✔ R1 pure impact confirmed-applicability branch stays local 保健体育 (197.485394ms)
+✖ R1 confirmed Course identity does not erase unresolved applicability of cross-course placements (93.702839ms)
+✖ R2 retained rejects sparse deletion without losing source credits (858.639359ms)
+✔ R2 retained rejects ordinary deletion without losing source credits (225.008622ms)
+✔ R2 retained rejects credit rewrite without losing source credits (237.134654ms)
+✔ R2 retained rejects omitted credit without losing source credits (177.814342ms)
+✔ R2 retained rejects null credit without losing source credits (170.792138ms)
+✔ R2 retained rejects null element without losing source credits (193.777997ms)
+✔ R2 retained rejects undefined credit without losing source credits (186.852002ms)
+✔ R2 retained rejects NaN credit without losing source credits (190.064284ms)
+✔ R2 retained rejects Infinity credit without losing source credits (185.338025ms)
+✔ R2 retained rejects bigint credit without losing source credits (182.20834ms)
+✔ R2 retained rejects function credit without losing source credits (172.027813ms)
+✖ R2 retained rejects symbol property without losing source credits (81.137632ms)
+✖ R2 retained rejects hidden property without losing source credits (111.382853ms)
+✖ R2 retained rejects extra array property without losing source credits (82.583969ms)
+✖ R2 retained rejects Date in object slot without losing source credits (79.651767ms)
+✖ R2 retained rejects Map in object slot without losing source credits (82.515376ms)
+✖ R2 retained rejects Set in object slot without losing source credits (90.351489ms)
+✖ R2 retained rejects custom prototype without losing source credits (81.32912ms)
+✔ R2 retained rejects cycle without losing source credits (164.244611ms)
+✖ R2 accessor envelope-retained is rejected without invocation (0.979336ms)
+✖ R2 accessor envelope-graph is rejected without invocation (0.584191ms)
+✖ R2 accessor collection is rejected without invocation (79.094535ms)
+✖ R2 accessor array-index is rejected without invocation (98.303891ms)
+✖ R2 accessor credit is rejected without invocation (91.710664ms)
+✔ R2 accessor setter-only is rejected without invocation (0.456087ms)
+✖ R2 accessor array-extra is rejected without invocation (100.498613ms)
+✖ R2 retained reflection failure rejects; calculation never reads caller access traps (0.726795ms)
+✔ R2 equality preserves omissions, null, zero, positive, order and plain frozen data (0.476538ms)
+✖ R2 equality rejects non-data or sparse self-comparison undefined (0.592027ms)
+✔ R2 equality rejects non-data or sparse self-comparison NaN (0.132913ms)
+✖ R2 equality rejects non-data or sparse self-comparison Infinity (0.302404ms)
+✖ R2 equality rejects non-data or sparse self-comparison 2 (0.373802ms)
+✖ R2 equality rejects non-data or sparse self-comparison Symbol(x) (0.273842ms)
+✖ R2 equality rejects non-data or sparse self-comparison () => 2 (0.245408ms)
+✖ R2 equality rejects non-data or sparse self-comparison Thu Jan 01 1970 09:00:00 GMT+0900 (Japan Standard Time) (0.230543ms)
+✖ R2 equality rejects non-data or sparse self-comparison [object Map] (0.229689ms)
+✖ R2 equality rejects non-data or sparse self-comparison [object Set] (0.219812ms)
+✖ R2 equality rejects non-data or sparse self-comparison  (0.237764ms)
+✖ R2 equality rejects accessors on either side, cycles and hidden data without reading values (0.527037ms)
+✖ R2 graph sparse arrays reject before inherited index accessors can execute (82.09079ms)
+✖ R2 graph custom array prototype and reflection failure reject without inherited accessor execution (0.826081ms)
+✖ R2 graph snapshots reject clone loss and uncloneable inputs instead of throwing (93.441931ms)
+✖ R2 out-of-range numeric properties cannot disguise missing array indices (0.57669ms)
+ℹ tests 71
+ℹ suites 0
+ℹ pass 17
+ℹ fail 54
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 18021.922191
+
+Corrected final source: 71 new + previous 64 P2
+node --import tsx --test --test-name-pattern=^(R[12] |P2-) tests/attempt-graduation.test.mjs
+raw log SHA256 d9bca2a96ca6bb2930064475fef1ee171d714f36db4a7c693ec4bfcc7d6db319
+✔ R1 candidate addition is monotone and order independent 文学部 / 史学科/一般教育 (1112.889021ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 史学科/外国語 (1034.205158ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 史学科/保健体育 (936.45801ms)
+✔ R1 candidate addition is monotone and order independent 経済学部 / 経済学科/一般教育 (924.938303ms)
+✔ R1 candidate addition is monotone and order independent 経済学部 / 経済学科/外国語 (1097.181469ms)
+✔ R1 candidate addition is monotone and order independent 経済学部 / 経済学科/保健体育 (862.369218ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 地理学科/一般教育 (872.471215ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 地理学科/外国語 (914.010066ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 地理学科/保健体育 (875.168551ms)
+✔ R1 candidate addition is monotone and order independent 経済学部 / 商業学科/一般教育 (971.222786ms)
+✔ R1 candidate addition is monotone and order independent 経済学部 / 商業学科/外国語 (876.612956ms)
+✔ R1 candidate addition is monotone and order independent 経済学部 / 商業学科/保健体育 (805.503114ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 言語コース/一般教育 (873.177244ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 言語コース/外国語 (759.166567ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 言語コース/保健体育 (686.659215ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 芸能文化コース/一般教育 (740.308184ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 芸能文化コース/外国語 (722.026752ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 芸能文化コース/保健体育 (672.564409ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 文学コース/一般教育 (551.419663ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 文学コース/外国語 (517.985128ms)
+✔ R1 candidate addition is monotone and order independent 文学部 / 日本文学科 / 文学コース/保健体育 (494.583082ms)
+✔ R1 candidate addition is monotone and order independent 法学部 / 法律学科/一般教育 (470.52675ms)
+✔ R1 candidate addition is monotone and order independent 法学部 / 法律学科/外国語 (490.200934ms)
+✔ R1 candidate addition is monotone and order independent 法学部 / 法律学科/保健体育 (519.345677ms)
+✔ R1 pure impact confirmed-applicability branch stays local 一般教育 (118.43723ms)
+✔ R1 pure impact confirmed-applicability branch stays local 外国語 (109.744568ms)
+✔ R1 pure impact confirmed-applicability branch stays local 保健体育 (128.491078ms)
+✔ R1 confirmed Course identity does not erase unresolved applicability of cross-course placements (85.782196ms)
+✔ R2 retained rejects sparse deletion without losing source credits (687.040469ms)
+✔ R2 retained rejects ordinary deletion without losing source credits (148.827779ms)
+✔ R2 retained rejects credit rewrite without losing source credits (192.178494ms)
+✔ R2 retained rejects omitted credit without losing source credits (113.921953ms)
+✔ R2 retained rejects null credit without losing source credits (182.078927ms)
+✔ R2 retained rejects null element without losing source credits (145.635677ms)
+✔ R2 retained rejects undefined credit without losing source credits (116.418951ms)
+✔ R2 retained rejects NaN credit without losing source credits (123.02259ms)
+✔ R2 retained rejects Infinity credit without losing source credits (184.780567ms)
+✔ R2 retained rejects bigint credit without losing source credits (174.894ms)
+✔ R2 retained rejects function credit without losing source credits (199.958764ms)
+✔ R2 retained rejects symbol property without losing source credits (200.161077ms)
+✔ R2 retained rejects hidden property without losing source credits (156.6112ms)
+✔ R2 retained rejects extra array property without losing source credits (192.884706ms)
+✔ R2 retained rejects Date in object slot without losing source credits (184.987582ms)
+✔ R2 retained rejects Map in object slot without losing source credits (235.542027ms)
+✔ R2 retained rejects Set in object slot without losing source credits (336.424462ms)
+✔ R2 retained rejects custom prototype without losing source credits (367.602905ms)
+✔ R2 retained rejects cycle without losing source credits (264.595716ms)
+✔ R2 accessor envelope-retained is rejected without invocation (0.561632ms)
+✔ R2 accessor envelope-graph is rejected without invocation (0.201317ms)
+✔ R2 accessor collection is rejected without invocation (0.191269ms)
+✔ R2 accessor array-index is rejected without invocation (0.207412ms)
+✔ R2 accessor credit is rejected without invocation (0.24399ms)
+✔ R2 accessor setter-only is rejected without invocation (0.249425ms)
+✔ R2 accessor array-extra is rejected without invocation (0.186086ms)
+✔ R2 retained reflection failure rejects; calculation never reads caller access traps (128.668056ms)
+✔ R2 equality preserves omissions, null, zero, positive, order and plain frozen data (0.710098ms)
+✔ R2 equality rejects non-data or sparse self-comparison undefined (0.249861ms)
+✔ R2 equality rejects non-data or sparse self-comparison NaN (0.115432ms)
+✔ R2 equality rejects non-data or sparse self-comparison Infinity (0.10296ms)
+✔ R2 equality rejects non-data or sparse self-comparison 2 (0.100813ms)
+✔ R2 equality rejects non-data or sparse self-comparison Symbol(x) (0.097321ms)
+✔ R2 equality rejects non-data or sparse self-comparison () => 2 (0.122855ms)
+✔ R2 equality rejects non-data or sparse self-comparison Thu Jan 01 1970 09:00:00 GMT+0900 (Japan Standard Time) (0.062814ms)
+✔ R2 equality rejects non-data or sparse self-comparison [object Map] (0.057604ms)
+✔ R2 equality rejects non-data or sparse self-comparison [object Set] (0.059783ms)
+✔ R2 equality rejects non-data or sparse self-comparison  (0.105194ms)
+✔ R2 equality rejects accessors on either side, cycles and hidden data without reading values (0.291587ms)
+✔ R2 graph sparse arrays reject before inherited index accessors can execute (0.326968ms)
+✔ R2 graph custom array prototype and reflection failure reject without inherited accessor execution (0.991587ms)
+✔ R2 graph snapshots reject clone loss and uncloneable inputs instead of throwing (398.086845ms)
+✔ R2 out-of-range numeric properties cannot disguise missing array indices (0.491881ms)
+✔ P2-1 ownership aggregate/same: only exact Course identity excludes earned ordinary and S (785.715667ms)
+✔ P2-1 ownership aggregate/different: only exact Course identity excludes earned ordinary and S (704.731614ms)
+✔ P2-1 ownership aggregate/unknown: only exact Course identity excludes earned ordinary and S (647.934587ms)
+✔ P2-1 ownership aggregate/ambiguous: only exact Course identity excludes earned ordinary and S (681.662616ms)
+✔ P2-1 ownership aggregate/conflict: only exact Course identity excludes earned ordinary and S (665.863123ms)
+✔ P2-1 ownership aggregate/unmatched: only exact Course identity excludes earned ordinary and S (616.309883ms)
+✔ P2-1 ownership method-detail/same: only exact Course identity excludes earned ordinary and S (654.879526ms)
+✔ P2-1 ownership method-detail/different: only exact Course identity excludes earned ordinary and S (764.907848ms)
+✔ P2-1 ownership method-detail/unknown: only exact Course identity excludes earned ordinary and S (644.077345ms)
+✔ P2-1 ownership method-detail/ambiguous: only exact Course identity excludes earned ordinary and S (580.537342ms)
+✔ P2-1 ownership method-detail/conflict: only exact Course identity excludes earned ordinary and S (633.424113ms)
+✔ P2-1 ownership method-detail/unmatched: only exact Course identity excludes earned ordinary and S (619.860698ms)
+✔ P2-1 ownership year-detail/same: only exact Course identity excludes earned ordinary and S (598.460295ms)
+✔ P2-1 ownership year-detail/different: only exact Course identity excludes earned ordinary and S (672.186936ms)
+✔ P2-1 ownership year-detail/unknown: only exact Course identity excludes earned ordinary and S (657.419174ms)
+✔ P2-1 ownership year-detail/ambiguous: only exact Course identity excludes earned ordinary and S (613.28872ms)
+✔ P2-1 ownership year-detail/conflict: only exact Course identity excludes earned ordinary and S (595.044053ms)
+✔ P2-1 ownership year-detail/unmatched: only exact Course identity excludes earned ordinary and S (578.3991ms)
+✔ P2-1 ownership both-details/same: only exact Course identity excludes earned ordinary and S (564.215283ms)
+✔ P2-1 ownership both-details/different: only exact Course identity excludes earned ordinary and S (582.943093ms)
+✔ P2-1 ownership both-details/unknown: only exact Course identity excludes earned ordinary and S (559.260683ms)
+✔ P2-1 ownership both-details/ambiguous: only exact Course identity excludes earned ordinary and S (600.450785ms)
+✔ P2-1 ownership both-details/conflict: only exact Course identity excludes earned ordinary and S (621.649397ms)
+✔ P2-1 ownership both-details/unmatched: only exact Course identity excludes earned ordinary and S (676.647939ms)
+✔ P2-1 unresolved parent unmatched/aggregate cannot own a confirmed Attempt (433.657985ms)
+✔ P2-1 unresolved parent unmatched/detail cannot own a confirmed Attempt (395.660828ms)
+✔ P2-1 unresolved parent ambiguous/aggregate cannot own a confirmed Attempt (356.86056ms)
+✔ P2-1 unresolved parent ambiguous/detail cannot own a confirmed Attempt (371.951677ms)
+✔ P2-1 unresolved parent absent/aggregate cannot own a confirmed Attempt (413.966343ms)
+✔ P2-1 unresolved parent absent/detail cannot own a confirmed Attempt (421.635283ms)
+✔ P2-1 an exact old parent with an unsafe crosswalk remains possible, never exclusive (424.105324ms)
+✔ P2-1 a wrong detail does not suppress legitimate exact aggregate ownership or alter its null/zero (1263.017135ms)
+✔ P2-2 exact common requirement IDs 文学部 / 史学科/一般教育 (165.129958ms)
+✔ P2-2 exact common requirement IDs 文学部 / 史学科/外国語 (176.706627ms)
+✔ P2-2 exact common requirement IDs 文学部 / 史学科/保健体育 (171.775364ms)
+✔ P2-2 selected professional and unknown requirement IDs 文学部 / 史学科 (187.683363ms)
+✔ P2-2 exact common requirement IDs 経済学部 / 経済学科/一般教育 (153.154786ms)
+✔ P2-2 exact common requirement IDs 経済学部 / 経済学科/外国語 (143.335825ms)
+✔ P2-2 exact common requirement IDs 経済学部 / 経済学科/保健体育 (174.114396ms)
+✔ P2-2 selected professional and unknown requirement IDs 経済学部 / 経済学科 (184.162351ms)
+✔ P2-2 exact common requirement IDs 文学部 / 地理学科/一般教育 (196.219898ms)
+✔ P2-2 exact common requirement IDs 文学部 / 地理学科/外国語 (180.474462ms)
+✔ P2-2 exact common requirement IDs 文学部 / 地理学科/保健体育 (197.524042ms)
+✔ P2-2 selected professional and unknown requirement IDs 文学部 / 地理学科 (151.318554ms)
+✔ P2-2 exact common requirement IDs 経済学部 / 商業学科/一般教育 (202.657972ms)
+✔ P2-2 exact common requirement IDs 経済学部 / 商業学科/外国語 (201.276063ms)
+✔ P2-2 exact common requirement IDs 経済学部 / 商業学科/保健体育 (177.508611ms)
+✔ P2-2 selected professional and unknown requirement IDs 経済学部 / 商業学科 (180.774958ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 言語コース/一般教育 (210.902772ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 言語コース/外国語 (224.11615ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 言語コース/保健体育 (190.131702ms)
+✔ P2-2 selected professional and unknown requirement IDs 文学部 / 日本文学科 / 言語コース (190.342276ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 芸能文化コース/一般教育 (203.76905ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 芸能文化コース/外国語 (182.04251ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 芸能文化コース/保健体育 (224.838652ms)
+✔ P2-2 selected professional and unknown requirement IDs 文学部 / 日本文学科 / 芸能文化コース (205.967253ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 文学コース/一般教育 (191.347868ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 文学コース/外国語 (159.743766ms)
+✔ P2-2 exact common requirement IDs 文学部 / 日本文学科 / 文学コース/保健体育 (277.034626ms)
+✔ P2-2 selected professional and unknown requirement IDs 文学部 / 日本文学科 / 文学コース (189.408264ms)
+✔ P2-2 exact common requirement IDs 法学部 / 法律学科/一般教育 (182.122315ms)
+✔ P2-2 exact common requirement IDs 法学部 / 法律学科/外国語 (200.005324ms)
+✔ P2-2 exact common requirement IDs 法学部 / 法律学科/保健体育 (203.396049ms)
+✔ P2-2 selected professional and unknown requirement IDs 法学部 / 法律学科 (166.071524ms)
+ℹ tests 135
+ℹ suites 0
+ℹ pass 135
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 55489.371662
+
+Representative RED counterexample
+test at ../yi07-r1-r2-evidence/audited/tests/attempt-graduation.test.mjs:47:3
+✖ R1 candidate addition is monotone and order independent 文学部 / 史学科/一般教育 (482.651957ms)
+  AssertionError [ERR_ASSERTION]: candidate addition must not erase either impact set
+  + actual - expected
+
+    {
+  +   cardIds: [
+  +     'group-foreign',
+  +     'group-physical',
+  +     'professional-history-required',
+  +     'professional-history-schooling-required-elective',
+  +     'professional-history-elective',
+  +     'thesis-progress-118c5183-6aec-4fa1-905a-265f25d86db1',
+  +     'public-course-118c5183-6aec-4fa1-905a-265f25d86db1',
+  +     'history-seminar-required-elective',
+  +     'history-seminar-elective'
+  +   ],
+  +   requirementIds: [
+  +     '018836c4-c4be-4ac3-8987-fb9f091c7a64',
+  +     '08fc8f63-7eed-4092-8511-ad4446b7c20a',
+  +     '0e9b82d6-98e7-4c26-9ee3-7c4d67a2cca4',
+  +     '0f7a7982-8b3d-4d5b-886e-26d5d2d841b0',
+  +     '1695cfc8-53b7-4d28-8c0a-570bf6cea995',
+  +     '16fca7a6-e4a7-4579-844a-0b825f425f33',
+  +     '1b783c86-e99e-4407-906b-4fed610c3dce',
+  +     '2d6c807e-e205-4fac-99e0-d12e71a83e1b',
+  +     '37c71286-0a93-4880-b2ee-e7893567808c',
+  +     '437596fb-daec-4a4f-8ba2-162dc71b92bc',
+  +     '4442e318-c718-4a8a-861c-d26b3ee64ea9',
+  +     '5654bd34-c642-4ffd-b8c7-7b647cde9569',
+  +     '566e8d96-4f4e-47f9-afd0-f4df8514ce8c',
+  +     '66544e51-780c-498d-a4d1-9f1ece599207',
+  +     '7ae46682-6d87-444d-8d99-54e4724564d4',
+  +     '7d8e08ff-185c-486d-aa28-3c67dc9e9af9',
+  +     '823af8f4-56d9-4a99-9cbd-bf3626aebe0f',
+  +     '8aaa4ddb-ea21-440c-ba2f-86740a9a1fd3',
+  +     '8f91c4f3-9a90-4001-afb4-587debe92d2f',
+  +     '9423de04-3112-4b95-95d3-c40aa12417af',
+  +     '9ded9b36-ce7a-4d82-9fe1-3b8315df142c',
+  +     'aeadbf2d-0396-4b6b-91b1-9a4100563838',
+  +     'b15abf2d-e183-4d57-8837-6726b093a304',
+  +     'b588eb9e-e08f-4059-8e37-d1df90165988',
+  +     'ca77f2ef-0e59-4ab1-8ecd-ea55c1d7ec7b',
+  +     'cbf128a3-9b1f-4705-bf47-89b5b899fea4',
+  +     'd1f1fd2a-f638-4762-8cff-c3dbb0b02548',
+  +     'd2188d54-9294-4ae9-ae9c-349c9fa7344b',
+  +     'd387d640-b6d8-4cb4-9a1a-db98a80fdb69',
+  +     'd537dabd-adb4-4969-bd24-45c83f39e9a8',
+  +     'd9010be2-cce5-4db6-8e7c-c8f279a3c430',
+  +     'de1ba568-532d-4a76-8ae1-331b194abdf9',
+  +     'e1569470-7c36-4b39-801a-118e44953f2f',
+  +     'ee1d6de2-262f-443d-93d7-1ef8a7de030b',
+  +     'f102810a-ec25-43ae-abcb-6d0d2426bb9d',
+  +     'fd5b3387-30f8-49bd-bbe7-605ac344363d'
+  +   ]
+  -   cardIds: [],
+  -   requirementIds: []
+    }
+
+      at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi07-r1-r2-evidence/audited/tests/attempt-graduation.test.mjs:66:14)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.start (node:internal/test_runner/test:1003:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: {
+      requirementIds: [
+        '018836c4-c4be-4ac3-8987-fb9f091c7a64', '08fc8f63-7eed-4092-8511-ad4446b7c20a',
+        '0e9b82d6-98e7-4c26-9ee3-7c4d67a2cca4', '0f7a7982-8b3d-4d5b-886e-26d5d2d841b0',
+        '1695cfc8-53b7-4d28-8c0a-570bf6cea995', '16fca7a6-e4a7-4579-844a-0b825f425f33',
+        '1b783c86-e99e-4407-906b-4fed610c3dce', '2d6c807e-e205-4fac-99e0-d12e71a83e1b',
+        '37c71286-0a93-4880-b2ee-e7893567808c', '437596fb-daec-4a4f-8ba2-162dc71b92bc',
+        '4442e318-c718-4a8a-861c-d26b3ee64ea9', '5654bd34-c642-4ffd-b8c7-7b647cde9569',
+        '566e8d96-4f4e-47f9-afd0-f4df8514ce8c', '66544e51-780c-498d-a4d1-9f1ece599207',
+        '7ae46682-6d87-444d-8d99-54e4724564d4', '7d8e08ff-185c-486d-aa28-3c67dc9e9af9',
+        '823af8f4-56d9-4a99-9cbd-bf3626aebe0f', '8aaa4ddb-ea21-440c-ba2f-86740a9a1fd3',
+        '8f91c4f3-9a90-4001-afb4-587debe92d2f', '9423de04-3112-4b95-95d3-c40aa12417af',
+        '9ded9b36-ce7a-4d82-9fe1-3b8315df142c', 'aeadbf2d-0396-4b6b-91b1-9a4100563838',
+        'b15abf2d-e183-4d57-8837-6726b093a304', 'b588eb9e-e08f-4059-8e37-d1df90165988',
+        'ca77f2ef-0e59-4ab1-8ecd-ea55c1d7ec7b', 'cbf128a3-9b1f-4705-bf47-89b5b899fea4',
+        'd1f1fd2a-f638-4762-8cff-c3dbb0b02548', 'd2188d54-9294-4ae9-ae9c-349c9fa7344b',
+        'd387d640-b6d8-4cb4-9a1a-db98a80fdb69', 'd537dabd-adb4-4969-bd24-45c83f39e9a8',
+        'd9010be2-cce5-4db6-8e7c-c8f279a3c430', 'de1ba568-532d-4a76-8ae1-331b194abdf9',
+        'e1569470-7c36-4b39-801a-118e44953f2f', 'ee1d6de2-262f-443d-93d7-1ef8a7de030b',
+        'f102810a-ec25-43ae-abcb-6d0d2426bb9d', 'fd5b3387-30f8-49bd-bbe7-605ac344363d'
+      ],
+      cardIds: [ 'group-foreign', 'group-physical', 'professional-history-required', 'professional-history-schooling-required-elective', 'professional-history-elective', 'thesis-progress-118c5183-6aec-4fa1-905a-265f25d86db1', 'public-course-118c5183-6aec-4fa1-905a-265f25d86db1', 'history-seminar-required-elective', 'history-seminar-elective' ]
+    },
+    expected: { requirementIds: [], cardIds: [] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+Representative RED counterexample
+test at ../yi07-r1-r2-evidence/audited/tests/attempt-graduation.test.mjs:138:4
+✖ R2 retained rejects sparse deletion without losing source credits (858.639359ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'adapted'
+  - 'rejected'
+
+      at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi07-r1-r2-evidence/audited/tests/attempt-graduation.test.mjs:141:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.start (node:internal/test_runner/test:1003:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17)
+      at run (node:internal/test_runner/harness:369:12)
+      at test (node:internal/test_runner/harness:378:12)
+      at <anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi07-r1-r2-evidence/audited/tests/attempt-graduation.test.mjs:138:4) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'adapted',
+    expected: 'rejected',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

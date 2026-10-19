@@ -1,0 +1,302 @@
+{
+  "date": "2026-10-19",
+  "auditedHead": "765401484e4b4bdf71f56a1a18699e7cc2eed309",
+  "baseDev": "1866c6b7668458a6c664d3b2461b4f78c6cc9697",
+  "localEnvironment": {
+    "node": "24.13.0",
+    "npm": "11.6.2",
+    "playwright": "1.62.1",
+    "chromiumHeadlessShellRevision": 1243
+  },
+  "redGreen": {
+    "red": {
+      "name": "red-final",
+      "summary": {
+        "tests": 64,
+        "pass": 6,
+        "fail": 58,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 22243.37207
+      },
+      "logSha256": "5fc8f6f504ba43a0cb292524f300a574ef5a08098ccff57f5f61c844bc8bbbb4"
+    },
+    "green": {
+      "name": "green",
+      "summary": {
+        "tests": 64,
+        "pass": 64,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 25851.577788
+      },
+      "logSha256": "cc85ee030ae80d6672ddc875e387bcbe8e8525f7946d9cc7304bd372fbeda7a5"
+    }
+  },
+  "planner": {
+    "command": [
+      "node",
+      "--import",
+      "tsx",
+      "--test",
+      "--test-concurrency=2",
+      "tests/official-repeatable.test.mjs",
+      "tests/calligraphy-progress.test.mjs",
+      "tests/calligraphy-state-references.test.mjs",
+      "tests/calligraphy-partial-details.test.mjs",
+      "tests/planner.test.mjs",
+      "tests/curriculum-foundation.test.mjs",
+      "tests/course-progress.test.mjs",
+      "tests/curriculum-centered-model.test.mjs",
+      "tests/curriculum-course-ui.test.mjs",
+      "tests/component-provenance.test.mjs",
+      "tests/graduation-audit.test.mjs",
+      "tests/manual-graduation-credits.test.mjs",
+      "tests/structured-professional-credits.test.mjs",
+      "tests/grade-import-privacy.test.mjs",
+      "tests/grade-import-identity.test.mjs",
+      "tests/unresolved-conditions.test.mjs",
+      "tests/institutional-catalog.test.mjs",
+      "tests/attempt-contract.test.mjs",
+      "tests/migration.test.mjs",
+      "tests/attempt-workbench.test.mjs",
+      "tests/attempt-persistence.test.mjs",
+      "tests/attempt-graduation.test.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 1093.52,
+    "name": "planner",
+    "summary": {
+      "tests": 3835,
+      "pass": 3835,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 1093216.984719
+    },
+    "logSha256": "488cc5180230695aeb0cfaabc60001843bdb621ecae51c5002ff5199aac1af18",
+    "sameNpmScriptFiles": true,
+    "onlyRunnerOptionAdded": "--test-concurrency=2"
+  },
+  "checks": [
+    {
+      "name": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0,
+      "seconds": 32.25
+    },
+    {
+      "name": "lint",
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "exitCode": 0,
+      "seconds": 34.2
+    },
+    {
+      "name": "extension",
+      "command": [
+        "npm",
+        "run",
+        "test:extension"
+      ],
+      "exitCode": 0,
+      "seconds": 1.86
+    },
+    {
+      "name": "bookmarklet",
+      "command": [
+        "npm",
+        "run",
+        "test:bookmarklet"
+      ],
+      "exitCode": 0,
+      "seconds": 6.18
+    },
+    {
+      "name": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exitCode": 0,
+      "seconds": 26.14
+    },
+    {
+      "name": "yi01-verify",
+      "command": [
+        "python3",
+        "docs/planner-yi-01/verify.py"
+      ],
+      "exitCode": 0,
+      "seconds": 0.83
+    },
+    {
+      "name": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "seconds": 0.1
+    }
+  ],
+  "otherSuites": [
+    {
+      "name": "extension",
+      "summary": {
+        "tests": 54,
+        "pass": 54,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 381.053944
+      },
+      "logSha256": "2da314975802f7f4c4085429b5f048fd5ff03caeea21f0c2c348f0317caab628"
+    },
+    {
+      "name": "bookmarklet",
+      "summary": {
+        "tests": 168,
+        "pass": 168,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 4268.931785
+      },
+      "logSha256": "aed257222edfdaf8a811c133339d492c385e9d83182e62241571332c86743901"
+    }
+  ],
+  "finalSourceNameOnlyAdjustment": "Renamed local variable visible to evaluatedRequirementIds after Tailwind extraction changed CSS. Final typecheck/lint/build repeated; production byte comparison passes all 12 files. Final CI checks the pushed source.",
+  "fixedBaseline": {
+    "sourceCommit": "a4c9a088680b376daf7a66a22b62d755036a2107",
+    "cases": 192,
+    "unchanged": true,
+    "gzipSha256": "15fc5f7b11bf3b35fc379e0792bc257dc5cc1355e199f541fe72cf1bc37a03de",
+    "uncompressedSha256": "a0aed205de6ad027d81351ef354e677b505785de66442f137fdfc21a8af34a7c"
+  },
+  "finalSourceSha256": {
+    "src/planner/attempts/graduation/adapter.ts": "107902e133b1d82a148e4d5c6a44e79fff8864d61ae6dfee9b82ca2e92538bc1",
+    "src/planner/attempts/graduation/impact.ts": "1108990995c9a4895da264f8fe278a2912fb3df305efc06c2a7b381de6fb0641",
+    "src/planner/attempts/graduation/types.ts": "faab67466cd3b50d78c0f0b3f9a60f8872b2bca19f5c99669901964e822626ae",
+    "tests/attempt-graduation.test.mjs": "3b5ea8b8f45b6af6ab694c66da24c1ed2e782b990831303337015211d4530536"
+  },
+  "repeatedChecksAfterVariableRename": [
+    {
+      "name": "typecheck",
+      "exitCode": 0,
+      "logSha256": "f1292e716cf206bd36a7d012b36caceaa0b3ac2d43e5b16d6f445e3f4b029f51"
+    },
+    {
+      "name": "lint",
+      "exitCode": 0,
+      "logSha256": "a2623802382957a2bcd0606d148b093c7b1e5f2f097004819d45199ee92b809c"
+    },
+    {
+      "name": "build",
+      "exitCode": 0,
+      "logSha256": "273b9b309aa42f4648bb3212b74692dc0ebf139a6b9c1d205e255ef7db8126be"
+    }
+  ],
+  "browser": [
+    {
+      "name": "attempt-ui-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-ui-browser"
+      ],
+      "exitCode": 0,
+      "seconds": 45.99,
+      "summary": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 43364.225123
+      },
+      "logSha256": "b85f1a952cbc38e02db8fe371351107b70042a9048a29a58fad0476a94d0e8da"
+    },
+    {
+      "name": "attempt-persistence-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence-browser"
+      ],
+      "exitCode": 0,
+      "seconds": 282.83,
+      "summary": {
+        "tests": 17,
+        "pass": 17,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 282321.349426
+      },
+      "logSha256": "a97d9fb95724ee2ed8feddbee0665f3aa87f2a9b3a8a0311c17bde585df8bcd5"
+    },
+    {
+      "name": "planner-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:planner-browser"
+      ],
+      "exitCode": 1,
+      "seconds": 379.43,
+      "summary": {
+        "tests": 44,
+        "pass": 43,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 378816.63829
+      },
+      "logSha256": "ea66f16ae5b0112d9e8872a19858721da2b10abdd2a8caa7c7fe720a3b09b3bd"
+    }
+  ],
+  "devBrowserReproduction": {
+    "name": "dev-browser-known-failure",
+    "baseCommit": "1866c6b7668458a6c664d3b2461b4f78c6cc9697",
+    "command": [
+      "node",
+      "--import",
+      "tsx",
+      "--test",
+      "--test-name-pattern=restore invalidates an unsaved media draft even when the stored value is identical",
+      "tests/planner-save-lock.browser.mjs"
+    ],
+    "exitCode": 1,
+    "seconds": 39.91,
+    "summary": {
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "duration_ms": 39753.060626
+    },
+    "logSha256": "7a55e2de6677e7856a293fed26713c6f2711ca06b4336fc674907b60721cb3a7"
+  },
+  "displayLogFormatting": "ANSI colors and trailing whitespace removed in display txt copies only; SHA values identify the original complete raw logs"
+}

@@ -1,0 +1,47 @@
+Implementation commit: d77e3c74ad968bc6148c586d1913625f253ad435
+Full unmodified browser suite; failures preserved.
+
+ℹ tests 44
+ℹ suites 0
+ℹ pass 42
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 524703.158461
+
+✖ failing tests:
+
+test at tests/planner-save-lock.browser.mjs:308:1
+✖ restore invalidates an unsaved media draft even when the stored value is identical (33472.675636ms)
+  locator.setInputFiles: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')
+
+      at async TestContext.<anonymous> (<feature>/tests/planner-save-lock.browser.mjs:315:3) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')" ]
+  }
+
+test at tests/planner-save-lock.browser.mjs:557:44
+✖ calligraphy P2 Chromium card state matrix 文学コース (92786.464513ms)
+  locator.waitFor: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for locator('section[aria-labelledby="graduation-progress-heading"]') to be visible
+
+      at assertCalligraphyReferences (<feature>/tests/planner-save-lock.browser.mjs:549:17)
+      at TestContext.<anonymous> (<feature>/tests/planner-save-lock.browser.mjs:566:11) {
+    name: 'TimeoutError',
+    log: [ `  - waiting for locator('section[aria-labelledby="graduation-progress-heading"]') to be visible` ]
+  }
+
+Unchanged isolated literature rerun (after persistence suite completed):
+✔ calligraphy P2 Chromium card state matrix 文学コース (67203.389069ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 68703.170576

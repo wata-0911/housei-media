@@ -1,0 +1,26 @@
+Latest dev: 1866c6b7668458a6c664d3b2461b4f78c6cc9697
+Test source SHA-256: 7672f4ca9c4a023cb1cf39c8d46fc516bf5c3063650fa47f257919ceffbb803b
+No test source changes; one targeted baseline reproduction.
+
+✖ restore invalidates an unsaved media draft even when the stored value is identical (39570.876883ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 41781.915138
+
+✖ failing tests:
+
+test at tests/planner-save-lock.browser.mjs:308:1
+✖ restore invalidates an unsaved media draft even when the stored value is identical (39570.876883ms)
+  locator.setInputFiles: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')
+
+      at async TestContext.<anonymous> (<pristine-dev>/tests/planner-save-lock.browser.mjs:315:3) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')" ]
+  }

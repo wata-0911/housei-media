@@ -1,0 +1,237 @@
+{
+  "date": "2026-10-18",
+  "implementationCommit": "d77e3c74ad968bc6148c586d1913625f253ad435",
+  "latestDev": "1866c6b7668458a6c664d3b2461b4f78c6cc9697",
+  "localEnvironment": {
+    "node": "24.13.0",
+    "npm": "11.6.2",
+    "playwright": "1.62.1",
+    "chromiumHeadlessShellRevision": 1243
+  },
+  "localRuns": [
+    {
+      "name": "attempt-graduation",
+      "command": "npm run test:attempt-graduation",
+      "summary": {
+        "tests": 266,
+        "pass": 266,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 954640.412599
+      },
+      "logSha256": "747c8de8420f318fbe4fb30feac71d18ab59189b55bf81e75cf6e6a118993e0c"
+    },
+    {
+      "name": "new-matrix",
+      "summary": {
+        "tests": 13,
+        "pass": 13,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 45170.698334
+      },
+      "logSha256": "f4345544a969987a48425dffd5b56ca560ec775452d058182d77460b811ed4f1",
+      "selectionDescription": "Targeted node:test run of 13 added placement/category/official-plan/retained-record tests"
+    },
+    {
+      "name": "attempts",
+      "command": "npm run test:attempts",
+      "summary": {
+        "tests": 132,
+        "pass": 132,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 10709.091308
+      },
+      "logSha256": "d79b3a3b8e9c3d34de1cafc75c7a2f7a62315df09fd991183a3d559ee067ac66"
+    },
+    {
+      "name": "migration",
+      "command": "npm run test:migration",
+      "summary": {
+        "tests": 133,
+        "pass": 133,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 1131752.034081
+      },
+      "logSha256": "70993309373e862f5df793ede7af569eb42180deca404d7855cb3a3b3a0d65c5"
+    },
+    {
+      "name": "attempt-ui",
+      "command": "npm run test:attempt-ui",
+      "summary": {
+        "tests": 84,
+        "pass": 84,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 62532.351949
+      },
+      "logSha256": "c5c9cab00060dc94868e7cbb48e13656645ea2b47b806f02fd13026cb6969532"
+    },
+    {
+      "name": "attempt-persistence",
+      "command": "npm run test:attempt-persistence",
+      "summary": {
+        "tests": 103,
+        "pass": 103,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 1022559.165994
+      },
+      "logSha256": "83a295345b11a84ad4bcb7cf4fba8e025cb8e21a8004e72a87ef4c1ef31e0812"
+    },
+    {
+      "name": "institutional",
+      "command": "npm run test:institutional",
+      "summary": {
+        "tests": 36,
+        "pass": 36,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 18021.699637
+      },
+      "logSha256": "5a21d340eefac275f35eb91f07dcd6c5985d63b233ddb8f63ffcf4eae0134c68"
+    },
+    {
+      "name": "extension",
+      "command": "npm run test:extension",
+      "summary": {
+        "tests": 54,
+        "pass": 54,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 749.941371
+      },
+      "logSha256": "d67ef756b94125a1ade2e979fc2e4344eba982e0c2314d5bc0cc96af6b9a1234"
+    },
+    {
+      "name": "bookmarklet",
+      "command": "npm run test:bookmarklet",
+      "summary": {
+        "tests": 168,
+        "pass": 168,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 10354.677904
+      },
+      "logSha256": "d27e2b8e79eb5872b0839076ef9ccadd1684915e29db5bb229e765a36f36b3dc"
+    },
+    {
+      "name": "attempt-ui-browser",
+      "command": "npm run test:attempt-ui-browser",
+      "summary": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 164516.96607
+      },
+      "logSha256": "f658ea216c353d561e247532c1bd74e29f4a9da9f02ff47ffa7f090b57b5d74f"
+    },
+    {
+      "name": "attempt-persistence-browser",
+      "command": "npm run test:attempt-persistence-browser",
+      "summary": {
+        "tests": 17,
+        "pass": 17,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 404181.685208
+      },
+      "logSha256": "700989706d36fb86ab9500e6f898a3f061aeb3194719ebb76e474e7e189e89f4"
+    },
+    {
+      "name": "planner-browser",
+      "command": "npm run test:planner-browser",
+      "summary": {
+        "tests": 44,
+        "pass": 42,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 524703.158461
+      },
+      "logSha256": "c213dc7f37d2e74cd59bba9fd979435058008fe85e6ed4d10e58d9cefe8ae46a"
+    },
+    {
+      "name": "planner-browser-literature-rerun",
+      "command": "node --import tsx --test --test-name-pattern='^calligraphy P2 Chromium card state matrix 文学コース$' tests/planner-save-lock.browser.mjs",
+      "summary": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 68703.170576
+      },
+      "logSha256": "73d5abcacb125b81a0db0d2e30f702e7ca3656778a6a04d1888f80bfd9e48ec0"
+    }
+  ],
+  "ci": {
+    "url": "https://github.com/wata-0911/housei-media/actions/runs/39120071158",
+    "node": 22,
+    "conclusion": "success",
+    "planner": {
+      "tests": 3771,
+      "pass": 3771,
+      "fail": 0,
+      "skipped": 0,
+      "new": 279,
+      "existing": 3492
+    },
+    "extension": {
+      "pass": 54,
+      "fail": 0
+    },
+    "bookmarklet": {
+      "pass": 168,
+      "fail": 0
+    },
+    "typecheck": "pass",
+    "lint": "pass",
+    "build": "pass"
+  },
+  "notes": [
+    "Counts overlap between individual scripts and CI; do not sum them.",
+    "Local planner run interrupted before completion is not counted; exact npm run test:planner completed in CI.",
+    "Initial concurrent YI-06 browser run: 11 pass / 6 fail from a shared reload timeout; unchanged full suite rerun: 17 pass / 0 fail.",
+    "Latest dev independently reproduces #145; full feature browser run also had a literature course reload timeout, separately investigated.",
+    "Literature reload timeout passed unchanged as a targeted isolated rerun. Root cause unconfirmed; not classified as #145 or silently removed from full-suite failures."
+  ],
+  "staticChecks": {
+    "typecheck": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "productionArtifactByteComparison": {
+      "identical": true,
+      "files": 12
+    },
+    "yi01Verify": "pass",
+    "gitDiffCheck": "pass"
+  }
+}

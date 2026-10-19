@@ -1,0 +1,69 @@
+
+> hosei-app@0.0.0 test:planner-browser
+> node --import tsx --test tests/planner-save-lock.browser.mjs
+
+✔ Web Lock wait disables thesis editors, preserves pending state, and permits editing after release (13194.897727ms)
+✔ geography report submission joins the same disabled controls and can be edited again (3429.040571ms)
+✔ storage failure leaves original bytes, reports failure and allows a successful retry (2132.107916ms)
+✔ external storage error disables every thesis editor (2839.251306ms)
+✔ recovery-only raw protection downloads null primary and exact recovery without normal restore (3025.677051ms)
+✔ grade import preview and undo stop accepting changes while the shared save is pending (5204.403057ms)
+✔ backup restore waits with thesis controls disabled and enables the restored state (4317.217666ms)
+✔ media name supports continuous typing without writes or focus loss; blur and Enter commit once (4267.590593ms)
+✔ media name failed save keeps the full draft and retry saves the same text (2173.762587ms)
+✔ media name remains editable before confirmation during a held lock, preserves full draft while queued and resumes (3565.268428ms)
+✔ media total supports multi-digit drafts, retains failures and retries the numeric value (2406.488737ms)
+✔ IME composition Enter does not persist an unfinished media draft (2161.08258ms)
+✔ admission year and recognized credits keep unsaved numeric drafts after failure and allow Enter retry (2939.108573ms)
+✔ imported component year and term are drafts, preserve failed text and keep official credits unchanged (2921.319194ms)
+✖ restore invalidates an unsaved media draft even when the stored value is identical (32186.319056ms)
+✔ public course title and planned year retain failed drafts and confirm whole values after a held lock (3943.041616ms)
+✔ media total presets replace the draft without a preceding blur save, including the same stored preset (2520.561752ms)
+✔ grade identity P1: preview holds a different exam year and preserves stored original bytes (2584.455974ms)
+✔ grade components P2: manual year survives grade refresh without duplicates and aggregate history is labelled (3604.669816ms)
+✔ grade partial P2: unchecked changed detail holds storage; full refresh then aggregate correction remains possible (6357.980695ms)
+✔ calligraphy 390px real UI S1 (1883.300871ms)
+✔ calligraphy 390px real UI S1+S1 (2175.253755ms)
+✔ calligraphy 390px real UI batch-only (2042.114312ms)
+✔ calligraphy 390px real UI batch+S1 (2009.78271ms)
+✔ calligraphy 390px real UI legacy-T2+S1 (2120.26062ms)
+✔ calligraphy 390px real UI official2/S1 (2029.856541ms)
+✔ calligraphy UI status, S1 revocation, reload, and JSON restoration preserve v22 (5851.723102ms)
+✔ calligraphy P2 Chromium card state matrix 言語コース (58586.021277ms)
+✔ calligraphy P2 Chromium card state matrix 芸能文化コース (63425.907254ms)
+✔ calligraphy P2 Chromium card state matrix 文学コース (60462.850502ms)
+✔ calligraphy P2 Chromium lifecycle and backup references 言語コース (9984.243313ms)
+✔ calligraphy P2 Chromium lifecycle and backup references 芸能文化コース (9994.037958ms)
+✔ calligraphy P2 Chromium lifecycle and backup references 文学コース (10164.491041ms)
+✔ calligraphy partial Chromium summer/GW exact body 言語コース (5715.594564ms)
+✔ calligraphy partial Chromium summer/GW exact body 芸能文化コース (5408.908209ms)
+✔ calligraphy partial Chromium summer/GW exact body 文学コース (5348.469498ms)
+✔ official repeatable Chromium: cap and source total remain separate after reload (3349.376058ms)
+✔ official repeatable Chromium: explicit zero conflicting with passed detail is visibly held (1858.149422ms)
+✔ official repeatable audit Chromium: R1 S null retains conflict, global/law S hold and saved bytes (3209.936109ms)
+✔ official repeatable audit Chromium: R1 composition null retains conflict, global/law S hold and saved bytes (2930.867736ms)
+✔ official repeatable audit Chromium: R2 year absent retains conflict, global/law S hold and saved bytes (3032.205627ms)
+✔ official repeatable F1 native-legacy Chromium holds and preserves conflicting source bytes (3242.148255ms)
+✔ official repeatable F1 legacy-native Chromium holds and preserves conflicting source bytes (3368.452404ms)
+✔ official repeatable F2 A+B Chromium holds and preserves conflicting source bytes (3283.694148ms)
+ℹ tests 44
+ℹ suites 0
+ℹ pass 43
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 378816.63829
+
+✖ failing tests:
+
+test at tests/planner-save-lock.browser.mjs:308:1
+✖ restore invalidates an unsaved media draft even when the stored value is identical (32186.319056ms)
+  locator.setInputFiles: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')
+
+      at async TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-graduation-adapter/tests/planner-save-lock.browser.mjs:315:3) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')" ]
+  }
