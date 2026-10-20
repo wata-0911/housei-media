@@ -1,0 +1,164 @@
+Final evidence suite GREEN (55)
+
+> hosei-app@0.0.0 test:attempt-evidence
+> node --import tsx --test tests/attempt-evidence.test.mjs
+
+✔ applicability unknown: identity and placement do not prove learner application (420.693592ms)
+✔ applicability unverified: identity and placement do not prove learner application (382.903082ms)
+✔ confirmed applicability cannot be forged with current YI-02 row evidence (579.956311ms)
+✔ learner method correspondence is not official performance (160.718282ms)
+✔ learner method schooling is not official performance (195.838231ms)
+✔ learner method media is not official performance (263.692387ms)
+✔ learner method unknown is not official performance (256.846297ms)
+✔ migrated Offering method remains a reference, not an official Attempt fact (2670.041313ms)
+✔ official aggregate null preserved; Course ownership is not detail exclusivity (1357.512568ms)
+✔ official aggregate 0 preserved; Course ownership is not detail exclusivity (1105.034927ms)
+✔ official aggregate 2 preserved; Course ownership is not detail exclusivity (1548.694984ms)
+✔ official aggregate 4 preserved; Course ownership is not detail exclusivity (1348.924062ms)
+✔ detail with other parent cannot own this Course increment (916.437749ms)
+✔ detail with unmatched parent cannot own this Course increment (956.462988ms)
+✔ detail with ambiguous parent cannot own this Course increment (1110.923382ms)
+✔ detail with unsafe parent cannot own this Course increment (1203.089568ms)
+✔ detail with missing parent cannot own this Course increment (876.913382ms)
+✔ legitimate ownership survives an unrelated detail reference (876.200591ms)
+✔ shared detail counts all distinct Attempt claims, including detached; unique reference is still held (1079.877924ms)
+✔ quantity state omitted remains distinct across authorities (772.763578ms)
+✔ quantity state null remains distinct across authorities (719.224028ms)
+✔ quantity state 0 remains distinct across authorities (663.988534ms)
+✔ quantity state 2 remains distinct across authorities (869.773484ms)
+✔ composition4 / correspondence2 / S2 never generates completion4 or S4 (706.71875ms)
+✔ method/year disagreement is reported without changing source or treating capture time as academic year (683.401505ms)
+✔ identity unknown: no first candidate selection (398.950788ms)
+✔ identity ambiguous: no first candidate selection (295.082346ms)
+✔ identity conflict: no first candidate selection (300.040987ms)
+✔ identity unmatched: no first candidate selection (314.355151ms)
+✔ all8 文学部 / 史学科: unknown outside candidate does not narrow impact or import outside requirements (446.095407ms)
+✔ all8 経済学部 / 経済学科: unknown outside candidate does not narrow impact or import outside requirements (521.976798ms)
+✔ all8 文学部 / 地理学科: unknown outside candidate does not narrow impact or import outside requirements (832.763776ms)
+✔ all8 経済学部 / 商業学科: unknown outside candidate does not narrow impact or import outside requirements (442.377832ms)
+✔ all8 文学部 / 日本文学科 / 言語コース: unknown outside candidate does not narrow impact or import outside requirements (496.735612ms)
+✔ all8 文学部 / 日本文学科 / 芸能文化コース: unknown outside candidate does not narrow impact or import outside requirements (632.379035ms)
+✔ all8 文学部 / 日本文学科 / 文学コース: unknown outside candidate does not narrow impact or import outside requirements (618.20391ms)
+✔ all8 法学部 / 法律学科: unknown outside candidate does not narrow impact or import outside requirements (571.498374ms)
+✔ addition/removal of identity and detail evidence changes only justified propositions (1522.797628ms)
+✔ unreviewed submitted evidence is retained with revision/refs and never authorizes confirmation (150.392883ms)
+✔ all judgements retain evidence paths, revision and source digest; results deterministic and frozen (351.870537ms)
+✔ retained sparse is rejected through the existing boundary (739.097121ms)
+✔ retained getter is rejected through the existing boundary (619.675936ms)
+✔ retained undefined is rejected through the existing boundary (557.620582ms)
+✔ retained NaN is rejected through the existing boundary (605.215761ms)
+✔ retained cycle is rejected through the existing boundary (620.794443ms)
+✔ retained envelope is rejected through the existing boundary (675.758718ms)
+✔ submitted evidence sparse cannot bypass the data boundary (153.678557ms)
+✔ submitted evidence accessor cannot bypass the data boundary (160.321622ms)
+✔ submitted evidence envelope cannot bypass the data boundary (145.141908ms)
+✔ submitted evidence undefined cannot bypass the data boundary (151.853118ms)
+✔ submitted evidence unknown-attempt cannot bypass the data boundary (160.578759ms)
+✔ submitted evidence extra-field cannot bypass the data boundary (144.41915ms)
+✔ submitted evidence not-array cannot bypass the data boundary (145.046562ms)
+✔ a submission using the known document revision still cannot prove applicability or method (160.162125ms)
+✔ official schooling label alone neither proves nor contradicts the narrower learner media claim (725.474902ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 42877.565699
+
+Media subtype safety condition RED before fix (1)
+✖ official schooling label alone neither proves nor contradicts the narrower learner media claim (1715.284822ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13271.555985
+
+✖ failing tests:
+
+test at tests/attempt-evidence.test.mjs:183:1
+✖ official schooling label alone neither proves nor contradicts the narrower learner media claim (1715.284822ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (<feature-checkout>/tests/attempt-evidence.test.mjs:186:34)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+Same final suite against pristine dev RED (missing API; 55)
+✖ applicability unknown: identity and placement do not prove learner application (27.064445ms)
+✖ applicability unverified: identity and placement do not prove learner application (0.835565ms)
+✖ confirmed applicability cannot be forged with current YI-02 row evidence (0.781403ms)
+✖ learner method correspondence is not official performance (0.775809ms)
+✖ learner method schooling is not official performance (0.570891ms)
+✖ learner method media is not official performance (0.524336ms)
+✖ learner method unknown is not official performance (0.513588ms)
+✖ migrated Offering method remains a reference, not an official Attempt fact (2105.659915ms)
+✖ official aggregate null preserved; Course ownership is not detail exclusivity (525.56321ms)
+✖ official aggregate 0 preserved; Course ownership is not detail exclusivity (526.801083ms)
+✖ official aggregate 2 preserved; Course ownership is not detail exclusivity (638.687481ms)
+✖ official aggregate 4 preserved; Course ownership is not detail exclusivity (735.072593ms)
+✖ detail with other parent cannot own this Course increment (647.678337ms)
+✖ detail with unmatched parent cannot own this Course increment (635.315898ms)
+✖ detail with ambiguous parent cannot own this Course increment (571.45708ms)
+✖ detail with unsafe parent cannot own this Course increment (624.064855ms)
+✖ detail with missing parent cannot own this Course increment (617.052177ms)
+✖ legitimate ownership survives an unrelated detail reference (662.991151ms)
+✖ shared detail counts all distinct Attempt claims, including detached; unique reference is still held (642.070939ms)
+✖ quantity state omitted remains distinct across authorities (624.010245ms)
+✖ quantity state null remains distinct across authorities (539.302136ms)
+✖ quantity state 0 remains distinct across authorities (562.415237ms)
+✖ quantity state 2 remains distinct across authorities (532.374403ms)
+✖ composition4 / correspondence2 / S2 never generates completion4 or S4 (693.782078ms)
+✖ method/year disagreement is reported without changing source or treating capture time as academic year (596.093169ms)
+✖ identity unknown: no first candidate selection (0.692617ms)
+✖ identity ambiguous: no first candidate selection (0.608581ms)
+✖ identity conflict: no first candidate selection (0.356712ms)
+✖ identity unmatched: no first candidate selection (0.314561ms)
+✖ all8 文学部 / 史学科: unknown outside candidate does not narrow impact or import outside requirements (1.090868ms)
+✖ all8 経済学部 / 経済学科: unknown outside candidate does not narrow impact or import outside requirements (0.338482ms)
+✖ all8 文学部 / 地理学科: unknown outside candidate does not narrow impact or import outside requirements (0.30554ms)
+✖ all8 経済学部 / 商業学科: unknown outside candidate does not narrow impact or import outside requirements (0.294713ms)
+✖ all8 文学部 / 日本文学科 / 言語コース: unknown outside candidate does not narrow impact or import outside requirements (0.290732ms)
+✖ all8 文学部 / 日本文学科 / 芸能文化コース: unknown outside candidate does not narrow impact or import outside requirements (0.294012ms)
+✖ all8 文学部 / 日本文学科 / 文学コース: unknown outside candidate does not narrow impact or import outside requirements (0.304666ms)
+✖ all8 法学部 / 法律学科: unknown outside candidate does not narrow impact or import outside requirements (0.590199ms)
+✖ addition/removal of identity and detail evidence changes only justified propositions (585.121059ms)
+✖ unreviewed submitted evidence is retained with revision/refs and never authorizes confirmation (0.701018ms)
+✖ all judgements retain evidence paths, revision and source digest; results deterministic and frozen (0.856811ms)
+✖ retained sparse is rejected through the existing boundary (0.665299ms)
+✖ retained getter is rejected through the existing boundary (0.31066ms)
+✖ retained undefined is rejected through the existing boundary (0.276601ms)
+✖ retained NaN is rejected through the existing boundary (0.299449ms)
+✖ retained cycle is rejected through the existing boundary (0.266068ms)
+✖ retained envelope is rejected through the existing boundary (0.267682ms)
+✖ submitted evidence sparse cannot bypass the data boundary (0.567924ms)
+✖ submitted evidence accessor cannot bypass the data boundary (0.371858ms)
+✖ submitted evidence envelope cannot bypass the data boundary (0.279425ms)
+✖ submitted evidence undefined cannot bypass the data boundary (0.221851ms)
+✖ submitted evidence unknown-attempt cannot bypass the data boundary (1.668488ms)
+✖ submitted evidence extra-field cannot bypass the data boundary (0.295601ms)
+✖ submitted evidence not-array cannot bypass the data boundary (0.225571ms)
+✖ a submission using the known document revision still cannot prove applicability or method (0.567916ms)
+✖ official schooling label alone neither proves nor contradicts the narrower learner media claim (879.311618ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 0
+ℹ fail 55
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22885.377716
+

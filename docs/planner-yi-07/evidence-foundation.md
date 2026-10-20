@@ -112,3 +112,60 @@ aggregateの`courseIdentity`は**Attemptとの同科目一致**の命題。`incr
 新テストは本人データを合成するが、公式本人適用confirmedや排他的履修回対応を合成して実データとして受理させない。confirmedの正常系は実マスターに存在するIC/配置/同科目所有に限定する。
 
 追加の自己点検では、detailのschoolingラベルを本人申告mediaの矛盾と断定していた点を検出した。ImportedStudyRecordにはmedia subtypeがなく、schoolingだけではmediaを証明も否定もできない。先に反例1件を追加して **0 PASS / 1 FAIL** を確認し、`media_method_unverified`としてheldを維持するよう修正した。通信との方式不一致は`method_claim_conflict`を維持する。最終新suiteは55件。
+
+必須ケースとの対応は以下のとおり。新suiteの全55件は `test:planner` にも組み込む。
+
+| 必須番号 | 主な独立回帰 |
+| --- | --- |
+| 1–2 | applicability unknown/unverified、偽装confirmed拒否、identity/placement supportedと本人heldの併存 |
+| 3–4 | learnerの全4方式、migrationのlegacy_reference、official_detail参照でもmethod held、media subtype未証明 |
+| 5–6 | 他科目/未照合/ambiguous/unsafe/親なし、同科目の正当所有と別の誤detailの共存 |
+| 7–9 | 公式null/0/2/4、同detailの複数回・同Attempt内2参照・detached、optional数量の省略/null/0/2 |
+| 10 | identity unknown/ambiguous/conflict/unmatched、候補反転、unsafe親、method/実績年の矛盾 |
+| 11 | 2035年、legacyRefsなし、catalogに2035 Offeringなしを明示assert |
+| 12・14 | 全8scopeのscope外候補＋common追加、保留集合の不縮小・scope外要件の非混入 |
+| 13 | identity/detail証拠の追加・削除、公式表示との矛盾、既知/未知revisionの未審査追加提出 |
+| 15 | retained sparse/getter/undefined/NaN/cycle/envelopeの拒否、getter呼出し0回。追加提出境界も別に検証 |
+
+第1段階の4監査課題は既存テストをbyte不変で維持する：誤参照からの公式所有昇格、他scope unsupported混入、候補追加による影響消失、疎配列/accessorによるsource一致回避。既存src/tests/dev/scripts/.githubの計228ファイルが開始devとbyte一致することも別に確認した。新ソース・新テスト・npm script・今回資料の追加だけである。
+
+## 完走した検証とproduction比較
+
+ローカルはNode v24.13.0 / npm 11.6.2、開始devと同一lockfileの依存を使用。全Plannerは`NODE_OPTIONS=--max-old-space-size=1024 npm run test:planner`を実行し、テスト並列数・期待値・skip・timeoutは変更していない。ブラウザsuite同士は順次実行し、非ブラウザsuiteとは並行していた。CIは既存workflowのNode22 / npm ci。
+
+| 検証 | 結果 |
+| --- | --- |
+| 最終証拠suiteのdev RED / feature GREEN | **55 FAIL / 55 PASS**、同じ最終テスト、双方SKIP 0 |
+| schooling/mediaの個別RED | **1 FAIL**→上記最終GREENに含む |
+| `npm run test:attempt-graduation` | **414 PASS**、固定192＋過去P2/R1/R2を含む |
+| `npm run test:planner` ローカル | **3,960 PASS / 0 FAIL / 0 SKIP**、完走。新suite54件版を読込済みだったため最終55件版の全件結果とは区別 |
+| 実装HEAD `28415f0` のGitHub CI全Planner | **3,961 PASS / 0 FAIL / 0 SKIP**、既存3,906＋新55件 |
+| `npm run test:migration` | **133 PASS** |
+| `npm run test:attempt-persistence` | **103 PASS** |
+| `npm run test:extension` | **54 PASS** |
+| `npm run test:bookmarklet` | **168 PASS** |
+| `npm run typecheck` / `npm run lint` | **PASS** |
+| `npm run build` / grade-import / catalog check | **PASS**、既存chunk size警告あり |
+| `python3 docs/planner-yi-01/verify.py` / `git diff --check` | **PASS** |
+| production build byte比較 | **12/12完全一致**、開始devのpristine archiveと最終sourceを同一依存でbuild |
+| Chromium YI-05 | **9 PASS / 0 FAIL / 0 SKIP** |
+| Chromium YI-06 | **17 PASS / 0 FAIL / 0 SKIP** |
+| 同じ開始devのChromium YI-06 | **17 PASS / 0 FAIL / 0 SKIP** |
+| Chromium 通常Planner 初回全suite | **40 PASS / 4 FAIL / 0 SKIP**、下記参照 |
+| devでの#145単独比較 | **0 PASS / 1 FAIL / 0 SKIP**、同じfile input selector・30000ms timeout |
+
+初回実装の[CI run](https://github.com/wata-0911/housei-media/actions/runs/39387921746)は全step成功、両Vercel preview成功。最終テストの追加assertionと検証資料を同じDraft PRへ追記し、最終HEADのCI状態は[PR #181 Checks](https://github.com/wata-0911/housei-media/pull/181/checks)とPR本文に照合して記録する。最終の55件では2035 Offeringなし・legacyRefsなし、明示配置の構成4をさらにassertしている。実装コードは`28415f0`から不変。
+
+[RED/GREEN全件と反例](evidence-red-green.txt)、[build各ファイルSHA](evidence-build-comparison.json)、[既存228ファイル不変記録](evidence-invariance.json)。コマンド間の重複件数は合算しない。iPhone/Safari実機は未実施であり、Chromiumを実機PASSと呼ばない。
+
+### ブラウザ失敗の扱い
+
+YI-06のportable queued commitを含めdev/feature双方17件が成功したため、今回portable競合保存timeoutは再現していない。既知失敗をskipしたり、timeoutを延長したりしていない。
+
+通常Plannerの初回4失敗は、(1) Web Lock waitのbackup heading待機、(2) external storage errorの卒論editor selector待機、(3) #145 restore invalidates media draftのfile input待機、(4) 書道文学コースmatrixの卒業要件section待機。すべて既存30000ms timeoutで、数量assertionの不一致ではない。[初回全44件ログ](evidence-feature-browser.txt)を保持する。
+
+(3)は開始devでも同じline315・同じselectorで再現したため既存#145として区別する。[dev比較ログ](evidence-dev-browser-145.txt)。(1)(2)(4)をこれと同じ既知失敗とは分類せず、同じテスト・期待値・timeoutでfeature→devの順に3件を再実行する。初回失敗は再実行の成功で上書きしない。再現性の原因を負荷や一時停止と断定しない。
+
+(1)(2)(4)の再実行は **feature 3 PASS / dev 3 PASS、双方FAIL/SKIP 0**。初回だけのtimeoutとして原因未確定のまま記録する。[両環境の再実行ログ](evidence-browser-recheck.txt)。通常Planner全44件を再実行して全件成功したとは主張しない。#145はこのPRで修正せず、他3件の初回失敗とともに独立監査へ引き継ぐ。
+
+[全検証の件数・コマンド・source/log SHA記録](evidence-verification.json)。最終変更は新テストの前提assertion強化と本検証記録だけで、算入実装・既存テストは無変更。独立監査は未実施。Draft PR #181、Issue #180 Openを維持し、Ready化・merge・Issue close・一般公開は行わない。

@@ -51,6 +51,7 @@ test('confirmed applicability cannot be forged with current YI-02 row evidence',
 for(const method of ['correspondence','schooling','media','unknown']) test(`learner method ${method} is not official performance`,()=>{
   const a=newAttempt(master,p,2,'earned',method),r=one(a); held(r.method.decision); assert.deepEqual(r.method.record,a.method);
   held(r.actualYear.decision); assert.equal(r.record.plan.plannedYear,2035); assert.equal(r.record.actualYear.value,null);
+  assert.equal(a.legacyRefs.length,0); assert.equal(catalog.offerings.some(o=>o.academicYear===2035),false);
   assert.equal(r.graduation.ordinary.value,null); assert.equal(r.graduation.schooling.value,null); assert.equal(r.graduation.completion.value,null);
 });
 test('migrated Offering method remains a reference, not an official Attempt fact',async()=>{
@@ -105,8 +106,8 @@ for(const value of ['omitted',null,0,2]) test(`quantity state ${value} remains d
 });
 test('composition4 / correspondence2 / S2 never generates completion4 or S4',async()=>{
   const d=detail({method:'schooling',credits:2,schoolingCreditsTotal:2}),source=await sourceFor([],[d]);
-  const a=newAttempt(master,p,2,'earned','correspondence'),b=refDetail(newAttempt(master,p,2),d.id);
-  for(const r of assessed([a,b],source).attempts){held(r.graduation.completion); held(r.graduation.ordinary);held(r.graduation.schooling);}
+  const a=confirmPlacement(newAttempt(master,p,2,'earned','correspondence'),p),b=confirmPlacement(refDetail(newAttempt(master,p,2),d.id),p);
+  for(const r of assessed([a,b],source).attempts){assert.equal(r.quantities.composition.quantity.value,4);held(r.graduation.completion); held(r.graduation.ordinary);held(r.graduation.schooling);}
 });
 test('method/year disagreement is reported without changing source or treating capture time as academic year',async()=>{
   const d=detail({method:'correspondence',academicYear:2025,yearSource:'manual',capturedAt:'2035-01-01',credits:2});

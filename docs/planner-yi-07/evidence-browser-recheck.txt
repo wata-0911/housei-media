@@ -1,0 +1,25 @@
+feature-browser-recheck.log
+✔ Web Lock wait disables thesis editors, preserves pending state, and permits editing after release (12693.01862ms)
+✔ external storage error disables every thesis editor (3260.671446ms)
+✔ calligraphy P2 Chromium card state matrix 文学コース (70106.589356ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 88256.328633
+
+baseline-browser-recheck.log
+✔ Web Lock wait disables thesis editors, preserves pending state, and permits editing after release (15408.373471ms)
+✔ external storage error disables every thesis editor (3611.582566ms)
+✔ calligraphy P2 Chromium card state matrix 文学コース (75010.370013ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 95861.69118

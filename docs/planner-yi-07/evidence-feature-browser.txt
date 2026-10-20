@@ -1,0 +1,105 @@
+
+> hosei-app@0.0.0 test:planner-browser
+> node --import tsx --test tests/planner-save-lock.browser.mjs
+
+✖ Web Lock wait disables thesis editors, preserves pending state, and permits editing after release (37887.502321ms)
+✔ geography report submission joins the same disabled controls and can be edited again (9458.338653ms)
+✔ storage failure leaves original bytes, reports failure and allows a successful retry (4249.173976ms)
+✖ external storage error disables every thesis editor (1000448.110421ms)
+✔ recovery-only raw protection downloads null primary and exact recovery without normal restore (14414.805799ms)
+✔ grade import preview and undo stop accepting changes while the shared save is pending (7343.430688ms)
+✔ backup restore waits with thesis controls disabled and enables the restored state (9829.841254ms)
+✔ media name supports continuous typing without writes or focus loss; blur and Enter commit once (11820.99343ms)
+✔ media name failed save keeps the full draft and retry saves the same text (5823.181852ms)
+✔ media name remains editable before confirmation during a held lock, preserves full draft while queued and resumes (8918.63157ms)
+✔ media total supports multi-digit drafts, retains failures and retries the numeric value (5171.237226ms)
+✔ IME composition Enter does not persist an unfinished media draft (4730.864447ms)
+✔ admission year and recognized credits keep unsaved numeric drafts after failure and allow Enter retry (5472.465725ms)
+✔ imported component year and term are drafts, preserve failed text and keep official credits unchanged (7267.647323ms)
+✖ restore invalidates an unsaved media draft even when the stored value is identical (34626.243946ms)
+✔ public course title and planned year retain failed drafts and confirm whole values after a held lock (9668.849224ms)
+✔ media total presets replace the draft without a preceding blur save, including the same stored preset (5014.170776ms)
+✔ grade identity P1: preview holds a different exam year and preserves stored original bytes (6276.652933ms)
+✔ grade components P2: manual year survives grade refresh without duplicates and aggregate history is labelled (7854.603791ms)
+✔ grade partial P2: unchecked changed detail holds storage; full refresh then aggregate correction remains possible (8579.262437ms)
+✔ calligraphy 390px real UI S1 (4003.729802ms)
+✔ calligraphy 390px real UI S1+S1 (3685.961677ms)
+✔ calligraphy 390px real UI batch-only (3851.140837ms)
+✔ calligraphy 390px real UI batch+S1 (3972.300377ms)
+✔ calligraphy 390px real UI legacy-T2+S1 (4228.744019ms)
+✔ calligraphy 390px real UI official2/S1 (4083.755967ms)
+✔ calligraphy UI status, S1 revocation, reload, and JSON restoration preserve v22 (13291.660921ms)
+✔ calligraphy P2 Chromium card state matrix 言語コース (131266.525915ms)
+✔ calligraphy P2 Chromium card state matrix 芸能文化コース (125778.882319ms)
+✖ calligraphy P2 Chromium card state matrix 文学コース (161068.193424ms)
+✔ calligraphy P2 Chromium lifecycle and backup references 言語コース (30155.047811ms)
+✔ calligraphy P2 Chromium lifecycle and backup references 芸能文化コース (20597.542659ms)
+✔ calligraphy P2 Chromium lifecycle and backup references 文学コース (20067.722187ms)
+✔ calligraphy partial Chromium summer/GW exact body 言語コース (16228.14702ms)
+✔ calligraphy partial Chromium summer/GW exact body 芸能文化コース (10987.295325ms)
+✔ calligraphy partial Chromium summer/GW exact body 文学コース (10855.885788ms)
+✔ official repeatable Chromium: cap and source total remain separate after reload (6079.42156ms)
+✔ official repeatable Chromium: explicit zero conflicting with passed detail is visibly held (3639.725123ms)
+✔ official repeatable audit Chromium: R1 S null retains conflict, global/law S hold and saved bytes (5322.872118ms)
+✔ official repeatable audit Chromium: R1 composition null retains conflict, global/law S hold and saved bytes (5709.722315ms)
+✔ official repeatable audit Chromium: R2 year absent retains conflict, global/law S hold and saved bytes (5246.166296ms)
+✔ official repeatable F1 native-legacy Chromium holds and preserves conflicting source bytes (6126.634434ms)
+✔ official repeatable F1 legacy-native Chromium holds and preserves conflicting source bytes (394842.417809ms)
+✔ official repeatable F2 A+B Chromium holds and preserves conflicting source bytes (9196.555319ms)
+ℹ tests 44
+ℹ suites 0
+ℹ pass 40
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2373815.394187
+
+✖ failing tests:
+
+test at tests/planner-save-lock.browser.mjs:66:1
+✖ Web Lock wait disables thesis editors, preserves pending state, and permits editing after release (37887.502321ms)
+  locator.waitFor: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for getByRole('heading', { name: '全データのJSONバックアップ・復元', exact: true }) to be visible
+  
+      at open (<feature-checkout>/tests/planner-save-lock.browser.mjs:48:80)
+      at async TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:67:44) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('heading', { name: '全データのJSONバックアップ・復元', exact: true }) to be visible" ]
+  }
+
+test at tests/planner-save-lock.browser.mjs:112:1
+✖ external storage error disables every thesis editor (1000448.110421ms)
+  locator.isDisabled: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for locator('section').filter({ has: getByRole('heading', { name: '卒論手続・事前指導（参考）', exact: true }) }).locator('select,input').nth(5)
+  
+      at allDisabled (<feature-checkout>/tests/planner-save-lock.browser.mjs:63:74)
+      at async TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:117:3) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for locator('section').filter({ has: getByRole('heading', { name: '卒論手続・事前指導（参考）', exact: true }) }).locator('select,input').nth(5)" ]
+  }
+
+test at tests/planner-save-lock.browser.mjs:308:1
+✖ restore invalidates an unsaved media draft even when the stored value is identical (34626.243946ms)
+  locator.setInputFiles: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')
+  
+      at async TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:315:3) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')" ]
+  }
+
+test at tests/planner-save-lock.browser.mjs:557:44
+✖ calligraphy P2 Chromium card state matrix 文学コース (161068.193424ms)
+  locator.waitFor: Timeout 30000ms exceeded.
+  Call log:
+    - waiting for locator('section[aria-labelledby="graduation-progress-heading"]') to be visible
+  
+      at assertCalligraphyReferences (<feature-checkout>/tests/planner-save-lock.browser.mjs:549:17)
+      at TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:566:11) {
+    name: 'TimeoutError',
+    log: [ `  - waiting for locator('section[aria-labelledby="graduation-progress-heading"]') to be visible` ]
+  }
