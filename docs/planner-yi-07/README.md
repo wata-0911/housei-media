@@ -18,3 +18,7 @@ Issue [#177](https://github.com/wata-0911/housei-media/issues/177)、dev向けDr
 `npm run test:attempt-graduation` を追加し、既存CIの `test:planner` に組み込む。production entry、PlannerPage、schema22/23、backup、IndexedDB authority、YI-04 projection、YI-05/06操作、既存engine、公式catalogには変更を加えない。一般公開・Ready化・merge・Issue closeは行わない。
 
 既存engine側の監査根拠を新Attempt側の監査済み実装とみなさない。未実装の量に0を返さず、`Decision.value=null` とreasonで示す。公式aggregate・内訳・手動値を直接足すAPI、架空Offeringを発行するAPIはない。
+
+## 第2段階：共通証拠判定
+
+[#180](https://github.com/wata-0911/housei-media/issues/180) の独立pure APIは [evidence-foundation.md](evidence-foundation.md) を参照。本人適用・方法・公式aggregate所有・detail associationの命題を分離し、不足根拠と資料revisionを返す。新Attemptの正値算入は開放しない。
