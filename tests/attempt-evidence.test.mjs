@@ -110,7 +110,7 @@ test('composition4 / correspondence2 / S2 never generates completion4 or S4',asy
   for(const r of assessed([a,b],source).attempts){assert.equal(r.quantities.composition.quantity.value,4);held(r.graduation.completion); held(r.graduation.ordinary);held(r.graduation.schooling);}
 });
 test('method/year disagreement is reported without changing source or treating capture time as academic year',async()=>{
-  const d=detail({method:'correspondence',academicYear:2025,yearSource:'manual',capturedAt:'2035-01-01',credits:2});
+  const d=detail({method:'correspondence',academicYear:2025,yearSource:'source',capturedAt:'2035-01-01',credits:2});
   const source=await sourceFor([],[d]),a=refDetail(newAttempt(master,p),d.id,'schooling');
   a.actualYear={value:2035,source:'source',reason:null,evidence:{kind:'official_detail',studyRecordId:d.id}};
   const r=one(a,source); held(r.method.decision);held(r.actualYear.decision);
@@ -186,4 +186,141 @@ test('official schooling label alone neither proves nor contradicts the narrower
   const a=refDetail(newAttempt(master,p),d.id,'media'),r=one(a,source);
   held(r.method.decision);assert.equal(r.method.decision.reasons.includes('method_claim_conflict'),false);
   assert.ok(r.method.decision.reasons.includes('media_method_unverified'));
+});
+
+// Independent audit counterexamples: expected to fail on 52f5f05 before fixes.
+test('F1 TOCTOU: a later Proxy cannot make clone execute an earlier record getter',()=>{
+  const a=newAttempt(master,p),first={attemptId:a.id,kind:'official',sourceRevisionId:master.sourceRevision.id,sourceRefs:['document://unreviewed']};
+  const second={...first,sourceRefs:[...first.sourceRefs]};let reads=0,writes=0;
+  const input={graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[first]};
+  input.submittedEvidence.push(new Proxy(second,{ownKeys(target){
+    Object.defineProperty(first,'kind',{enumerable:true,configurable:true,get(){
+      reads++;Object.defineProperty(first,'kind',{enumerable:true,configurable:true,writable:true,value:'official'});return 'official';
+    },set(){writes++;}});
+    input.submittedEvidence[1]=target;return Reflect.ownKeys(target);
+  }}));
+  const r=api.assessAttemptEvidence(input,blank,scope);
+  assert.equal(reads,0,JSON.stringify({status:r.status,getterCalls:reads,submissions:r.submittedEvidence?.length}));assert.equal(writes,0);
+  if(r.status==='assessed'){
+    assert.equal(r.submittedEvidence.length,2);r.submittedEvidence.forEach(s=>held(s.decision));
+    assert.equal(r.submittedEvidence[0].record.kind,'official');
+    assert.equal(Object.isFrozen(first),false);assert.equal(Object.isFrozen(r.submittedEvidence[0].record),true);
+  }else assert.equal(r.diagnostics[0].code,'invalid_evidence_submission');
+});
+test('F2 official null academicYear is unknown, never a contradictory year',async()=>{
+  const d=detail({academicYear:null,yearSource:'unknown',rawYear:null}),source=await sourceFor([],[d]),a=newAttempt(master,p);
+  a.actualYear={value:2025,source:'source',reason:null,evidence:{kind:'official_detail',studyRecordId:d.id}};
+  const r=one(a,source);held(r.actualYear.decision);assert.ok(r.actualYear.decision.reasons.includes('official_year_unverified'));
+  assert.equal(r.actualYear.decision.reasons.includes('actual_year_claim_conflict'),false);
+});
+test('F3 unresolved graduation diagnostics include their identity, placement and academic-year obligations',()=>{
+  const r=one(newAttempt(master));
+  for(const [reason,requirement] of [['identity_unresolved','reviewed_course_identity'],['placement_unresolved','unique_reviewed_placement'],['official_year_unverified','official_attempt_academic_year']]){
+    assert.ok(r.graduation.completion.reasons.includes(reason));assert.ok(r.graduation.completion.missingEvidence.includes(requirement),requirement);
+  }
+});
+
+const f1Corruptions = [
+  ['sparse refs', (s,input)=>delete s.sourceRefs[0]],
+  ['huge sparse array', (s,input)=>input.submittedEvidence=Array(0xffffffff)],
+  ['array extra field', (s,input)=>input.submittedEvidence.extra=true],
+  ['non-enumerable field', s=>Object.defineProperty(s,'hidden',{value:true})],
+  ['symbol key', s=>s[Symbol('hidden')]=true],
+  ['NaN', s=>s.sourceRefs=[NaN]], ['Infinity', s=>s.sourceRefs=[Infinity]],
+  ['negative zero', s=>s.sourceRefs=[-0]], ['bigint', s=>s.sourceRefs=[1n]],
+  ['symbol value', s=>s.sourceRefs=[Symbol('ref')]], ['function', s=>s.kind=()=> 'official'],
+  ['cycle', (s,input)=>s.sourceRefs.push(input.submittedEvidence)],
+  ['custom object prototype', s=>Object.setPrototypeOf(s,{inherited:true})],
+  ['custom array prototype', s=>Object.setPrototypeOf(s.sourceRefs,Object.create(Array.prototype))],
+  ...[new Map([['lost','data']]), new Set(['lost']), new Date(0), new ArrayBuffer(2), new Uint8Array(2), Object(2n)].map(v=>[
+    `${v.constructor.name} disguised as a record`, (s,input)=>{
+      Object.setPrototypeOf(v,Object.prototype);Object.assign(v,s);input.submittedEvidence=[v];
+    }]),
+];
+for(const [name,corrupt] of f1Corruptions)test(`F1 rejects ${name} without widening the submission schema`,()=>{
+  const a=newAttempt(master,p),s={attemptId:a.id,kind:'future',sourceRevisionId:master.sourceRevision.id,sourceRefs:['document://ref']};
+  const input={graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[s]};
+  corrupt(s,input);const r=api.assessAttemptEvidence(input,blank,scope);
+  assert.equal(r.status,'rejected');assert.equal(r.diagnostics[0].code,'invalid_evidence_submission');
+});
+for(const field of ['kind','sourceRefs','0'])test(`F1 static getter/setter ${field} has zero calls`,()=>{
+  const a=newAttempt(master,p),s={attemptId:a.id,kind:'future',sourceRevisionId:master.sourceRevision.id,sourceRefs:['document://ref']};
+  let reads=0,writes=0;
+  Object.defineProperty(field==='0'?s.sourceRefs:s,field,{enumerable:true,get(){reads++;return 'official';},set(){writes++;}});
+  const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[s]},blank,scope);
+  assert.equal(r.status,'rejected');assert.equal(reads,0);assert.equal(writes,0);
+});
+test('F1 subsequent reflection cannot rewrite captured refs; null-prototype valid data stays held',()=>{
+  const a=newAttempt(master,p),first=Object.assign(Object.create(null),{attemptId:a.id,kind:'official',sourceRevisionId:'future',sourceRefs:['original://ref']});
+  const second=new Proxy({...first,sourceRefs:['second://ref']},{ownKeys(target){first.sourceRefs[0]='mutated://ref';return Reflect.ownKeys(target);}});
+  const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[first,second]},blank,scope);
+  assert.equal(r.status,'assessed');assert.deepEqual(r.submittedEvidence[0].record.sourceRefs,['original://ref']);
+  r.submittedEvidence.forEach(s=>held(s.decision));held(r.attempts[0].applicability.decision);
+  assert.equal(Object.isFrozen(first),false);assert.equal(Object.isFrozen(first.sourceRefs),false);
+});
+test('F1 source authenticity still rejects copied, forged and proxied source objects',()=>{
+  const a=newAttempt(master,p),input={graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[]};
+  for(const source of [{...blank},structuredClone(blank),new Proxy(blank,{})]){
+    const r=api.assessAttemptEvidence(input,source,scope);assert.equal(r.status,'rejected');assert.equal(r.diagnostics[0].code,'unvalidated_source');
+  }
+});
+
+const yearCases = [
+  ['null unknown',null,'unknown',2025,'source',false],
+  ['null source',null,'source',2025,'source',false],
+  ['same source year',2025,'source',2025,'source',false],
+  ['different source year',2024,'source',2025,'source',true],
+  ['numeric unknown source',2024,'unknown',2025,'source',false],
+  ['manual detail year',2024,'manual',2025,'source',false],
+  ['date-inferred detail year',2024,'inferred',2025,'source',false],
+  ['no actual-year claim',2024,'source',null,'unknown',false],
+  ['manual actual-year claim',2024,'source',2025,'manual',false],
+  ['inferred actual-year claim',2024,'source',2025,'inferred',false],
+];
+for(const [label,academicYear,yearSource,value,claimSource,conflict] of yearCases)test(`F2 ${label}: compare only independently recorded source years`,async()=>{
+  const d=detail({academicYear,yearSource,rawYear:yearSource==='source'&&academicYear!==null?String(academicYear):null,
+    capturedAt:'2035-01-01',date:'2035-01-01'}),source=await sourceFor([],[d]),a=newAttempt(master,p);
+  a.actualYear={value,source:claimSource,reason:claimSource==='inferred'?'not official':null,evidence:value===null?null:
+    claimSource==='manual'?{kind:'learner',note:'self reported'}:{kind:'official_detail',studyRecordId:d.id}};
+  const r=one(a,source);held(r.actualYear.decision);assert.ok(r.actualYear.decision.reasons.includes('official_year_unverified'));
+  assert.equal(r.actualYear.decision.reasons.includes('actual_year_claim_conflict'),conflict);
+  assert.deepEqual(r.actualYear.record,a.actualYear);assert.equal(r.record.plan.plannedYear,2035);
+  const base=adaptAttemptGraduation({graph:graphFor([a]),retained:retained(source.state)},source,scope);
+  for(const [axis,decision] of Object.entries(base.attempts[0].decisions)){
+    const {missingEvidence,references,...unchanged}=r.graduation[axis];assert.deepEqual(unchanged,decision);
+  }
+});
+
+const reasonRequirements = {
+  identity_unresolved:['reviewed_course_identity'],
+  placement_unresolved:['unique_reviewed_placement'],placement_ambiguous:['unique_reviewed_placement'],
+  applicability_unverified:['official_learner_program','official_admission_context','official_curriculum_transition_history','reviewed_applicability_rules'],
+  method_evidence_insufficient:['official_attempt_method','official_attempt_detail_binding'],
+  official_year_unverified:['official_attempt_academic_year','official_attempt_detail_binding'],
+  contribution_omitted:['explicit_attempt_contribution'],contribution_unknown:['explicit_attempt_contribution'],
+  earned_order_unconfirmed:['reviewed_attempt_earned_order'],official_overlap_possible:['same_course_aggregate'],
+  official_matching_held:['reviewed_official_course_matching'],official_detail_shared:['official_attempt_detail_binding','exclusive_detail_assignment'],
+  official_association_unverified:['official_attempt_detail_binding'],completion_evidence_insufficient:['official_course_completion_evidence'],
+  attempt_rule_unimplemented:['implemented_allocation_rule'],multiple_attempt_rule_unimplemented:['implemented_allocation_rule'],
+};
+for(const planStatus of ['earned','in_progress','planned'])test(`F3 reason/obligation table for all axes of ${planStatus} Attempts`,async()=>{
+  const row=rowFor(),d=detail({sourceCourseId:row.id,rawName:row.rawName}),source=await sourceFor([row],[d]);
+  const unresolved=newAttempt(master,null,null,planStatus);delete unresolved.plan.contribution;
+  unresolved.placement.candidatePlacementIds=[p.id,other.id];
+  const unknown=newAttempt(master,null,null,planStatus),a=refDetail(confirmPlacement(newAttempt(master,p,2,planStatus),p),d.id);
+  const peer=refDetail(confirmPlacement(newAttempt(master,p,2,planStatus),p),d.id);
+  const attempts=[unresolved,unknown,a,peer],result=assessed(attempts,source);
+  const base=adaptAttemptGraduation({graph:graphFor(attempts),retained:retained(source.state)},source,scope);
+  for(const [i,r] of result.attempts.entries())for(const [axis,decision] of Object.entries(r.graduation)){
+    const {missingEvidence,references,...unchanged}=decision;assert.deepEqual(unchanged,base.attempts[i].decisions[axis]);
+    const expected=decision.status==='supported'?[]:[...new Set(decision.reasons.flatMap(reason=>{
+      assert.ok(Object.hasOwn(reasonRequirements,reason),reason);return reasonRequirements[reason];
+    }))];
+    assert.deepEqual(missingEvidence,expected,`${r.attemptId}/${axis}`);
+    if(['inProgress','planned'].includes(axis))assert.equal(missingEvidence.includes('official_attempt_method'),false);
+    if(axis!=='completion')assert.equal(missingEvidence.includes('official_attempt_academic_year'),false);
+    assert.equal(missingEvidence.includes('reviewed_course_identity'),decision.reasons.includes('identity_unresolved'));
+    assert.equal(missingEvidence.includes('unique_reviewed_placement'),decision.reasons.some(r=>r.startsWith('placement_')));
+  }
+  assert.deepEqual(result.retainedProgress,base.retainedProgress);assert.deepEqual(result.officialEvidence,base.officialEvidence);
 });

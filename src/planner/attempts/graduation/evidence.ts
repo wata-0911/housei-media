@@ -1,13 +1,33 @@
 import { adaptAttemptGraduation } from './adapter';
-import { sameAttemptData } from '../validation';
+import { snapshotEvidenceSubmissions } from './evidenceSnapshot';
 import { freeze, pointer } from '../migration/contracts';
 import type { Attempt } from '../types';
-import type { Decision, GraduationAxis, RecordedQuantity } from './types';
+import type { AttemptHoldCode, Decision, GraduationAxis, RecordedQuantity } from './types';
 import type { AttemptEvidenceInput, AttemptEvidenceResult, EvidenceDecision, EvidenceReference,
   EvidenceRequirement, EvidenceSource, EvidenceSubmission, OfficialRecordedQuantities } from './evidenceTypes';
 
 const applicabilityRequirements: EvidenceRequirement[] = ['official_learner_program', 'official_admission_context',
   'official_curriculum_transition_history', 'reviewed_applicability_rules'];
+// Each obligation comes only from a diagnostic carried by that graduation axis.
+// The mapping explains missing evidence; it never changes the adapter decision.
+const graduationRequirements: Record<AttemptHoldCode, readonly EvidenceRequirement[]> = {
+  identity_unresolved: ['reviewed_course_identity'],
+  placement_ambiguous: ['unique_reviewed_placement'],
+  placement_unresolved: ['unique_reviewed_placement'],
+  applicability_unverified: applicabilityRequirements,
+  method_evidence_insufficient: ['official_attempt_method', 'official_attempt_detail_binding'],
+  official_year_unverified: ['official_attempt_academic_year', 'official_attempt_detail_binding'],
+  contribution_omitted: ['explicit_attempt_contribution'],
+  contribution_unknown: ['explicit_attempt_contribution'],
+  earned_order_unconfirmed: ['reviewed_attempt_earned_order'],
+  official_overlap_possible: ['same_course_aggregate'],
+  official_matching_held: ['reviewed_official_course_matching'],
+  official_detail_shared: ['official_attempt_detail_binding', 'exclusive_detail_assignment'],
+  official_association_unverified: ['official_attempt_detail_binding'],
+  completion_evidence_insufficient: ['official_course_completion_evidence'],
+  attempt_rule_unimplemented: ['implemented_allocation_rule'],
+  multiple_attempt_rule_unimplemented: ['implemented_allocation_rule'],
+};
 const quantity = (value: number | null | undefined): RecordedQuantity => value === undefined ? { kind: 'omitted' }
   : value === null ? { kind: 'unknown', value: null } : value === 0 ? { kind: 'zero', value: 0 } : { kind: 'positive', value };
 function quantities(row: { earnedCreditsTotal?: number | null; schoolingCreditsTotal?: number | null;
@@ -33,14 +53,13 @@ export function assessAttemptEvidence(input: AttemptEvidenceInput, source: Evide
   const adapted = adaptAttemptGraduation(input, source, scopeId);
   if (adapted.status === 'rejected') return adapted;
   // Optional submissions are inert references, never an escape from the closed
-  // graph schema. Inspect descriptors before clone; reject sparse/accessor data.
+  // graph schema. Build plain snapshots from descriptors without cloning/re-reading inputs.
   let submissions: EvidenceSubmission[] = [];
   try {
     const property = Object.getOwnPropertyDescriptor(input, 'submittedEvidence');
     if (property) {
-      if (!('value' in property) || !sameAttemptData(property.value, property.value)) throw new Error('non_json_submission');
-      const copied = structuredClone(property.value);
-      if (!sameAttemptData(property.value, copied) || !Array.isArray(copied)) throw new Error('invalid_submission_snapshot');
+      if (!('value' in property)) throw new Error('non_json_submission');
+      const copied = snapshotEvidenceSubmissions(property.value);
       for (const s of copied) {
         if (!s || typeof s !== 'object' || Object.keys(s).sort().join(',') !== 'attemptId,kind,sourceRefs,sourceRevisionId'
           || typeof s.attemptId !== 'string' || !adapted.graph.attempts.some(a => a.id === s.attemptId)
@@ -113,12 +132,17 @@ export function assessAttemptEvidence(input: AttemptEvidenceInput, source: Evide
     const method = { record: a.method, decision: held(['method_evidence_insufficient',
       ...(methodConflict ? ['method_claim_conflict'] : []), ...(mediaUnverified ? ['media_method_unverified'] : [])],
     ['official_attempt_method', 'official_attempt_detail_binding'], methodRefs) };
+    // A numeric source year can expose a disagreement, but still does not bind
+    // the detail to this Attempt. Unknown/manual/inferred years are not official years.
+    const yearConflict = a.actualYear.source === 'source' && a.actualYear.value !== null
+      && yearDetail?.record.yearSource === 'source' && yearDetail.record.academicYear !== null
+      && a.actualYear.value !== yearDetail.record.academicYear;
     const actualYear = { record: a.actualYear, decision: held(['official_year_unverified',
-      ...(yearDetail && a.actualYear.value !== yearDetail.record.academicYear ? ['actual_year_claim_conflict'] : [])],
+      ...(yearConflict ? ['actual_year_claim_conflict'] : [])],
     ['official_attempt_academic_year', 'official_attempt_detail_binding'], [ref(`${base}/actualYear`), ...(yearDetail?.referenceExists.references ?? [])]) };
     const graduation = Object.fromEntries(Object.entries(entry.decisions).map(([axis, decision]) => [axis,
-      judgement(decision, decision.status === 'supported' ? [] : [...applicabilityRequirements, 'official_attempt_method',
-        'official_attempt_detail_binding', 'implemented_allocation_rule'], [ref(base), ...aggregates.flatMap(row => row.incrementOwnership.references)])])) as Record<GraduationAxis, EvidenceDecision<number>>;
+      judgement(decision, decision.status === 'supported' ? [] : decision.reasons.flatMap(reason =>
+        graduationRequirements[reason as AttemptHoldCode]), [ref(base), ...aggregates.flatMap(row => row.incrementOwnership.references)])])) as Record<GraduationAxis, EvidenceDecision<number>>;
     return { attemptId: a.id, record: a, identity, placement, placementCandidates: entry.placementCandidates, applicability,
       method, actualYear, quantities: entry.quantities, official: { aggregates, details }, graduation, impact: entry.impact,
       ruleSupport: judgement(entry.evidence.ruleSupport, ['implemented_allocation_rule'], [ref(base)]) };

@@ -169,3 +169,76 @@ YI-06のportable queued commitを含めdev/feature双方17件が成功したた�
 (1)(2)(4)の再実行は **feature 3 PASS / dev 3 PASS、双方FAIL/SKIP 0**。初回だけのtimeoutとして原因未確定のまま記録する。[両環境の再実行ログ](evidence-browser-recheck.txt)。通常Planner全44件を再実行して全件成功したとは主張しない。#145はこのPRで修正せず、他3件の初回失敗とともに独立監査へ引き継ぐ。
 
 [全検証の件数・コマンド・source/log SHA記録](evidence-verification.json)。最終変更は新テストの前提assertion強化と本検証記録だけで、算入実装・既存テストは無変更。独立監査は未実施。Draft PR #181、Issue #180 Openを維持し、Ready化・merge・Issue close・一般公開は行わない。
+
+
+## 独立監査 F1 / F2 / F3 の修正（2026-10-21）
+
+独立監査対象HEADは `52f5f05a64f0e3d2f2d220f89363e8ee8e76aa7b`。開始時にfetchし、PR #181のHEADが同じ、base devが `3eae77665711756e54785022856d5cfae3043f90`、作業ツリーclean、Draft/Open、Issue #180 Openを確認した。同じfeatureブランチを使用し、新Issue/PR/ブランチは作成しない。
+
+### F1：検査後の元入力再走査
+
+`sameAttemptData(value, value)`は独立snapshotを作らず、後続の`structuredClone(value)`が元入力を再走査していた。2件目のProxyの`ownKeys`から検査済み1件目の`kind`をgetterへ差し替える独立反例で、修正前は `assessed / getterCalls=1 / submissions=2` を再現した。
+
+`evidenceSnapshot.ts`で提出の固定schemaに沿い、own descriptorを取得しながら独立したplain object/arrayを構築する。元オブジェクトをclone・JSON化せず、値のプロパティアクセスもしない。文字列以外のleaf、疎配列、symbol/非列挙/アクセサのプロパティ、不正prototype、余分なキー、循環入力を拒否する。巨大疎配列は長さとキー集合を照合してから配列を確保する。Map/Setやbuffer等をprototypeだけ通常objectに偽装しても、組込みのbrand検査で構造欠落を防ぐ。後続のschema/Attempt ID検査・判定・freezeは作成済みsnapshotだけを使用する。既存source認証・graph・retained検証はadapterを先に通す従来の境界を維持する。
+
+JavaScriptのProxy trap自体の実行・副作用を一般的に封じたとは主張しない。reflection中のtrapによる入力変更は起こり得る。既に捕捉した値の再読込や、cloneによるgetter呼出しを行わない契約である。plain-data descriptorとして安全に取り込めるProxyは、その参照メモをheldで保持し得る。大学の証明として受理する経路ではない。
+
+### F2：未知年度と年度矛盾の区別
+
+`2025 !== null`を年度矛盾と扱っていた。Attempt側が`source`かつ年度非null、参照detail側が`yearSource=source`かつ年度非nullの場合だけ、異なる年度を`actual_year_claim_conflict`として報告する。null・unknown・manual・inferred、実績年未設定では矛盾を追加しない。予定年・date・capturedAt・rawYearから年度を生成しない。
+
+比較できるsource年度が同年でも、異年でも、履修回bindingは証明されていないため`official_year_unverified`とheldは維持する。この診断は記録されたsource年度同士の不一致であり、Attemptへの公式年度確定ではない。既存55件中の年度不一致fixtureはdetailの`yearSource`をmanualからsourceへ変更し、矛盾検出assertionを維持した。手動年度を公式とみなす旧fixtureの前提を修正し、manual/inferredに矛盾を付けない反例を別途追加した。
+
+### F3：卒業軸の理由と不足根拠の対応
+
+全軸共通の固定配列を廃止し、各軸に既存adapterが返す`reasons`から不足根拠を導く。`AttemptHoldCode`の全要素を型で網羅する対応表とし、重複を除いて返す。supportedな除外0の不足根拠は空配列。status/value/reasons・影響範囲・公式数量・retainedProgressはadapterから変更しない。
+
+| 卒業軸の理由 | 対応する不足根拠 |
+| --- | --- |
+| identity_unresolved | reviewed_course_identity |
+| placement_unresolved / placement_ambiguous | unique_reviewed_placement |
+| applicability_unverified | official_learner_program、official_admission_context、official_curriculum_transition_history、reviewed_applicability_rules |
+| method_evidence_insufficient | official_attempt_method、official_attempt_detail_binding |
+| official_year_unverified | official_attempt_academic_year、official_attempt_detail_binding |
+| contribution_omitted / contribution_unknown | explicit_attempt_contribution |
+| earned_order_unconfirmed | reviewed_attempt_earned_order |
+| official_overlap_possible | same_course_aggregate |
+| official_matching_held | reviewed_official_course_matching |
+| official_detail_shared | official_attempt_detail_binding、exclusive_detail_assignment |
+| official_association_unverified | official_attempt_detail_binding |
+| completion_evidence_insufficient | official_course_completion_evidence |
+| attempt_rule_unimplemented / multiple_attempt_rule_unimplemented | implemented_allocation_rule |
+
+`inProgress`/`planned`にmethodの不足を機械的に付加せず、年度不足はその理由があるcompletion軸に限る。本人の寄与値・修得順、公式照合、科目完成の新しい不足識別子も、根拠の受理・数量配分を実装するものではない。earned/in_progress/plannedのシナリオで全軸の対応表とadapter結果の完全一致をテストする。
+
+### 反例と検証記録
+
+独立反例3件をコード変更前に追加して **0 PASS / 3 FAIL / 0 SKIP**、同じassertionで修正後 **3 PASS / 0 FAIL / 0 SKIP** を確認した。同じ拡張96件を監査対象HEADのarchiveでも実行し **83 PASS / 13 FAIL / 0 SKIP** を確認した。追加の境界・年度・対応表テストを含む修正版の証拠suiteは **96 PASS / 0 FAIL / 0 SKIP**（元55件＋追加41件）。F1ではgetter/setter呼出し0回、後続trapによる参照文字列の変更が既存snapshotへ伝播しないこと、正当なnull-prototype提出のheld維持、偽造/copied/Proxy sourceの拒否も検証する。
+
+監査で見つかった過去ログ3ファイルの末尾空白・余分なEOF空行を修正した。空白以外のtoken列は完全一致で、実測値・失敗・意味は変更していない。前回の`git diff --check`成功記録は当時のローカル差分に対する実行記録であり、監査対象のPR全差分が成功していたという意味ではなかったことを明記する。今回は`git diff --check`と`git diff --check origin/dev`の両方を実行する。
+
+新Attemptの正値算入・完成・反復配分・本人公式証明受理、既存#145のブラウザ修正は今回の対象外。実装者による反例・回帰の成功を独立再監査の完了とは扱わない。
+
+[今回のRED/GREEN記録](evidence-f123-red-green.txt)。独立監査元ファイルのF1/F2/F3も、import先だけを修正版に置換して **3 PASS / 0 FAIL / 0 SKIP**。これは実装者が監査反例を再実行した結果であり、独立再監査の完了報告ではない。
+
+
+| 今回の必須回帰 | 結果 |
+| --- | --- |
+| 証拠suite（既存55＋追加41） | 96 PASS / 0 FAIL / 0 SKIP |
+| 第1段階suite・全8scope固定192・過去4件P2 | 414 PASS / 0 FAIL / 0 SKIP（既存assertionはbyte不変） |
+| Planner全体 | 4,002 PASS / 0 FAIL / 0 SKIP |
+| migration / attempt-persistence | 133 PASS / 103 PASS |
+| extension / bookmarklet | 54 PASS / 168 PASS |
+| typecheck / lint / build / YI-01 verify | 全成功 |
+| git diff --check / git diff --check origin/dev | 双方成功（過去ログの空白修正を含むPR全差分） |
+| production build | 同一依存のpristine devと12/12ファイルbyte一致 |
+| YI-05 Chromium | 9 PASS / 0 FAIL / 0 SKIP |
+| YI-06 Chromium feature / dev | 双方17 PASS / 0 FAIL / 0 SKIP。portable競合保存timeoutは再現なし |
+| 通常Planner Chromium初回 | 41 PASS / 3 FAIL / 0 SKIP |
+| #145のdev単独比較 | 0 PASS / 1 FAIL、同じfile input・30000ms timeout |
+
+通常Planner初回の残る2件は、書道P2 card state matrixの言語コース（reload待機）・文学コース（卒業要件section待機）の30000ms timeout。#145とは別に扱い、同じテスト・期待値・timeoutによるfeature→devの順の比較で **feature 2 PASS / dev 2 PASS、双方FAIL/SKIP 0**。初回timeoutの原因は未確定であり、既知#145と同じ原因とは断定しない。初回失敗を後の成功で上書きしない。ブラウザテスト・skip・timeout・期待値は変更していない。iPhone/Safari実機は未実施。
+
+[今回の検証件数・コマンド・source/log SHA・production比較・空白修正の前後SHA](evidence-f123-verification.json)。元の`evidence-verification.json`は前段階の履歴であり、今回のsource SHA/結果への書換えはしない。最終修正HEADのCIは[PR #181 Checks](https://github.com/wata-0911/housei-media/pull/181/checks)とPR本文で確定する。Draft/Open・Issue #180 Openを維持し、Ready化・merge・closeは行わない。
+
+[今回のブラウザ全件ログとdev比較・再実行](evidence-f123-browser.txt)。最終比較は上記2件だけであり、通常Planner全44件を再実行して全件成功したとは主張しない。

@@ -10,7 +10,9 @@ export type EvidenceRequirement =
   | 'official_curriculum_transition_history' | 'reviewed_applicability_rules'
   | 'official_attempt_method' | 'official_attempt_academic_year'
   | 'same_course_aggregate' | 'official_attempt_detail_binding' | 'exclusive_detail_assignment'
-  | 'reviewed_evidence_kind' | 'implemented_allocation_rule';
+  | 'reviewed_evidence_kind' | 'implemented_allocation_rule'
+  | 'explicit_attempt_contribution' | 'reviewed_attempt_earned_order'
+  | 'reviewed_official_course_matching' | 'official_course_completion_evidence';
 export type EvidenceReference = {
   sourceRef: string;
   sourceRevisionId: string;

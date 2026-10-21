@@ -83,9 +83,9 @@ Media subtype safety condition RED before fix (1)
 test at tests/attempt-evidence.test.mjs:183:1
 ✖ official schooling label alone neither proves nor contradicts the narrower learner media claim (1715.284822ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   true !== false
-  
+
       at TestContext.<anonymous> (<feature-checkout>/tests/attempt-evidence.test.mjs:186:34)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
@@ -161,4 +161,3 @@ Same final suite against pristine dev RED (missing API; 55)
 ℹ skipped 0
 ℹ todo 0
 ℹ duration_ms 22885.377716
-

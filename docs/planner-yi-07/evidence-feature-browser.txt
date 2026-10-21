@@ -62,7 +62,7 @@ test at tests/planner-save-lock.browser.mjs:66:1
   locator.waitFor: Timeout 30000ms exceeded.
   Call log:
     - waiting for getByRole('heading', { name: '全データのJSONバックアップ・復元', exact: true }) to be visible
-  
+
       at open (<feature-checkout>/tests/planner-save-lock.browser.mjs:48:80)
       at async TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:67:44) {
     name: 'TimeoutError',
@@ -74,7 +74,7 @@ test at tests/planner-save-lock.browser.mjs:112:1
   locator.isDisabled: Timeout 30000ms exceeded.
   Call log:
     - waiting for locator('section').filter({ has: getByRole('heading', { name: '卒論手続・事前指導（参考）', exact: true }) }).locator('select,input').nth(5)
-  
+
       at allDisabled (<feature-checkout>/tests/planner-save-lock.browser.mjs:63:74)
       at async TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:117:3) {
     name: 'TimeoutError',
@@ -86,7 +86,7 @@ test at tests/planner-save-lock.browser.mjs:308:1
   locator.setInputFiles: Timeout 30000ms exceeded.
   Call log:
     - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')
-  
+
       at async TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:315:3) {
     name: 'TimeoutError',
     log: [ "  - waiting for getByRole('region', { name: 'プランナー全データのバックアップ・復元' }).locator('input[type=file]')" ]
@@ -97,7 +97,7 @@ test at tests/planner-save-lock.browser.mjs:557:44
   locator.waitFor: Timeout 30000ms exceeded.
   Call log:
     - waiting for locator('section[aria-labelledby="graduation-progress-heading"]') to be visible
-  
+
       at assertCalligraphyReferences (<feature-checkout>/tests/planner-save-lock.browser.mjs:549:17)
       at TestContext.<anonymous> (<feature-checkout>/tests/planner-save-lock.browser.mjs:566:11) {
     name: 'TimeoutError',
