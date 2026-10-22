@@ -95,9 +95,13 @@ Node.js 24.13.0。同一lockfileの依存環境を使用。既存テスト・fix
 
 ### CIの記録
 
-ローカル検証とGitHub CIを区別する。Draft PRの最終HEADに対応するCI run/checkを確認し、PR本文へrun URLと結果を記録する。独立監査・Ready化・mergeの代わりにはしない。
+ローカル検証とGitHub CIを区別する。検証した実装・テストのSHA-256は [verified-code-sha256.json](verified-code-sha256.json) に固定した。
 
+- 実装を含むHEAD `2e4451b489d2a2e1ec0c2e892300f98191268571` の [CI #91実行記録](https://github.com/wata-0911/housei-media/actions/runs/39833690413)（[check job / 各stepの結果](https://github.com/wata-0911/housei-media/actions/runs/39833690413/job/120016293351)）。
+- CI環境はUbuntu / Node.js 22 / npm ci。typecheck、lint、全Planner（新規snapshot suiteを含む）、Extension、Bookmarklet、buildを実行する。ブラウザ試験とproduction byte比較は上記ローカル記録で区別する。
+- この実行リンクの追記は文書だけの変更で、実装・テストのSHA-256は不変。追記後の最終HEADとそのCI run URL・結論は [Draft PR #183の検証欄](https://github.com/wata-0911/housei-media/pull/183) に固定して記録する。CI記録が自分自身のcommit SHAを参照して更新を繰り返すことを避けるため、最終HEADの記録先をPR本文とする。
 
+実行結果の正本は上記GitHub Actionsの記録。独立監査・Ready化・mergeの代わりにはしない。
 
 ## release-blockerとの関係
 
