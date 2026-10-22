@@ -1,0 +1,146 @@
+{"entry":"validator","mode":"getter","reads":1,"traps":2,"valid":true}
+{"entry":"adapter","mode":"getter","reads":1,"traps":2,"status":"adapted","id":"hosei:attempt:5a2ac566-146e-4f4e-8c59-49170ea91b92","quantity":{"authority":"learner","quantity":{"kind":"positive","value":2}}}
+{"entry":"validator","mode":"invalid-id","reads":2,"traps":2,"valid":true}
+{"entry":"adapter","mode":"invalid-id","reads":2,"traps":2,"status":"adapted","id":"invalid-graph-id","quantity":{"authority":"learner","quantity":{"kind":"positive","value":2}}}
+{"entry":"validator","mode":"negative-contribution","reads":2,"traps":2,"valid":true}
+{"entry":"adapter","mode":"negative-contribution","reads":2,"traps":2,"status":"adapted","id":"hosei:attempt:eb3ce9f5-1506-4853-b8ad-a0f48cc8602f","quantity":{"authority":"learner","quantity":{"kind":"positive","value":-100}}}
+✖ N2 validator: getter never invokes a late-installed getter (59.567415ms)
+✖ N2 adapter: getter never invokes a late-installed getter or returns changed data (52.659ms)
+✖ N2 validator: invalid-id never invokes a late-installed getter (38.463099ms)
+✖ N2 adapter: invalid-id never invokes a late-installed getter or returns changed data (39.275825ms)
+✖ N2 validator: negative-contribution never invokes a late-installed getter (34.015242ms)
+✖ N2 adapter: negative-contribution never invokes a late-installed getter or returns changed data (40.594972ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 0
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2637.512812
+
+✖ failing tests:
+
+test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:40:3
+✖ N2 validator: getter never invokes a late-installed getter (59.567415ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:43:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.start (node:internal/test_runner/test:1003:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:47:3
+✖ N2 adapter: getter never invokes a late-installed getter or returns changed data (52.659ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:51:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:40:3
+✖ N2 validator: invalid-id never invokes a late-installed getter (38.463099ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 0
+  
+      at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:43:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:47:3
+✖ N2 adapter: invalid-id never invokes a late-installed getter or returns changed data (39.275825ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 0
+  
+      at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:51:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:40:3
+✖ N2 validator: negative-contribution never invokes a late-installed getter (34.015242ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 0
+  
+      at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:43:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:47:3
+✖ N2 adapter: negative-contribution never invokes a late-installed getter or returns changed data (40.594972ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 0
+  
+      at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:51:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

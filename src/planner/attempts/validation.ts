@@ -55,40 +55,93 @@ export function attemptValidationResult(issues: AttemptValidationIssue[]): Attem
   return { valid: sorted.length === 0, issues: sorted };
 }
 
-/** Validate an independent graph against a trusted YI-02 master. No normalization, issuance or aggregation. */
+/** A successful result owns a deeply frozen snapshot, never references into input. */
+export type AttemptGraphSnapshotResult =
+  | { valid: true; issues: AttemptValidationIssue[]; graph: AttemptGraph }
+  | { valid: false; issues: AttemptValidationIssue[] };
+
+/** Capture own data descriptors once, recursively copying each value immediately.
+ * Bottom-up native clone guards reject Proxy/exotic inputs before any ancestor
+ * is cloned. Reflection traps may mutate originals, never captured data.
+ * This is not an atomic snapshot of a hostile Proxy, nor a sandbox for its traps. */
+export function snapshotAttemptGraph(value: unknown, context: AttemptValidationContext): AttemptGraphSnapshotResult {
+  const ancestors = new Set<object>();
+  const issues: AttemptValidationIssue[] = [];
+  const invalid = (path: string, message: string): never => {
+    issues.push({ code: 'non_json_value', path, message });
+    throw new Error('invalid_graph_data');
+  };
+  const capture = (v: unknown, path: string): unknown => {
+    if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
+    if (typeof v === 'number' && Number.isFinite(v) && !Object.is(v, -0)) return v;
+    if (typeof v !== 'object' || v === null) return invalid(path, 'Value cannot be preserved as JSON');
+    if (ancestors.has(v)) return invalid(path, 'Cyclic input');
+    const array = Array.isArray(v), prototype = Object.getPrototypeOf(v);
+    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
+      return invalid(path, 'Expected a plain JSON object');
+    }
+    // Map/Set serialization traverses internal entries, outside own descriptors.
+    // Probe their internal slots without reading properties or invoking getters.
+    // A Proxy fails these probes and will fail the native clone guard below.
+    for (const has of [Map.prototype.has, Set.prototype.has]) {
+      let collection = false;
+      try { has.call(v, null); collection = true; } catch { /* Not this native collection. */ }
+      if (collection) return invalid(path, 'Native collections are not JSON records');
+    }
+    const keys = Reflect.ownKeys(v);
+    // Never read v.length (a Proxy get trap). Bound iteration by the own keys,
+    // rejecting huge sparse arrays before allocating/iterating their length.
+    const length = array ? Object.getOwnPropertyDescriptor(v, 'length') : undefined;
+    if (array && (!length || !('value' in length) || !Number.isInteger(length.value)
+      || length.value < 0 || length.value > 0xffffffff || length.enumerable || keys.length !== length.value + 1)) {
+      return invalid(path, 'Sparse or malformed array');
+    }
+    const copy: object = array ? [] : {};
+    ancestors.add(v);
+    try {
+      for (const key of keys) {
+        if (array && key === 'length') continue;
+        const descriptor = Object.getOwnPropertyDescriptor(v, key);
+        if (typeof key !== 'string' || !descriptor || !descriptor.enumerable || !('value' in descriptor)
+          || (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= length!.value))) {
+          return invalid(path, 'Only enumerable JSON data properties are supported');
+        }
+        const child = capture(descriptor.value, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`);
+        // defineProperty also preserves __proto__ as data, without a setter.
+        Object.defineProperty(copy, key, { value: child, enumerable: true, writable: true, configurable: true });
+      }
+      // Bottom-up guard, BEFORE schema/semantic validation: every descendant
+      // has already passed this guard. A Proxy is rejected by structuredClone
+      // without reading it, so no ancestor can reread data changed by its traps.
+      // For an ordinary node, no descendant Proxy can have survived to install
+      // accessors. Compare only independent copies, never reread v for equality.
+      if (!sameAttemptData(copy, structuredClone(v))) return invalid(path, 'Cloning changes graph data');
+      return Object.freeze(copy);
+    } finally { ancestors.delete(v); }
+  };
+  let snapshot: unknown;
+  try { snapshot = capture(value, ''); }
+  catch {
+    if (!issues.length) issues.push({ code: 'non_json_value', path: '', message: 'Unable to capture JSON data' });
+    return { valid: false, issues: attemptValidationResult(issues).issues };
+  }
+  const checked = validateCapturedGraph(snapshot, context);
+  return checked.valid ? { valid: true, issues: checked.issues, graph: snapshot as AttemptGraph }
+    : { valid: false, issues: checked.issues };
+}
+
+/** Validate a captured independent graph. Success describes the captured data,
+ * not the future state of a mutable caller object. Consumers needing data must
+ * use snapshotAttemptGraph and retain its graph instead of rereading input. */
 export function validateAttemptGraph(value: unknown, context: AttemptValidationContext): AttemptValidationResult {
+  const { valid, issues } = snapshotAttemptGraph(value, context);
+  return { valid, issues };
+}
+
+/** Private: only the independently captured data reaches AJV/semantic checks. */
+function validateCapturedGraph(value: unknown, context: AttemptValidationContext): AttemptValidationResult {
   const issues: AttemptValidationIssue[] = [];
   const error = (code: string, path: string, message: string) => { issues.push({ code, path, message }); };
-  // Reject explicit undefined/non-JSON numbers as well as unknown keys. Nothing is stripped.
-  const json = (v: unknown, path: string, seen: Set<object>) => {
-    if (v === undefined || typeof v === 'bigint' || typeof v === 'function' || typeof v === 'symbol'
-      || (typeof v === 'number' && !Number.isFinite(v))) error('non_json_value', path, 'Value cannot be preserved as JSON');
-    else if (v && typeof v === 'object') {
-      if (seen.has(v)) { error('non_json_value', path, 'Cyclic input'); return; }
-      const prototype = Object.getPrototypeOf(v);
-      if (Array.isArray(v) ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
-        error('non_json_value', path, 'Expected a plain JSON object'); return;
-      }
-      if (Array.isArray(v) && Object.keys(v).length !== v.length) {
-        error('non_json_value', path, 'Sparse arrays are not JSON data'); return;
-      }
-      seen.add(v);
-      for (const k of Reflect.ownKeys(v)) {
-        if (Array.isArray(v) && k === 'length') continue;
-        const descriptor = Object.getOwnPropertyDescriptor(v, k)!;
-        if (typeof k === 'symbol' || !descriptor.enumerable || !('value' in descriptor)
-          || (Array.isArray(v) && (!/^(0|[1-9][0-9]*)$/.test(k) || Number(k) >= v.length))) {
-          error('non_json_value', path, 'Only enumerable JSON data properties are supported');
-          continue;
-        }
-        json(descriptor.value, `${path}/${k}`, seen);
-      }
-      seen.delete(v);
-    }
-  };
-  try { json(value, '', new Set()); }
-  catch { error('non_json_value', '', 'Unable to inspect JSON data'); }
-  if (issues.length) return attemptValidationResult(issues);
   if (!validateAttemptGraphShape(value)) {
     for (const e of validateAttemptGraphShape.errors ?? []) error(`shape_${e.keyword}`, e.instancePath, `${e.message}: ${JSON.stringify(e.params)}`);
     return attemptValidationResult(issues);
