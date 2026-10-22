@@ -87,7 +87,7 @@ Node.js 24.13.0。同一lockfileの依存環境を使用。既存テスト・fix
 | production出力 | pristine devと12/12ファイル、ファイル集合・全byte完全一致 |
 | git diff --check / git diff --check origin/dev | 成功 |
 
-公式aggregate優先、unknown保持、過去P2/R1/R2、操作履歴・Undo・owner参照・保存/再読込は既存suiteを維持して検証した。集計は [verification.json](verification.json)、production全ファイルSHAと実byte比較結果は [production-byte-comparison.json](production-byte-comparison.json)、既存ファイルの変更範囲は [scope-invariance.json](scope-invariance.json)。初期実装のR2失敗もverification.jsonに残し、最終成功で消していない。
+公式aggregate優先、unknown保持、過去P2/R1/R2、操作履歴・Undo・owner参照・保存/再読込は既存suiteを維持して検証した。集計は [verification.json](verification.json)、production全ファイルSHAと実byte比較結果は [production-byte-comparison.json](production-byte-comparison.json)、既存ファイルの変更範囲は [scope-invariance.json](scope-invariance.json)。初期実装のR2失敗もverification.jsonに残し、最終成功で消していない。掲載ログはローカル絶対パスの置換と行末空白の除去だけを行った。
 
 ### 通常Plannerブラウザの既存失敗
 

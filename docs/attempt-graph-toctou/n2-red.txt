@@ -24,9 +24,9 @@
 test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:40:3
 ✖ N2 validator: getter never invokes a late-installed getter (59.567415ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   1 !== 0
-  
+
       at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:43:12)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
@@ -43,9 +43,9 @@ test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:4
 test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:47:3
 ✖ N2 adapter: getter never invokes a late-installed getter or returns changed data (52.659ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   1 !== 0
-  
+
       at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:51:12)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
@@ -64,9 +64,9 @@ test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:4
 test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:40:3
 ✖ N2 validator: invalid-id never invokes a late-installed getter (38.463099ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   2 !== 0
-  
+
       at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:43:12)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
@@ -85,9 +85,9 @@ test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:4
 test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:47:3
 ✖ N2 adapter: invalid-id never invokes a late-installed getter or returns changed data (39.275825ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   2 !== 0
-  
+
       at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:51:12)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
@@ -106,9 +106,9 @@ test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:4
 test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:40:3
 ✖ N2 validator: negative-contribution never invokes a late-installed getter (34.015242ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   2 !== 0
-  
+
       at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:43:12)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
@@ -127,9 +127,9 @@ test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:4
 test at ../attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:47:3
 ✖ N2 adapter: negative-contribution never invokes a late-installed getter or returns changed data (40.594972ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   2 !== 0
-  
+
       at TestContext.<anonymous> (file://<workspace>/attempt-graph-toctou-baseline/tests/attempt-graph-snapshot.test.mjs:51:12)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
