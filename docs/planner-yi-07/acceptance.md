@@ -205,3 +205,11 @@ graphもclone前後のデータ一致を確認してから使用する。Date/Ma
 変更はadapter、impact、共有比較/JSON guard、YI-07テスト、契約・受け入れ・検証記録に限定する。保存/復元/authorityの実装、YI-04 projection、schema22/23、固定baseline、legacy engine、公式catalog、production PlannerPageは変更しない。新Attemptの正値・完成判定はheld/unsupported、両完了flagはfalseのままとする。
 
 独立再監査は未実施。再監査は、未確認scope外候補を含むunionの要件/カード包含と順序不変性、他学科unsupported非混入、疎配列・accessor・clone欠落の拒否、計算retainedのsource固定、YI-04/05/06の有効なJSONデータ互換性を重点に確認する。PR Draft・Issue #177 Openを維持し、Ready化・merge・Issue closeは行わない。
+
+## N1・F3残存の再監査対応（2026-10-23）
+
+- [x] N1: 組込み型列挙では任意Proxy/内部slotを証明できないため、提出入力をprimitive JSON文字列へ変更。自動stringify fallbackなし。有効な未審査JSONはheld。
+- [x] WeakRef / Proxy Map / Promise、通常JSON、null-prototype、疎配列、accessor、循環、boxed String、toJSON、JSON構文・固定schema違反を回帰対象に含む。
+- [x] F3: completion固有の公式年度・detail binding前提をmissingEvidenceへ追加し、本人source申告で解除しない。他軸・既存判定状態/value/reasons・数量・影響範囲を維持。
+- [x] 公開入力型・valid test呼出側・旧F1正常object受理ケースへの影響と安全性の限界をevidence-foundation.mdに明記。
+- 検証結果はevidence-n1-f3-verification.json、RED/GREENはevidence-n1-f3-red-green.txtを参照。N2は#183（確認時Draft/Open）、dev未取込。最終CIはPR #181本文に記録する。

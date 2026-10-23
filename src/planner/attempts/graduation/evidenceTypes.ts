@@ -73,7 +73,13 @@ export type AttemptEvidenceAssessment = {
   ruleSupport: EvidenceDecision<never>;
 };
 type Adapted = Extract<AttemptGraduationResult, { status: 'adapted' }>;
-export type AttemptEvidenceInput = { graph: unknown; retained: RetainedState; submittedEvidence?: readonly EvidenceSubmission[] };
+export type AttemptEvidenceInput = {
+  graph: unknown;
+  retained: RetainedState;
+  /** Primitive JSON text encoding EvidenceSubmission[]. Objects are rejected;
+   * callers must not stringify arbitrary untrusted JS objects to bypass validation. */
+  submittedEvidence?: string;
+};
 export type AttemptEvidenceResult =
   | { status: 'rejected'; diagnostics: AttemptValidationIssue[] }
   | {

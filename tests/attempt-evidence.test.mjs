@@ -24,7 +24,7 @@ const blank = await sourceFor();
 const graphFor = attempts => ({ attempts, ownedRecords: [], removals: [] });
 function run(attempts, source=blank, selected=scope, submissions) {
   assert.equal(typeof api.assessAttemptEvidence, 'function', 'common evidence API must exist');
-  const input = { graph: graphFor(attempts), retained: retained(source.state), ...(submissions ? { submittedEvidence: submissions } : {}) };
+  const input = { graph: graphFor(attempts), retained: retained(source.state), ...(submissions ? { submittedEvidence: JSON.stringify(submissions) } : {}) };
   const before = structuredClone(input), result = api.assessAttemptEvidence(input, source, selected);
   assert.deepEqual(input, before); return result;
 }
@@ -250,13 +250,15 @@ for(const field of ['kind','sourceRefs','0'])test(`F1 static getter/setter ${fie
   const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[s]},blank,scope);
   assert.equal(r.status,'rejected');assert.equal(reads,0);assert.equal(writes,0);
 });
-test('F1 subsequent reflection cannot rewrite captured refs; null-prototype valid data stays held',()=>{
+test('F1 subsequent reflection cannot run through rejected object input',()=>{
   const a=newAttempt(master,p),first=Object.assign(Object.create(null),{attemptId:a.id,kind:'official',sourceRevisionId:'future',sourceRefs:['original://ref']});
-  const second=new Proxy({...first,sourceRefs:['second://ref']},{ownKeys(target){first.sourceRefs[0]='mutated://ref';return Reflect.ownKeys(target);}});
+  let traps=0;
+  const second=new Proxy({...first},{ownKeys(target){traps++;first.sourceRefs[0]='mutated://ref';return Reflect.ownKeys(target);}});
   const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[first,second]},blank,scope);
-  assert.equal(r.status,'assessed');assert.deepEqual(r.submittedEvidence[0].record.sourceRefs,['original://ref']);
-  r.submittedEvidence.forEach(s=>held(s.decision));held(r.attempts[0].applicability.decision);
-  assert.equal(Object.isFrozen(first),false);assert.equal(Object.isFrozen(first.sourceRefs),false);
+  assert.equal(r.status,'rejected');assert.equal(traps,0);assert.deepEqual(first.sourceRefs,['original://ref']);
+  const parsed=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:JSON.stringify([first])},blank,scope);
+  assert.equal(parsed.status,'assessed');held(parsed.submittedEvidence[0].decision);
+  assert.deepEqual(parsed.submittedEvidence[0].record,{...first});
 });
 test('F1 source authenticity still rejects copied, forged and proxied source objects',()=>{
   const a=newAttempt(master,p),input={graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[]};
@@ -316,6 +318,7 @@ for(const planStatus of ['earned','in_progress','planned'])test(`F3 reason/oblig
     const expected=decision.status==='supported'?[]:[...new Set(decision.reasons.flatMap(reason=>{
       assert.ok(Object.hasOwn(reasonRequirements,reason),reason);return reasonRequirements[reason];
     }))];
+    if(axis==='completion'&&decision.status!=='supported')for(const requirement of ['official_attempt_academic_year','official_attempt_detail_binding'])if(!expected.includes(requirement))expected.push(requirement);
     assert.deepEqual(missingEvidence,expected,`${r.attemptId}/${axis}`);
     if(['inProgress','planned'].includes(axis))assert.equal(missingEvidence.includes('official_attempt_method'),false);
     if(axis!=='completion')assert.equal(missingEvidence.includes('official_attempt_academic_year'),false);
@@ -323,4 +326,72 @@ for(const planStatus of ['earned','in_progress','planned'])test(`F3 reason/oblig
     assert.equal(missingEvidence.includes('unique_reviewed_placement'),decision.reasons.some(r=>r.startsWith('placement_')));
   }
   assert.deepEqual(result.retainedProgress,base.retainedProgress);assert.deepEqual(result.officialEvidence,base.officialEvidence);
+});
+
+// N1/F3 independent re-audit regressions: assertions run unchanged before/after fixes.
+for (const name of ['WeakRef', 'Proxy Map', 'Promise']) test(`N1 rejects disguised ${name}`,()=>{
+  const a=newAttempt(master,p),record={attemptId:a.id,kind:'future',sourceRevisionId:'future',sourceRefs:['document://ref']};
+  const target=name==='WeakRef'?new WeakRef({secret:1}):name==='Proxy Map'?new Map([['secret',1]]):Promise.resolve('secret');
+  Object.setPrototypeOf(target,Object.prototype);Object.assign(target,record);
+  const value=name==='Proxy Map'?new Proxy(target,{}):target;
+  const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:[value]},blank,scope);
+  assert.equal(r.status,'rejected');assert.equal(r.diagnostics[0].code,'invalid_evidence_submission');
+});
+for(const status of ['earned','planned','in_progress'])for(const [label,year,origin,claim] of [
+  ['null unknown',null,'unknown',2025],['null source',null,'source',2025],
+  ['numeric unknown',2025,'unknown',2025],['source match',2025,'source',2025],['source mismatch',2024,'source',2025],
+  ['no detail',null,'unknown',null],
+])test(`F3 remaining ${status}/${label}: completion requires official year independently of learner source claim`,async()=>{
+  const d=detail({academicYear:year,yearSource:origin}),source=await sourceFor([],[d]),a=newAttempt(master,p,2,status);
+  if(claim!==null)a.actualYear={value:claim,source:'source',reason:null,evidence:{kind:'official_detail',studyRecordId:d.id}};
+  const r=one(a,source),base=adaptAttemptGraduation({graph:graphFor([a]),retained:retained(source.state)},source,scope);
+  for(const [axis,decision] of Object.entries(r.graduation)){
+    const {missingEvidence,references,...unchanged}=decision;assert.deepEqual(unchanged,base.attempts[0].decisions[axis]);
+    assert.equal(missingEvidence.includes('official_attempt_academic_year'),axis==='completion',axis);
+  }
+  assert.deepEqual(r.quantities,base.attempts[0].quantities);assert.deepEqual(r.impact,base.attempts[0].impact);
+  assert.deepEqual(r.official.details.map(x=>x.record),claim===null?[]:[d]);
+  assert.deepEqual(assessed([a],source).retainedProgress,base.retainedProgress);
+  assert.deepEqual(assessed([a],source).officialEvidence,base.officialEvidence);
+});
+
+for(const name of ['plain JSON','null-prototype'])test(`N1 valid ${name} as JSON text remains held`,()=>{
+  const a=newAttempt(master,p),s={attemptId:a.id,kind:'unknown-future-proof',sourceRevisionId:'unknown-revision',sourceRefs:['document://unreviewed']};
+  const record=name==='null-prototype'?Object.assign(Object.create(null),s):s;
+  const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:JSON.stringify([record])},blank,scope);
+  assert.equal(r.status,'assessed');assert.deepEqual(r.submittedEvidence[0].record,s);held(r.submittedEvidence[0].decision);
+  assert.equal(r.graduationCheckComplete,false);assert.equal(r.sourceLinksReverified,false);
+});
+for(const name of ['normal object','null-prototype','sparse','accessor','cycle','boxed string','Proxy array'])test(`N1 raw ${name} rejected without coercion or traversal`,()=>{
+  const a=newAttempt(master,p),s={attemptId:a.id,kind:'future',sourceRevisionId:'future',sourceRefs:['document://ref']};let calls=0;
+  let value=[s];
+  if(name==='null-prototype')value=[Object.assign(Object.create(null),s)];
+  if(name==='sparse')value=Array(2);
+  if(name==='accessor')Object.defineProperty(s,'kind',{get(){calls++;return 'future';}});
+  if(name==='cycle')value.push(value);
+  if(name==='boxed string')value=new String(JSON.stringify([s]));
+  if(name==='Proxy array')value=new Proxy(value,{get(){calls++;throw Error('must not read');},ownKeys(){calls++;throw Error('must not reflect');}});
+  const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:value},blank,scope);
+  assert.equal(r.status,'rejected');assert.equal(calls,0);
+});
+for(const text of ['null','{}','[null]','[{}]','[1]','[','[null,null]','[{"attemptId":"a","kind":"future","sourceRevisionId":"r","sourceRefs":[null]}]'])test(`N1 malformed/invalid JSON ${text} rejected`,()=>{
+  const r=api.assessAttemptEvidence({graph:graphFor([]),retained:retained(blank.state),submittedEvidence:text},blank,scope);
+  assert.equal(r.status,'rejected');assert.equal(r.diagnostics[0].code,'invalid_evidence_submission');
+});
+test('N1 rejects object with toJSON without invoking it',()=>{
+  let calls=0;const value={toJSON(){calls++;return [];}};
+  const r=api.assessAttemptEvidence({graph:graphFor([]),retained:retained(blank.state),submittedEvidence:value},blank,scope);
+  assert.equal(r.status,'rejected');assert.equal(calls,0);
+});
+for(const corrupt of ['extra-key','unknown-attempt','empty-kind','empty-revision','empty-refs','null-ref','extra-proto-key'])test(`N1 serialized schema ${corrupt} rejected`,()=>{
+  const a=newAttempt(master,p),s={attemptId:a.id,kind:'future',sourceRevisionId:'future',sourceRefs:['document://ref']};
+  if(corrupt==='extra-key')s.confirmed=true;
+  if(corrupt==='unknown-attempt')s.attemptId='missing';
+  if(corrupt==='empty-kind')s.kind='';
+  if(corrupt==='empty-revision')s.sourceRevisionId='';
+  if(corrupt==='empty-refs')s.sourceRefs=[];
+  if(corrupt==='null-ref')s.sourceRefs=[null];
+  if(corrupt==='extra-proto-key')Object.defineProperty(s,'__proto__',{value:{confirmed:true},enumerable:true});
+  const r=api.assessAttemptEvidence({graph:graphFor([a]),retained:retained(blank.state),submittedEvidence:JSON.stringify([s])},blank,scope);
+  assert.equal(r.status,'rejected');assert.equal(r.diagnostics[0].code,'invalid_evidence_submission');
 });

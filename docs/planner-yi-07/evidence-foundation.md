@@ -242,3 +242,23 @@ JavaScriptのProxy trap自体の実行・副作用を一般的に封じたとは
 [今回の検証件数・コマンド・source/log SHA・production比較・空白修正の前後SHA](evidence-f123-verification.json)。元の`evidence-verification.json`は前段階の履歴であり、今回のsource SHA/結果への書換えはしない。最終修正HEADのCIは[PR #181 Checks](https://github.com/wata-0911/housei-media/pull/181/checks)とPR本文で確定する。Draft/Open・Issue #180 Openを維持し、Ready化・merge・closeは行わない。
 
 [今回のブラウザ全件ログとdev比較・再実行](evidence-f123-browser.txt)。最終比較は上記2件だけであり、通常Planner全44件を再実行して全件成功したとは主張しない。
+
+## 独立再監査 N1 / F3残存（2026-10-23）
+
+N1の旧境界はprototype/own descriptorと組込みbrandの拒否リストに依存していた。Object.prototypeへ変更したWeakRefに4つの正当なown propertyを加えたrecord、および同様のMapをProxyで包んだrecordを受理し、内部情報をsnapshotから落としていた。Promiseも回帰対象とした。組込み型追加だけでは未知の内部slotやProxyの偽装へ一般化できず、ブラウザJavaScriptのreflectionでは任意Proxyや内部状態の不在を証明できない。
+
+公開型 `AttemptEvidenceInput.submittedEvidence` を `readonly EvidenceSubmission[]` から **primitive `string`（JSONで表したEvidenceSubmission配列）** に変更した。省略は従来どおり可。出力の `submittedEvidence[].record` とEvidenceSubmission型は従来どおり。実行時は文字列以外（boxed String、通常object、null-prototype、WeakRef、Proxy Map、Promise、疎配列、accessor、循環を含む）を走査・coercion・JSON.stringifyせず拒否する。API内部のJSON.parseをreviverなしで実行した値だけを固定schema検査する。getter/toJSON/Proxy trapを提出値について呼び出さない。
+
+呼出例：`assessAttemptEvidence({ graph, retained, submittedEvidence: jsonText }, source, scopeId)`。信頼できるコードで構築した参照recordからJSONを生成することは可能だが、任意の未信頼JS objectを呼出側でJSON.stringifyしてこの境界へ流すことは契約外（既に失われた内部情報をparse後に復元・検出できない）。null-prototypeのデータも、内容をJSONテキストとして提出すれば保持される。既知revision・未知kindを含め有効な未審査提出はheld。オブジェクト入力を正常受理へ変換する互換fallbackはない。production呼出箇所は存在せず、今回の呼出側変更は証拠テストのvalid fixtureと文書のみ。旧F1のProxy混在正常受理テストは、直接object拒否・trap 0と、同内容のJSON提出heldの2つの契約に分けた。F1のgetter 0やF2の年度比較assertionは維持する。
+
+限界：この契約は提出テキストの構造を検証するもので、記載された証拠の真正性は証明しない。JSON.parseの標準の数値/重複キー処理を用い、任意JS実行環境の組込み関数改変や巨大入力の資源制限までは扱わない。graph/source/retainedの既存境界は別に維持する。N2の修正はPR #183に属する。
+
+F3の旧処理はadapterのreasonsだけから不足証拠を列挙したため、本人actualYear.sourceがsourceでdetail参照を持つと、公式detail.academicYearがnullでもcompletionから公式年度不足が落ちた。軸固有の前提として、未確定のcompletionは公式履修回年度とreviewed detail bindingを必要とすると明示した。本人source申告や公式detailの数値年度の一致・不一致だけでは、その履修回への公式bindingが未審査のため不足を解除しない。
+
+| 卒業軸 | 必要な証拠 |
+| --- | --- |
+| completion | 既存reason対応の本人適用・同一性・配置・方法・完成根拠等に加え、公式履修回年度とdetail binding |
+| ordinary / schooling | 既存reason対応の証拠。公式aggregateの除外0は不足なし。今回の年度前提を追加しない |
+| inProgress / planned | 該当statusの寄与・本人適用等の既存reason対応の証拠。非該当/明示0は除外0。方法・公式年度を無条件に要求しない |
+
+実装はmissingEvidenceだけを補い、supported/held/unsupported、value、reasons、公式数量、retainedProgress、impact、完成判定を変更しない。null/unknown、source同年/異年、detail参照なしとearned/planned/in_progressの直積を既存adapter結果と比較した。新Attemptの正値算入・完成判定は未解放。

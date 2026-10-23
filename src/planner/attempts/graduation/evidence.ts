@@ -8,7 +8,7 @@ import type { AttemptEvidenceInput, AttemptEvidenceResult, EvidenceDecision, Evi
 
 const applicabilityRequirements: EvidenceRequirement[] = ['official_learner_program', 'official_admission_context',
   'official_curriculum_transition_history', 'reviewed_applicability_rules'];
-// Each obligation comes only from a diagnostic carried by that graduation axis.
+// Diagnostic obligations plus independent completion prerequisites below.
 // The mapping explains missing evidence; it never changes the adapter decision.
 const graduationRequirements: Record<AttemptHoldCode, readonly EvidenceRequirement[]> = {
   identity_unresolved: ['reviewed_course_identity'],
@@ -53,7 +53,7 @@ export function assessAttemptEvidence(input: AttemptEvidenceInput, source: Evide
   const adapted = adaptAttemptGraduation(input, source, scopeId);
   if (adapted.status === 'rejected') return adapted;
   // Optional submissions are inert references, never an escape from the closed
-  // graph schema. Build plain snapshots from descriptors without cloning/re-reading inputs.
+  // graph schema. Parse primitive JSON text; never serialize caller objects.
   let submissions: EvidenceSubmission[] = [];
   try {
     const property = Object.getOwnPropertyDescriptor(input, 'submittedEvidence');
@@ -71,7 +71,7 @@ export function assessAttemptEvidence(input: AttemptEvidenceInput, source: Evide
       submissions = copied;
     }
   } catch { return { status: 'rejected', diagnostics: [{ code: 'invalid_evidence_submission', path: '/submittedEvidence',
-    message: 'Expected plain, revision-bound references to an existing Attempt; no proof kinds are accepted yet' }] }; }
+    message: 'Expected primitive JSON text encoding revision-bound references to an existing Attempt; no proof kinds are accepted yet' }] }; }
   const master = source.context.catalog;
   const ref = (sourceRef: string, sourceRevisionId = master.sourceRevision.id): EvidenceReference =>
     ({ sourceRef, sourceRevisionId, sourceRawSha256: source.rawSha256 });
@@ -140,9 +140,14 @@ export function assessAttemptEvidence(input: AttemptEvidenceInput, source: Evide
     const actualYear = { record: a.actualYear, decision: held(['official_year_unverified',
       ...(yearConflict ? ['actual_year_claim_conflict'] : [])],
     ['official_attempt_academic_year', 'official_attempt_detail_binding'], [ref(`${base}/actualYear`), ...(yearDetail?.referenceExists.references ?? [])]) };
+    // Completion needs an official Attempt year and a reviewed detail binding.
+    // A learner source pointer (even to a numeric source year) supplies neither.
+    // ordinary/S and planned/inProgress increments do not consume this proof.
+    // Explain the missing prerequisite without changing stage-1 reasons/value.
     const graduation = Object.fromEntries(Object.entries(entry.decisions).map(([axis, decision]) => [axis,
       judgement(decision, decision.status === 'supported' ? [] : decision.reasons.flatMap(reason =>
-        graduationRequirements[reason as AttemptHoldCode]), [ref(base), ...aggregates.flatMap(row => row.incrementOwnership.references)])])) as Record<GraduationAxis, EvidenceDecision<number>>;
+        graduationRequirements[reason as AttemptHoldCode]).concat(axis === 'completion'
+          ? ['official_attempt_academic_year', 'official_attempt_detail_binding'] : []), [ref(base), ...aggregates.flatMap(row => row.incrementOwnership.references)])])) as Record<GraduationAxis, EvidenceDecision<number>>;
     return { attemptId: a.id, record: a, identity, placement, placementCandidates: entry.placementCandidates, applicability,
       method, actualYear, quantities: entry.quantities, official: { aggregates, details }, graduation, impact: entry.impact,
       ruleSupport: judgement(entry.evidence.ruleSupport, ['implemented_allocation_rule'], [ref(base)]) };
