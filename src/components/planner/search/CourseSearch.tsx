@@ -46,7 +46,7 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
           <p className="text-xs text-gray-500 mt-1">追加後に実際の科目名へ変更できます</p>
         </div>
         <button type="button" disabled={disabled} onClick={onAddPublicCourse} aria-label="公開科目を履修計画に追加"
-          className="shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm hover:bg-[#003377] disabled:bg-gray-200 disabled:text-gray-600">計画に追加</button>
+          className="planner-button planner-button--navy shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm disabled:bg-gray-200 disabled:text-gray-600">計画に追加</button>
       </li>}
       {matches.slice(0, limit).map(o => <li key={o.id} className="py-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
         <div className="min-w-0">
@@ -58,9 +58,9 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
           {curriculumProgress && curriculumOfferingAdvisories(o, curriculumProgress).map(warning => <p key={warning} className="mt-2 text-xs text-amber-900">{warning}</p>)}
         </div>
         <button type="button" disabled={disabled || addedIds.has(o.id)} onClick={() => onAdd(o.id)} aria-label={`${o.name}（${o.classCode ?? o.deliveryCategory ?? o.method}）を履修計画に追加`}
-          className="shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm hover:bg-[#003377] disabled:bg-gray-200 disabled:text-gray-600">{addedIds.has(o.id) ? '追加済み' : '計画に追加'}</button>
+          className="planner-button planner-button--navy shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm disabled:bg-gray-200 disabled:text-gray-600">{addedIds.has(o.id) ? '追加済み' : '計画に追加'}</button>
       </li>)}
     </ul>
-    {limit < matches.length && <button type="button" onClick={() => setLimit(limit + 30)} className="mt-5 border border-[#002255] text-[#002255] px-5 py-2">さらに30件表示</button>}
+    {limit < matches.length && <button type="button" onClick={() => setLimit(limit + 30)} className="planner-button mt-5 border border-[#002255] text-[#002255] px-5 py-2">さらに30件表示</button>}
   </section>;
 }

@@ -13,7 +13,7 @@ export default function BrowserExtensionEntrySection({ publicUrl = PLANNER_EXTEN
         {!publicUrl && <p id="planner-extension-status" className="mt-2 text-sm font-medium text-[#9A3D00]">拡張機能は現在公開準備中です。</p>}
       </div>
       {publicUrl
-        ? <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 shrink-0 items-center justify-center bg-[#002255] px-4 py-2 text-center text-sm text-white underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">拡張機能を入手<span className="sr-only">（外部サイトを新しいタブで開きます）</span></a>
+        ? <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="planner-button planner-button--navy inline-flex min-h-10 shrink-0 items-center justify-center bg-[#002255] px-4 py-2 text-center text-sm text-white underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">拡張機能を入手<span className="sr-only">（外部サイトを新しいタブで開きます）</span></a>
         : <button type="button" disabled aria-describedby="planner-extension-status" className="min-h-10 shrink-0 cursor-not-allowed border border-gray-300 bg-gray-100 px-4 py-2 text-sm text-gray-500 disabled:opacity-100">拡張機能を入手（公開準備中）</button>}
     </div>
   </section>;

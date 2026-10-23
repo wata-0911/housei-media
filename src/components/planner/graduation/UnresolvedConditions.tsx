@@ -66,7 +66,7 @@ export function ProfileUnresolvedConditions({
           <button
             type="button"
             onClick={onOpenProfile}
-            className="mt-4 min-h-11 rounded border border-[#002255] px-4 py-2 font-medium text-[#002255] hover:bg-amber-100"
+            className="planner-button mt-4 min-h-11 rounded border border-[#002255] px-4 py-2 font-medium text-[#002255]"
           >
             プロフィールを開く
           </button>

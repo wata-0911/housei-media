@@ -23,7 +23,7 @@ export default function GradeImportBookmarklet({ disabled }: { disabled: boolean
         <li>登録したブックマークのURL欄を開き、既存のURLを削除し、コピーしたコードを貼り付けて下さい。名前は「成績コピー」などにして下さい。</li>
         <li>登録したブックマークを実行し、成功の表示を確認し、この画面の「JSONを貼り付け」に貼り付けて「読み込み・検証」を押してください。</li>
       </ol>
-      <button type="button" disabled={disabled} onClick={copyCode} className="border border-[#002255] bg-white px-3 py-2 text-[#002255] disabled:opacity-50">Bookmarkletのコードをコピー</button>
+      <button type="button" disabled={disabled} onClick={copyCode} className="planner-button border border-[#002255] bg-white px-3 py-2 text-[#002255] disabled:opacity-50">Bookmarkletのコードをコピー</button>
       <label className="block">手動コピー用コード
         <textarea ref={field} readOnly value={artifact.bookmarklet} onFocus={event => event.currentTarget.select()} className="mt-1 block h-20 w-full border bg-white p-2 font-mono text-xs" spellCheck={false} />
       </label>

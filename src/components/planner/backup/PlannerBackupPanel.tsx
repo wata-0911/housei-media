@@ -8,7 +8,7 @@ import { BACKUP_KEY, STORAGE_KEY, type LoadResult } from '../../../planner/backu
 type Props = { catalog: PlannerCatalog; loaded: LoadResult; disabled: boolean; onRestored: (next: LoadResult) => void; onBusyChange: (busy: boolean) => void };
 type Preview = { text: string; backup: PlannerBackup; expectedRaw: string | null };
 type Prepared = { file: File; sourceRaw: string | null };
-const buttonClass = 'border border-[#002255] px-3 py-2 text-sm text-[#002255] disabled:opacity-50';
+const buttonClass = 'planner-button border border-[#002255] px-3 py-2 text-sm text-[#002255] disabled:opacity-50';
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : '操作できませんでした。保存設定と空き容量を確認してください。';
 
 export default function PlannerBackupPanel({ catalog, loaded, disabled, onRestored, onBusyChange }: Props) {
