@@ -193,3 +193,80 @@ for (const entry of ['validator', 'snapshot', 'adapter']) for (const brand of ['
     assert.equal(reads, 0); assert.equal(Object.hasOwn(r, 'graph'), false);
   });
 }
+
+test('P3 collects independent non-JSON paths without exposing partial snapshot', () => {
+  const f = attemptFixture();
+  f.graph.attempts[0].plan.contribution.value = undefined;
+  f.graph.attempts[1].plan.contribution.value = NaN;
+  for (const invoke of [validateAttemptGraph, snapshotAttemptGraph]) {
+    const r = invoke(f.graph, f.context);
+    assert.equal(r.valid, false);
+    assert.deepEqual(r.issues.map(({ code, path }) => ({ code, path })), [
+      { code: 'non_json_value', path: '/attempts/0/plan/contribution/value' },
+      { code: 'non_json_value', path: '/attempts/1/plan/contribution/value' },
+    ]);
+    assert.equal(Object.hasOwn(r, 'graph'), false);
+  }
+});
+test('P2 editing certified workspace bounds native clone calls independently of row count', () => {
+  const f = attemptFixture();
+  for (const n of [10, 100]) {
+    const graph = { attempts: Array.from({ length: n }, (_, i) => f.makeAttempt(2000 + i)), ownedRecords: [], removals: [] };
+    const w = createWorkspace(graph, f.context), native = globalThis.structuredClone;
+    let calls = 0, result;
+    try {
+      globalThis.structuredClone = (...args) => { calls++; return native(...args); };
+      result = applyCommand(w, { kind: 'edit', attemptId: graph.attempts[0].id,
+        operationId: newOperationId(), changes: { originalTitle: 'edited' } }, f.context);
+    } finally { globalThis.structuredClone = native; }
+    assert.ok(calls < 100, `${n} rows: ${calls} clones`);
+    assert.equal(result.graph.attempts[0].originalTitle, 'edited');
+    assert.equal(w.graph.attempts[0].originalTitle, graph.attempts[0].originalTitle);
+  }
+});
+
+test('certified snapshots remain detached and are revalidated in each context', () => {
+  const f = attemptFixture(), first = snapshotAttemptGraph(f.graph, f.context);
+  assert.equal(first.valid, true);
+  const second = snapshotAttemptGraph(first.graph, f.context);
+  assert.equal(second.valid, true);
+  const refs = new Set();
+  const visit = (v, fn) => { if (v && typeof v === 'object') { fn(v); Object.values(v).forEach(x => visit(x, fn)); } };
+  visit(first.graph, v => refs.add(v));
+  visit(second.graph, v => { assert.equal(refs.has(v), false); assert.equal(Object.isFrozen(v), true); });
+  const context = { ...f.context, officialStudyRecordIds: [] };
+  const changed = structuredClone(first.graph);
+  changed.attempts[0].method = { value: 'media', source: 'official_detail', evidence: { kind: 'official_detail', studyRecordId: 'official-detail' } };
+  const certified = snapshotAttemptGraph(changed, f.context);
+  assert.equal(certified.valid, true);
+  assert.equal(snapshotAttemptGraph(certified.graph, context).valid, false);
+  let reads = 0;
+  const proxy = new Proxy(first.graph, { ownKeys(target) { reads++; return Reflect.ownKeys(target); } });
+  assert.equal(snapshotAttemptGraph(proxy, f.context).valid, false);
+  assert.ok(reads > 0);
+  const forged = structuredClone(first.graph);
+  Object.defineProperty(forged.attempts[0], 'originalTitle', { get() { throw new Error('getter'); }, enumerable: true });
+  Object.freeze(forged);
+  assert.equal(snapshotAttemptGraph(forged, f.context).valid, false);
+});
+test('multiple diagnostics never resume native cloning after a late getter trap', () => {
+  const f = attemptFixture(); let reads = 0;
+  f.graph.attempts[0].plan.contribution.value = undefined;
+  f.graph.attempts[1].plan.contribution.value = NaN;
+  f.graph.ownedRecords = new Proxy([], { ownKeys(target) {
+    Object.defineProperty(f.graph.attempts[0], 'originalTitle', { get() { reads++; return 'unsafe'; }, enumerable: true });
+    return Reflect.ownKeys(target);
+  } });
+  const r = snapshotAttemptGraph(f.graph, f.context);
+  assert.equal(r.valid, false); assert.equal(reads, 0);
+  assert.equal(Object.hasOwn(r, 'graph'), false);
+  assert.ok(r.issues.some(i => i.path === '/attempts/1/plan/contribution/value'));
+});
+test('unexpected native clone implementation errors are not input diagnostics', () => {
+  const f = attemptFixture(), native = globalThis.structuredClone;
+  const error = new Error('unexpected implementation failure');
+  try {
+    globalThis.structuredClone = () => { throw error; };
+    assert.throws(() => snapshotAttemptGraph(f.graph, f.context), e => e === error);
+  } finally { globalThis.structuredClone = native; }
+});

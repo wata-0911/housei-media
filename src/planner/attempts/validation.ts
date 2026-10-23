@@ -60,6 +60,20 @@ export type AttemptGraphSnapshotResult =
   | { valid: true; issues: AttemptValidationIssue[]; graph: AttemptGraph }
   | { valid: false; issues: AttemptValidationIssue[] };
 
+// Provenance of plain, recursively frozen nodes created only by this module.
+// This certifies JSON representation, never schema validity or a context binding.
+const capturedNodes = new WeakSet<object>();
+function freezeCaptured(value: unknown): void {
+  if (!value || typeof value !== 'object' || capturedNodes.has(value)) return;
+  for (const child of Object.values(value)) freezeCaptured(child);
+  Object.freeze(value);
+  capturedNodes.add(value);
+}
+class CaptureFailure extends Error {}
+function reflectInput<T>(read: () => T): T {
+  try { return read(); } catch { throw new CaptureFailure('Input reflection failed'); }
+}
+
 /** Capture own data descriptors once, recursively copying each value immediately.
  * Bottom-up native clone guards reject Proxy/exotic inputs before any ancestor
  * is cloned. Reflection traps may mutate originals, never captured data.
@@ -67,16 +81,18 @@ export type AttemptGraphSnapshotResult =
 export function snapshotAttemptGraph(value: unknown, context: AttemptValidationContext): AttemptGraphSnapshotResult {
   const ancestors = new Set<object>();
   const issues: AttemptValidationIssue[] = [];
-  const invalid = (path: string, message: string): never => {
+  const failed = Symbol('invalid capture');
+  const invalid = (path: string, message: string): typeof failed => {
     issues.push({ code: 'non_json_value', path, message });
-    throw new Error('invalid_graph_data');
+    return failed;
   };
   const capture = (v: unknown, path: string): unknown => {
     if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
     if (typeof v === 'number' && Number.isFinite(v) && !Object.is(v, -0)) return v;
     if (typeof v !== 'object' || v === null) return invalid(path, 'Value cannot be preserved as JSON');
+    if (capturedNodes.has(v)) return v;
     if (ancestors.has(v)) return invalid(path, 'Cyclic input');
-    const array = Array.isArray(v), prototype = Object.getPrototypeOf(v);
+    const array = reflectInput(() => Array.isArray(v)), prototype = reflectInput(() => Object.getPrototypeOf(v));
     if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
       return invalid(path, 'Expected a plain JSON object');
     }
@@ -88,10 +104,10 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
       try { has.call(v, null); collection = true; } catch { /* Not this native collection. */ }
       if (collection) return invalid(path, 'Native collections are not JSON records');
     }
-    const keys = Reflect.ownKeys(v);
+    const keys = reflectInput(() => Reflect.ownKeys(v));
     // Never read v.length (a Proxy get trap). Bound iteration by the own keys,
     // rejecting huge sparse arrays before allocating/iterating their length.
-    const length = array ? Object.getOwnPropertyDescriptor(v, 'length') : undefined;
+    const length = array ? reflectInput(() => Object.getOwnPropertyDescriptor(v, 'length')) : undefined;
     if (array && (!length || !('value' in length) || !Number.isInteger(length.value)
       || length.value < 0 || length.value > 0xffffffff || length.enumerable || keys.length !== length.value + 1)) {
       return invalid(path, 'Sparse or malformed array');
@@ -101,12 +117,14 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
     try {
       for (const key of keys) {
         if (array && key === 'length') continue;
-        const descriptor = Object.getOwnPropertyDescriptor(v, key);
+        const descriptor = reflectInput(() => Object.getOwnPropertyDescriptor(v, key));
         if (typeof key !== 'string' || !descriptor || !descriptor.enumerable || !('value' in descriptor)
           || (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= length!.value))) {
-          return invalid(path, 'Only enumerable JSON data properties are supported');
+          invalid(path, 'Only enumerable JSON data properties are supported');
+          continue;
         }
         const child = capture(descriptor.value, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`);
+        if (child === failed) continue;
         // defineProperty also preserves __proto__ as data, without a setter.
         Object.defineProperty(copy, key, { value: child, enumerable: true, writable: true, configurable: true });
       }
@@ -115,16 +133,33 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
       // without reading it, so no ancestor can reread data changed by its traps.
       // For an ordinary node, no descendant Proxy can have survived to install
       // accessors. Compare only independent copies, never reread v for equality.
-      if (!sameAttemptData(copy, structuredClone(v))) return invalid(path, 'Cloning changes graph data');
-      return Object.freeze(copy);
+      if (issues.length) return failed;
+      let clone: unknown;
+      try { clone = structuredClone(v); }
+      catch (error) {
+        if (error instanceof DOMException && error.name === 'DataCloneError') {
+          return invalid(path, 'Unable to clone JSON data');
+        }
+        throw error;
+      }
+      if (!sameAttemptData(copy, clone)) return invalid(path, 'Cloning changes graph data');
+      Object.freeze(copy);
+      capturedNodes.add(copy);
+      return copy;
     } finally { ancestors.delete(v); }
   };
   let snapshot: unknown;
   try { snapshot = capture(value, ''); }
-  catch {
+  catch (error) {
+    if (!(error instanceof CaptureFailure)) throw error;
     if (!issues.length) issues.push({ code: 'non_json_value', path: '', message: 'Unable to capture JSON data' });
     return { valid: false, issues: attemptValidationResult(issues).issues };
   }
+  if (issues.length) return { valid: false, issues: attemptValidationResult(issues).issues };
+  // Capture may reuse certified immutable children internally. Always detach the
+  // public result from every input reference, including previously returned data.
+  snapshot = structuredClone(snapshot);
+  freezeCaptured(snapshot);
   const checked = validateCapturedGraph(snapshot, context);
   return checked.valid ? { valid: true, issues: checked.issues, graph: snapshot as AttemptGraph }
     : { valid: false, issues: checked.issues };

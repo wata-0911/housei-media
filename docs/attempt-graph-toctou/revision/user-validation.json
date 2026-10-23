@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "source": "direct user report, same worktree; raw new logs not supplied",
+  "productCodeUnchanged": true,
+  "planner": {
+    "pass": 4107,
+    "fail": 0,
+    "skip": 0
+  },
+  "build": "success",
+  "plannerBrowser": {
+    "pass": 43,
+    "fail": 1,
+    "test": "restore invalidates an unsaved media draft even when the stored value is identical",
+    "failure": "backup/restore file input search timeout 30000ms",
+    "comparison": "same reported symptom as committed base evidence; not independently rerun this turn"
+  },
+  "diffCheck": "success, also repeated by implementer"
+}
