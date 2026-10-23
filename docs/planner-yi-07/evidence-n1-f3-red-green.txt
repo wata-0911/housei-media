@@ -39,10 +39,10 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:332:57
 ✖ N1 rejects disguised WeakRef (1322.530921ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   + actual - expected
-  
+
   + 'assessed'
   - 'rejected'
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:338:10)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
@@ -60,10 +60,10 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:332:57
 ✖ N1 rejects disguised Proxy Map (532.914483ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   + actual - expected
-  
+
   + 'assessed'
   - 'rejected'
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:338:10)
       at Test.runInAsyncScope (node:async_hooks:214:14)
       at Test.run (node:internal/test_runner/test:1106:25)
@@ -82,9 +82,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:332:57
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining earned/null unknown: completion requires official year independently of learner source claim (3817.881517ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -99,9 +99,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining earned/null source: completion requires official year independently of learner source claim (5716.379983ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -116,9 +116,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining earned/numeric unknown: completion requires official year independently of learner source claim (4343.391591ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -133,9 +133,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining earned/source match: completion requires official year independently of learner source claim (5016.461927ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -150,9 +150,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining earned/source mismatch: completion requires official year independently of learner source claim (3952.997972ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -167,9 +167,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining planned/null unknown: completion requires official year independently of learner source claim (4443.165877ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -184,9 +184,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining planned/null source: completion requires official year independently of learner source claim (3554.398952ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -201,9 +201,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining planned/numeric unknown: completion requires official year independently of learner source claim (3105.958333ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -218,9 +218,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining planned/source match: completion requires official year independently of learner source claim (2461.141263ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -235,9 +235,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining planned/source mismatch: completion requires official year independently of learner source claim (2652.357072ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -252,9 +252,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining in_progress/null unknown: completion requires official year independently of learner source claim (3174.237453ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -269,9 +269,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining in_progress/null source: completion requires official year independently of learner source claim (2229.223416ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -286,9 +286,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining in_progress/numeric unknown: completion requires official year independently of learner source claim (2693.418889ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -303,9 +303,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining in_progress/source match: completion requires official year independently of learner source claim (2257.063875ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
@@ -320,9 +320,9 @@ test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 test at ../yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:344:3
 ✖ F3 remaining in_progress/source mismatch: completion requires official year independently of learner source claim (1975.276469ms)
   AssertionError [ERR_ASSERTION]: completion
-  
+
   false !== true
-  
+
       at TestContext.<anonymous> (/Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/yi-07-n1-f3-results/audited/tests/attempt-evidence.test.mjs:350:12)
       at async Test.run (node:internal/test_runner/test:1113:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {

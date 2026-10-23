@@ -62,5 +62,6 @@
     "New browser/real-device runs were not performed for N1/F3; previous browser failure records are retained.",
     "Arbitrary hostile JS realm/intrinsic tampering, resource limits, submitted source authenticity are outside this JSON boundary."
   ],
-  "N2": "PR #183 Draft/Open; origin/dev unchanged at verification, no N2 code integrated."
+  "N2": "PR #183 Draft/Open; origin/dev unchanged at verification, no N2 code integrated.",
+  "logWhitespace": "Embedded RED/GREEN text has trailing whitespace removed; non-whitespace tokens unchanged. SHA256 values refer to original raw logs."
 }
