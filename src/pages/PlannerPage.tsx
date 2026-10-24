@@ -29,7 +29,7 @@ import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/plann
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/gradeImport/directGradeHandoff';
 import { guidanceEligibilityCredits, guidanceForScope } from '../planner/graduation/thesisGuidance';
 import { missingGraduationProfilePrerequisites } from '../planner/graduation/graduationProfile';
-import { motion } from 'framer-motion';
+import { useReducedMotion, motion } from 'framer-motion';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -46,6 +46,7 @@ function downloadOriginal(raw: string) {
 }
 
 export default function PlannerPage() {
+  const shouldReduceMotion = useReducedMotion();
   const [loaded, setLoaded] = useState(readSavedState);
   const writePending = useRef(false);
   const [saving, setSaving] = useState(false);
@@ -231,9 +232,9 @@ export default function PlannerPage() {
   return <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen" style={{ fontFamily: '"Noto Serif JP", serif' }}>
     <section className="bg-[#002255] text-white py-12 sm:py-16 text-center px-4">
       <motion.div
-        initial={{ opacity: 0, y: 24 }}
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
+        transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.3 }}
       >
         <p className="text-orange-400 text-sm tracking-[0.2em] mb-3">PLANNER</p>
         <h1 className="text-3xl sm:text-4xl font-light tracking-wider">履修計画表</h1>
@@ -258,9 +259,9 @@ export default function PlannerPage() {
       </div>}
       {saveError && <p role="alert" className="border border-red-300 bg-red-50 p-4 text-sm">{saveError}</p>}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{
+        transition={shouldReduceMotion ? { duration: 0, delay: 0 } : {
           delay: 0.2
         }}
       >

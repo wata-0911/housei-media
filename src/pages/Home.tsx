@@ -142,25 +142,25 @@ export default function Home() {
 
         <motion.div style={{ opacity: shouldReduceMotion ? 1 : opacity }} className="relative z-20 text-center text-white px-4 mt-20">
           <motion.span
-            initial={{ opacity: 0, y: 20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.2 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.2 }}
             className="block text-sm md:text-base tracking-[0.15em] mb-6 text-white/90 font-light"
           >
             法政大学通信教育部 学生生活ガイド
           </motion.span>
           <motion.h2
-            initial={{ opacity: 0, y: 30 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.5, ease: "easeOut" }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.5, ease: "easeOut" }}
             className="text-4xl md:text-6xl lg:text-7xl font-light leading-tight tracking-wider mb-8 drop-shadow-lg"
           >
             誰かの「困った」を<br />「良かった」に変えるために。
           </motion.h2>
           <motion.p
-            initial={{ opacity: 0 }}
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 1 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 1 }}
             className="text-lg md:text-xl font-light tracking-wider text-white/80 max-w-2xl mx-auto"
           >
             法政通信メディアは皆様の学生生活に役立つ情報をまとめています。
@@ -168,9 +168,9 @@ export default function Home() {
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={shouldReduceMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 1.5 }}
+          transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 1.5 }}
           className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center text-white/90"
         >
           <span className="text-xs tracking-[0.2em] mb-3 font-light">SCROLL</span>
@@ -186,10 +186,10 @@ export default function Home() {
       <section className="py-20 bg-white border-b border-gray-100">
         <div className="max-w-4xl mx-auto px-6">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8 }}
             className="text-center"
           >
             <h3 className="text-[#002255] text-2xl font-medium mb-8 tracking-wider">知りたいことはありますか？</h3>
@@ -217,10 +217,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row items-center">
             <motion.div
-              initial={{ opacity: 0, x: -50 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
+              transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.3, ease: "easeOut" }}
               className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
               <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / SCHEDULE</span>
@@ -234,21 +234,21 @@ export default function Home() {
 
               <div className="space-y-4">
                 <a href="https://x.com/hosei_c_media?s=20" target="_blank" rel="noopener noreferrer" className="flex items-center text-[#666666] hover:text-[#002255] transition-colors group">
-                  <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12"></span>
+                  <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
                   <span className="tracking-wide">法政通信メディア＠勉強・就職情報発信</span>
                 </a>
                 <a href="https://x.com/hosei_c_media2" target="_blank" rel="noopener noreferrer" className="flex items-center text-[#666666] hover:text-[#002255] transition-colors group">
-                  <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12"></span>
+                  <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
                   <span className="tracking-wide">締切リマインド＠法政通信メディア2nd</span>
                 </a>
               </div>
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, x: 50 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, ease: "easeOut" }}
+              transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, ease: "easeOut" }}
               className="w-full md:w-7/12 z-20 relative mt-8 md:mt-0 md:-ml-12"
             >
               <div className="rounded-xl overflow-hidden border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] bg-white p-2 md:p-4">
@@ -270,10 +270,10 @@ export default function Home() {
           <div className="flex flex-col items-center gap-12">
 
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
+              transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
               className="text-center w-full"
             >
               <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / OFFICIAL X</span>
@@ -286,10 +286,10 @@ export default function Home() {
               {tweetIds.map((id, index) => (
                 <motion.div
                   key={id}
-                  initial={{ opacity: 0, x: index === 0 ? -30 : 30 }}
+                  initial={shouldReduceMotion ? false : { opacity: 0, x: index === 0 ? -30 : 30 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true, margin: "-100px" }}
-                  transition={{ duration: 1, delay: 0.2 + index * 0.2, ease: "easeOut" }}
+                  transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.2 + index * 0.2, ease: "easeOut" }}
                   className="bg-[#FAFAFA] rounded-2xl p-6 border border-gray-100 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
                 >
                   <div className="bg-white rounded-xl p-2 border border-gray-200">
@@ -308,10 +308,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row-reverse items-center justify-between gap-12">
             <motion.div
-              initial={{ opacity: 0, x: 50 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, delay: 0.3, ease: "easeOut" }}
+              transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.3, ease: "easeOut" }}
               className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
               <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">03 / MEMBERS</span>
@@ -324,20 +324,20 @@ export default function Home() {
 
               <Link
                 to="/member"
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium group"
+                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group"
               >
                 メンバープロフィールを見る
-                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
                 </svg>
               </Link>
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, x: -50 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 1, ease: "easeOut" }}
+              transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, ease: "easeOut" }}
               className="w-full md:w-6/12 z-20 relative mt-8 md:mt-0"
             >
               <div className="bg-white rounded-xl border border-gray-200 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] p-12 flex justify-center items-center gap-6">
@@ -363,10 +363,10 @@ export default function Home() {
       <section className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 1, ease: "easeOut" }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, ease: "easeOut" }}
             className="w-full max-w-5xl mx-auto bg-[#FAFAFA] p-10 md:p-16 md:px-24 border-t-4 border-[#002255] shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)] relative"
           >
             <div className="absolute top-0 left-8 md:left-12 -translate-y-1/2 bg-white px-2">
@@ -390,10 +390,10 @@ export default function Home() {
             <div className="flex justify-start">
               <Link
                 to="/message"
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 font-medium group"
+                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group"
               >
                 メッセージの続きを読む
-                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
                 </svg>
               </Link>
