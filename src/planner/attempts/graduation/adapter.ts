@@ -1,5 +1,5 @@
 import type { Attempt, AttemptGraph } from '../types';
-import { sameAttemptData, validateAttemptGraph } from '../validation';
+import { sameAttemptData, snapshotAttemptGraph } from '../validation';
 import { requireDecoded } from '../migration/source';
 import { freeze, pointer, type RetainedState, type SourceArchive } from '../migration/contracts';
 import { calculateGraduationProgress } from '../../graduation/graduationProgress';
@@ -51,12 +51,11 @@ export function adaptAttemptGraduation(input: { graph: unknown; retained: Retain
   }] };
   let graph: AttemptGraph;
   try {
-    const checked = validateAttemptGraph(graphInput, source.context);
+    const checked = snapshotAttemptGraph(graphInput, source.context);
     if (!checked.valid) return { status: 'rejected', diagnostics: checked.issues };
-    graph = structuredClone(graphInput as AttemptGraph);
-    if (!sameAttemptData(graphInput, graph)) throw new Error('graph_clone_changed_data');
+    graph = checked.graph;
   } catch { return { status: 'rejected', diagnostics: [{ code: 'invalid_graph_input', path: '/graph', message: 'Expected cloneable plain graph data' }] }; }
-  // Clone BEFORE freeze/calculation, including retained optional properties and arrays.
+  // The graph is already captured, validated and frozen. Clone trusted retained data.
   // Calculation uses the decoded source, never a second read of caller retained.
   const retained = structuredClone(sourceRetained);
   const catalog = source.sourceCatalog, master = source.context.catalog;
