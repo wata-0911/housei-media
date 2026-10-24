@@ -91,7 +91,7 @@ YI-02 loaderが公式原行scopeとregistryのPlacement scopeの一致を検証�
 
 教職検索は明示 `usage='teacher'`、`teacherCodeEvidenceIds` のリンク、かつ証拠scopeが
 `teacher_only` であることを必要とする。根拠は同コード表p.202-213の教職用途分類と、
-配置監査台帳の教職リンク全628件（すべて `teacher_only`）。本科scopeの証拠が教職リンクに
+配置監査台帳の教職リンク全528件（すべて `teacher_only`）。本科scopeの証拠が教職リンクに
 入っていても教職コードとして一致しない。逆に教職証拠を本科へ転用しない。
 `teacher_only` は教職掲載という用途domainで、学生本人の所属学科・免許教科・新旧法の資格判定ではない。
 
