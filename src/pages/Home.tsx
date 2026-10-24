@@ -232,6 +232,22 @@ export default function Home() {
                 見やすいなと思って貰えたらXで《いいね》や《RT》で広めて貰えると嬉しいです。
               </p>
 
+              <nav aria-label="履修プランナー" className="mb-10 grid gap-3">
+                {[
+                  { to: '/planner', label: '履修計画', description: '年間の学習予定を立てる', accent: 'border-[#002255] bg-[#002255] text-white hover:bg-[#003377]' },
+                  { to: '/planner#grade-import', label: '成績取り込み', description: '成績データを取り込んで確認する', accent: 'border-[#E65C00] bg-white text-[#002255] hover:bg-orange-50' },
+                  { to: '/planner#media', label: 'メディア進捗記録', description: 'メディアスクーリングの進捗を記録する', accent: 'border-[#002255] bg-white text-[#002255] hover:bg-slate-50' },
+                ].map(({ to, label, description, accent }) => (
+                  <Link key={to} to={to} className={`flex items-center justify-between gap-3 rounded-md border px-4 py-3 transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E65C00] ${accent}`}>
+                    <span className="min-w-0">
+                      <span className="block text-base font-medium">{label}</span>
+                      <span className="mt-1 block text-xs leading-relaxed">{description}</span>
+                    </span>
+                    <span aria-hidden="true" className="shrink-0">→</span>
+                  </Link>
+                ))}
+              </nav>
+
               <div className="space-y-4">
                 <a href="https://x.com/hosei_c_media?s=20" target="_blank" rel="noopener noreferrer" className="flex items-center text-[#666666] hover:text-[#002255] transition-colors group">
                   <span className="w-8 h-[1px] bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
