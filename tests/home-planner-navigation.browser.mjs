@@ -62,18 +62,35 @@ async function destination(page, id, tab) {
 async function scrollCount(page) { return page.evaluate(() => window.navigationScrolls.length); }
 
 for (const viewport of [{ width: 1440, height: 1000 }, { width: 375, height: 812 }]) {
-  test(`SCHEDULE retains order/calendar/X and three keyboard accessible CTAs (${viewport.width}px, reduced motion)`, async t => {
+  test(`independent Planner cards precede unchanged SCHEDULE with keyboard accessible CTAs (${viewport.width}px, reduced motion)`, async t => {
     const page = await open(t, '/', { viewport, reducedMotion: 'reduce' });
     const nav = page.getByRole('navigation', { name: '履修プランナー', exact: true });
     assert.equal(await nav.getByRole('link').count(), 3);
     const section = page.locator('section').filter({ has: nav });
-    assert.equal(await section.locator('img[src="/schedule-calendar.png"]').count(), 1);
-    assert.equal(await section.locator('a[href^="https://x.com/"]').count(), 2);
+    assert.equal(await section.getByRole('heading', { name: '履修プランナー', exact: true }).count(), 1);
+    assert.equal(await section.locator('img[src="/schedule-calendar.png"]').count(), 0);
+    const schedule = page.locator('section').filter({ has: page.locator('img[src="/schedule-calendar.png"]') });
+    assert.equal(await schedule.locator('img[src="/schedule-calendar.png"]').count(), 1);
+    assert.equal(await schedule.locator('a[href^="https://x.com/"]').count(), 2);
+    assert.equal(await schedule.getByRole('navigation', { name: '履修プランナー', exact: true }).count(), 0);
+    assert.equal(await section.evaluate(el => el.nextElementSibling.querySelector('img[src="/schedule-calendar.png"]') !== null), true);
+    const cards = await nav.getByRole('link').evaluateAll(links => links.map(link => {
+      const { x, y, width, height } = link.getBoundingClientRect();
+      return { x, y, width, height };
+    }));
+    if (viewport.width >= 768) {
+      assert.ok(cards.every(card => Math.abs(card.y - cards[0].y) <= 1), 'desktop cards share a row');
+      assert.ok(cards[1].x >= cards[0].x + cards[0].width && cards[2].x >= cards[1].x + cards[1].width);
+    } else {
+      assert.ok(cards.every(card => Math.abs(card.x - cards[0].x) <= 1), 'mobile cards share a column');
+      assert.ok(cards[1].y >= cards[0].y + cards[0].height && cards[2].y >= cards[1].y + cards[1].height);
+    }
     assert.equal(await page.locator('main > div > section').first().getByRole('textbox').count(), 1);
     assert.equal(await section.evaluate(el => el.previousElementSibling.querySelector('#home-search') !== null), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const link = nav.getByRole('link').filter({ hasText: '年間の学習予定を立てる' });
     await link.focus();
+    if (process.env.HOME_PLANNER_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/home-planner-${viewport.width}.png`, fullPage: true });
     assert.equal(await link.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
     assert.equal(await link.evaluate(el => getComputedStyle(el).transitionDuration), '0s');
     await page.keyboard.press('Enter');

@@ -212,6 +212,38 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 履修プランナー */}
+      <section aria-labelledby="home-planner-heading" className="py-20 sm:py-24 bg-[#002255] text-white overflow-hidden">
+        <motion.div
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+        >
+          <div className="mb-10 sm:mb-12 text-center">
+            <span className="text-orange-400 text-sm tracking-[0.15em] mb-4 block font-medium">PLANNER</span>
+            <h2 id="home-planner-heading" className="text-3xl md:text-4xl font-medium tracking-wide">履修プランナー</h2>
+            <p className="mt-6 text-sm sm:text-base text-white/80 leading-loose font-light">履修計画や成績の取り込み、メディアの進捗記録をまとめて。</p>
+          </div>
+          <nav aria-label="履修プランナー" className="grid gap-4 md:grid-cols-3 md:gap-6">
+            {[
+              { to: '/planner', label: '履修計画', description: '年間の学習予定を立てる' },
+              { to: '/planner#grade-import', label: '成績取り込み', description: '成績データを取り込んで確認する' },
+              { to: '/planner#media', label: 'メディア進捗記録', description: 'メディアスクーリングの進捗を記録する' },
+            ].map(({ to, label, description }) => (
+              <Link key={to} to={to} className="flex items-center justify-between gap-4 rounded-xl border-t-4 border-[#E65C00] bg-white px-6 py-7 lg:p-8 text-[#002255] hover:bg-orange-50 transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-400">
+                <span className="min-w-0">
+                  <span className="block text-xl font-medium tracking-wide">{label}</span>
+                  <span className="mt-3 block text-sm text-[#666666] leading-relaxed font-light">{description}</span>
+                </span>
+                <span aria-hidden="true" className="shrink-0 text-[#E65C00] text-xl">→</span>
+              </Link>
+            ))}
+          </nav>
+        </motion.div>
+      </section>
+
       {/* セクション1: SCHEDULE */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
@@ -231,22 +263,6 @@ export default function Home() {
                 通教生向けのスケジュールです！<br />
                 見やすいなと思って貰えたらXで《いいね》や《RT》で広めて貰えると嬉しいです。
               </p>
-
-              <nav aria-label="履修プランナー" className="mb-10 grid gap-3">
-                {[
-                  { to: '/planner', label: '履修計画', description: '年間の学習予定を立てる', accent: 'border-[#002255] bg-[#002255] text-white hover:bg-[#003377]' },
-                  { to: '/planner#grade-import', label: '成績取り込み', description: '成績データを取り込んで確認する', accent: 'border-[#E65C00] bg-white text-[#002255] hover:bg-orange-50' },
-                  { to: '/planner#media', label: 'メディア進捗記録', description: 'メディアスクーリングの進捗を記録する', accent: 'border-[#002255] bg-white text-[#002255] hover:bg-slate-50' },
-                ].map(({ to, label, description, accent }) => (
-                  <Link key={to} to={to} className={`flex items-center justify-between gap-3 rounded-md border px-4 py-3 transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#E65C00] ${accent}`}>
-                    <span className="min-w-0">
-                      <span className="block text-base font-medium">{label}</span>
-                      <span className="mt-1 block text-xs leading-relaxed">{description}</span>
-                    </span>
-                    <span aria-hidden="true" className="shrink-0">→</span>
-                  </Link>
-                ))}
-              </nav>
 
               <div className="space-y-4">
                 <a href="https://x.com/hosei_c_media?s=20" target="_blank" rel="noopener noreferrer" className="flex items-center text-[#666666] hover:text-[#002255] transition-colors group">
