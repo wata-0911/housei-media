@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "test:planner": "node --import tsx --test tests/official-repeatable.test.mjs tests/calligraphy-progress.test.mjs tests/calligraphy-state-references.test.mjs tests/calligraphy-partial-details.test.mjs tests/planner.test.mjs tests/curriculum-foundation.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-model.test.mjs tests/curriculum-course-ui.test.mjs tests/component-provenance.test.mjs tests/graduation-audit.test.mjs tests/manual-graduation-credits.test.mjs tests/structured-professional-credits.test.mjs tests/grade-import-privacy.test.mjs tests/grade-import-identity.test.mjs tests/unresolved-conditions.test.mjs tests/institutional-catalog.test.mjs tests/attempt-contract.test.mjs tests/migration.test.mjs tests/attempt-workbench.test.mjs tests/attempt-persistence.test.mjs tests/attempt-graduation.test.mjs",
+    "test:planner": "node --import tsx --test tests/official-repeatable.test.mjs tests/calligraphy-progress.test.mjs tests/calligraphy-state-references.test.mjs tests/calligraphy-partial-details.test.mjs tests/planner.test.mjs tests/curriculum-foundation.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-model.test.mjs tests/curriculum-course-ui.test.mjs tests/component-provenance.test.mjs tests/graduation-audit.test.mjs tests/manual-graduation-credits.test.mjs tests/structured-professional-credits.test.mjs tests/grade-import-privacy.test.mjs tests/grade-import-identity.test.mjs tests/unresolved-conditions.test.mjs tests/institutional-catalog.test.mjs tests/attempt-contract.test.mjs tests/migration.test.mjs tests/attempt-workbench.test.mjs tests/attempt-persistence.test.mjs tests/attempt-graduation.test.mjs tests/attempt-evidence.test.mjs",
     "test:extension": "node --test extension/hosei-planner-import/tests/*.test.mjs",
     "test:planner-browser": "node --import tsx --test tests/planner-save-lock.browser.mjs",
     "build:extension-dev": "npm run check:grade-import && node scripts/build-extension-dev.mjs",
@@ -26,7 +26,8 @@
     "test:attempt-ui-browser": "node --import tsx --test tests/attempt-workbench.browser.mjs",
     "test:attempt-persistence": "node --import tsx --test tests/attempt-persistence.test.mjs",
     "test:attempt-persistence-browser": "node --import tsx --test tests/attempt-persistence.browser.mjs",
-    "test:attempt-graduation": "node --import tsx --test tests/attempt-graduation.test.mjs"
+    "test:attempt-graduation": "node --import tsx --test tests/attempt-graduation.test.mjs",
+    "test:attempt-evidence": "node --import tsx --test tests/attempt-evidence.test.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.31.2",

@@ -1,0 +1,67 @@
+{
+  "auditedHead": "07438730ec29e0cf53ac56f813ff022cc92ae93e",
+  "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+  "runtime": "Node.js v24.13.0 local; CI Node.js 22",
+  "results": {
+    "red-exact": {
+      "counts": {
+        "tests": 21,
+        "pass": 4,
+        "fail": 17,
+        "skipped": 0
+      },
+      "sha256": "805a1461594f8b75cf351c48e1aad6b0e591a446ba5163f550b28f1ec53755bc"
+    },
+    "green-exact": {
+      "counts": {
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "skipped": 0
+      },
+      "sha256": "50951aecbe58e0f33cc2bc49b685d6d1807f890ebdce7b6f4799529722a849b1"
+    },
+    "evidence-final": {
+      "counts": {
+        "tests": 142,
+        "pass": 142,
+        "fail": 0,
+        "skipped": 0
+      },
+      "sha256": "e8e12dad82929013bec6e48bd32a1bf9c2a698cee5542f0f70f4392f48d66506"
+    },
+    "extension": {
+      "counts": {
+        "tests": 54,
+        "pass": 54,
+        "fail": 0,
+        "skipped": 0
+      },
+      "sha256": "42f5f37fcf8f5d1508e924bd2271aeffab21a6ac36e4fb79307c11aaf3489775"
+    },
+    "bookmarklet": {
+      "counts": {
+        "tests": 168,
+        "pass": 168,
+        "fail": 0,
+        "skipped": 0
+      },
+      "sha256": "ad6f12febd3b5b0dcf335e55f98cb6f07257558c6b490dfb744c414aafc737e5"
+    }
+  },
+  "completedChecks": [
+    "typecheck",
+    "lint",
+    "build",
+    "git diff --check",
+    "git diff --check origin/dev"
+  ],
+  "production": "12/12 byte identical to fresh origin/dev build",
+  "allPlannerAndCI": "Final results recorded in PR #181 body after pushing final HEAD.",
+  "unverified": [
+    "New browser/real-device runs were not performed for N1/F3; previous browser failure records are retained.",
+    "Arbitrary hostile JS realm/intrinsic tampering, resource limits, submitted source authenticity are outside this JSON boundary."
+  ],
+  "N2": "PR #183 Draft/Open; origin/dev unchanged at verification, no N2 code integrated.",
+  "logWhitespace": "Embedded RED/GREEN text has trailing whitespace removed; non-whitespace tokens unchanged. SHA256 values refer to original raw logs."
+}

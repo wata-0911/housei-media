@@ -1,0 +1,13 @@
+{
+  "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+  "implementationHead": "28415f06a4e3dfe452b76c5d3a533346da5c2d63",
+  "existingProtectedFiles": 228,
+  "changedExistingProtectedFiles": [],
+  "newSourceSha256": {
+    "src/planner/attempts/graduation/evidence.ts": "04052426a1de47c243303975db2be163b075b072c712ff10e3543c1fdd813d31",
+    "src/planner/attempts/graduation/evidenceTypes.ts": "f30c643f507396642e93307740a6168499bd8f15e75bdc438804ecaffb6259f2",
+    "tests/attempt-evidence.test.mjs": "4533b215e2fc1881caa5eb4b60a7e811511687261747ac5137a5af7eabd66d46"
+  },
+  "finalTestSha256": "2f270746ca02c628f12915226785bdcbc238894cc1aa34b72ec11eea081fc55f",
+  "note": "Existing 228 source/test/dev/script/CI files remain unchanged. New-source hashes identify implementation commit; finalTestSha256 includes the later strengthened fixture assertions."
+}

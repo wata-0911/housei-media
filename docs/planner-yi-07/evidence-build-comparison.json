@@ -1,0 +1,33 @@
+{
+  "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+  "baseline": {
+    "assets/PlannerPage-A1y07S3G.js": "c8a093baf0b5c1b7cbcd841bc9da8d9764f4e107b75c7e1e8337004e87acc3fd",
+    "assets/index-BFZGgrmL.js": "28827902afa8db5c0b7f006174190ccb83c92feb828655cc58ad326cfa63abbb",
+    "assets/index-C2Qpu_om.css": "053e7463c807b9165ed206547d19cfaf59340c67f181010765deb3fee9bcfac8",
+    "hedda.jpeg": "f92d1cac3cad5bc2e4560675a67d720fdb3412aeae4e11e355a2d7a54ae157d4",
+    "icon-128.png": "a39c6ebf8e9d01750bcc4e9fdea3ce4755474983c7e42fd7bcbe04ca87e0ea01",
+    "index.html": "a8e1a8d698c36184d72a622478ac798f2f1672979b3da0054f0f63959dfdd636",
+    "member-founder.jpg": "f38f3d980231bdc35984c269ad94970eaebdd609e6ff706dd8062e3046248a46",
+    "member1.jpg": "e475207e4fb8a388cf7174cbb7f0e438bc44e446d2f219fc9f1dae4aa134fa77",
+    "member2.jpg": "5038c5f6a19f6a0b7bd06ce3a89872e1467d27c74109b1480f77a629f8fd0385",
+    "member3.jpg": "b6ed172788679ac8542a84974e51173d3923f7adf68ffd7365537bdac65deaa0",
+    "qa.jpeg": "d835622886456af254e111db43df977b42f871dd3b0ab1d16d0ab87dcfacd142",
+    "schedule-calendar.png": "5c54af2aa0522ac37dfce25fb9dd70eacd4dd01cce9be07e688b9c7c5829699b"
+  },
+  "feature": {
+    "assets/PlannerPage-A1y07S3G.js": "c8a093baf0b5c1b7cbcd841bc9da8d9764f4e107b75c7e1e8337004e87acc3fd",
+    "assets/index-BFZGgrmL.js": "28827902afa8db5c0b7f006174190ccb83c92feb828655cc58ad326cfa63abbb",
+    "assets/index-C2Qpu_om.css": "053e7463c807b9165ed206547d19cfaf59340c67f181010765deb3fee9bcfac8",
+    "hedda.jpeg": "f92d1cac3cad5bc2e4560675a67d720fdb3412aeae4e11e355a2d7a54ae157d4",
+    "icon-128.png": "a39c6ebf8e9d01750bcc4e9fdea3ce4755474983c7e42fd7bcbe04ca87e0ea01",
+    "index.html": "a8e1a8d698c36184d72a622478ac798f2f1672979b3da0054f0f63959dfdd636",
+    "member-founder.jpg": "f38f3d980231bdc35984c269ad94970eaebdd609e6ff706dd8062e3046248a46",
+    "member1.jpg": "e475207e4fb8a388cf7174cbb7f0e438bc44e446d2f219fc9f1dae4aa134fa77",
+    "member2.jpg": "5038c5f6a19f6a0b7bd06ce3a89872e1467d27c74109b1480f77a629f8fd0385",
+    "member3.jpg": "b6ed172788679ac8542a84974e51173d3923f7adf68ffd7365537bdac65deaa0",
+    "qa.jpeg": "d835622886456af254e111db43df977b42f871dd3b0ab1d16d0ab87dcfacd142",
+    "schedule-calendar.png": "5c54af2aa0522ac37dfce25fb9dd70eacd4dd01cce9be07e688b9c7c5829699b"
+  },
+  "byteIdentical": true,
+  "differences": []
+}

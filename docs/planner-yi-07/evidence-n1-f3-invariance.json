@@ -1,0 +1,9 @@
+{
+  "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+  "existingDevFilesCompared": 230,
+  "changedExistingFiles": [
+    "package.json"
+  ],
+  "N2Integrated": false,
+  "changedExistingFilesExplanation": "package.json differs only by the pre-existing evidence suite scripts from earlier PR #181 commits; unchanged by N1/F3."
+}

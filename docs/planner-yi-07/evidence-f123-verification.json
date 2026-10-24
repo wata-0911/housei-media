@@ -1,0 +1,472 @@
+{
+  "auditedHead": "52f5f05a64f0e3d2f2d220f89363e8ee8e76aa7b",
+  "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+  "results": [
+    {
+      "log": "counterexamples-red.log",
+      "sha256": "9041ad8895eefedaebbe44f3ddad039cc19ee7900dfca636f12959eaedd6e2c7",
+      "tests": 3,
+      "pass": 0,
+      "fail": 3,
+      "skipped": 0
+    },
+    {
+      "log": "counterexamples-green.log",
+      "sha256": "b9e797d2df570bf17f5100029659030ee17cdd721faca1f4d32f16bd7056275a",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "expanded-red.log",
+      "sha256": "04bdc72d4b13396f4f43be471a0b9d6709907e83ba991dd011bfa193839db6d8",
+      "tests": 96,
+      "pass": 83,
+      "fail": 13,
+      "skipped": 0
+    },
+    {
+      "log": "test-attempt-evidence.log",
+      "sha256": "ee6f729c8ac1a50908f681a8f1b55749555388ed303751c0955a01bf8070c8c2",
+      "tests": 96,
+      "pass": 96,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "independent-counterexamples-green.log",
+      "sha256": "9aa20edae247af29b09565da24ab0f4c1953beca0f5a7312672618ac409cf581",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "test-attempt-graduation.log",
+      "sha256": "b9309fde9e284c94e5f15552d7bf8e8d8365b186cb5cd5fbee60d7ba32b745dd",
+      "tests": 414,
+      "pass": 414,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "planner.log",
+      "sha256": "81b81a88623904e9f82242c56e50865f2c98f22d7168b117985baa8e1035706f",
+      "tests": 4002,
+      "pass": 4002,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "test-migration.log",
+      "sha256": "c874e2e3ec18aac99f303caec421740fbd8e6bc50ea8703c123437618b4db680",
+      "tests": 133,
+      "pass": 133,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "test-attempt-persistence.log",
+      "sha256": "90058034ecdef51b92a550beebc8f941c582862a34e7a3974852a75492e75340",
+      "tests": 103,
+      "pass": 103,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "test-extension.log",
+      "sha256": "28357f6b6846069aa138d8d8bee9f03bf8278247651915fe6c9a6b99e8d018df",
+      "tests": 54,
+      "pass": 54,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "test-bookmarklet.log",
+      "sha256": "c8447b106f9add0e9a5afbdfa3f26ab4334f90408ebeb2b134945dfa8f3aa6c3",
+      "tests": 168,
+      "pass": 168,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "typecheck.log",
+      "sha256": "f1292e716cf206bd36a7d012b36caceaa0b3ac2d43e5b16d6f445e3f4b029f51"
+    },
+    {
+      "log": "lint.log",
+      "sha256": "a2623802382957a2bcd0606d148b093c7b1e5f2f097004819d45199ee92b809c"
+    },
+    {
+      "log": "build.log",
+      "sha256": "f8a0103900b58ae7e0c17b6bdd318826b65a705ed98fb7b6017ae574ab0a59b9"
+    },
+    {
+      "log": "build-dev.log",
+      "sha256": "de34305d61868218c62ce2da09c622e4e108fdcfd8f0721757d411af1c1ce2a3"
+    },
+    {
+      "log": "diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "log": "diff-check-dev.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "log": "feature-ui-browser.log",
+      "sha256": "2c4177bd84a5ce389dee90692ba68d47ff19b4794c9be70f6e07ce48d7847a9d",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "feature-persistence-browser.log",
+      "sha256": "19186944bb177ec5afe8f795a2e825ed87b53773db3ca849f0fcf1be95e06abc",
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "dev-persistence-browser.log",
+      "sha256": "1633c55e6cbabba774c3bf63a27a17cbd3ef0f1569974f8945589b6859d1c610",
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "feature-planner-browser.log",
+      "sha256": "407d94d103f4189f5c0c5dcb6cf10bdfa87bffd3865caec53483d562f6f7b63c",
+      "tests": 44,
+      "pass": 41,
+      "fail": 3,
+      "skipped": 0
+    },
+    {
+      "log": "dev-planner-145.log",
+      "sha256": "9d0af2b9176e1dfa2044a49fa28c4f2bda89badc35c85717908fab471e26135d",
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "skipped": 0
+    },
+    {
+      "log": "feature-browser-recheck.log",
+      "sha256": "a389c4cac8890ee689d68e773a8e6372e758743520cd6748b1de36e97683ac57",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "log": "dev-browser-recheck.log",
+      "sha256": "b61b0ada6d81dcc714915b8986b61047ca22f44f918d84231a23fd9eaaae899f",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0
+    }
+  ],
+  "commands": [
+    {
+      "name": "test:attempt-evidence",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-evidence"
+      ],
+      "exitCode": 0,
+      "seconds": 37.84
+    },
+    {
+      "name": "test:attempt-graduation",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-graduation"
+      ],
+      "exitCode": 0,
+      "seconds": 794.52
+    },
+    {
+      "name": "test:migration",
+      "command": [
+        "npm",
+        "run",
+        "test:migration"
+      ],
+      "exitCode": 0,
+      "seconds": 490.52
+    },
+    {
+      "name": "test:attempt-persistence",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence"
+      ],
+      "exitCode": 0,
+      "seconds": 1344.82
+    },
+    {
+      "name": "test:extension",
+      "command": [
+        "npm",
+        "run",
+        "test:extension"
+      ],
+      "exitCode": 0,
+      "seconds": 1.52
+    },
+    {
+      "name": "test:bookmarklet",
+      "command": [
+        "npm",
+        "run",
+        "test:bookmarklet"
+      ],
+      "exitCode": 0,
+      "seconds": 3.1
+    },
+    {
+      "name": "typecheck",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exitCode": 0,
+      "seconds": 13.57
+    },
+    {
+      "name": "lint",
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "exitCode": 0,
+      "seconds": 33.43
+    },
+    {
+      "name": "build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exitCode": 0,
+      "seconds": 20.34
+    },
+    {
+      "name": "build-dev",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exitCode": 0,
+      "seconds": 10.99
+    },
+    {
+      "name": "yi01",
+      "command": [
+        "python3",
+        "docs/planner-yi-01/verify.py"
+      ],
+      "exitCode": 0,
+      "seconds": 0.82
+    },
+    {
+      "name": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0,
+      "seconds": 0.15
+    },
+    {
+      "name": "diff-check-dev",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "origin/dev"
+      ],
+      "exitCode": 0,
+      "seconds": 0.05
+    }
+  ],
+  "plannerCommand": {
+    "command": "NODE_OPTIONS=--max-old-space-size=1024 npm run test:planner",
+    "exitCode": 0,
+    "tests": 4002,
+    "pass": 4002,
+    "fail": 0,
+    "skipped": 0
+  },
+  "browserCommands": [
+    {
+      "name": "feature-ui-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-ui-browser"
+      ],
+      "exitCode": 0,
+      "seconds": 102.92
+    },
+    {
+      "name": "feature-persistence-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence-browser"
+      ],
+      "exitCode": 0,
+      "seconds": 695.3
+    },
+    {
+      "name": "dev-persistence-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence-browser"
+      ],
+      "exitCode": 0,
+      "seconds": 635.81
+    },
+    {
+      "name": "feature-planner-browser",
+      "command": [
+        "npm",
+        "run",
+        "test:planner-browser"
+      ],
+      "exitCode": 1,
+      "seconds": 729.68
+    },
+    {
+      "name": "dev-planner-145",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-name-pattern=restore invalidates an unsaved media draft even when the stored value is identical",
+        "tests/planner-save-lock.browser.mjs"
+      ],
+      "exitCode": 1,
+      "seconds": 45.27
+    }
+  ],
+  "invariance": {
+    "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+    "trackedFilesCompared": 228,
+    "differences": [],
+    "lockfileUnchanged": true
+  },
+  "productionBuild": {
+    "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+    "baseline": {
+      "assets/PlannerPage-A1y07S3G.js": "c8a093baf0b5c1b7cbcd841bc9da8d9764f4e107b75c7e1e8337004e87acc3fd",
+      "assets/index-BFZGgrmL.js": "28827902afa8db5c0b7f006174190ccb83c92feb828655cc58ad326cfa63abbb",
+      "assets/index-C2Qpu_om.css": "053e7463c807b9165ed206547d19cfaf59340c67f181010765deb3fee9bcfac8",
+      "hedda.jpeg": "f92d1cac3cad5bc2e4560675a67d720fdb3412aeae4e11e355a2d7a54ae157d4",
+      "icon-128.png": "a39c6ebf8e9d01750bcc4e9fdea3ce4755474983c7e42fd7bcbe04ca87e0ea01",
+      "index.html": "a8e1a8d698c36184d72a622478ac798f2f1672979b3da0054f0f63959dfdd636",
+      "member-founder.jpg": "f38f3d980231bdc35984c269ad94970eaebdd609e6ff706dd8062e3046248a46",
+      "member1.jpg": "e475207e4fb8a388cf7174cbb7f0e438bc44e446d2f219fc9f1dae4aa134fa77",
+      "member2.jpg": "5038c5f6a19f6a0b7bd06ce3a89872e1467d27c74109b1480f77a629f8fd0385",
+      "member3.jpg": "b6ed172788679ac8542a84974e51173d3923f7adf68ffd7365537bdac65deaa0",
+      "qa.jpeg": "d835622886456af254e111db43df977b42f871dd3b0ab1d16d0ab87dcfacd142",
+      "schedule-calendar.png": "5c54af2aa0522ac37dfce25fb9dd70eacd4dd01cce9be07e688b9c7c5829699b"
+    },
+    "feature": {
+      "assets/PlannerPage-A1y07S3G.js": "c8a093baf0b5c1b7cbcd841bc9da8d9764f4e107b75c7e1e8337004e87acc3fd",
+      "assets/index-BFZGgrmL.js": "28827902afa8db5c0b7f006174190ccb83c92feb828655cc58ad326cfa63abbb",
+      "assets/index-C2Qpu_om.css": "053e7463c807b9165ed206547d19cfaf59340c67f181010765deb3fee9bcfac8",
+      "hedda.jpeg": "f92d1cac3cad5bc2e4560675a67d720fdb3412aeae4e11e355a2d7a54ae157d4",
+      "icon-128.png": "a39c6ebf8e9d01750bcc4e9fdea3ce4755474983c7e42fd7bcbe04ca87e0ea01",
+      "index.html": "a8e1a8d698c36184d72a622478ac798f2f1672979b3da0054f0f63959dfdd636",
+      "member-founder.jpg": "f38f3d980231bdc35984c269ad94970eaebdd609e6ff706dd8062e3046248a46",
+      "member1.jpg": "e475207e4fb8a388cf7174cbb7f0e438bc44e446d2f219fc9f1dae4aa134fa77",
+      "member2.jpg": "5038c5f6a19f6a0b7bd06ce3a89872e1467d27c74109b1480f77a629f8fd0385",
+      "member3.jpg": "b6ed172788679ac8542a84974e51173d3923f7adf68ffd7365537bdac65deaa0",
+      "qa.jpeg": "d835622886456af254e111db43df977b42f871dd3b0ab1d16d0ab87dcfacd142",
+      "schedule-calendar.png": "5c54af2aa0522ac37dfce25fb9dd70eacd4dd01cce9be07e688b9c7c5829699b"
+    },
+    "byteIdentical": true,
+    "differences": [],
+    "directByteComparison": true
+  },
+  "whitespaceNormalization": [
+    {
+      "file": "docs/planner-yi-07/evidence-dev-browser-145.txt",
+      "beforeSha256": "e0dd7567a17413d8a9b74ea3f191bb44fb3c065a146254ee90649f6f7393c919",
+      "afterSha256": "df4f47b4d4db7f9bcaee57433c116cbc28b295f52ada15f08c8f989f46022984",
+      "nonWhitespaceTokensUnchanged": true
+    },
+    {
+      "file": "docs/planner-yi-07/evidence-feature-browser.txt",
+      "beforeSha256": "88eb28af9d8cf26a23f11debaafeba0e71932843fb8bcf5fb2d4c37bfd07755b",
+      "afterSha256": "0692c4070d10e5647ac3ee503d3de61415f86a2e1e4042c0e893b19e2b1d28a2",
+      "nonWhitespaceTokensUnchanged": true
+    },
+    {
+      "file": "docs/planner-yi-07/evidence-red-green.txt",
+      "beforeSha256": "8c454291045eeb36ad082d1a0bb077b09e5c34ce2d7d6a0e5d8b9253dd6feaf8",
+      "afterSha256": "1e731a927c84b87e98f1e36f3a0dafe50203c4e47e13b906b94f9fcef89d3859",
+      "nonWhitespaceTokensUnchanged": true
+    }
+  ],
+  "sourceSha256": {
+    "src/planner/attempts/graduation/evidence.ts": "188dd85228a557b8a0df63c094238d12b01b39221148dff3a27d24375172b216",
+    "src/planner/attempts/graduation/evidenceTypes.ts": "5627358c5a9b42797e21f5cd56a896ceef797b76f02d651204bb102677c8ff9f",
+    "src/planner/attempts/graduation/evidenceSnapshot.ts": "9a4755f9f5d118a420f54cdbc462f158add548e424d11c2f0f4a5100acbe35cc",
+    "tests/attempt-evidence.test.mjs": "27e66cef70fab1682e05204fde979766160ebfafeb3df820fa5755e322250c82"
+  },
+  "notes": [
+    "Original audit counterexamples written and executed RED before implementation changes. Same assertions GREEN. Expanded final suite rerun unchanged on audited-head archive: 83 PASS/13 FAIL, fixed code: 96 PASS.",
+    "Existing 55 test assertions retained. One prior disagreement fixture now has yearSource=source (previously manual); separate manual/inferred tests ensure they are not promoted to official year.",
+    "All existing 228 src/tests/dev/scripts/.github files from dev remain byte-identical. No new positive allocations or official attestation acceptance.",
+    "Historical log normalization changes whitespace only; before/after hashes are recorded, original test results are unchanged.",
+    "Normal Planner first run: 41 PASS/3 FAIL. #145 reproduced on dev. Other two timeouts are not classified as #145. No skip, assertion or timeout changes.",
+    "CI for the final fix commit is recorded in PR #181 body/Checks to avoid a self-referential commit hash in this file. Results are implementer verification, not independent audit sign-off.",
+    "Two non-#145 browser timeouts rechecked unchanged sequentially: feature 2 PASS, dev 2 PASS, both FAIL 0/SKIP 0. Original 41/44 result is retained; timeout cause unknown. This is not a clean full-44 rerun."
+  ],
+  "browserRecheckCommands": [
+    {
+      "name": "feature-browser-recheck",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-name-pattern=calligraphy P2 Chromium card state matrix (言語コース|文学コース)",
+        "tests/planner-save-lock.browser.mjs"
+      ],
+      "exitCode": 0,
+      "seconds": 190.71
+    },
+    {
+      "name": "dev-browser-recheck",
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-name-pattern=calligraphy P2 Chromium card state matrix (言語コース|文学コース)",
+        "tests/planner-save-lock.browser.mjs"
+      ],
+      "exitCode": 0,
+      "seconds": 203.8
+    }
+  ]
+}
