@@ -1,3 +1,35 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  /* Planner actions: #F06A14 on #002255 exceeds 4.5:1 for small text. */
+  .planner-button {
+    background-color: #fff;
+    color: #002255;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  .planner-button--navy {
+    background-color: #002255;
+    color: #fff;
+  }
+
+  .planner-button:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .planner-button:not(:disabled):not([aria-disabled="true"]):hover {
+      background-color: #002255;
+      color: #f06a14;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .planner-button {
+      transition: none;
+    }
+  }
+}

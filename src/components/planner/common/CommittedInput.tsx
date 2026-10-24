@@ -43,7 +43,7 @@ export default function CommittedInput({ value, onCommit, normalize, saveLabel, 
         if (!preset && (!saveButton.current || event.relatedTarget !== saveButton.current)) void commit();
       }}
       onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && !composing.current) { event.preventDefault(); void commit(); } }} />
-    {(saveLabel || error) && <button ref={saveButton} type="button" disabled={disabled || pending} onClick={() => { void commit(); }} className="border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">{error ? '再試行' : saveLabel}</button>}
+    {(saveLabel || error) && <button ref={saveButton} type="button" disabled={disabled || pending} onClick={() => { void commit(); }} className="planner-button border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">{error ? '再試行' : saveLabel}</button>}
     {error && <span role="alert" className="mt-1 block text-xs text-red-700">{error}</span>}
   </>;
 }

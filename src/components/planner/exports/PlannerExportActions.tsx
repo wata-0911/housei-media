@@ -133,7 +133,7 @@ export default function PlannerExportActions({
       <button
         type="button"
         onClick={handleCsv}
-        className="border border-[#002255] px-3 py-2 text-sm text-[#002255]"
+        className="planner-button border border-[#002255] px-3 py-2 text-sm text-[#002255]"
       >
         CSVで保存
       </button>
@@ -142,7 +142,7 @@ export default function PlannerExportActions({
         type="button"
         onClick={handlePng}
         disabled={isGenerating}
-        className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
+        className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
       >
         {isGenerating ? '画像を作成中…' : '画像を生成'}
       </button>
@@ -153,7 +153,7 @@ export default function PlannerExportActions({
             type="button"
             onClick={handleShare}
             disabled={isGenerating}
-            className="border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
+            className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
           >
             共有・保存
           </button>
@@ -161,7 +161,7 @@ export default function PlannerExportActions({
           <a
             href={readyImage.dataUrl}
             download={readyImage.file.name}
-            className="border border-[#002255] px-3 py-2 text-sm text-[#002255]"
+            className="planner-button border border-[#002255] px-3 py-2 text-sm text-[#002255]"
           >
             ファイルをダウンロード
           </a>
