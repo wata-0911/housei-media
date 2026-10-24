@@ -33,3 +33,10 @@
     }
   }
 }
+
+/* Shared transitions used by page controls and navigation. */
+@media (prefers-reduced-motion: reduce) {
+  #root :is(.transition-all, .transition-colors, .transition-transform, .select-btn) {
+    transition: none;
+  }
+}

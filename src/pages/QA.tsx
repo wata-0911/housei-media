@@ -1,6 +1,6 @@
 import { type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { useReducedMotion, motion } from 'framer-motion';
 import { qaData, type QAItem } from '../data/qaData';
 
 const groupByCategory = (
@@ -28,6 +28,7 @@ const getCategoryId = (category: string) =>
   `category-${category.trim().replace(/\s+/g, '-')}`
 
 export default function QA() {
+  const shouldReduceMotion = useReducedMotion();
   const [searchParams, setSearchParams] = useSearchParams()
   const searchQuery = searchParams.get('q') ?? ''
 
@@ -66,24 +67,24 @@ export default function QA() {
 
         <div className="container mx-auto px-4 text-center relative z-10">
           <motion.span
-            initial={{ opacity: 0, y: 10 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="block text-[#E65C00] text-sm tracking-[0.2em] font-medium mb-4"
           >
             FAQ
           </motion.span>
           <motion.h2
-            initial={{ opacity: 0, y: 20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.1 }}
             className="text-3xl md:text-5xl font-light tracking-wider drop-shadow-lg"
           >
             よくある質問
           </motion.h2>
           <motion.p
-            initial={{ opacity: 0 }}
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.3 }}
             className="text-white/90 mt-6 text-sm md:text-base tracking-widest font-light drop-shadow-md"
           >
             学生生活の疑問を解消しましょう。
@@ -95,7 +96,7 @@ export default function QA() {
         <div className="max-w-4xl mx-auto">
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-16 relative"
           >
@@ -117,9 +118,9 @@ export default function QA() {
 
           {categories.length > 0 && (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={shouldReduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
+              transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.2 }}
               className="mb-16"
             >
               <div className="flex flex-wrap justify-center gap-4">
@@ -153,7 +154,7 @@ export default function QA() {
                 key={category}
                 id={getCategoryId(category)}
                 className="scroll-mt-32"
-                initial={{ opacity: 0, y: 20 }}
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-50px' }}
               >
