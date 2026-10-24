@@ -26,7 +26,8 @@
     "test:attempt-ui-browser": "node --import tsx --test tests/attempt-workbench.browser.mjs",
     "test:attempt-persistence": "node --import tsx --test tests/attempt-persistence.test.mjs",
     "test:attempt-persistence-browser": "node --import tsx --test tests/attempt-persistence.browser.mjs",
-    "test:attempt-graduation": "node --import tsx --test tests/attempt-graduation.test.mjs"
+    "test:attempt-graduation": "node --import tsx --test tests/attempt-graduation.test.mjs",
+    "test:home-planner-browser": "node --import tsx --test tests/home-planner-navigation.browser.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.31.2",
