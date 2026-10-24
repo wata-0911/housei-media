@@ -61,13 +61,27 @@ async function destination(page, id, tab) {
 }
 async function scrollCount(page) { return page.evaluate(() => window.navigationScrolls.length); }
 
-for (const viewport of [{ width: 1440, height: 1000 }, { width: 375, height: 812 }]) {
+for (const viewport of [{ width: 1440, height: 1000 }, { width: 768, height: 1024 }, { width: 375, height: 812 }]) {
   test(`independent Planner cards precede unchanged SCHEDULE with keyboard accessible CTAs (${viewport.width}px, reduced motion)`, async t => {
     const page = await open(t, '/', { viewport, reducedMotion: 'reduce' });
     const nav = page.getByRole('navigation', { name: '履修プランナー', exact: true });
     assert.equal(await nav.getByRole('link').count(), 3);
+    assert.deepEqual(await page.locator('main section span').filter({ hasText: /^\d{2} \/ / }).allTextContents(), [
+      '01 / PLANNER', '02 / SCHEDULE', '03 / OFFICIAL X TIMELINE', '04 / MEMBERS', "05 / FOUNDER'S MESSAGE",
+    ]);
     const section = page.locator('section').filter({ has: nav });
     assert.equal(await section.getByRole('heading', { name: '履修プランナー', exact: true }).count(), 1);
+    assert.equal(await section.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(250, 250, 250)');
+    const referenceButton = page.locator('main a[href="/member"]');
+    const buttonAppearance = el => {
+      const style = getComputedStyle(el);
+      return { background: style.backgroundColor, color: style.color, radius: style.borderRadius, shadow: style.boxShadow };
+    };
+    const referenceAppearance = await referenceButton.evaluate(buttonAppearance);
+    for (const button of await nav.getByRole('link').all()) {
+      assert.deepEqual(await button.evaluate(buttonAppearance), referenceAppearance);
+      assert.equal(await button.locator('svg path').getAttribute('d'), await referenceButton.locator('svg path').getAttribute('d'));
+    }
     assert.equal(await section.locator('img[src="/schedule-calendar.png"]').count(), 0);
     const schedule = page.locator('section').filter({ has: page.locator('img[src="/schedule-calendar.png"]') });
     assert.equal(await schedule.locator('img[src="/schedule-calendar.png"]').count(), 1);
@@ -93,6 +107,12 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 375, height: 812
     if (process.env.HOME_PLANNER_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/home-planner-${viewport.width}.png`, fullPage: true });
     assert.equal(await link.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
     assert.equal(await link.evaluate(el => getComputedStyle(el).transitionDuration), '0s');
+    if (viewport.width >= 768) {
+      await link.hover();
+      assert.equal(await link.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(204, 82, 0)');
+      assert.equal(await link.evaluate(el => getComputedStyle(el).transform), 'matrix(1, 0, 0, 1, 0, 0)');
+      assert.equal(await link.locator('svg').evaluate(el => getComputedStyle(el).transform), 'matrix(1, 0, 0, 1, 0, 0)');
+    }
     await page.keyboard.press('Enter');
     await destination(page, 'planner-start', '年間履修計画');
     assert.equal(new URL(page.url()).pathname, '/planner');

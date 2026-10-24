@@ -212,8 +212,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 履修プランナー */}
-      <section aria-labelledby="home-planner-heading" className="py-20 sm:py-24 bg-[#002255] text-white overflow-hidden">
+      {/* セクション1: PLANNER */}
+      <section aria-labelledby="home-planner-heading" className="py-20 sm:py-24 bg-[#FAFAFA] text-[#002255] border-y border-gray-200 overflow-hidden">
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -222,9 +222,9 @@ export default function Home() {
           className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
         >
           <div className="mb-10 sm:mb-12 text-center">
-            <span className="text-orange-400 text-sm tracking-[0.15em] mb-4 block font-medium">PLANNER</span>
+            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / PLANNER</span>
             <h2 id="home-planner-heading" className="text-3xl md:text-4xl font-medium tracking-wide">履修プランナー</h2>
-            <p className="mt-6 text-sm sm:text-base text-white/80 leading-loose font-light">履修計画や成績の取り込み、メディアの進捗記録をまとめて。</p>
+            <p className="mt-6 text-sm sm:text-base text-[#666666] leading-loose font-light">履修計画や成績の取り込み、メディアの進捗記録をまとめて。</p>
           </div>
           <nav aria-label="履修プランナー" className="grid gap-4 md:grid-cols-3 md:gap-6">
             {[
@@ -232,19 +232,21 @@ export default function Home() {
               { to: '/planner#grade-import', label: '成績取り込み', description: '成績データを取り込んで確認する' },
               { to: '/planner#media', label: 'メディア進捗記録', description: 'メディアスクーリングの進捗を記録する' },
             ].map(({ to, label, description }) => (
-              <Link key={to} to={to} className="flex items-center justify-between gap-4 rounded-xl border-t-4 border-[#E65C00] bg-white px-6 py-7 lg:p-8 text-[#002255] hover:bg-orange-50 transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-400">
+              <Link key={to} to={to} className="flex min-h-32 items-center justify-between gap-4 text-white bg-[#E65C00] hover:bg-[#CC5200] px-6 py-7 lg:p-8 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]">
                 <span className="min-w-0">
-                  <span className="block text-xl font-medium tracking-wide">{label}</span>
-                  <span className="mt-3 block text-sm text-[#666666] leading-relaxed font-light">{description}</span>
+                  <span className="block text-xl tracking-widest">{label}</span>
+                  <span className="mt-3 block text-sm leading-relaxed font-light">{description}</span>
                 </span>
-                <span aria-hidden="true" className="shrink-0 text-[#E65C00] text-xl">→</span>
+                <svg aria-hidden="true" className="w-4 h-4 ml-2 shrink-0 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                </svg>
               </Link>
             ))}
           </nav>
         </motion.div>
       </section>
 
-      {/* セクション1: SCHEDULE */}
+      {/* セクション2: SCHEDULE */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row items-center">
@@ -255,7 +257,7 @@ export default function Home() {
               transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.3, ease: "easeOut" }}
               className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / SCHEDULE</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / SCHEDULE</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
                 計画的な学習が、<br />目標への最短距離。
               </h3>
@@ -296,7 +298,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション2: OFFICIAL X TIMELINE */}
+      {/* セクション3: OFFICIAL X TIMELINE */}
       <section className="py-32 overflow-hidden bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col items-center gap-12">
@@ -308,7 +310,7 @@ export default function Home() {
               transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
               className="text-center w-full"
             >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / OFFICIAL X</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">03 / OFFICIAL X TIMELINE</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium tracking-wide">
                 TIMELINE
               </h3>
@@ -335,7 +337,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション3: MEMBERS */}
+      {/* セクション4: MEMBERS */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row-reverse items-center justify-between gap-12">
@@ -346,7 +348,7 @@ export default function Home() {
               transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.3, ease: "easeOut" }}
               className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">03 / MEMBERS</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / MEMBERS</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
                 法政通信メディアの<br />運営メンバーを紹介します！
               </h3>
@@ -391,7 +393,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション4: MESSAGE */}
+      {/* セクション5: FOUNDER'S MESSAGE */}
       <section className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div
@@ -405,7 +407,7 @@ export default function Home() {
               <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
             </div>
 
-            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER;S MESSAGE</span>
+            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">05 / FOUNDER&apos;S MESSAGE</span>
             <h3 className="text-2xl md:text-3xl text-[#002255] font-medium mb-8 leading-relaxed tracking-widest">
               いつか君も困っている人がいたら、<br />
               助けてあげてね。
