@@ -30,6 +30,7 @@ import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from
 import { guidanceEligibilityCredits, guidanceForScope } from '../planner/graduation/thesisGuidance';
 import { missingGraduationProfilePrerequisites } from '../planner/graduation/graduationProfile';
 import { useReducedMotion, motion } from 'framer-motion';
+import PlannerSectionEntrance from '../components/planner/common/PlannerSectionEntrance';
 
 function readSavedState(): LoadResult {
   try { return loadState(window.localStorage, catalog); }
@@ -242,10 +243,10 @@ export default function PlannerPage() {
       </motion.div>
     </section>
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-      <div className="border-l-4 border-[#E65C00] bg-orange-50 p-4 text-sm leading-relaxed">
+      <PlannerSectionEntrance className="border-l-4 border-[#E65C00] bg-orange-50 p-4 text-sm leading-relaxed">
         {!catalog.metadata.graduationCheckComplete && <p>一部要件のみ自動判定しています。卒業可否を保証しません。</p>}
         <p className="mt-1">2026年の収録データを使用しています。計画はこのブラウザに保存されます。修得単位は公式成績の集計を優先します。制度科目の「予定込み」には計画中・履修中・結果待ちを含めます。単位数不明の件数は全状態を対象に表示します。</p>
-      </div>
+      </PlannerSectionEntrance>
       {loaded.error && <div role="alert" className="bg-amber-50 border border-amber-300 p-4 space-y-3">
         <p>{loaded.error}</p>
         <p className="text-sm">確認が済むまで追加・変更を停止しています。</p>
@@ -281,6 +282,7 @@ export default function PlannerPage() {
         {undoItem && <button type="button" disabled={loaded.error !== null || saving} onClick={undoRemove} className="ml-2 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">元に戻す</button>}
         {undoImport && <button type="button" disabled={loaded.error !== null || saving} onClick={undoGradeImport} className="ml-2 underline underline-offset-2">取り込みを元に戻す</button>}
       </div>
+      <PlannerSectionEntrance className="space-y-6">
       <div role="tablist" aria-label="履修プランナーの表示" className="grid w-full max-w-2xl grid-cols-3 border-b border-gray-300">
         <button disabled={saving} id="annual-tab" type="button" role="tab" aria-selected={activeTab === 'annual'} aria-controls="annual-panel" onClick={() => setActiveTab('annual')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'annual' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>年間履修計画</button>
         <button disabled={saving} id="media-tab" type="button" role="tab" aria-selected={activeTab === 'media'} aria-controls="media-panel" onClick={() => setActiveTab('media')} className={`min-w-0 px-1 py-3 text-xs sm:px-4 sm:text-sm ${activeTab === 'media' ? 'border-b-2 border-[#E65C00] text-[#002255]' : 'text-gray-600'}`}>メディア</button>
@@ -345,6 +347,7 @@ export default function PlannerPage() {
         />
       </div>
       }
+      </PlannerSectionEntrance>
     </div>
   </div>;
 }
