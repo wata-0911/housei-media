@@ -181,6 +181,124 @@ test('search: teacher-only and name-only synthetic codes do not become undergrad
   assert.equal(a.search({ scope: all, officialCode: { value: 'N-ONLY', usage: 'teacher' } }).rows.length, 0);
 });
 
+/** Synthetic counterexamples rebuilt from the audit report. All pass the
+ * existing YI-02 loader; no official registry or issuance policy is changed. */
+function linkedCodeFixture(evidenceScope, usage = 'undergraduate', placementScope = 'fixture_scope') {
+  const f = institutionalFixture();
+  f.registry.scopes[0].officialScopeLabel = placementScope;
+  for (const row of f.input.officialRows) row.scope = placementScope;
+  const mapping = f.input.mappingRows[0];
+  const code = { ...structuredClone(master.codes[0]), evidenceId: 'synthetic-scope-code',
+    scope: evidenceScope, codes: ['SYNTHETIC-CODE'], codeText: 'SYNTHETIC-CODE',
+    conditions: '合成条件：本人の履修資格は未確認' };
+  f.input.codes = [code];
+  mapping.mainCodeEvidenceIds = usage === 'undergraduate' ? [code.evidenceId] : [];
+  mapping.mainCodes = usage === 'undergraduate' ? [...code.codes] : [];
+  mapping.teacherCodeEvidenceIds = usage === 'teacher' ? [code.evidenceId] : [];
+  mapping.sameNameCodeCandidateEvidenceIds = [code.evidenceId];
+  const model = loadInstitutionalCatalog(f.input, f.registry, f.baseline);
+  const placement = model.placements.find(p => p.auditRecord.oldMappingId === mapping.oldMappingId);
+  return { model, placement, code, adapter: fromSynthetic(model) };
+}
+
+for (const [label, evidenceScope, usage, placementScope] of [
+  ['unrelated undergraduate scope', '法律', 'undergraduate', 'fixture_scope'],
+  ['unknown undergraduate evidence scope', 'unknown_scope', 'undergraduate', 'fixture_scope'],
+  ['undergraduate evidence in teacher link', '法律', 'teacher', 'fixture_scope'],
+  ['unknown scope even when labels coincide', 'future_scope', 'undergraduate', 'future_scope'],
+  ['common evidence is not an arbitrary department code', 'common', 'undergraduate', '法律'],
+  ['unknown evidence in teacher link', 'unknown_scope', 'teacher', '法律'],
+]) {
+  test(`P2: loader-backed synthetic ${label} must not match; raw evidence remains`, () => {
+    const f = linkedCodeFixture(evidenceScope, usage, placementScope);
+    const request = { scope: all, officialCode: { value: f.code.codes[0], usage } };
+    assert.deepEqual(ids(f.adapter.search(request)), []);
+    const row = f.adapter.search({ scope: all }).rows.find(r => r.placement.id === f.placement.id);
+    assert.deepEqual(row.placement, f.placement);
+    assert.deepEqual(row.codeEvidence[usage], [f.code]);
+    assert.deepEqual(row.codeEvidence.nameOnlyCandidates, [f.code]);
+    assert.equal(row.codeEvidence[usage][0].conditions, f.code.conditions);
+    assert.deepEqual(f.model.codes, [f.code]);
+  });
+}
+
+test('P2: loader-backed same known scope, common, Japanese parent and teacher evidence match', () => {
+  for (const [placementScope, evidenceScope, usage] of [
+    ['法律', '法律', 'undergraduate'], ['common', 'common', 'undergraduate'],
+    ['日文文学', '日文', 'undergraduate'], ['日文言語', '日文', 'undergraduate'],
+    ['日文芸能', '日文', 'undergraduate'], ['法律', 'teacher_only', 'teacher'],
+  ]) {
+    const f = linkedCodeFixture(evidenceScope, usage, placementScope);
+    const result = f.adapter.search({ scope: all, officialCode: { value: f.code.codes[0], usage } });
+    assert.deepEqual(ids(result), [f.placement.id], `${placementScope} / ${evidenceScope} / ${usage}`);
+    assert.deepEqual(result.rows[0].codeEvidence[usage], [f.code]);
+    assert.deepEqual(result.rows[0].placement.identityDecision, f.placement.identityDecision);
+    assert.equal(result.rows[0].curriculumVersion.applicabilityStatus, 'unknown');
+  }
+});
+
+test('P2: loader-backed name-only evidence never becomes an official code link', () => {
+  const f = linkedCodeFixture('法律', 'candidate', '法律');
+  for (const usage of ['undergraduate', 'teacher']) {
+    assert.deepEqual(ids(f.adapter.search({ scope: all,
+      officialCode: { value: f.code.codes[0], usage } })), []);
+  }
+  const row = f.adapter.search({ scope: all }).rows.find(r => r.placement.id === f.placement.id);
+  assert.deepEqual(row.codeEvidence.nameOnlyCandidates, [f.code]);
+  assert.deepEqual(row.codeEvidence.undergraduate, []);
+  assert.deepEqual(row.codeEvidence.teacher, []);
+});
+
+test('P2: explicit scope pairs exclude prefix guesses, unrelated departments and sibling course evidence', () => {
+  for (const [placementScope, evidenceScope] of [
+    ['法律', '経済'], ['日文言語', '日文文学'], ['日文新コース', '日文'],
+    ['日文文学', '日文unknown'], ['common', '法律'],
+  ]) {
+    const f = linkedCodeFixture(evidenceScope, 'undergraduate', placementScope);
+    assert.deepEqual(ids(f.adapter.search({ scope: all,
+      officialCode: { value: f.code.codes[0], usage: 'undergraduate' } })), []);
+  }
+});
+
+test('P2: all official undergraduate/teacher code searches retain pre-fix placement matches and conditions', () => {
+  // Pin the pre-fix relation from the official audit, independently of the new
+  // scope predicate. Exhaustively check every linked official code and placement.
+  const expected = new Map();
+  const pairs = new Map();
+  const evidenceById = new Map(master.codes.map(c => [c.evidenceId, c]));
+  for (const p of master.placements) {
+    const label = master.scopes.find(s => s.id === p.scopeId).officialScopeLabel;
+    for (const [usage, field] of [['undergraduate', 'mainCodeEvidenceIds'], ['teacher', 'teacherCodeEvidenceIds']]) {
+      for (const id of p.auditRecord[field]) {
+        const evidence = evidenceById.get(id);
+        pairs.set(`${usage}:${label}:${evidence.scope}`, true);
+        for (const code of evidence.codes) {
+          if (usage === 'undergraduate' && !p.auditRecord.mainCodes.includes(code)) continue;
+          const key = `${usage}:${code}`;
+          if (!expected.has(key)) expected.set(key, new Set());
+          expected.get(key).add(p.id);
+        }
+      }
+    }
+  }
+  for (const label of ['common', '法律', '史学', '地理', '経済', '商業']) {
+    assert.ok(pairs.has(`undergraduate:${label}:${label}`));
+  }
+  for (const label of ['日文文学', '日文言語', '日文芸能']) {
+    assert.ok(pairs.has(`undergraduate:${label}:日文`));
+  }
+  assert.ok(expected.size > 100);
+  for (const [key, expectedIds] of expected) {
+    const [usage, value] = key.split(':');
+    const result = search({ officialCode: { value, usage } });
+    assert.deepEqual(new Set(ids(result)), expectedIds, key);
+  }
+  const conditional = search().rows.flatMap(r => [...r.codeEvidence.undergraduate, ...r.codeEvidence.teacher])
+    .filter(c => c.conditions !== null);
+  assert.ok(conditional.length);
+  for (const c of conditional) assert.deepEqual(c, evidenceById.get(c.evidenceId));
+});
+
 test('search: applicability, source revision, notes, locators and multiple roles remain intact', () => {
   const result = search();
   assert.ok(result.rows.every(r => r.curriculumVersion.applicabilityStatus === 'unknown' && r.curriculumVersion.applicableTo === null));

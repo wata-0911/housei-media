@@ -72,11 +72,37 @@ unmatchedは `non_course_bucket`、IC null。公開科目/放送大学認定枠�
 構成単位nullを0や認定上限、年度別登録単位で補完しない。
 
 公式コードは完全一致（NFKC・前後空白のみ）。本科検索は `mainCodeEvidenceIds` と `mainCodes` の
-両方に監査済みの裏付けがあるものだけ。`teacher_only` は本科から除外する。
-教職検索は明示 `usage='teacher'` で `teacherCodeEvidenceIds` だけを使う。
-`sameNameCodeCandidateEvidenceIds` チャネルだけではコード検索対象にしない（本科/教職と同じ証拠行が
-別チャネルにも含まれる場合はある）。コード証拠のscope・conditions・原行を保持し、
-同名・同コードでidentityを確定/統合しない。年度別クラスコードや開講期は検索条件にしない。
+両方に監査済みの裏付けがあり、証拠scopeが当該Placementに適合するものだけ。
+YI-02 loaderが公式原行scopeとregistryのPlacement scopeの一致を検証するため、原行scopeを使って
+以下の固定関係を照合する。未知scopeは同名同士でも許可せず、前方一致・部分一致は使わない。
+
+| Placement scope | 本科コード証拠scope |
+| --- | --- |
+| common / 法律 / 史学 / 地理 / 経済 / 商業 | それぞれ同一scopeのみ |
+| 日文文学 / 日文言語 / 日文芸能 | 日文のみ |
+
+根拠は [YI-01コード表](../planner-yi-01/official-codes.md) のp.199-202本科表（共通はp.199、
+日文はp.200）と、[配置監査台帳](../planner-yi-01/mapping-crosswalk.json) の本科リンク全281件。
+日本文学科3コースの定義は [registry](../../src/data/institutional_registry.json) と
+[課程表監査](../planner-yi-01/official-evidence.md) p.49-51に対応する。
+共通コードは共通Placement用であり、学科Placementへの無条件のfallbackにはしない。
+学科検索で共通科目を含める処理は、共通Placement自体を検索対象に加える既存仕様を維持する。
+将来の新scopeは、この許可関係の根拠をレビューするまで自動許可しない。
+
+教職検索は明示 `usage='teacher'`、`teacherCodeEvidenceIds` のリンク、かつ証拠scopeが
+`teacher_only` であることを必要とする。根拠は同コード表p.202-213の教職用途分類と、
+配置監査台帳の教職リンク全628件（すべて `teacher_only`）。本科scopeの証拠が教職リンクに
+入っていても教職コードとして一致しない。逆に教職証拠を本科へ転用しない。
+`teacher_only` は教職掲載という用途domainで、学生本人の所属学科・免許教科・新旧法の資格判定ではない。
+
+`codeEvidence` は**元の監査チャネル**であり、検索に利用可能な証拠だけの一覧ではない。
+`undergraduate` は元の `mainCodeEvidenceIds`、`teacher` は元の `teacherCodeEvidenceIds`、
+`nameOnlyCandidates` は元の `sameNameCodeCandidateEvidenceIds` に対応する全証拠原行を返す。
+不適合証拠もscope・conditions・出典を含めてここに保持し、Placement内の元IDも維持する。
+名称候補チャネルだけでは検索一致させない（別チャネルとの証拠重複はあり得る）。
+コード一致判定でのみ上記scope・用途gateを適用し、監査チャネルの書換えやidentityの確定/統合は行わない。
+`conditions` は条件付き掲載の根拠としてそのまま返し、本人の履修資格・適用年度・改正条件を評価しない。
+年度別クラスコードや開講期は検索条件にしない。
 
 後続Attempt登録はPlacement ID・CV/revision・nullable IC・identityDecision/candidateAuditIds・
 kind・構成単位の不明状態・scope/role・方式制約・出典を区別して渡す必要がある。
@@ -95,10 +121,28 @@ Offering空配列の合成fixtureを既存loaderで検証/ロードした上で�
 本番 `src/main.tsx` からの推移的import graphにも新adapterが入らないことを検査する。
 既存institutional suiteで旧6ファイルdigestと本番catalog adapter出力の不変性も確認する。
 
-`npm run test:institutional` は既存36件＋追加16件を実行する。追加suiteは `test:planner` にも登録。
+`npm run test:institutional` は既存36件＋初回追加16件＋P2回帰10件を実行する。追加suiteは `test:planner` にも登録。
 合成値（null/0、配当学年unknown、教職専用/名称候補コード等）はtests内のみで、公式registryを変更しない。
 変更2モジュールに限定したstrict TypeScript検証と変更コードのESLintも実施する。
 全体のtypecheck / lint / test:planner / buildはユーザー担当。
 
 未確定事項はYI-02から継承する本人適用、学科横断identity、過年度連続性、方式conflict、公式資料の未監査範囲。
 新たな解決・確認済みへの昇格はしていない。本番接続、Attempt登録、独立監査、mergeは後続工程。
+
+## PR #191 独立監査P2修正の検証
+
+監査対象 `1f2eb7101c5bf917418091a9d68e379ec4a8cec6` で、loaderを通る合成反例を再構築した。
+実装修正前はP2テスト9件中7件FAIL（必須3反例を含む）、正常対照2件PASS。
+修正後は追加した名称候補専用ケースも含めP2テスト10件PASS、`test:institutional` 全62件PASS。
+公式全本科/教職コード315検索条件について、修正前の監査リンクから導いた検索Placement集合を全件比較する回帰テストを含む。
+元のidentity、null、unknown、CV固定、snapshot、出典、Offering非依存、順序の既存テストも維持する。
+
+P3性能最適化は保留。索引化・sort keyキャッシュ・ページ化は行わない。
+本人資格engine、公式データ、YI-02 loader、公開APIのシグネチャには変更を加えていない。
+
+変更箇所限定のstrict TypeScript検証・ESLint・差分チェックもPASS。
+P3の必要最小限の影響確認として、同一プロセスで旧HEAD版/修正版を交互に各40回測定した中央値は、
+全502件検索50.78/50.66ms、簿記Ⅰ検索2.53/2.52ms、本科コード01116検索5.60/5.56ms。
+このローカル簡易測定では明らかな悪化を認めず、一般的な性能保証やP3解消を意味しない。
+前回HEADのユーザー全体検証（3,932件等）とは別の実装者による局所検証記録であり、
+今回HEADの全体typecheck/lint/test:planner/buildはユーザーとCIに引き渡す。

@@ -29,6 +29,8 @@ export type InstitutionalSearchRow = {
   curriculumVersion: CurriculumVersion;
   sourceRevision: SourceRevision;
   notes: OfficialNote[];
+  /** Raw audit channels, including inapplicable evidence; not eligibility or
+   * a list of evidence accepted by the code-search predicate. */
   codeEvidence: {
     status: CurriculumPlacement['auditRecord']['codeStatus'];
     undergraduate: OfficialCode[];
@@ -47,6 +49,14 @@ export type InstitutionalSearchAdapter = {
 };
 
 const codeKey = (text: string) => text.normalize('NFKC').trim();
+// YI-01 official-codes.md p.199-202 and mapping-crosswalk.json audit pairs.
+// The loader validates officialRow.scope against the registry Placement scope.
+// These are exact labels, not a prefix rule or permission for future scopes.
+const undergraduateCodeScopes = new Map<string, string>([
+  ['common', 'common'], ['法律', '法律'], ['史学', '史学'],
+  ['地理', '地理'], ['経済', '経済'], ['商業', '商業'],
+  ['日文文学', '日文'], ['日文言語', '日文'], ['日文芸能', '日文'],
+]);
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 
 /** Accept only a catalog validated by YI-02's loader. Snapshot ownership prevents
@@ -95,14 +105,17 @@ export function createInstitutionalSearchAdapter(
       if (request.requirementType !== undefined && placement.requirementType !== request.requirementType) continue;
       if (request.eligibleYear !== undefined && !placement.officialRow.eligibleYears?.includes(request.eligibleYear)) continue;
       const evidence = (ids: string[]) => master.codes.filter(code => ids.includes(code.evidenceId));
-      const undergraduate = evidence(placement.auditRecord.mainCodeEvidenceIds).filter(c => c.scope !== 'teacher_only');
+      const undergraduate = evidence(placement.auditRecord.mainCodeEvidenceIds);
       const teacher = evidence(placement.auditRecord.teacherCodeEvidenceIds);
       if (request.officialCode) {
         const key = codeKey(request.officialCode.value);
+        const undergraduateScope = undergraduateCodeScopes.get(placement.officialRow.scope);
         const matched = request.officialCode.usage === 'teacher'
-          ? teacher.some(c => c.codes.some(code => codeKey(code) === key))
-          : placement.auditRecord.mainCodes.some(code => codeKey(code) === key)
-            && undergraduate.some(c => c.codes.some(code => codeKey(code) === key));
+          // teacher_only is the audited usage domain, not a learner eligibility decision.
+          ? teacher.some(c => c.scope === 'teacher_only' && c.codes.some(code => codeKey(code) === key))
+          : undergraduateScope !== undefined && placement.auditRecord.mainCodes.some(code => codeKey(code) === key)
+            && undergraduate.some(c => undergraduateScope === c.scope
+              && c.codes.some(code => codeKey(code) === key));
         if (!key || !matched) continue;
       }
       rows.push({ placement,
