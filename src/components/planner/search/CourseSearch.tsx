@@ -23,6 +23,7 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
   return <section aria-labelledby="course-search-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="course-search-heading" className="text-xl text-[#002255] mb-5">科目を探す</h2>
     <p className="mb-4 text-sm text-gray-600">検索結果は方式・開講期を含め2026年度カタログの情報です。追加時の履修予定年度は未設定で、追加後に編集できます。2027年度以降の開講状況は未確認です。</p>
+    <p className="mb-4 text-sm text-gray-600">履修予定年度が未設定でも、各科目の算入条件に応じて予定込み単位に反映されます。ただし、プランナーの年度別49単位上限の参考集計には含まれません。年度別に確認する場合は履修予定年度を設定してください。</p>
     <label htmlFor="course-query" className="block text-sm mb-2">科目名・科目コード・クラスコード・開講区分・期</label>
     <input id="course-query" type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(30); }}
       placeholder="例：政治学、前期メディア" className="w-full scroll-mt-24 border border-gray-300 p-3 rounded-sm focus:ring-2 focus:ring-[#002255]" />

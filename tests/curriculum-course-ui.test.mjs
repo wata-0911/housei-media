@@ -553,3 +553,26 @@ test('planned year: search explains catalog/default/editing/availability and kee
   const duplicated = state({ items: [...input.items, { ...input.items[0], plannedYear: 2027 }] });
   assert.throws(() => saveState({ getItem: () => null, setItem: () => assert.fail('duplicate must not write') }, duplicated, null, catalog), /形式が不正/);
 });
+
+test('planned year: search explains conditional projected credits and annual reference exclusion even without annual rows', async () => {
+  const { default: CourseSearch } = await import('../src/components/planner/search/CourseSearch.tsx');
+  const { default: AnnualCreditLimitNotice } = await import('../src/components/planner/planning/AnnualCreditLimitNotice.tsx');
+  const { annualCreditLimitReferences } = await import('../src/planner/planning/annualPlan.ts');
+  for (const items of [[], [plannerItemFromCourseSearch(correspondence.id)]]) {
+    const references = annualCreditLimitReferences(items, offeringsById);
+    assert.deepEqual(references, []);
+    assert.equal(renderToStaticMarkup(createElement(AnnualCreditLimitNotice, { rows: references })), '');
+    const markup = renderToStaticMarkup(createElement(CourseSearch, {
+      catalog, classify: createCreditClassifier(catalog, null), selectedScopeId: null,
+      offerings: items.length ? [correspondence] : [], addedIds: new Set(items.map(item => item.offeringId)),
+      disabled: false, onAdd: noop, onAddPublicCourse: noop,
+    }));
+    // Check the meaning in the rendered explanation, without fixing the full copy or layout.
+    const explanation = markup.match(/<p\b[^>]*>[^<]*履修予定年度が未設定[^<]*<\/p>/)?.[0];
+    assert.ok(explanation, 'search must show the explanation without annual reference rows');
+    assert.match(explanation, /各科目.*条件に応じて.*予定込み単位/);
+    assert.match(explanation, /プランナー.*年度別49単位上限.*参考集計.*含まれません/);
+    assert.match(explanation, /年度別.*確認.*履修予定年度.*設定/);
+    assert.doesNotMatch(markup, /<details\b/, 'explanation is visible without opening a disclosure');
+  }
+});
