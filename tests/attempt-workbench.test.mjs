@@ -311,3 +311,153 @@ test('safety: no storage, legacy projection or preservation verification in CRUD
     assert.doesNotMatch(text, /localStorage|sessionStorage|savePlannerState|createPlannerBackup|projectLegacyState|verifyMigrationPreservation/);
   }
 });
+
+// Placement-search bridge: these tests cover the new conversion boundary, while
+// the existing CRUD suite above remains the authority for generic owner/Undo rules.
+const { loadCurrentCurriculumSearchAdapter } = await import('../src/planner/institutional/currentSearch.ts');
+const { createInstitutionalSearchAdapter } = await import('../src/planner/institutional/search.ts');
+const { CURRENT_CURRICULUM_SEARCH_TARGET } = await import('../src/planner/institutional/currentSearch.ts');
+const { makeSearchAttempt } = await import('../src/planner/attempts/workbench/searchBridge.ts');
+const { loadYi01InstitutionalCatalog } = await import('../src/planner/institutional/yi01.ts');
+const searchMaster = loadYi01InstitutionalCatalog();
+const searchRows = loadCurrentCurriculumSearchAdapter().search({ scope: { kind: 'all' } }).rows;
+const searchInput = () => ({ plan: { ...plan(), plannedYear: null, plannedTerm: null }, method: 'unknown', note: '' });
+const byStatus = status => searchRows.find(r => r.placement.kind === 'course_placement' && r.placement.identityDecision.status === status);
+
+for (const status of ['safe', 'ambiguous', 'conflict']) test(`search bridge: ${status} selection retains identity, candidates and revision-bound evidence without Offering`, () => {
+  const row = byStatus(status), p = row.placement, input = searchInput();
+  const a = makeSearchAttempt(searchMaster, row, input);
+  const context = { catalog: searchMaster, officialAchievementIds: [], officialStudyRecordIds: [] };
+  const w = applyCommand(createWorkspace(blank(), context), add(a), context);
+  assert.equal(w.graph.attempts.length, 1); assert.deepEqual(w.graph.ownedRecords, []);
+  assert.equal(a.identity.status, status === 'safe' ? 'confirmed' : status);
+  assert.equal(a.identity.ref?.institutionalCourseId ?? null, row.institutionalCourse?.id ?? null);
+  assert.deepEqual(a.identity.candidateAuditIds, p.candidateAuditIds);
+  assert.deepEqual(a.placement.candidateAuditIds, p.candidateAuditIds);
+  assert.deepEqual(a.placement.candidatePlacementIds, [p.id]); assert.equal(a.placement.ref, null);
+  assert.equal(a.placement.status, status === 'safe' ? 'unknown' : status);
+  assert.deepEqual(a.applicability, { status: 'unknown', curriculumVersionId: null, scopeId: null, legacyApplicability: 'unknown', originalValue: null, evidence: null });
+  assert.equal(a.plan.plannedYear, null); assert.equal(a.method.value, 'unknown'); assert.ok(!Object.hasOwn(a.plan, 'contribution'));
+  assert.equal(a.legacyRefs[0].oldId, p.identityDecision.oldId);
+  assert.equal(a.legacyRefs[0].sourceRevisionId, row.sourceRevision.id);
+  assert.equal(a.legacyRefs[0].sourceDigest, row.sourceRevision.sha256);
+  assert.deepEqual(a.legacyRefs[0].legacyDigests, searchMaster.legacyDigests);
+  // The exact revision + Mapping and Placement IDs recover the full evidence.
+  const linked = searchMaster.placements.find(p => p.id === a.placement.candidatePlacementIds[0]);
+  assert.deepEqual(linked, p); assert.deepEqual(searchMaster.curriculumVersions.find(v => v.id === linked.curriculumVersionId), row.curriculumVersion);
+  assert.deepEqual(searchMaster.notes.filter(n => linked.noteIds.includes(n.evidenceId)), row.notes);
+  assert.ok(!Object.hasOwn(a, 'selection')); assert.ok(!Object.hasOwn(a, 'compositionCredits'));
+  assert.deepEqual(input, searchInput());
+});
+
+test('search bridge: inconsistent or stale UI row is rejected before Workspace changes', () => {
+  const row = byStatus('ambiguous'), context = { catalog: searchMaster, officialAchievementIds: [], officialStudyRecordIds: [] };
+  const w = createWorkspace(blank(), context), before = structuredClone(w);
+  const changes = [
+    r => { r.placement.id = 'missing'; },
+    r => { r.placement.scopeId = searchMaster.scopes.find(s => s.id !== r.placement.scopeId).id; },
+    r => { r.scope = searchMaster.scopes.find(s => s.id !== r.scope.id); },
+    r => { r.placement.curriculumVersionId = 'other-cv'; },
+    r => { r.curriculumVersion.id = 'other-cv'; },
+    r => { r.sourceRevision.sha256 = 'changed'; },
+    r => { r.placement.sourceRevisionId = 'changed'; },
+    r => { r.placement.institutionalCourseId = byStatus('safe').institutionalCourse.id; },
+    r => { r.institutionalCourse = byStatus('safe').institutionalCourse; },
+    r => { r.placement.identityDecision.status = 'safe'; },
+    r => { r.placement.candidateAuditIds = []; },
+    r => { r.placement.identityDecision.candidateAuditIds = []; },
+    r => { r.placement.placementRoleKey = 'changed'; },
+    r => { r.placement.compositionCredits = 0; },
+    r => { r.notes = []; },
+    r => { r.placement.methodConstraint.status = 'conflict'; },
+    r => { r.codeEvidence.status = 'changed'; },
+  ];
+  for (const mutate of changes) {
+    const changed = structuredClone(row); mutate(changed);
+    assert.throws(() => applyCommand(w, add(makeSearchAttempt(searchMaster, changed, searchInput())), context), /search_selection_mismatch/);
+    assert.deepEqual(w, before);
+  }
+  const other = structuredClone(searchMaster); other.sourceRevision.sha256 = 'changed';
+  assert.throws(() => makeSearchAttempt(other, row, searchInput()), /search_selection_mismatch/);
+  const safe = structuredClone(byStatus('safe')); safe.institutionalCourse = searchRows.find(r => r.institutionalCourse && r.institutionalCourse.id !== safe.institutionalCourse.id).institutionalCourse;
+  assert.throws(() => makeSearchAttempt(searchMaster, safe, searchInput()), /search_selection_mismatch/);
+});
+
+test('search bridge: non-course buckets cannot become ordinary attempts, even after kind tampering', () => {
+  const rows = searchRows.filter(r => r.placement.kind === 'non_course_bucket'); assert.equal(rows.length, 9);
+  for (const row of rows) {
+    assert.throws(() => makeSearchAttempt(searchMaster, row, searchInput()), /non_course_bucket/);
+    const forged = structuredClone(row); forged.placement.kind = 'course_placement';
+    assert.throws(() => makeSearchAttempt(searchMaster, forged, searchInput()), /search_selection_mismatch/);
+  }
+});
+
+test('search bridge: deliberate identical additions are independent; fixed retry and changed replay use existing receipts', () => {
+  const row = byStatus('ambiguous'), context = { catalog: searchMaster, officialAchievementIds: [], officialStudyRecordIds: [] };
+  const a = makeSearchAttempt(searchMaster, row, searchInput()), b = makeSearchAttempt(searchMaster, row, searchInput());
+  assert.notEqual(a.id, b.id); assert.notEqual(a.creationOperationId, b.creationOperationId);
+  let w = createWorkspace(blank(), context); const request = add(a);
+  w = applyCommand(w, request, context); assert.strictEqual(applyCommand(w, request, context), w);
+  w = applyCommand(w, add(b), context); assert.equal(w.graph.attempts.length, 2);
+  assert.throws(() => applyCommand(w, { ...request, attempt: { ...a, plan: { ...a.plan, plannedYear: 2031 } } }, context), /operation_replay_conflict/);
+  assert.deepEqual(w.graph.ownedRecords, []);
+});
+
+test('search bridge: edit, delete and Undo retain selected refs and existing progress/evaluation/TODO owners', () => {
+  const context = { catalog: searchMaster, officialAchievementIds: [], officialStudyRecordIds: [] };
+  const old = created(context);
+  const records = setup().workspace.graph.ownedRecords.filter(r => r.owner?.attemptId === setup().a.id).map(r => ({ ...structuredClone(r), owner: { kind: 'attempt', attemptId: old.id } }));
+  const workspace = createWorkspace({ attempts: [old], ownedRecords: records, removals: [] }, context);
+  const a = makeSearchAttempt(context.catalog, byStatus('conflict'), searchInput());
+  let w = applyCommand(workspace, add(a), context);
+  assert.deepEqual(w.graph.ownedRecords, workspace.graph.ownedRecords);
+  w = applyCommand(w, edit(a, { plan: { ...a.plan, plannedYear: 2033 } }), context);
+  const edited = w.graph.attempts.find(x => x.id === a.id), deletion = remove(a);
+  w = applyCommand(w, deletion, context); w = applyCommand(w, undo(a, deletion), context);
+  assert.deepEqual(w.graph.attempts.find(x => x.id === a.id), edited);
+  assert.deepEqual(w.graph.ownedRecords, workspace.graph.ownedRecords);
+});
+
+test('search bridge: null/0 composition and absent/null/0 learner contribution remain separate', () => {
+  for (const composition of [null, 0]) {
+    const master = structuredClone(searchMaster), id = byStatus('ambiguous').placement.id;
+    master.placements.find(p => p.id === id).compositionCredits = composition;
+    const row = createInstitutionalSearchAdapter(master, CURRENT_CURRICULUM_SEARCH_TARGET).search({ scope: { kind: 'all' } }).rows.find(r => r.placement.id === id);
+    for (const value of ['unset', null, 0]) {
+      const input = searchInput(); if (value !== 'unset') input.plan.contribution = { value, source: 'learner', note: null };
+      const a = makeSearchAttempt(master, row, input);
+      assert.equal(Object.hasOwn(a.plan, 'contribution'), value !== 'unset');
+      if (value !== 'unset') assert.equal(a.plan.contribution.value, value);
+      assert.equal(master.placements.find(p => p.id === a.placement.candidatePlacementIds[0]).compositionCredits, composition);
+    }
+  }
+});
+
+test('search bridge: bad year/method/status and negative contribution fail before registration', () => {
+  for (const mutate of [i => { i.plan.plannedYear = 22; }, i => { i.method = 'invented'; },
+    i => { i.plan.status = 'invented'; }, i => { i.plan.contribution = { value: -1, source: 'learner', note: null }; }]) {
+    const input = searchInput(); mutate(input);
+    assert.throws(() => makeSearchAttempt(searchMaster, byStatus('safe'), input));
+  }
+});
+
+test('search bridge: multiple audited candidates are retained without choosing the first', () => {
+  const master = structuredClone(searchMaster), p = master.placements.find(p => p.id === byStatus('ambiguous').placement.id);
+  const other = master.curriculumAudit.find(c => !p.candidateAuditIds.includes(c.oldCurriculumCourseId)).oldCurriculumCourseId;
+  p.candidateAuditIds = [...p.candidateAuditIds, other]; p.identityDecision.candidateAuditIds = [...p.candidateAuditIds];
+  const row = createInstitutionalSearchAdapter(master, CURRENT_CURRICULUM_SEARCH_TARGET).search({ scope: { kind: 'all' } }).rows.find(r => r.placement.id === p.id);
+  const a = makeSearchAttempt(master, row, searchInput());
+  assert.equal(a.identity.status, 'ambiguous'); assert.equal(a.identity.ref, null);
+  assert.deepEqual(a.identity.candidateAuditIds, p.candidateAuditIds); assert.equal(a.identity.candidateAuditIds.length, 2);
+  assert.deepEqual(a.placement.candidateAuditIds, p.candidateAuditIds);
+});
+
+test('search bridge UI stays opt-in; the shared YI-06 form keeps its legacy selection path', async () => {
+  const { createElement } = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { AttemptForm } = await import('../dev/attempts/AttemptForm.tsx');
+  const context = { catalog: searchMaster, officialAchievementIds: [], officialStudyRecordIds: [] };
+  const render = props => renderToStaticMarkup(createElement(AttemptForm, { context, submit: () => true, close: () => {}, ...props }));
+  assert.match(render({}), /Placement候補/); assert.doesNotMatch(render({}), /Placement検索結果/);
+  assert.match(render({ searchEnabled: true }), /Placement検索結果/); assert.doesNotMatch(render({ searchEnabled: true }), /Placement候補/);
+});

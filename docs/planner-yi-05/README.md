@@ -77,3 +77,6 @@ YI05_WORKBENCH=1 npm run dev -- --host 127.0.0.1 --port 4185
 修正は原JSONの該当assessment.scheduledDate一箇所だけを変えた新rawを生成する。元rawは別sessionとしてそのまま保持する。新raw全体をdecode/previewし、新digestには新しい割当を発行する。以前の割当IDを予約し、訂正前後のIDを推測で継承しない。同じ提案を再確認しても新しい割当を増殖させない。他に不正日が残れば全体heldを継続する。新rawのJSON整形は変わり得るが、原rawの空白も保持し、訂正以外の全semantic field/owner不変をテストする。
 
 保留/拒否のcandidateを直接編集して成功にする操作、本番訂正保存、一般利用者sourceの取得、ユーザーファイルの読み込みは提供しない。
+
+Placementベースの制度科目検索と独立Attempt登録の隔離接続（Issue #193）は
+[search-bridge.md](search-bridge.md) を参照。
