@@ -22,7 +22,8 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
   const unknownCount = targetYear === null ? 0 : queryMatches.filter(offering => yearEligibility(offering, selectedScopeId, targetYear, catalog) === 'unknown').length;
   return <section aria-labelledby="course-search-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="course-search-heading" className="text-xl text-[#002255] mb-5">科目を探す</h2>
-    <p className="mb-4 text-sm text-gray-600">2026年度カタログの科目です。追加後、計画年度に2027年以降の西暦を入力して仮計画を作れます。ここに表示する方式・期は2026年度情報です。</p>
+    <p className="mb-4 text-sm text-gray-600">検索結果は方式・開講期を含め2026年度カタログの情報です。追加時の履修予定年度は未設定で、追加後に編集できます。2027年度以降の開講状況は未確認です。</p>
+    <p className="mb-4 text-sm text-gray-600">履修予定年度が未設定でも、各科目の算入条件に応じて予定込み単位に反映されます。ただし、プランナーの年度別49単位上限の参考集計には含まれません。年度別に確認する場合は履修予定年度を設定してください。</p>
     <label htmlFor="course-query" className="block text-sm mb-2">科目名・科目コード・クラスコード・開講区分・期</label>
     <input id="course-query" type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(30); }}
       placeholder="例：政治学、前期メディア" className="w-full scroll-mt-24 border border-gray-300 p-3 rounded-sm focus:ring-2 focus:ring-[#002255]" />
@@ -46,7 +47,7 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
           <p className="text-xs text-gray-500 mt-1">追加後に実際の科目名へ変更できます</p>
         </div>
         <button type="button" disabled={disabled} onClick={onAddPublicCourse} aria-label="公開科目を履修計画に追加"
-          className="shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm hover:bg-[#003377] disabled:bg-gray-200 disabled:text-gray-600">計画に追加</button>
+          className="planner-button planner-button--navy shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm disabled:bg-gray-200 disabled:text-gray-600">計画に追加</button>
       </li>}
       {matches.slice(0, limit).map(o => <li key={o.id} className="py-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
         <div className="min-w-0">
@@ -58,9 +59,9 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
           {curriculumProgress && curriculumOfferingAdvisories(o, curriculumProgress).map(warning => <p key={warning} className="mt-2 text-xs text-amber-900">{warning}</p>)}
         </div>
         <button type="button" disabled={disabled || addedIds.has(o.id)} onClick={() => onAdd(o.id)} aria-label={`${o.name}（${o.classCode ?? o.deliveryCategory ?? o.method}）を履修計画に追加`}
-          className="shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm hover:bg-[#003377] disabled:bg-gray-200 disabled:text-gray-600">{addedIds.has(o.id) ? '追加済み' : '計画に追加'}</button>
+          className="planner-button planner-button--navy shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm disabled:bg-gray-200 disabled:text-gray-600">{addedIds.has(o.id) ? '追加済み' : '計画に追加'}</button>
       </li>)}
     </ul>
-    {limit < matches.length && <button type="button" onClick={() => setLimit(limit + 30)} className="mt-5 border border-[#002255] text-[#002255] px-5 py-2">さらに30件表示</button>}
+    {limit < matches.length && <button type="button" onClick={() => setLimit(limit + 30)} className="planner-button mt-5 border border-[#002255] text-[#002255] px-5 py-2">さらに30件表示</button>}
   </section>;
 }

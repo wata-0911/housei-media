@@ -57,7 +57,7 @@ async function add(page, name = '将来年度の未確定科目', contribution =
 async function initProgress(card, button) { await card.locator('details').last().locator('summary').click(); await card.getByRole('button', { name: button }).click(); }
 
 test('flag: default disabled, query cannot enable, direct module blocked, production serve rejects even flag=1', async () => {
-  for (const p of [port + 1, port + 2]) for (const path of ['/__dev/attempts', '/__dev/attempts?YI05_WORKBENCH=1', '/dev/attempts/main.tsx', '/src/planner/attempts/workbench/operations.ts']) {
+  for (const p of [port + 1, port + 2]) for (const path of ['/__dev/attempts', '/__dev/attempts?YI05_WORKBENCH=1', '/dev/attempts/main.tsx', '/dev/attempts/PlacementSearch.tsx', '/src/planner/attempts/workbench/searchBridge.ts', '/src/planner/attempts/workbench/operations.ts']) {
     assert.equal((await fetch(`http://127.0.0.1:${p}${path}`, { headers: { Connection: 'close' } })).status, 404);
   }
   const page = await browser.newPage();
@@ -77,14 +77,66 @@ test('React: future Offering-free unknown attempts, same-name separate rows, nul
   assert.equal(await cards.first().getAttribute('data-attempt-id'), ids[0]); assert.match(await cards.first().innerText(), /2040/); assert.match(await cards.nth(1).innerText(), /2035/);
   await page.reload(); await page.getByRole('heading', { name: '履修計画 / active 0件' }).waitFor(); assert.equal(await cards.count(), 0);
 });
-test('React: master search and explicit Placement selection creates independent course reference', async t => {
+test('React: Placement search, explicit selection and separate registration preserve safe identity', async t => {
   const page = await open(t); await page.getByRole('button', { name: '新しい履修回', exact: true }).click();
-  const form = page.getByRole('form', { name: '新規履修回' }); await form.getByLabel('制度科目を検索').fill('日本');
-  const option = await form.getByLabel('制度科目', { exact: true }).locator('option').nth(1).getAttribute('value');
-  await form.getByLabel('制度科目', { exact: true }).selectOption(option);
-  const placement = await form.getByLabel('Placement候補').locator('option').nth(1).getAttribute('value'); await form.getByLabel('Placement候補').selectOption(placement);
+  const form = page.getByRole('form', { name: '新規履修回' }); await form.getByLabel('制度科目を検索').fill('東洋史特講');
+  const result = form.getByRole('list', { name: 'Placement検索結果' });
+  const safe = result.getByRole('listitem').filter({ hasText: 'identity: safe' }).first();
+  await safe.getByRole('button', { name: /^この配置を選択:/ }).click();
   await form.getByRole('button', { name: '新規Attemptを追加' }).click(); await form.waitFor({ state: 'detached' });
   const card = page.locator('[data-attempt-id]'); assert.match(await card.innerText(), /制度identity: confirmed/); assert.match(await card.innerText(), /制度構成/); assert.match(await card.innerText(), /本人適用: unknown/);
+});
+for (const width of [1280, 390]) test(`React ${width}px: scope/code, pagination, unresolved/conflict/bucket, IME and stable selection`, async t => {
+  const page = await open(t, { width, height: 900 });
+  await page.getByRole('button', { name: '新しい履修回', exact: true }).click();
+  const form = page.getByRole('form', { name: '新規履修回' });
+  const query = form.getByLabel('制度科目を検索');
+  assert.equal(await form.getByLabel('予定年度', { exact: true }).inputValue(), '');
+  assert.equal(await form.getByLabel('履修方法（本人希望）').inputValue(), 'unknown');
+  await form.getByRole('status').filter({ hasText: '検索結果 502件 / 表示 30件' }).waitFor();
+  await form.getByRole('button', { name: /^次の30件/ }).click();
+  await form.getByRole('status').filter({ hasText: '表示 60件' }).waitFor();
+  await form.getByLabel('学科・コースscope').selectOption({ label: '法律' });
+  const withCommon = await form.getByRole('listitem').count(); assert.ok(withCommon > 0);
+  await form.getByLabel('共通科目を含める').uncheck();
+  assert.ok((await form.getByRole('listitem').allTextContents()).every(text => !text.includes(' / common / ')));
+  await form.getByLabel('学科・コースscope').selectOption('');
+  await form.getByLabel('公式科目コード（完全一致）').fill('01116');
+  assert.ok(await form.getByRole('listitem').count() > 0);
+  await form.getByLabel('公式科目コード（完全一致）').fill('invalid-code');
+  await form.getByRole('status').filter({ hasText: '検索結果 0件' }).waitFor();
+  await form.getByLabel('公式科目コード（完全一致）').fill('');
+  await query.fill('公開科目');
+  await form.getByText('非科目枠：通常Attempt登録の対象外', { exact: false }).first().waitFor();
+  for (const b of await form.getByRole('button', { name: /^この配置を選択:/ }).all()) assert.equal(await b.isDisabled(), true);
+  await query.fill('データサイエンス応用基礎C');
+  const pick = form.getByRole('listitem').filter({ hasText: 'identity: ambiguous' }).first().getByRole('button');
+  await pick.focus(); await page.keyboard.press('Space');
+  // The selection panel has an accessible label and remains visible across search edits.
+  await form.locator('[aria-label="選択中の配置"]').waitFor();
+  await query.fill('自然地理学演習');
+  assert.match(await form.locator('[aria-label="選択中の配置"]').innerText(), /データサイエンス応用基礎C/);
+  await query.press('Enter'); assert.equal(await page.locator('[data-attempt-id]').count(), 0);
+  await query.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, keyCode: 229 });
+  assert.equal(await page.locator('[data-attempt-id]').count(), 0);
+  await form.getByRole('button', { name: '新規Attemptを追加' }).click(); await form.waitFor({ state: 'detached' });
+  const card = page.locator('[data-attempt-id]').first();
+  assert.match(await card.innerText(), /制度identity: ambiguous/); assert.match(await card.innerText(), /本人適用: unknown/);
+  assert.match(await card.innerText(), /本人寄与単位\n未設定/);
+  await card.locator('details').first().locator('summary').click();
+  assert.match(await card.locator('details').first().innerText(), /candidateAuditIds/);
+  assert.match(await card.locator('details').first().innerText(), /placementRoleKey/);
+  await page.getByRole('button', { name: '新しい履修回', exact: true }).click();
+  const next = page.getByRole('form', { name: '新規履修回' });
+  await next.getByLabel('制度科目を検索').fill('自然地理学演習');
+  await next.getByRole('listitem').filter({ hasText: 'identity: conflict' }).first().getByRole('button').click();
+  await next.getByLabel('予定年度', { exact: true }).fill('22');
+  await next.getByRole('button', { name: '新規Attemptを追加' }).click();
+  await next.getByRole('alert').waitFor(); assert.equal(await page.locator('[data-attempt-id]').count(), 1);
+  await next.getByLabel('予定年度', { exact: true }).fill('');
+  await next.getByRole('button', { name: '新規Attemptを追加' }).click(); await next.waitFor({ state: 'detached' });
+  assert.match(await page.locator('[data-attempt-id]').last().innerText(), /制度identity: conflict/);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal page overflow');
 });
 test('React: media video/test/exam and correspondence/report/batch and independent evaluations', async t => {
   const page = await open(t), card = await add(page); await initProgress(card, 'メディア進捗を開始');

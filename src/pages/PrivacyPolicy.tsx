@@ -1,6 +1,7 @@
-import { motion } from 'framer-motion'
+import { useReducedMotion, motion } from 'framer-motion'
 
 export default function PrivacyPolicy() {
+  const shouldReduceMotion = useReducedMotion();
 
   return (
     <div className="bg-[#FAFAFA] text-[#1A1A1A] min-h-screen antialiased" style={{ fontFamily: '"Noto Serif JP", serif' }}>
@@ -10,16 +11,16 @@ export default function PrivacyPolicy() {
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         <div className="container mx-auto px-4 text-center relative z-10">
           <motion.span
-            initial={{ opacity: 0, y: 10 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="block text-[#E65C00] text-sm tracking-[0.2em] font-medium mb-4"
           >
             LEGAL
           </motion.span>
           <motion.h2
-            initial={{ opacity: 0, y: 20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.1 }}
             className="text-3xl md:text-5xl font-light tracking-wider"
           >
             プライバシーポリシー・免責事項
@@ -31,9 +32,9 @@ export default function PrivacyPolicy() {
       <section className="py-20 md:py-32">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
             className="bg-white p-8 md:p-16 relative z-20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)] border-t-4 border-[#002255]"
           >
 

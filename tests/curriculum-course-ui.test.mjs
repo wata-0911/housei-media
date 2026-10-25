@@ -8,7 +8,7 @@ import { catalog, offeringsById } from '../src/planner/catalog/catalog.ts';
 import { createCreditClassifier } from '../src/planner/planning/annualPlan.ts';
 import { deriveCurriculumCourseView } from '../src/planner/progress/curriculumCourseView.ts';
 import { applyImport, importPreview } from '../src/planner/gradeImport/gradeImportApply.ts';
-import { updatePlannerItem } from '../src/planner/planning/plannerItemState.ts';
+import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/planning/plannerItemState.ts';
 import { loadState, saveState, STORAGE_KEY } from '../src/planner/backup/storage.ts';
 import { removePlannerItem, restorePlannerItem } from '../src/planner/planning/removeUndo.ts';
 import CurriculumCourseList from '../src/components/planner/courses/CurriculumCourseList.tsx';
@@ -54,7 +54,7 @@ const attemptFor = input => deriveCurriculumCourseView(input, catalog).courses[0
 test('UI: one exact Course parent keeps communication and winter attempts with different studyYears', () => {
   const markup = html(state({ items: [item(correspondence, 'planned', { studyYear: 1 }), item(winter, 'earned', { studyYear: 3 })] }));
   assert.equal(count(markup, 'data-curriculum-course-id'), 1); assert.equal(count(markup, 'data-attempt-id'), 2);
-  assert.match(markup, /1年/); assert.match(markup, /3年/); assert.match(markup, /2026 通信/); assert.match(markup, /冬期/);
+  assert.match(markup, /1年/); assert.match(markup, /3年/); assert.match(markup, /参照カタログ：2026年度/); assert.match(markup, /経済学 \/ 通信/); assert.match(markup, /冬期/);
 });
 test('UI: exact official row with unknown Offering survives under its Course', () => {
   const markup = html(state({ importedCourseAchievements: [official()] }));
@@ -484,5 +484,95 @@ test('import accessibility: preview selection still controls apply availability 
     const actions = GradeImportApplyActions({ units, plannedItems: [], offerings: [], disabled: false, onApply: () => calls.push(units) });
     const button = find(actions, 'button'); assert.equal(button.props.disabled, !selected);
     if (selected) { button.props.onClick(); assert.deepEqual(calls.at(-1), units); }
+  }
+});
+
+
+// Course Search defaults must stay independent of the catalog's academic year.
+test('planned year: search addition changes only the default year', () => {
+  assert.deepEqual(plannerItemFromCourseSearch(correspondence.id), {
+    offeringId: correspondence.id, status: 'planned', plannedYear: null,
+    plannedTerm: null, studyYear: null, earnedOrder: null,
+  });
+});
+for (const plannedYear of [null, 2027, 2026]) {
+  test(`planned year: save/reload/resave and backup preserve ${plannedYear}`, async () => {
+    const { createPlannerBackup, parsePlannerBackup } = await import('../src/planner/backup/plannerBackup.ts');
+    const added = plannerItemFromCourseSearch(correspondence.id);
+    const items = plannedYear === null ? [added] : updatePlannerItem([added], correspondence.id, { plannedYear });
+    const input = state({ items });
+    const values = new Map();
+    const store = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+    saveState(store, input, null, catalog);
+    const loaded = loadState(store, catalog);
+    assert.equal(loaded.error, null);
+    assert.deepEqual(loaded.state, input);
+    saveState(store, loaded.state, loaded.raw, catalog);
+    assert.deepEqual(loadState(store, catalog).state, input);
+    const backup = await createPlannerBackup(store.getItem(STORAGE_KEY), catalog);
+    assert.deepEqual((await parsePlannerBackup(JSON.stringify(backup), catalog)).state, input);
+    assert.equal(input.schemaVersion, 22);
+    assert.equal(correspondence.academicYear, 2026);
+  });
+  test(`planned year: UI separates catalog from ${plannedYear}`, () => {
+    const markup = html(state({ items: [{ ...plannerItemFromCourseSearch(correspondence.id), plannedYear }] }));
+    assert.ok(markup.includes('参照カタログ：2026年度'));
+    assert.ok(markup.includes(`履修予定年度：${plannedYear === null ? '未設定' : `${plannedYear}年度`}`));
+    assert.ok(markup.includes('履修予定年度<input'));
+    if (plannedYear === 2027) assert.ok(markup.includes('2027年の仮計画：2026年度カタログを参考 / 将来年度の開講は未確認'));
+  });
+}
+test('planned year: unset retains projected credits and is excluded only from annual reference', async () => {
+  const { annualCreditLimitReferences, summarizeCategories } = await import('../src/planner/planning/annualPlan.ts');
+  const { summarizeCredits } = await import('../src/planner/calculations.ts');
+  const { deriveCurriculumCourseProgress } = await import('../src/planner/progress/curriculumCourseProgress.ts');
+  const unset = [plannerItemFromCourseSearch(correspondence.id)];
+  const dated = updatePlannerItem(unset, correspondence.id, { plannedYear: 2026 });
+  assert.deepEqual(summarizeCredits(unset, offeringsById), summarizeCredits(dated, offeringsById));
+  assert.equal(summarizeCredits(unset, offeringsById).planned, correspondence.credits);
+  assert.equal(summarizeCredits(unset, offeringsById).earned, 0);
+  const progress = items => deriveCurriculumCourseProgress(items, catalog);
+  const quantities = result => result.courses.map(({ attempts, ...course }) => ({ ...course, contributions: attempts.map(({ earnedContribution, projectedContribution }) => ({ earnedContribution, projectedContribution })) }));
+  assert.deepEqual(quantities(progress(unset)), quantities(progress(dated)));
+  const course = progress(unset).courses.find(course => course.curriculumCourseId === economics.id);
+  assert.equal(course.earnedCredits, 0);
+  assert.equal(course.projectedCredits, correspondence.credits);
+  assert.deepEqual(summarizeCategories(unset, catalog, null), summarizeCategories(dated, catalog, null));
+  assert.deepEqual(annualCreditLimitReferences(unset, offeringsById), []);
+  assert.equal(annualCreditLimitReferences(dated, offeringsById)[0].year, 2026);
+});
+test('planned year: search explains catalog/default/editing/availability and keeps duplicates disabled', async () => {
+  const { default: CourseSearch } = await import('../src/components/planner/search/CourseSearch.tsx');
+  const input = state({ items: [plannerItemFromCourseSearch(correspondence.id)] });
+  const markup = renderToStaticMarkup(createElement(CourseSearch, {
+    catalog, classify: createCreditClassifier(catalog, null), selectedScopeId: null,
+    offerings: [correspondence], addedIds: new Set([correspondence.id]), disabled: false, onAdd: noop, onAddPublicCourse: noop,
+  }));
+  for (const text of ['2026年度カタログの情報', '追加時の履修予定年度は未設定', '追加後に編集できます', '2027年度以降の開講状況は未確認']) assert.ok(markup.includes(text), text);
+  assert.match(markup, /<button[^>]*disabled=""[^>]*>追加済み<\/button>/);
+  const duplicated = state({ items: [...input.items, { ...input.items[0], plannedYear: 2027 }] });
+  assert.throws(() => saveState({ getItem: () => null, setItem: () => assert.fail('duplicate must not write') }, duplicated, null, catalog), /形式が不正/);
+});
+
+test('planned year: search explains conditional projected credits and annual reference exclusion even without annual rows', async () => {
+  const { default: CourseSearch } = await import('../src/components/planner/search/CourseSearch.tsx');
+  const { default: AnnualCreditLimitNotice } = await import('../src/components/planner/planning/AnnualCreditLimitNotice.tsx');
+  const { annualCreditLimitReferences } = await import('../src/planner/planning/annualPlan.ts');
+  for (const items of [[], [plannerItemFromCourseSearch(correspondence.id)]]) {
+    const references = annualCreditLimitReferences(items, offeringsById);
+    assert.deepEqual(references, []);
+    assert.equal(renderToStaticMarkup(createElement(AnnualCreditLimitNotice, { rows: references })), '');
+    const markup = renderToStaticMarkup(createElement(CourseSearch, {
+      catalog, classify: createCreditClassifier(catalog, null), selectedScopeId: null,
+      offerings: items.length ? [correspondence] : [], addedIds: new Set(items.map(item => item.offeringId)),
+      disabled: false, onAdd: noop, onAddPublicCourse: noop,
+    }));
+    // Check the meaning in the rendered explanation, without fixing the full copy or layout.
+    const explanation = markup.match(/<p\b[^>]*>[^<]*履修予定年度が未設定[^<]*<\/p>/)?.[0];
+    assert.ok(explanation, 'search must show the explanation without annual reference rows');
+    assert.match(explanation, /各科目.*条件に応じて.*予定込み単位/);
+    assert.match(explanation, /プランナー.*年度別49単位上限.*参考集計.*含まれません/);
+    assert.match(explanation, /年度別.*確認.*履修予定年度.*設定/);
+    assert.doesNotMatch(markup, /<details\b/, 'explanation is visible without opening a disclosure');
   }
 });

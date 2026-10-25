@@ -16,9 +16,11 @@ export default function PlannerAttemptChild({ attempt, editor, contributions }: 
   const evaluation = attempt.evaluation ?? { offeringId: item.offeringId, finalGrade: null, reportGrade: null, schoolingGrade: null };
   const correspondence = offering ? progress.correspondence ?? progressForCorrespondence(offering, {}) : null;
   return <article data-attempt-id={item.offeringId} aria-label={`履修状況 ${offering?.name ?? item.offeringId}`} className="min-w-0 rounded-sm border border-gray-200 p-4">
-    <h4 className="break-words font-medium text-[#002255]">履修状況 — {offering ? `${offering.academicYear} ${offeringFormLabel(offering)} / ${offering.name}` : `開講情報なし / ${item.offeringId}`}</h4>
+    <h4 className="break-words font-medium text-[#002255]">履修状況 — {offering ? `${offering.name} / ${offeringFormLabel(offering)}` : `開講情報なし / ${item.offeringId}`}</h4>
+    <p className="mt-2 text-sm">参照カタログ：{offering ? `${offering.academicYear}年度` : '未確認'}</p>
+    <p className="mt-1 text-sm">履修予定年度：{item.plannedYear === null ? '未設定' : `${item.plannedYear}年度`}</p>
     {offering && <><FuturePlanNotice item={item} offering={offering} /><ClassificationLabel value={editor.classify(offering)} /></>}
-    <p className="mt-2 text-sm">{statusLabels[item.status]} / 計画 {item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {item.studyYear === null ? '学年未設定' : `${item.studyYear}年`} / {item.plannedTerm ?? '時期未設定'}</p>
+    <p className="mt-2 text-sm">{statusLabels[item.status]} / {item.studyYear === null ? '学年未設定' : `${item.studyYear}年`} / {item.plannedTerm ?? '時期未設定'}</p>
     <p className="mt-1 text-sm">開講 {offering?.credits ?? '未確認'}単位</p>
     {item.courseCreditContribution !== undefined && <p className="mt-1 text-sm">保存済み寄与設定 {item.courseCreditContribution}単位{!(offering?.method === 'correspondence' && offering.credits === 4 && [2, 4].includes(item.courseCreditContribution)) && '（要確認）'}</p>}
     {contributions && <p className="mt-1 text-xs text-gray-600">{contributions.officialEarnedPreferenceReason === 'component_source_match'
@@ -31,7 +33,7 @@ export default function PlannerAttemptChild({ attempt, editor, contributions }: 
     <details className="mt-3">
       <summary className="cursor-pointer text-sm">履修状況の詳細・編集</summary>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="text-xs">計画年度<YearInput value={item.plannedYear} disabled={editor.disabled} onChange={plannedYear => editor.onChange(item.offeringId, { plannedYear })} /></label>
+        <label className="text-xs">履修予定年度<YearInput value={item.plannedYear} disabled={editor.disabled} onChange={plannedYear => editor.onChange(item.offeringId, { plannedYear })} /></label>
         <label className="text-xs">履修学年<StudyYearSelect value={item.studyYear} disabled={editor.disabled} onChange={studyYear => editor.onChange(item.offeringId, { studyYear })} /></label>
         <label className="text-xs">時期<TermSelect id={`attempt-term-${item.offeringId}`} value={item.plannedTerm} disabled={editor.disabled} onChange={plannedTerm => editor.onChange(item.offeringId, { plannedTerm })} /></label>
         <label className="text-xs">状態<StatusSelect value={item.status} disabled={editor.disabled} onChange={status => editor.onChange(item.offeringId, { status })} /></label>

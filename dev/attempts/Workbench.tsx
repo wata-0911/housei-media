@@ -13,8 +13,9 @@ import { buttonClass, Field, inputClass } from './Fields';
 
 const master = loadYi01InstitutionalCatalog();
 const initialContext: AttemptValidationContext = { catalog: master, officialAchievementIds: [], officialStudyRecordIds: [] };
-type Props = { seed?: { workspace: Workspace; context: AttemptValidationContext }; dispatch?: (workspace: Workspace, command: Command) => Workspace; onCommand?: (command: Command) => void };
-export function Workbench({ seed, dispatch, onCommand }: Props = {}) {
+type Props = { mode?: 'institutional-search' | 'legacy-migration'; seed?: { workspace: Workspace; context: AttemptValidationContext }; dispatch?: (workspace: Workspace, command: Command) => Workspace; onCommand?: (command: Command) => void };
+export function Workbench({ seed, dispatch, onCommand, mode }: Props = {}) {
+  const institutionalSearch = mode ? mode === 'institutional-search' : !seed;
   const [state, setState] = useState(() => seed ?? ({ workspace: createWorkspace({ attempts: [], ownedRecords: [], removals: [] }, initialContext), context: initialContext }));
   // Synchronous latest-state reference makes event replays atomic between React renders.
   const current = useRef(state);
@@ -45,7 +46,15 @@ export function Workbench({ seed, dispatch, onCommand }: Props = {}) {
       <p className="text-sm">{a.identity.reason} {a.placement.reason}</p>
       {view.placements.map(p => <p className="text-sm" key={p.id}>配置参考: {p.officialName} / 制度構成 {p.compositionCredits ?? '不明'}単位 / {p.identityDecision.status}（本人寄与とは別）</p>)}
       <p className="text-sm" data-testid="progress-summary">{view.progressSummary}</p>
-      <details><summary>根拠・実績context・候補</summary><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify({ method: a.method, actualYear: a.actualYear, contribution: a.plan?.contribution, earnedOrder: a.plan?.earnedOrder, identity: a.identity, placement: a.placement, legacyRefs: a.legacyRefs }, null, 2)}</pre></details>
+      <details><summary>根拠・実績context・候補</summary><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify({ method: a.method, actualYear: a.actualYear, contribution: a.plan?.contribution, earnedOrder: a.plan?.earnedOrder, identity: a.identity, placement: a.placement, legacyRefs: a.legacyRefs,
+        // References remain in Attempt; resolve document context only for display.
+        selectedDocument: !institutionalSearch ? undefined : view.placements.map(p => ({ placement: p,
+          curriculumVersion: context.catalog.curriculumVersions.find(v => v.id === p.curriculumVersionId),
+          sourceRevision: context.catalog.sourceRevision,
+          notes: context.catalog.notes.filter(n => p.noteIds.includes(n.evidenceId)),
+          codes: context.catalog.codes.filter(c => [...p.auditRecord.mainCodeEvidenceIds, ...p.auditRecord.teacherCodeEvidenceIds,
+            ...p.auditRecord.sameNameCodeCandidateEvidenceIds].includes(c.evidenceId)),
+        })) }, null, 2)}</pre></details>
       <div className="flex flex-wrap gap-2">
         {a.membership.kind === 'active' ? <><button className={buttonClass} onClick={() => setForm(a)}>予定を編集</button><button className={buttonClass} onClick={() => submit({ kind: 'remove', attemptId: a.id, operationId: newOperationId() })}>計画から削除</button></>
           : a.membership.reason === 'plan_deleted' ? <button className={buttonClass} onClick={() => { if (a.membership.kind === 'detached' && a.membership.deletionOperationId) submit({ kind: 'undo', attemptId: a.id, operationId: newOperationId(), removalOperationId: a.membership.deletionOperationId }); }}>このAttemptをUndo</button> : <p>旧孤立owner。計画・状態を推測しません。</p>}
@@ -66,7 +75,7 @@ export function Workbench({ seed, dispatch, onCommand }: Props = {}) {
     <div aria-live="polite" className="space-y-2">{notice && <p role="status">{notice}</p>}{error && <p role="alert" className="whitespace-pre-wrap rounded border border-red-500 bg-red-50 p-3 text-red-900">{error}</p>}</div>
     <section className="space-y-4" aria-labelledby="plan-heading"><div className="flex flex-wrap items-center justify-between gap-3"><h2 id="plan-heading" className="text-xl font-bold">履修計画 / active {active.length}件</h2><button className={buttonClass} onClick={() => setForm('new')}>新しい履修回</button></div>
       <Field label="表示順（ID・計画順は維持）"><select className={`${inputClass} sm:max-w-xs`} value={sort} onChange={e => setSort(e.target.value)}><option value="plan">計画順</option><option value="name">科目名</option><option value="year">予定年度</option></select></Field>
-      {form && <AttemptForm key={form === 'new' ? 'new' : form.id} context={context} attempt={form === 'new' ? undefined : form} submit={submit} close={() => setForm(null)} />}
+      {form && <AttemptForm key={form === 'new' ? 'new' : form.id} context={context} searchEnabled={institutionalSearch} attempt={form === 'new' ? undefined : form} submit={submit} close={() => setForm(null)} />}
       <div className="space-y-4">{active.map(card)}</div>{active.length === 0 && <p>制度科目を選択するか、未確定の名称で追加できます。</p>}
     </section>
     <section className="space-y-4" aria-labelledby="detached-heading"><h2 className="text-xl font-bold" id="detached-heading">detached / 計画外のowner {detached.length}件</h2><p>削除しても進捗・評価・TODOは元Attemptに残ります。Undoと新しい履修回の追加は別操作です。複数削除した場合は、最後に削除した履修回から逆順にUndoしてください。削除順を確認できない場合は復元を停止します。</p>{detached.map(card)}</section>
