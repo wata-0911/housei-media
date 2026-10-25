@@ -233,7 +233,8 @@ export default function Home() {
               { to: '/planner#media', label: 'メディア進捗記録', description: 'メディアスクーリングの進捗を記録する' },
             ].map(({ to, label, description }) => (
               <Link key={to} to={to} className="flex min-h-32 items-center justify-between gap-4 text-white bg-[#E65C00] hover:bg-[#CC5200] px-6 py-7 lg:p-8 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]">
-                <span className="min-w-0">
+                {/* G18: a 1px unblurred outline preserves the white fill, including thin description text. */}
+                <span className="min-w-0" style={{ textShadow: '-1px -1px 0 #000, 0 -1px 0 #000, 1px -1px 0 #000, -1px 0 0 #000, 1px 0 0 #000, -1px 1px 0 #000, 0 1px 0 #000, 1px 1px 0 #000' }}>
                   <span className="block text-xl tracking-widest">{label}</span>
                   <span className="mt-3 block text-sm leading-relaxed font-light">{description}</span>
                 </span>

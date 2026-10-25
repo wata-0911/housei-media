@@ -9,7 +9,9 @@ import { STORAGE_KEY } from '../src/planner/backup/storage.ts';
 const origin = `http://127.0.0.1:${process.env.PLANNER_BROWSER_PORT || 4187}`;
 let browser, server;
 before(async () => {
-  const { chromium } = await import(process.env.PLANNER_PLAYWRIGHT_MODULE || 'playwright');
+  const engine = process.env.PLANNER_BROWSER_ENGINE || 'chromium';
+  assert.ok(['chromium', 'webkit'].includes(engine));
+  const browserType = (await import(process.env.PLANNER_PLAYWRIGHT_MODULE || 'playwright'))[engine];
   server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', new URL(origin).port, '--strictPort'], { cwd: new URL('../', import.meta.url), stdio: 'pipe' });
   let output = '';
   server.stdout.on('data', chunk => { output += chunk; });
@@ -21,7 +23,7 @@ before(async () => {
     await delay(200);
   }
   assert.ok(ready, output);
-  browser = await chromium.launch({ headless: true, ...(process.env.PLANNER_BROWSER_EXECUTABLE ? { executablePath: process.env.PLANNER_BROWSER_EXECUTABLE } : {}) });
+  browser = await browserType.launch({ headless: true, ...(process.env.PLANNER_BROWSER_EXECUTABLE ? { executablePath: process.env.PLANNER_BROWSER_EXECUTABLE } : {}) });
 });
 after(async () => { await browser?.close(); server?.kill(); });
 
@@ -61,6 +63,35 @@ async function destination(page, id, tab) {
 }
 async function scrollCount(page) { return page.evaluate(() => window.navigationScrolls.length); }
 
+// WCAG G18 sRGB calculation. Style checks do not certify AA: the full glyph
+// outline and legibility also need rendered/manual review (see PR #192).
+function contrast(first, second) {
+  const luminance = rgb => rgb.map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
+  const values = [luminance(first), luminance(second)].sort((a, b) => a - b);
+  return (values[1] + 0.05) / (values[0] + 0.05);
+}
+async function assertOutline(button, background) {
+  assert.equal(await button.evaluate(el => getComputedStyle(el).backgroundColor), `rgb(${background.join(', ')})`);
+  const text = button.locator('span.min-w-0 > span');
+  assert.equal(await text.count(), 2, 'both title and description retain their text');
+  for (const element of await text.all()) {
+    const computed = await element.evaluate(el => {
+      const style = getComputedStyle(el);
+      return { color: style.color, shadow: style.textShadow, stroke: style.webkitTextStrokeWidth };
+    });
+    assert.equal(computed.color, 'rgb(255, 255, 255)');
+    assert.equal(computed.stroke, '0px', 'outline must not eat into the thin white fill');
+    const layers = computed.shadow.match(/rgb\(0, 0, 0\) -?\d+px -?\d+px 0px/g) ?? [];
+    assert.equal(layers.length, 8, 'opaque zero-blur outline in all eight directions');
+    const offsets = layers.map(layer => layer.replace('rgb(0, 0, 0) ', '')).sort();
+    assert.deepEqual(offsets, ['-1px -1px 0px', '0px -1px 0px', '1px -1px 0px', '-1px 0px 0px', '1px 0px 0px', '-1px 1px 0px', '0px 1px 0px', '1px 1px 0px'].sort());
+  }
+  assert.ok(contrast([0, 0, 0], background) >= 4.5, 'narrow black outline vs actual normal/hover background');
+  assert.equal(contrast([255, 255, 255], [0, 0, 0]), 21, 'white fill vs outline');
+}
+
+
 for (const viewport of [{ width: 1440, height: 1000 }, { width: 768, height: 1024 }, { width: 375, height: 812 }]) {
   test(`independent Planner cards precede unchanged SCHEDULE with keyboard accessible CTAs (${viewport.width}px, reduced motion)`, async t => {
     const page = await open(t, '/', { viewport, reducedMotion: 'reduce' });
@@ -78,8 +109,11 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 768, height: 102
       return { background: style.backgroundColor, color: style.color, radius: style.borderRadius, shadow: style.boxShadow };
     };
     const referenceAppearance = await referenceButton.evaluate(buttonAppearance);
+    assert.equal(await referenceButton.evaluate(el => getComputedStyle(el).textShadow), 'none');
+    assert.equal(await page.locator('main a[href="/message"]').evaluate(el => getComputedStyle(el).textShadow), 'none');
     for (const button of await nav.getByRole('link').all()) {
       assert.deepEqual(await button.evaluate(buttonAppearance), referenceAppearance);
+      await assertOutline(button, [230, 92, 0]);
       assert.equal(await button.locator('svg path').getAttribute('d'), await referenceButton.locator('svg path').getAttribute('d'));
     }
     assert.equal(await section.locator('img[src="/schedule-calendar.png"]').count(), 0);
@@ -104,11 +138,19 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 768, height: 102
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const link = nav.getByRole('link').filter({ hasText: '年間の学習予定を立てる' });
     await link.focus();
-    if (process.env.HOME_PLANNER_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/home-planner-${viewport.width}.png`, fullPage: true });
+    if (process.env.HOME_PLANNER_SCREENSHOT_DIR) {
+      await page.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/home-planner-${viewport.width}.png`, fullPage: true });
+      await nav.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/outline-normal-${viewport.width}.png` });
+    }
     assert.equal(await link.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
     assert.equal(await link.evaluate(el => getComputedStyle(el).transitionDuration), '0s');
     if (viewport.width >= 768) {
+      for (const button of await nav.getByRole('link').all()) {
+        await button.hover();
+        await assertOutline(button, [204, 82, 0]);
+      }
       await link.hover();
+      if (process.env.HOME_PLANNER_SCREENSHOT_DIR) await nav.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/outline-hover-${viewport.width}.png` });
       assert.equal(await link.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(204, 82, 0)');
       assert.equal(await link.evaluate(el => getComputedStyle(el).transform), 'matrix(1, 0, 0, 1, 0, 0)');
       assert.equal(await link.locator('svg').evaluate(el => getComputedStyle(el).transform), 'matrix(1, 0, 0, 1, 0, 0)');
