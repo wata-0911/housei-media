@@ -270,3 +270,90 @@ test('unexpected native clone implementation errors are not input diagnostics', 
     assert.throws(() => snapshotAttemptGraph(f.graph, f.context), e => e === error);
   } finally { globalThis.structuredClone = native; }
 });
+
+
+test('P3 adapter preserves unexpected clone error identity and cause', () => {
+  const { graph } = fixture(), input = { graph, retained: retained(source.state) };
+  const before = structuredClone(input), native = globalThis.structuredClone;
+  const error = new Error('unexpected clone failure', { cause: new Error('underlying failure') });
+  try {
+    globalThis.structuredClone = () => { throw error; };
+    for (const invoke of [() => validateAttemptGraph(graph, source.context),
+      () => snapshotAttemptGraph(graph, source.context), () => adaptAttemptGraduation(input, source, scope)]) {
+      assert.throws(invoke, thrown => thrown === error && thrown.cause === error.cause);
+    }
+  } finally { globalThis.structuredClone = native; }
+  assert.deepEqual(input, before);
+});
+
+test('expected reflection and DataCloneError failures remain input rejections at all entry points', () => {
+  for (const failure of ['reflection', 'clone']) {
+    const { graph } = fixture(), native = globalThis.structuredClone;
+    const input = failure === 'reflection' ? new Proxy(graph, {
+      ownKeys() { throw new Error('input reflection failure'); },
+    }) : graph;
+    const retainedInput = retained(source.state);
+    try {
+      if (failure === 'clone') globalThis.structuredClone = () => { throw new DOMException('not cloneable', 'DataCloneError'); };
+      for (const invoke of [validateAttemptGraph, snapshotAttemptGraph]) {
+        const r = invoke(input, source.context);
+        assert.equal(r.valid, false); assert.equal(Object.hasOwn(r, 'graph'), false);
+        assert.ok(r.issues.every(i => i.code === 'non_json_value'));
+      }
+      const r = adaptAttemptGraduation({ graph: input, retained: retainedInput }, source, scope);
+      assert.equal(r.status, 'rejected'); assert.equal(Object.hasOwn(r, 'graph'), false);
+      assert.ok(r.diagnostics.every(i => i.code === 'non_json_value'));
+    } finally { globalThis.structuredClone = native; }
+  }
+});
+
+test('shared input descendants remain detached and frozen without concealing a later Proxy', () => {
+  const f = attemptFixture();
+  f.graph.attempts[1].plan.contribution = f.graph.attempts[0].plan.contribution;
+  const expected = structuredClone(f.graph), result = snapshotAttemptGraph(f.graph, f.context);
+  assert.equal(result.valid, true); assert.deepEqual(result.graph, expected);
+  for (const attempt of result.graph.attempts) {
+    assert.notEqual(attempt.plan.contribution, f.graph.attempts[0].plan.contribution);
+    assert.equal(Object.isFrozen(attempt.plan.contribution), true);
+  }
+  let reads = 0;
+  f.graph.ownedRecords = new Proxy([], { ownKeys(target) {
+    Object.defineProperty(f.graph.attempts[0].plan.contribution, 'value', {
+      enumerable: true, get() { reads++; return -100; },
+    });
+    return Reflect.ownKeys(target);
+  } });
+  assert.equal(snapshotAttemptGraph(f.graph, f.context).valid, false);
+  assert.equal(reads, 0); assert.deepEqual(result.graph, expected);
+});
+
+
+test('mixed disguised built-in and non-JSON leaf retain both diagnostics', () => {
+  const f = attemptFixture(), disguised = new Date(0);
+  Object.setPrototypeOf(disguised, Object.prototype);
+  f.graph.attempts[0].plan.contribution.value = disguised;
+  f.graph.attempts[1].plan.contribution.value = NaN;
+  for (const invoke of [validateAttemptGraph, snapshotAttemptGraph]) {
+    const result = invoke(f.graph, f.context);
+    assert.equal(result.valid, false); assert.equal(Object.hasOwn(result, 'graph'), false);
+    assert.deepEqual(result.issues.map(({code, path}) => ({code, path})), [
+      { code: 'non_json_value', path: '/attempts/0/plan/contribution/value' },
+      { code: 'non_json_value', path: '/attempts/1/plan/contribution/value' },
+    ]);
+  }
+});
+
+
+test('clone failure on already certified data propagates instead of blaming input', () => {
+  const { graph } = fixture(), checked = snapshotAttemptGraph(graph, source.context);
+  assert.equal(checked.valid, true);
+  const input = { graph: checked.graph, retained: retained(source.state) }, native = globalThis.structuredClone;
+  const error = new DOMException('internal clone failure on certified data', 'DataCloneError');
+  try {
+    globalThis.structuredClone = () => { throw error; };
+    for (const invoke of [() => validateAttemptGraph(input.graph, source.context),
+      () => snapshotAttemptGraph(input.graph, source.context), () => adaptAttemptGraduation(input, source, scope)]) {
+      assert.throws(invoke, thrown => thrown === error);
+    }
+  } finally { globalThis.structuredClone = native; }
+});

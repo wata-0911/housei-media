@@ -1,4 +1,4 @@
-import type { Attempt, AttemptGraph } from '../types';
+import type { Attempt } from '../types';
 import { sameAttemptData, snapshotAttemptGraph } from '../validation';
 import { requireDecoded } from '../migration/source';
 import { freeze, pointer, type RetainedState, type SourceArchive } from '../migration/contracts';
@@ -49,12 +49,11 @@ export function adaptAttemptGraduation(input: { graph: unknown; retained: Retain
   if (!source.sourceCatalog.programs.some(p => p.scopeId === scopeId && !p.isCommon)) return { status: 'rejected', diagnostics: [{
     code: 'unknown_scope', path: '/scopeId', message: 'Select an explicit known program; never infer from a planned year',
   }] };
-  let graph: AttemptGraph;
-  try {
-    const checked = snapshotAttemptGraph(graphInput, source.context);
-    if (!checked.valid) return { status: 'rejected', diagnostics: checked.issues };
-    graph = checked.graph;
-  } catch { return { status: 'rejected', diagnostics: [{ code: 'invalid_graph_input', path: '/graph', message: 'Expected cloneable plain graph data' }] }; }
+  // Capture reports expected input/reflection/DataCloneError failures itself.
+  // Unexpected implementation exceptions retain their identity and cause.
+  const checked = snapshotAttemptGraph(graphInput, source.context);
+  if (!checked.valid) return { status: 'rejected', diagnostics: checked.issues };
+  const graph = checked.graph;
   // The graph is already captured, validated and frozen. Clone trusted retained data.
   // Calculation uses the decoded source, never a second read of caller retained.
   const retained = structuredClone(sourceRetained);
