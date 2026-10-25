@@ -221,29 +221,31 @@ export default function Home() {
           transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
           className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
         >
-          <div className="mb-10 sm:mb-12 text-center">
-            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / PLANNER</span>
-            <h2 id="home-planner-heading" className="text-3xl md:text-4xl font-medium tracking-wide">履修プランナー</h2>
-          </div>
-          <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
-            <div className="text-[#666666] leading-loose font-light space-y-4 text-left">
-              <p>こちらのボタンから履修の計画を検索しながら立てられます。</p>
-              <p>公式の成績表からデータを取り込むとすぐに今後の予定を立てられます。また、メディアの進捗も記録でき、すぐにsnsなどに共有できます。</p>
-              <p>卒業までに足りない単位数を確かめられますが、卒業の可否を保証しません。</p>
-              <p>卒業の可否や科目の内容などはシラバスやしおり、公式ホームページを参照してください。</p>
+          <div className="bg-white p-6 sm:p-10 md:p-16 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]">
+            <div className="mb-10 sm:mb-12 text-center">
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / PLANNER</span>
+              <h2 id="home-planner-heading" className="text-3xl md:text-4xl font-medium tracking-wide">履修プランナー</h2>
             </div>
-            <nav aria-label="履修プランナー" className="w-full space-y-4 md:max-w-sm md:justify-self-end">
-              {[
-                { to: '/planner', label: '履修計画' },
-                { to: '/planner#grade-import', label: '成績取り込み' },
-                { to: '/planner#media', label: 'メディア進捗記録' },
-              ].map(({ to, label }) => (
-                <Link key={to} to={to} className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]">
-                  <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
-                  <span className="min-w-0 break-words tracking-wide">{label}</span>
-                </Link>
-              ))}
-            </nav>
+            <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+              <div className="text-[#666666] leading-loose font-light space-y-4 text-left">
+                <p>こちらのボタンから履修の計画を検索しながら立てられます。</p>
+                <p>公式の成績表からデータを取り込むとすぐに今後の予定を立てられます。また、メディアの進捗も記録でき、すぐにsnsなどに共有できます。</p>
+                <p>卒業までに足りない単位数を確かめられますが、卒業の可否を保証しません。</p>
+                <p>卒業の可否や科目の内容などはシラバスやしおり、公式ホームページを参照してください。</p>
+              </div>
+              <nav aria-label="履修プランナー" className="w-full space-y-4 md:max-w-sm md:justify-self-end">
+                {[
+                  { to: '/planner', label: '履修計画' },
+                  { to: '/planner#grade-import', label: '成績取り込み' },
+                  { to: '/planner#media', label: 'メディア進捗記録' },
+                ].map(({ to, label }) => (
+                  <Link key={to} to={to} className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]">
+                    <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
+                    <span className="min-w-0 break-words tracking-wide">{label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
         </motion.div>
       </section>

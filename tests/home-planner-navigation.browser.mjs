@@ -109,6 +109,23 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 768, height: 102
     const section = page.locator('section').filter({ has: nav });
     assert.equal(await section.getByRole('heading', { name: '履修プランナー', exact: true }).count(), 1);
     assert.equal(await section.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(250, 250, 250)');
+    const panel = section.locator('div.bg-white');
+    assert.equal(await panel.count(), 1, 'one shared panel around all Planner content');
+    assert.equal(await panel.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(255, 255, 255)');
+    assert.equal(await panel.evaluate(el => getComputedStyle(el).borderRadius), '0px', 'rectangular panel');
+    assert.equal(await panel.getByText('01 / PLANNER', { exact: true }).count(), 1);
+    assert.equal(await panel.getByRole('heading', { name: '履修プランナー', exact: true }).count(), 1);
+    assert.equal(await panel.getByRole('navigation', { name: '履修プランナー', exact: true }).count(), 1);
+    assert.deepEqual(await panel.locator('p').allTextContents(), paragraphs);
+    const spacing = await panel.evaluate(el => {
+      const box = el.getBoundingClientRect();
+      const children = [el.querySelector('h2'), ...el.querySelectorAll('p'), el.querySelector('nav')];
+      return children.every(child => {
+        const content = child.getBoundingClientRect();
+        return content.left >= box.left + 23 && content.right <= box.right - 23 && content.top >= box.top + 23 && content.bottom <= box.bottom - 23;
+      });
+    });
+    assert.equal(spacing, true, 'heading, paragraphs and links stay inside panel padding on every viewport');
     assert.deepEqual(await section.locator('p').allTextContents(), paragraphs);
     assert.equal(await section.getByText('履修計画や成績の取り込み、メディアの進捗記録をまとめて。', { exact: true }).count(), 0);
     assert.equal(await nav.locator('p').count(), 0);
@@ -117,7 +134,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 768, height: 102
       assert.equal(await p.evaluate(el => getComputedStyle(el).color), 'rgb(102, 102, 102)');
       assert.equal(await p.evaluate(el => getComputedStyle(el).textAlign), 'left');
     }
-    assert.ok(contrast([102, 102, 102], [250, 250, 250]) >= 4.5, 'explanation contrast');
+    assert.ok(contrast([102, 102, 102], [255, 255, 255]) >= 4.5, 'explanation contrast on white panel');
     assert.equal(await section.locator('img[src="/schedule-calendar.png"]').count(), 0);
     const schedule = page.locator('section').filter({ has: page.locator('img[src="/schedule-calendar.png"]') });
     assert.equal(await schedule.locator('img[src="/schedule-calendar.png"]').count(), 1);
