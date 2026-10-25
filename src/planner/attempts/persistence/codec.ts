@@ -1,3 +1,4 @@
+import { replayNewPlan } from './newPlan';
 import { backupDigest } from '../../backup/plannerBackupCompatibility';
 import { sameAttemptData, validateAttemptGraph } from '../validation';
 import { checkMigrationAssignmentStructure, validateMigrationAssignments } from '../migration/assignments';
@@ -39,7 +40,7 @@ export function requireLiveMigration(source: SourceArchive, table: IdAssignments
 /** Integrity replay, NOT issuer authentication. Callers separately require either
  * a local checkpoint (reload) or explicit adoption of a validated portable backup.
  * Never registers a copied table in YI-04's WeakSet. */
-export async function replayState(value: unknown) {
+export async function replayMigrationState(value: unknown) {
   exactKeys(value, ['format', 'schemaVersion', 'rule', 'binding', 'source', 'corrections', 'catalog', 'catalogSha256', 'assignments', 'ledger', 'graph', 'retained', 'history', 'verification'], 'state');
   if (value.format !== STATE_FORMAT || value.schemaVersion !== STATE_VERSION || !sameAttemptData(value.rule, PERSISTENCE_RULE)) throw new Error('unsupported_persistence_version');
   const state = value as unknown as AttemptState23;
@@ -101,4 +102,10 @@ export async function replayState(value: unknown) {
   if (!sameAttemptData(state, expected)) throw new Error('state_replay_mismatch');
   return { state: expected, workspace, source, base, environment,
     requiredReservations: requiredReservations(source, expected.history.issuedIds, previousSources) };
+}
+
+/** Version dispatch preserves the migration-only schema23 decoder unchanged. */
+export async function replayState(value: unknown) {
+  if (value && typeof value === 'object' && (value as { schemaVersion?: unknown }).schemaVersion === 24) return replayNewPlan(value);
+  return replayMigrationState(value);
 }

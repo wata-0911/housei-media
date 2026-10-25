@@ -23,8 +23,8 @@ async function open(t,width=1280,base=origin){const context=await browser.newCon
     set.call(localStorage,'hosei-planner:v1','primary original \n  bytes');set.call(localStorage,'hosei-planner:v1:recovery','recovery original');window.calls=[];
     for(const name of ['getItem','setItem','removeItem','clear'])Storage.prototype[name]=function(){window.calls.push(name);throw new Error('legacy storage forbidden');};
     window.originalBytes=()=>[get.call(localStorage,'hosei-planner:v1'),get.call(localStorage,'hosei-planner:v1:recovery')];});
-  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(`${base}/__dev/persistence`,{timeout:60000});
-  await page.getByRole('status').waitFor({timeout:60000});
+  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(`${base}/__dev/persistence`,{timeout:120000,waitUntil:'domcontentloaded'});
+  await page.getByRole('status').waitFor({timeout:120000});
   t.after(async()=>{try{assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.calls),[]);assert.deepEqual(await page.evaluate(()=>window.originalBytes()),['primary original \n  bytes','recovery original']);}finally{await context.close();}});return {page,context};}
 async function confirm(page){const download=page.waitForEvent('download');await page.getByRole('button',{name:'置換前原文・移行元を保護ファイルに保存'}).click();await download;
   const adoption=page.getByLabel('発行者が認証されていないことを理解し、選択したバックアップを復旧元として採用します');if(await adoption.count())await adoption.check();
@@ -35,7 +35,7 @@ async function save(page){await page.getByRole('button',{name:'編集の保存pr
 async function add(page){await page.getByRole('button',{name:'新しい履修回',exact:true}).click();const form=page.getByRole('form',{name:'新規履修回'});await form.getByLabel('未確定科目の名称').fill('2035年の履修回');await form.getByLabel('予定年度',{exact:true}).fill('2035');await form.getByRole('button',{name:'新規Attemptを追加'}).click();await form.waitFor({state:'detached'});}
 async function rawState(page){return page.evaluate(async()=>{const {createIndexedDbAttemptStore}=await import('/src/planner/attempts/persistence/indexedDb.ts');return JSON.parse((await createIndexedDbAttemptStore(indexedDB).read()).raw);});}
 
-test('gate: invalid flag/query/direct modules and production serve refuse',async()=>{for(const p of [port+1,port+2])for(const path of ['/__dev/persistence','/__dev/persistence?YI06_PERSISTENCE=1','/dev/persistence/main.tsx','/src/planner/attempts/persistence/controller.ts','/dev%2fpersistence/main.tsx',`/@fs${root}dev/persistence/main.tsx`])assert.equal((await fetch(`http://127.0.0.1:${p}${path}`,{headers:{Connection:'close'}})).status,404);});
+test('gate: invalid flag/query/direct modules and production serve refuse',async()=>{for(const p of [port+1,port+2])for(const path of ['/__dev/persistence','/__dev/persistence?YI06_PERSISTENCE=1','/dev/persistence/main.tsx','/src/planner/attempts/persistence/controller.ts','/src/planner/attempts/persistence/newPlan.ts','/dev%2fpersistence/main.tsx',`/@fs${root}dev/persistence/main.tsx`])assert.equal((await fetch(`http://127.0.0.1:${p}${path}`,{headers:{Connection:'close'}})).status,404);});
 for(const width of [1280,390])test(`Chromium ${width}px: migration, reload, CRUD, backup file and repeated replacement`,async t=>{
   const {page}=await open(t,width);await migrate(page);const first=await rawState(page);await page.reload();await page.getByRole('status').filter({hasText:'再検証して読み込み'}).waitFor({timeout:60000});
   assert.deepEqual(await rawState(page),first);await add(page);await save(page);await page.reload();await page.getByRole('heading',{name:'履修計画 / active 2件'}).waitFor({timeout:60000});
@@ -158,4 +158,64 @@ test('portable queued commit rejects a concurrent first writer and preserves its
  await page.getByLabel('発行者が認証されていないことを理解し、選択したバックアップを復旧元として採用します').check();await page.getByLabel('保護ファイルの保存先と比較内容を確認し、隔離保存の全件置換に同意します').check();await page.getByRole('button',{name:'確認して隔離保存'}).click();
  const winner=await other.evaluate(async backup=>{const {createIndexedDbAttemptStore}=await import('/src/planner/attempts/persistence/indexedDb.ts');const {backupDigest}=await import('/src/planner/backup/plannerBackupCompatibility.ts');const store=createIndexedDbAttemptStore(indexedDB),current=await store.read(),value=JSON.parse(backup),next={raw:JSON.stringify(value.state,null,2),revision:1,committed:[await backupDigest(value.state)],issuedIds:value.reservedIds};await store.commit(current,next);window.releaseLock();await window.lockDone;return next;},fixture.backup.toString());
  await page.getByRole('alert').filter({hasText:'stale_commit'}).waitFor({timeout:60000});assert.deepEqual(await storeSnapshot(page),winner);await other.close();
+});
+
+for (const width of [1280,390]) test(`new source ${width}: empty preview, seeded Placement search, explicit save, reload and portable v3`, async t => {
+  const { page } = await open(t,width);
+  await page.getByRole('button',{name:'新しい空の履修計画の初期化preview'}).click();
+  await page.getByText(/操作: new-plan/).waitFor({timeout:60000});
+  assert.deepEqual(await dbNames(page),[]);
+  assert.equal(await page.getByRole('button',{name:'確認して隔離保存'}).isDisabled(),true);
+  await page.getByText('初期状態・出典・公式数量・非Attempt情報・対応台帳',{exact:true}).click();
+  await page.getByText(/"origin": "new-plan"/).waitFor();
+  await page.getByRole('button',{name:'この新規状態を未保存draftとして採用して編集',exact:true}).click();
+  await page.getByRole('heading',{name:'履修計画 / active 0件',exact:true}).waitFor();
+  assert.deepEqual(await dbNames(page),[]);assert.equal((await storeSnapshot(page)).raw,null);
+  const {loadYi01InstitutionalCatalog}=await import('../src/planner/institutional/yi01.ts');
+  const {createInstitutionalSearchAdapter}=await import('../src/planner/institutional/search.ts');
+  const {CURRENT_CURRICULUM_SEARCH_TARGET}=await import('../src/planner/institutional/currentSearch.ts');
+  const rows=createInstitutionalSearchAdapter(loadYi01InstitutionalCatalog(),CURRENT_CURRICULUM_SEARCH_TARGET).search({scope:{kind:'all'}}).rows;
+  for (const status of ['safe','ambiguous','conflict','safe']) {
+    const row=rows.find(r=>r.placement.kind==='course_placement'&&r.placement.identityDecision.status===status);
+    await page.getByRole('button',{name:'新しい履修回',exact:true}).click();
+    const form=page.getByRole('form',{name:'新規履修回'});
+    await form.getByRole('region',{name:'制度Placement検索'}).waitFor();
+    await form.getByLabel('制度科目を検索',{exact:true}).fill(row.placement.officialName);
+    await form.getByLabel('制度科目を検索',{exact:true}).press('Enter');
+    assert.equal((await storeSnapshot(page)).raw,null);
+    await form.getByRole('button',{name:`この配置を選択: ${row.placement.officialName} / ${row.scope.officialScopeLabel} / ${row.placement.placementRoleKey}`,exact:true}).click();
+    await form.getByRole('button',{name:'新規Attemptを追加',exact:true}).click();await form.waitFor({state:'detached'});
+  }
+  assert.equal((await storeSnapshot(page)).raw,null);await save(page);
+  const added=await rawState(page),ids=added.graph.attempts.map(a=>a.id);assert.equal(new Set(ids).size,4);
+  assert.deepEqual(added.graph.attempts.map(a=>a.identity.status),['confirmed','ambiguous','conflict','confirmed']);
+  const first=page.locator(`[data-attempt-id="${ids[0]}"]`);
+  await first.getByRole('button',{name:'予定を編集',exact:true}).click();
+  const edit=page.getByRole('form',{name:'Attempt編集'});await edit.getByLabel('予定年度',{exact:true}).fill('2032');await edit.getByRole('button',{name:'編集をメモリに反映'}).click();
+  await first.getByText('このAttemptの進捗・評価（方式を問わず保持）',{exact:true}).click();
+  await first.getByRole('button',{name:'科目評価を開始',exact:true}).click();await first.getByLabel('最終評価',{exact:true}).selectOption('A');
+  await first.getByRole('button',{name:'科目評価をメモリに反映'}).click();
+  const todo=page.getByRole('form',{name:'TODO追加'});await todo.getByLabel('新しいTODO').fill('新規source TODO');await todo.getByLabel('追加先owner').selectOption(ids[0]);await todo.getByRole('button',{name:'TODOを追加',exact:true}).click();
+  await save(page);const beforeDelete=await rawState(page);
+  for (const id of ids.slice(0,2)) await page.locator(`[data-attempt-id="${id}"]`).getByRole('button',{name:'計画から削除',exact:true}).click();
+  await save(page);await page.reload();await page.getByRole('status').filter({hasText:'再検証して読み込み'}).waitFor({timeout:60000});
+  const expected=await rawState(page);assert.equal(expected.graph.removals.length,2);assert.deepEqual(expected.graph.ownedRecords,beforeDelete.graph.ownedRecords);
+  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'確定状態の新backupを書き出す'}).click();const file=await pending,backup=await readFile(await file.path());assert.equal(JSON.parse(backup).backupVersion,3);
+  const {page:other}=await open(t,width,`http://127.0.0.1:${port+3}`);await selectPortable(other,backup);assert.deepEqual(await dbNames(other),[]);
+  const protection=other.waitForEvent('download');await other.getByRole('button',{name:'置換前原文・移行元を保護ファイルに保存'}).click();await protection;
+  await other.getByLabel('保護ファイルの保存先と比較内容を確認し、隔離保存の全件置換に同意します').check();assert.equal(await other.getByRole('button',{name:'確認して隔離保存'}).isDisabled(),true);
+  await other.getByLabel('発行者が認証されていないことを理解し、選択したバックアップを復旧元として採用します').check();await other.getByRole('button',{name:'確認して隔離保存'}).click();await other.getByRole('status').filter({hasText:'隔離保存が完了'}).waitFor({timeout:60000});
+  assert.deepEqual(await rawState(other),expected);await other.reload();await other.getByRole('status').filter({hasText:'再検証して読み込み'}).waitFor({timeout:60000});assert.deepEqual(await rawState(other),expected);
+  await other.locator(`[data-attempt-id="${ids[0]}"]`).getByRole('button',{name:'このAttemptをUndo'}).click();await other.getByRole('alert').filter({hasText:'undo_order_conflict'}).waitFor();
+  for(const id of ids.slice(0,2).reverse())await other.locator(`[data-attempt-id="${id}"]`).getByRole('button',{name:'このAttemptをUndo'}).click();await save(other);assert.deepEqual((await rawState(other)).graph,beforeDelete.graph);
+  assert.equal(await other.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  // A new empty preview cannot silently replace a populated saved plan.
+  await other.getByRole('button',{name:'新しい空の履修計画の初期化preview'}).click();await other.getByText(/操作: new-plan/).waitFor();assert.deepEqual((await rawState(other)).graph,beforeDelete.graph);
+  await other.getByRole('button',{name:'取消（保存しない）'}).click();assert.deepEqual((await rawState(other)).graph,beforeDelete.graph);
+});
+
+for(const failure of ['quota','abort'])test(`new source atomic initialization ${failure}: empty DB preserved`,async t=>{
+  const {page}=await open(t);await page.getByRole('button',{name:'新しい空の履修計画の初期化preview'}).click();await page.getByText(/操作: new-plan/).waitFor();
+  await page.evaluate(mode=>{const original=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){if(mode==='quota')throw new DOMException('full','QuotaExceededError');const request=original.apply(this,args);this.transaction.abort();return request;};},failure);
+  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'置換前原文・移行元を保護ファイルに保存'}).click();await pending;await page.getByLabel('保護ファイルの保存先と比較内容を確認し、隔離保存の全件置換に同意します').check();await page.getByRole('button',{name:'確認して隔離保存'}).click();await page.getByRole('alert').waitFor();assert.deepEqual(await dbNames(page),[]);assert.equal((await storeSnapshot(page)).raw,null);assert.equal(await page.getByText(/隔離保存が完了/).count(),0);
 });

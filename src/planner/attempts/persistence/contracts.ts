@@ -1,5 +1,5 @@
 import type { PlannerCatalog } from '../../plannerCatalog';
-import type { AttemptGraph } from '../types';
+import type { AttemptGraph, AttemptValidationContext } from '../types';
 import type { Binding, IdAssignments, MigrationTarget, RetainedState, SourceArchive } from '../migration/contracts';
 import type { Command } from '../workbench/operations';
 
@@ -7,6 +7,7 @@ export const STATE_FORMAT = 'hosei-attempt-state';
 export const STATE_VERSION = 23;
 export const BACKUP_FORMAT = 'hosei-attempt-backup';
 export const BACKUP_VERSION = 2;
+export const NEW_BACKUP_VERSION = 3;
 export const PERSISTENCE_RULE = { id: 'yi-06:replay', version: 1 } as const;
 // Explicit evidence representation; runtime context and decoder capabilities are never serialized.
 export type SourceEvidence = {
@@ -28,10 +29,32 @@ export type AttemptState23 = {
   history: { commands: Command[]; issuedIds: string[]; usedTodoIds: string[] };
   verification: { sourceRoundTrip: true; graphSha256: string; retainedSha256: string; masterSha256: string };
 };
+// schema23 remains migration-only. New plans use an explicitly different schema.
+export const NEW_STATE_VERSION = 24;
+export const NEW_PERSISTENCE_RULE = { id: 'yi-new-plan:replay', version: 1 } as const;
+export type NewPlanEvidence = {
+  origin: 'new-plan'; initializationVersion: 1;
+  curriculumVersionId: string; sourceRevisionId: string; sourceDigest: string; masterSha256: string;
+};
+export type NewPlanSource = { kind: 'new-plan'; evidence: NewPlanEvidence; context: AttemptValidationContext };
+export type PersistenceSource = SourceArchive | NewPlanSource;
+export type NewPlanRetained = {
+  importedCourseAchievements: []; importedStudyRecords: [];
+  applicability: 'unknown'; scopeId: null; graduationEvaluation: 'not_evaluated';
+  graduationCheckComplete: false; sourceLinksReverified: false;
+};
+export type AttemptState24 = {
+  format: typeof STATE_FORMAT; schemaVersion: typeof NEW_STATE_VERSION; rule: typeof NEW_PERSISTENCE_RULE;
+  source: NewPlanEvidence; graph: AttemptGraph; retained: NewPlanRetained;
+  history: AttemptState23['history'];
+  verification: { graphSha256: string; retainedSha256: string };
+};
+export type AttemptState = AttemptState23 | AttemptState24;
 export type AttemptBackup = {
   format: typeof BACKUP_FORMAT; backupVersion: typeof BACKUP_VERSION; createdAt: string;
   state: AttemptState23; reservedIds: string[]; sha256: string;
 };
+export type NewPlanBackup = Omit<AttemptBackup, 'backupVersion' | 'state'> & { backupVersion: typeof NEW_BACKUP_VERSION; state: AttemptState24 };
 // The host checkpoint registry is never imported. Validated backup reservations
 // may only add restrictions after explicit adoption; a file hash is not authority.
 export type AuthorityRecord = { raw: string | null; revision: number; committed: string[]; issuedIds: string[] };
