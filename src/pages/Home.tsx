@@ -224,26 +224,27 @@ export default function Home() {
           <div className="mb-10 sm:mb-12 text-center">
             <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / PLANNER</span>
             <h2 id="home-planner-heading" className="text-3xl md:text-4xl font-medium tracking-wide">履修プランナー</h2>
-            <p className="mt-6 text-sm sm:text-base text-[#666666] leading-loose font-light">履修計画や成績の取り込み、メディアの進捗記録をまとめて。</p>
           </div>
-          <nav aria-label="履修プランナー" className="grid gap-4 md:grid-cols-3 md:gap-6">
-            {[
-              { to: '/planner', label: '履修計画', description: '年間の学習予定を立てる' },
-              { to: '/planner#grade-import', label: '成績取り込み', description: '成績データを取り込んで確認する' },
-              { to: '/planner#media', label: 'メディア進捗記録', description: 'メディアスクーリングの進捗を記録する' },
-            ].map(({ to, label, description }) => (
-              <Link key={to} to={to} className="flex min-h-32 items-center justify-between gap-4 text-white bg-[#E65C00] hover:bg-[#CC5200] px-6 py-7 lg:p-8 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]">
-                {/* G18: a 1px unblurred outline preserves the white fill, including thin description text. */}
-                <span className="min-w-0" style={{ textShadow: '-1px -1px 0 #000, 0 -1px 0 #000, 1px -1px 0 #000, -1px 0 0 #000, 1px 0 0 #000, -1px 1px 0 #000, 0 1px 0 #000, 1px 1px 0 #000' }}>
-                  <span className="block text-xl tracking-widest">{label}</span>
-                  <span className="mt-3 block text-sm leading-relaxed font-light">{description}</span>
-                </span>
-                <svg aria-hidden="true" className="w-4 h-4 ml-2 shrink-0 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                </svg>
-              </Link>
-            ))}
-          </nav>
+          <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+            <div className="text-[#666666] leading-loose font-light space-y-4 text-left">
+              <p>こちらのボタンから履修の計画を検索しながら立てられます。</p>
+              <p>公式の成績表からデータを取り込むとすぐに今後の予定を立てられます。また、メディアの進捗も記録でき、すぐにsnsなどに共有できます。</p>
+              <p>卒業までに足りない単位数を確かめられますが、卒業の可否を保証しません。</p>
+              <p>卒業の可否や科目の内容などはシラバスやしおり、公式ホームページを参照してください。</p>
+            </div>
+            <nav aria-label="履修プランナー" className="w-full space-y-4 md:max-w-sm md:justify-self-end">
+              {[
+                { to: '/planner', label: '履修計画' },
+                { to: '/planner#grade-import', label: '成績取り込み' },
+                { to: '/planner#media', label: 'メディア進捗記録' },
+              ].map(({ to, label }) => (
+                <Link key={to} to={to} className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]">
+                  <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
+                  <span className="min-w-0 break-words tracking-wide">{label}</span>
+                </Link>
+              ))}
+            </nav>
+          </div>
         </motion.div>
       </section>
 
@@ -359,12 +360,10 @@ export default function Home() {
 
               <Link
                 to="/member"
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group"
+                className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]"
               >
-                メンバープロフィールを見る
-                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                </svg>
+                <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
+                <span className="min-w-0 break-words tracking-wide">メンバープロフィールを見る</span>
               </Link>
             </motion.div>
 
@@ -425,12 +424,10 @@ export default function Home() {
             <div className="flex justify-start">
               <Link
                 to="/message"
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group"
+                className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]"
               >
-                メッセージの続きを読む
-                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                </svg>
+                <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
+                <span className="min-w-0 break-words tracking-wide">メッセージの続きを読む</span>
               </Link>
             </div>
           </motion.div>

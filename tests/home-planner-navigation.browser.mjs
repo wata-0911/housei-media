@@ -63,103 +63,145 @@ async function destination(page, id, tab) {
 }
 async function scrollCount(page) { return page.evaluate(() => window.navigationScrolls.length); }
 
-// WCAG G18 sRGB calculation. Style checks do not certify AA: the full glyph
-// outline and legibility also need rendered/manual review (see PR #192).
+// WCAG sRGB relative luminance; compare the rendered text color with its opaque background.
 function contrast(first, second) {
   const luminance = rgb => rgb.map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
     .reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0);
   const values = [luminance(first), luminance(second)].sort((a, b) => a - b);
   return (values[1] + 0.05) / (values[0] + 0.05);
 }
-async function assertOutline(button, background) {
-  assert.equal(await button.evaluate(el => getComputedStyle(el).backgroundColor), `rgb(${background.join(', ')})`);
-  const text = button.locator('span.min-w-0 > span');
-  assert.equal(await text.count(), 2, 'both title and description retain their text');
-  for (const element of await text.all()) {
-    const computed = await element.evaluate(el => {
-      const style = getComputedStyle(el);
-      return { color: style.color, shadow: style.textShadow, stroke: style.webkitTextStrokeWidth };
-    });
-    assert.equal(computed.color, 'rgb(255, 255, 255)');
-    assert.equal(computed.stroke, '0px', 'outline must not eat into the thin white fill');
-    const layers = computed.shadow.match(/rgb\(0, 0, 0\) -?\d+px -?\d+px 0px/g) ?? [];
-    assert.equal(layers.length, 8, 'opaque zero-blur outline in all eight directions');
-    const offsets = layers.map(layer => layer.replace('rgb(0, 0, 0) ', '')).sort();
-    assert.deepEqual(offsets, ['-1px -1px 0px', '0px -1px 0px', '1px -1px 0px', '-1px 0px 0px', '1px 0px 0px', '-1px 1px 0px', '0px 1px 0px', '1px 1px 0px'].sort());
-  }
-  assert.ok(contrast([0, 0, 0], background) >= 4.5, 'narrow black outline vs actual normal/hover background');
-  assert.equal(contrast([255, 255, 255], [0, 0, 0]), 21, 'white fill vs outline');
+async function assertTextContrast(link, color) {
+  const appearance = await link.locator('span').last().evaluate(el => {
+    const style = getComputedStyle(el);
+    let parent = el;
+    while (parent && getComputedStyle(parent).backgroundColor === 'rgba(0, 0, 0, 0)') parent = parent.parentElement;
+    return { color: style.color, background: getComputedStyle(parent).backgroundColor, shadow: style.textShadow, stroke: style.webkitTextStrokeWidth };
+  });
+  assert.equal(appearance.color, color);
+  assert.equal(appearance.shadow, 'none', 'no obsolete black outline');
+  assert.equal(appearance.stroke, '0px');
+  const rgb = value => value.match(/\d+/g).map(Number);
+  assert.ok(contrast(rgb(appearance.color), rgb(appearance.background)) >= 4.5, JSON.stringify(appearance));
+  assert.equal(await link.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)', 'no filled CTA');
+  assert.equal(await link.locator('svg').count(), 0, 'decorative rule replaces the button arrow');
+}
+const paragraphs = [
+  'こちらのボタンから履修の計画を検索しながら立てられます。',
+  '公式の成績表からデータを取り込むとすぐに今後の予定を立てられます。また、メディアの進捗も記録でき、すぐにsnsなどに共有できます。',
+  '卒業までに足りない単位数を確かめられますが、卒業の可否を保証しません。',
+  '卒業の可否や科目の内容などはシラバスやしおり、公式ホームページを参照してください。',
+];
+const labels = ['履修計画', '成績取り込み', 'メディア進捗記録'];
+const hrefs = ['/planner', '/planner#grade-import', '/planner#media'];
+function unifiedLinks(page) {
+  return page.locator('nav[aria-label="履修プランナー"] a, main a[href="/member"], main a[href="/message"]');
 }
 
-
 for (const viewport of [{ width: 1440, height: 1000 }, { width: 768, height: 1024 }, { width: 375, height: 812 }]) {
-  test(`independent Planner cards precede unchanged SCHEDULE with keyboard accessible CTAs (${viewport.width}px, reduced motion)`, async t => {
+  test(`Planner explanation and unified links precede unchanged SCHEDULE (${viewport.width}px, reduced motion)`, async t => {
     const page = await open(t, '/', { viewport, reducedMotion: 'reduce' });
     const nav = page.getByRole('navigation', { name: '履修プランナー', exact: true });
-    assert.equal(await nav.getByRole('link').count(), 3);
+    assert.deepEqual(await nav.getByRole('link').evaluateAll(links => links.map(link => link.textContent.trim())), labels);
+    assert.deepEqual(await nav.getByRole('link').evaluateAll(links => links.map(link => link.getAttribute('href'))), hrefs);
     assert.deepEqual(await page.locator('main section span').filter({ hasText: /^\d{2} \/ / }).allTextContents(), [
       '01 / PLANNER', '02 / SCHEDULE', '03 / OFFICIAL X TIMELINE', '04 / MEMBERS', "05 / FOUNDER'S MESSAGE",
     ]);
     const section = page.locator('section').filter({ has: nav });
     assert.equal(await section.getByRole('heading', { name: '履修プランナー', exact: true }).count(), 1);
     assert.equal(await section.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(250, 250, 250)');
-    const referenceButton = page.locator('main a[href="/member"]');
-    const buttonAppearance = el => {
-      const style = getComputedStyle(el);
-      return { background: style.backgroundColor, color: style.color, radius: style.borderRadius, shadow: style.boxShadow };
-    };
-    const referenceAppearance = await referenceButton.evaluate(buttonAppearance);
-    assert.equal(await referenceButton.evaluate(el => getComputedStyle(el).textShadow), 'none');
-    assert.equal(await page.locator('main a[href="/message"]').evaluate(el => getComputedStyle(el).textShadow), 'none');
-    for (const button of await nav.getByRole('link').all()) {
-      assert.deepEqual(await button.evaluate(buttonAppearance), referenceAppearance);
-      await assertOutline(button, [230, 92, 0]);
-      assert.equal(await button.locator('svg path').getAttribute('d'), await referenceButton.locator('svg path').getAttribute('d'));
+    assert.deepEqual(await section.locator('p').allTextContents(), paragraphs);
+    assert.equal(await section.getByText('履修計画や成績の取り込み、メディアの進捗記録をまとめて。', { exact: true }).count(), 0);
+    assert.equal(await nav.locator('p').count(), 0);
+    assert.equal(await section.getByText(/年間の学習予定を立てる|成績データを取り込んで確認する|メディアスクーリングの進捗を記録する/).count(), 0);
+    for (const p of await section.locator('p').all()) {
+      assert.equal(await p.evaluate(el => getComputedStyle(el).color), 'rgb(102, 102, 102)');
+      assert.equal(await p.evaluate(el => getComputedStyle(el).textAlign), 'left');
     }
+    assert.ok(contrast([102, 102, 102], [250, 250, 250]) >= 4.5, 'explanation contrast');
     assert.equal(await section.locator('img[src="/schedule-calendar.png"]').count(), 0);
     const schedule = page.locator('section').filter({ has: page.locator('img[src="/schedule-calendar.png"]') });
     assert.equal(await schedule.locator('img[src="/schedule-calendar.png"]').count(), 1);
     assert.equal(await schedule.locator('a[href^="https://x.com/"]').count(), 2);
     assert.equal(await schedule.getByRole('navigation', { name: '履修プランナー', exact: true }).count(), 0);
     assert.equal(await section.evaluate(el => el.nextElementSibling.querySelector('img[src="/schedule-calendar.png"]') !== null), true);
-    const cards = await nav.getByRole('link').evaluateAll(links => links.map(link => {
+    const links = await nav.getByRole('link').evaluateAll(links => links.map(link => {
       const { x, y, width, height } = link.getBoundingClientRect();
       return { x, y, width, height };
     }));
+    assert.ok(links.every(link => Math.abs(link.x - links[0].x) <= 1), 'all three links share a left edge');
+    assert.ok(links[1].y >= links[0].y + links[0].height + 15 && links[2].y >= links[1].y + links[1].height + 15, 'links always stacked with space');
+    const copy = await section.locator('p').first().locator('..').boundingBox();
+    const navigation = await nav.boundingBox();
     if (viewport.width >= 768) {
-      assert.ok(cards.every(card => Math.abs(card.y - cards[0].y) <= 1), 'desktop cards share a row');
-      assert.ok(cards[1].x >= cards[0].x + cards[0].width && cards[2].x >= cards[1].x + cards[1].width);
+      assert.ok(navigation.x >= copy.x + copy.width, 'desktop text and navigation in separate columns');
+      assert.ok(navigation.y < copy.y + copy.height && navigation.y + navigation.height > copy.y, 'columns overlap vertically');
     } else {
-      assert.ok(cards.every(card => Math.abs(card.x - cards[0].x) <= 1), 'mobile cards share a column');
-      assert.ok(cards[1].y >= cards[0].y + cards[0].height && cards[2].y >= cards[1].y + cards[1].height);
+      assert.ok(navigation.y >= copy.y + copy.height, 'mobile navigation follows all four paragraphs');
     }
     assert.equal(await page.locator('main > div > section').first().getByRole('textbox').count(), 1);
     assert.equal(await section.evaluate(el => el.previousElementSibling.querySelector('#home-search') !== null), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    const link = nav.getByRole('link').filter({ hasText: '年間の学習予定を立てる' });
+    assert.equal(await page.locator('main a[href="/member"]').innerText(), 'メンバープロフィールを見る');
+    assert.equal(await page.locator('main a[href="/message"]').innerText(), 'メッセージの続きを読む');
+    for (const link of await unifiedLinks(page).all()) {
+      await page.mouse.move(0, 0);
+      await assertTextContrast(link, 'rgb(102, 102, 102)');
+      assert.ok((await link.boundingBox()).height >= 44, 'clickable target at least 44px high');
+      await link.scrollIntoViewIfNeeded();
+      const rule = link.locator('span').first();
+      const text = link.locator('span').last();
+      const before = await text.boundingBox();
+      assert.equal(await rule.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(230, 92, 0)');
+      assert.equal((await rule.boundingBox()).width, 32);
+      await link.hover();
+      await assertTextContrast(link, 'rgb(0, 34, 85)');
+      assert.equal((await rule.boundingBox()).width, 32, 'reduced motion suppresses rule growth');
+      assert.equal((await text.boundingBox()).x, before.x, 'reduced motion suppresses text movement');
+      assert.equal(await rule.evaluate(el => getComputedStyle(el).transitionDuration), '0s');
+      await page.keyboard.press('Tab');
+      await link.focus();
+      assert.equal(await link.evaluate(el => el.matches(':focus-visible')), true);
+      assert.equal(await link.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
+    }
+    const link = nav.getByRole('link', { name: '履修計画', exact: true });
     await link.focus();
     if (process.env.HOME_PLANNER_SCREENSHOT_DIR) {
-      await page.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/home-planner-${viewport.width}.png`, fullPage: true });
-      await nav.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/outline-normal-${viewport.width}.png` });
-    }
-    assert.equal(await link.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
-    assert.equal(await link.evaluate(el => getComputedStyle(el).transitionDuration), '0s');
-    if (viewport.width >= 768) {
-      for (const button of await nav.getByRole('link').all()) {
-        await button.hover();
-        await assertOutline(button, [204, 82, 0]);
-      }
-      await link.hover();
-      if (process.env.HOME_PLANNER_SCREENSHOT_DIR) await nav.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/outline-hover-${viewport.width}.png` });
-      assert.equal(await link.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(204, 82, 0)');
-      assert.equal(await link.evaluate(el => getComputedStyle(el).transform), 'matrix(1, 0, 0, 1, 0, 0)');
-      assert.equal(await link.locator('svg').evaluate(el => getComputedStyle(el).transform), 'matrix(1, 0, 0, 1, 0, 0)');
+      await page.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/home-${viewport.width}.png`, fullPage: true });
+      await section.screenshot({ path: `${process.env.HOME_PLANNER_SCREENSHOT_DIR}/planner-${viewport.width}.png` });
     }
     await page.keyboard.press('Enter');
     await destination(page, 'planner-start', '年間履修計画');
     assert.equal(new URL(page.url()).pathname, '/planner');
   });
 }
+
+test('unified navigation matches SCHEDULE hover colors, rule growth and text movement', async t => {
+  const page = await open(t, '/', { viewport: { width: 1440, height: 1000 }, reducedMotion: 'no-preference' });
+  const schedule = page.locator('section').filter({ has: page.locator('img[src="/schedule-calendar.png"]') });
+  const allLinks = [...await unifiedLinks(page).all(), ...await schedule.locator('a[href^="https://x.com/"]').all()];
+  for (const link of allLinks) {
+    await link.scrollIntoViewIfNeeded();
+    await page.mouse.move(0, 0);
+    await page.waitForFunction(el => getComputedStyle(el).color === 'rgb(102, 102, 102)' && !el.getAnimations({ subtree: true }).some(animation => animation.playState === 'running'), await link.elementHandle());
+    await assertTextContrast(link, 'rgb(102, 102, 102)');
+    const rule = link.locator('span').first();
+    assert.equal(await rule.evaluate(el => getComputedStyle(el).transitionDuration), '0.3s');
+    // Finish Home's entrance transform before measuring the horizontal hover shift.
+    await page.waitForFunction(el => {
+      for (let p = el; p; p = p.parentElement) if (getComputedStyle(p).opacity !== '1' || (getComputedStyle(p).transform !== 'none' && getComputedStyle(p).transform !== 'matrix(1, 0, 0, 1, 0, 0)')) return false;
+      return true;
+    }, await link.elementHandle());
+    const before = await link.locator('span').last().boundingBox();
+    const ruleBefore = (await rule.boundingBox()).width;
+    await link.hover();
+    await page.waitForFunction(el => getComputedStyle(el).color === 'rgb(0, 34, 85)' && !el.getAnimations({ subtree: true }).some(animation => animation.playState === 'running'), await link.elementHandle());
+    await assertTextContrast(link, 'rgb(0, 34, 85)');
+    const growth = (await rule.boundingBox()).width - ruleBefore;
+    assert.ok(growth > 0, 'orange rule grows on hover');
+    assert.ok(Math.abs((await link.locator('span').last().boundingBox()).x - before.x - growth) < 1, 'rule growth pushes the whole label right');
+    if ((await link.getAttribute('href')).startsWith('/')) assert.ok(Math.abs(growth - 16) < 1, 'new rules grow from 32px to 48px');
+  }
+});
 
 for (const [hash, id, tab] of [['#grade-import', 'grade-import', '年間履修計画'], ['#media', 'media-panel', 'メディア']]) {
   test(`${hash}: Home CTA, reload, direct access, back/forward and no writes`, async t => {
