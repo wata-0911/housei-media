@@ -212,7 +212,45 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション1: SCHEDULE */}
+      {/* セクション1: PLANNER */}
+      <section aria-labelledby="home-planner-heading" className="py-20 sm:py-24 bg-[#FAFAFA] text-[#002255] border-y border-gray-200 overflow-hidden">
+        <motion.div
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+        >
+          <div className="bg-white p-6 sm:p-10 md:p-16 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]">
+            <div className="mb-10 sm:mb-12 text-center">
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / PLANNER</span>
+              <h2 id="home-planner-heading" className="text-3xl md:text-4xl font-medium tracking-wide">履修プランナー</h2>
+            </div>
+            <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+              <div className="text-[#666666] leading-loose font-light space-y-4 text-left">
+                <p>こちらのボタンから履修の計画を検索しながら立てられます。</p>
+                <p>公式の成績表からデータを取り込むとすぐに今後の予定を立てられます。また、メディアの進捗も記録でき、すぐにsnsなどに共有できます。</p>
+                <p>卒業までに足りない単位数を確かめられますが、卒業の可否を保証しません。</p>
+                <p>卒業の可否や科目の内容などはシラバスやしおり、公式ホームページを参照してください。</p>
+              </div>
+              <nav aria-label="履修プランナー" className="w-full space-y-4 md:max-w-sm md:justify-self-end">
+                {[
+                  { to: '/planner', label: '履修計画' },
+                  { to: '/planner#grade-import', label: '成績取り込み' },
+                  { to: '/planner#media', label: 'メディア進捗記録' },
+                ].map(({ to, label }) => (
+                  <Link key={to} to={to} className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]">
+                    <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
+                    <span className="min-w-0 break-words tracking-wide">{label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* セクション2: SCHEDULE */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row items-center">
@@ -223,7 +261,7 @@ export default function Home() {
               transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.3, ease: "easeOut" }}
               className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">01 / SCHEDULE</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / SCHEDULE</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
                 計画的な学習が、<br />目標への最短距離。
               </h3>
@@ -264,7 +302,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション2: OFFICIAL X TIMELINE */}
+      {/* セクション3: OFFICIAL X TIMELINE */}
       <section className="py-32 overflow-hidden bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col items-center gap-12">
@@ -276,7 +314,7 @@ export default function Home() {
               transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
               className="text-center w-full"
             >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">02 / OFFICIAL X</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">03 / OFFICIAL X TIMELINE</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium tracking-wide">
                 TIMELINE
               </h3>
@@ -303,7 +341,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション3: MEMBERS */}
+      {/* セクション4: MEMBERS */}
       <section className="py-32 bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row-reverse items-center justify-between gap-12">
@@ -314,7 +352,7 @@ export default function Home() {
               transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 1, delay: 0.3, ease: "easeOut" }}
               className="w-full md:w-5/12 bg-white p-10 md:p-16 relative z-10 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.05)]"
             >
-              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">03 / MEMBERS</span>
+              <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / MEMBERS</span>
               <h3 className="text-3xl md:text-4xl text-[#002255] font-medium mb-8 leading-relaxed tracking-wide">
                 法政通信メディアの<br />運営メンバーを紹介します！
               </h3>
@@ -324,12 +362,10 @@ export default function Home() {
 
               <Link
                 to="/member"
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group"
+                className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]"
               >
-                メンバープロフィールを見る
-                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                </svg>
+                <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
+                <span className="min-w-0 break-words tracking-wide">メンバープロフィールを見る</span>
               </Link>
             </motion.div>
 
@@ -359,7 +395,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション4: MESSAGE */}
+      {/* セクション5: FOUNDER'S MESSAGE */}
       <section className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div
@@ -373,7 +409,7 @@ export default function Home() {
               <span className="text-5xl text-[#C6A87C] font-serif leading-none">“</span>
             </div>
 
-            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">04 / FOUNDER;S MESSAGE</span>
+            <span className="text-[#E65C00] text-sm tracking-[0.15em] mb-4 block font-medium">05 / FOUNDER&apos;S MESSAGE</span>
             <h3 className="text-2xl md:text-3xl text-[#002255] font-medium mb-8 leading-relaxed tracking-widest">
               いつか君も困っている人がいたら、<br />
               助けてあげてね。
@@ -390,12 +426,10 @@ export default function Home() {
             <div className="flex justify-start">
               <Link
                 to="/message"
-                className="inline-flex items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-6 py-3 rounded-md shadow-md hover:shadow-lg hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 transition-all duration-300 font-medium group"
+                className="flex min-h-12 items-center py-2 text-[#666666] hover:text-[#002255] transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#002255]"
               >
-                メッセージの続きを読む
-                <svg className="w-4 h-4 ml-2 transform group-hover:translate-x-1 motion-reduce:group-hover:translate-x-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                </svg>
+                <span aria-hidden="true" className="w-8 h-[1px] shrink-0 bg-[#E65C00] mr-4 transition-all duration-300 group-hover:w-12 motion-reduce:group-hover:w-8"></span>
+                <span className="min-w-0 break-words tracking-wide">メッセージの続きを読む</span>
               </Link>
             </div>
           </motion.div>

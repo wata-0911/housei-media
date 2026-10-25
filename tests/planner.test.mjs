@@ -19,6 +19,7 @@ import CorrespondenceProgress from '../src/components/planner/progress/Correspon
 import CourseEvaluations from '../src/components/planner/progress/CourseEvaluations.tsx';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import FuturePlanNotice from '../src/components/planner/planning/FuturePlanNotice.tsx';
 import AnnualCreditLimitNotice from '../src/components/planner/planning/AnnualCreditLimitNotice.tsx';
 import BrowserExtensionEntrySection, { PLANNER_EXTENSION_PUBLIC_URL } from '../src/components/planner/gradeImport/BrowserExtensionEntrySection.tsx';
@@ -4382,7 +4383,7 @@ function thesisPageMarkup(state) {
       removeEventListener() { }
     }
   });
-  try { return renderToStaticMarkup(createElement(PlannerPage)); }
+  try { return renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ['/planner'] }, createElement(PlannerPage))); }
   finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else delete globalThis.window;
