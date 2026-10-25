@@ -142,7 +142,8 @@ test('schema23/new24 decoders refuse source confusion; backup3 can port only aft
   await assert.rejects(commit(portable, p, true, { ...portableConsent(p), protectedBackupRaw: 'wrong' }), /adoption/);
   const restored = await commit(portable, p, true, portableConsent(p));
   assert.deepEqual(restored.state, loaded.state); assert.deepEqual((await controller(target).load()).workspace, loaded.workspace);
-  assert.deepEqual(target.snapshot().issuedIds, store.snapshot().issuedIds);
+  // Reservations are a restriction set; host union insertion order is not portable authority.
+  assert.deepEqual(new Set(target.snapshot().issuedIds), new Set(store.snapshot().issuedIds));
   const collision = controller(store); loaded = await collision.load();
   const altered = JSON.parse(raw); altered.state.history.commands[0].attempt.originalTitle = '別履歴'; altered.state.graph.attempts[0].originalTitle = '別履歴'; altered.state.verification.graphSha256 = await backupDigest(altered.state.graph);
   await assert.rejects(collision.inspectBackup(await rehash(altered)), /host_collision/);
