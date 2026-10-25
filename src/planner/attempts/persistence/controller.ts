@@ -8,14 +8,25 @@ import { dateCorrectionProposal, type DateCorrection, type MigrationSession } fr
 import { applyCommand, createWorkspace, type Command, type Workspace } from '../workbench/operations';
 import { sameAttemptData } from '../validation';
 import { assignmentIds, issuedIds, encodeState, replayState, requireLiveMigration } from './codec';
-import { BACKUP_FORMAT, BACKUP_VERSION, exactKeys, type AtomicAttemptStore, type AttemptBackup, type AttemptState23, type AuthorityRecord, type CorrectionEvidence } from './contracts';
+import { BACKUP_FORMAT, BACKUP_VERSION, NEW_BACKUP_VERSION, exactKeys, type AtomicAttemptStore, type AttemptState, type PersistenceSource, type NewPlanSource, type AuthorityRecord, type CorrectionEvidence } from './contracts';
+import { createNewPlanSource, emptyNewPlanWorkspace, encodeNewPlan, newPlanIssuedIds } from './newPlan';
 import { catalogUuids, checkFreshCommandIds, idTail, referencedUuids, requireReservations, sourceUuids, unionReservations, validateReservations } from './identity';
 
-export type PersistenceHandle = { state: AttemptState23; workspace: Workspace; source: SourceArchive };
+export type PersistenceHandle = { state: AttemptState; workspace: Workspace; source: PersistenceSource };
 type Recovery = { raw: string; rawSha256: string; reservedIds: string[]; portable: boolean };
 export type PortableConsent = { acceptedBackupRawSha256: string; protectedBackupRaw: string };
-export type PersistencePreview = { handle: PersistenceHandle; bytes: number; previousRaw: string | null; sourceRaw: string; action: 'migration' | 'edit' | 'restore'; recovery: Recovery | null };
-type PrivateHandle = { expected: AuthorityRecord; base: MigrationTarget; table: IdAssignments; corrections: CorrectionEvidence[]; fresh: boolean; recovery?: Recovery };
+export type PersistencePreview = { handle: PersistenceHandle; bytes: number; previousRaw: string | null; sourceRaw: string; action: 'new-plan' | 'migration' | 'edit' | 'restore'; recovery: Recovery | null };
+type Origin = { kind: 'migration'; source: SourceArchive; base: MigrationTarget; table: IdAssignments; corrections: CorrectionEvidence[] }
+  | { kind: 'new-plan'; source: NewPlanSource };
+type PrivateHandle = Origin & { expected: AuthorityRecord; fresh: boolean; recovery?: Recovery };
+type Replay = Awaited<ReturnType<typeof replayState>>;
+function replayOrigin(r: Replay): Origin {
+  if ('environment' in r) return { kind: 'migration', source: r.source, base: r.base, table: r.state.assignments, corrections: r.state.corrections };
+  return { kind: 'new-plan', source: r.source };
+}
+const sourceProtection = (source: PersistenceSource) => source.kind === 'new-plan' ? JSON.stringify(source.evidence) : source.raw;
+// New source evidence contains shared document references, no learner identities.
+const stateReferences = (source: PersistenceSource) => source.kind === 'new-plan' ? new Set<string>() : referencedUuids(source.state);
 type Environment = Awaited<ReturnType<typeof prepareMigrationEnvironment>>;
 const utf8Bytes = (raw: string) => new TextEncoder().encode(raw).byteLength;
 function validateAuthority(record: AuthorityRecord) {
@@ -31,8 +42,13 @@ function validateAuthority(record: AuthorityRecord) {
 /** Reload requires a host checkpoint. Portable recovery instead requires complete
  * integrity validation plus separate explicit adoption of the selected file.
  * Neither a hash nor user consent authenticates its issuer. */
-export function createAttemptPersistence(store: AtomicAttemptStore, locks: PlannerWriteLocks | undefined, environment: Environment, maxRecordBytes = 32 * 1024 * 1024) {
+export function createAttemptPersistence(store: AtomicAttemptStore, locks: PlannerWriteLocks | undefined, environmentInput?: Environment | (() => Promise<Environment>), maxRecordBytes = 32 * 1024 * 1024) {
   if (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes <= 0) throw new Error('capacity_policy');
+  let environmentTask: Promise<Environment> | undefined;
+  async function migrationEnvironment() {
+    if (!environmentInput) throw new Error('migration_environment_required');
+    return typeof environmentInput === 'function' ? environmentTask ??= environmentInput() : environmentInput;
+  }
   const handles = new WeakMap<PersistenceHandle, PrivateHandle>();
   const previews = new WeakSet<PersistencePreview>();
   const sessions = new WeakMap<MigrationSession, { expected: AuthorityRecord; corrections: CorrectionEvidence[] }>();
@@ -53,31 +69,40 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
   }
   async function validateState(state: unknown) {
     const replay = await replayState(state);
-    if (!sameAttemptData(replay.environment.target, environment.target)
-      || !sameAttemptData(replay.environment.rawFiles, environment.rawFiles)
-      || !sameAttemptData(replay.environment.catalog, environment.catalog)) throw new Error('target_catalog_changed');
+    if ('environment' in replay) {
+      const environment = await migrationEnvironment();
+      if (!sameAttemptData(replay.environment.target, environment.target)
+        || !sameAttemptData(replay.environment.rawFiles, environment.rawFiles)
+        || !sameAttemptData(replay.environment.catalog, environment.catalog)) throw new Error('target_catalog_changed');
+    }
     return replay;
   }
-  async function checkReplacement(state: AttemptState23, source: SourceArchive, reserved: string[], expected: AuthorityRecord) {
+  async function checkReplacement(state: AttemptState, source: PersistenceSource, reserved: string[], expected: AuthorityRecord) {
     // Known checkpoints can roll back, but permanent reservations survive.
     unionReservations(expected.issuedIds, reserved);
     if (expected.committed.includes(await backupDigest(state))) return;
     const occupied = new Set(expected.issuedIds.map(idTail));
-    const sharedCatalog = new Set<string>(), stateReferences = referencedUuids(source.state);
+    const sharedCatalog = new Set<string>(), incomingReferences = stateReferences(source);
     if (expected.raw !== null) {
       const current = await witness(parseMigrationJson(expected.raw), expected);
-      referencedUuids(current.source.state).forEach(id => occupied.add(id));
+      stateReferences(current.source).forEach(id => occupied.add(id));
       const incomingCatalog = catalogUuids(source);
       catalogUuids(current.source).forEach(id => { if (incomingCatalog.has(id)) sharedCatalog.add(id); });
     }
     // Identical bare catalog references are shared restrictions, not newly issued
     // identities. State references and cross-namespace aliases still conflict.
     if (reserved.some(id => occupied.has(idTail(id))
-      && !(sharedCatalog.has(id) && !stateReferences.has(id)))) throw new Error('recovery_host_collision: 未知の履歴が既存IDと重なります。空の隔離環境で復旧してください。');
+      && !(sharedCatalog.has(id) && !incomingReferences.has(id)))) throw new Error('recovery_host_collision: 未知の履歴が既存IDと重なります。空の隔離環境で復旧してください。');
   }
-  async function makeHandle(source: SourceArchive, table: IdAssignments, base: MigrationTarget, workspace: Workspace, detail: PrivateHandle) {
-    const state = await encodeState(source, table, base, workspace, environment.target, detail.corrections);
-    const handle = freeze({ state, workspace, source }); handles.set(handle, detail); return handle;
+  async function makeHandle(workspace: Workspace, detail: PrivateHandle): Promise<PersistenceHandle> {
+    const state = detail.kind === 'new-plan' ? await encodeNewPlan(detail.source, workspace)
+      : await encodeState(detail.source, detail.table, detail.base, workspace, (await migrationEnvironment()).target, detail.corrections);
+    const handle = freeze({ state, workspace, source: detail.source }); handles.set(handle, detail); return handle;
+  }
+  async function prepareNewPlan() {
+    const expected = await read(), source = await createNewPlanSource();
+    const handle = await makeHandle(emptyNewPlanWorkspace(source), { kind: 'new-plan', source, expected, fresh: true });
+    return preview(handle, 'new-plan');
   }
   async function protectCurrent() {
     const { raw } = await store.read();
@@ -87,10 +112,10 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
   async function load(): Promise<PersistenceHandle | null> {
     const expected = await read(); if (expected.raw === null) return null;
     const r = await witness(parseMigrationJson(expected.raw), expected);
-    if (!sameAttemptData(r.environment.target, environment.target)) throw new Error('target_catalog_changed');
-    return makeHandle(r.source, r.state.assignments, r.base, r.workspace, { expected, base: r.base, table: r.state.assignments, corrections: r.state.corrections, fresh: false });
+    return makeHandle(r.workspace, { ...replayOrigin(r), expected, fresh: false });
   }
   async function inspectLegacy(raw: string): Promise<MigrationSession> {
+    const environment = await migrationEnvironment();
     const expected = await read();
     const cacheKey = `${expected.revision}:${raw}`;
     if (inspected.has(cacheKey)) return inspected.get(cacheKey)!;
@@ -112,6 +137,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
   async function confirmDate(session: MigrationSession, proposal: DateCorrection, confirmed: boolean): Promise<MigrationSession> {
     const previous = sessions.get(session);
     if (!previous || !corrections.has(proposal) || proposal.original.raw !== session.raw || !session.table || !confirmed) throw new Error('explicit_correction_confirmation_required');
+    const environment = await migrationEnvironment();
     const originalTable = session.table;
     if (confirmedDates.has(proposal)) return confirmedDates.get(proposal)!;
     const task = (async () => {
@@ -128,7 +154,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
   }
   async function preview(handle: PersistenceHandle, action: PersistencePreview['action']): Promise<PersistencePreview> {
     const detail = requireHandle(handle);
-    const result = freeze({ handle, action, previousRaw: detail.expected.raw, sourceRaw: handle.state.source.raw, recovery: detail.recovery ?? null,
+    const result = freeze({ handle, action, previousRaw: detail.expected.raw, sourceRaw: sourceProtection(handle.source), recovery: detail.recovery ?? null,
       bytes: utf8Bytes(JSON.stringify(handle.state)) }); previews.add(result); return result;
   }
   async function prepareMigration(session: MigrationSession) {
@@ -136,7 +162,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     if (!saved || session.decoded.status !== 'decoded' || !session.table || session.preview?.status !== 'ready') throw new Error('migration_not_ready');
     const source = session.decoded.source, base = session.preview.target;
     requireLiveMigration(source, session.table, base);
-    const handle = await makeHandle(source, session.table, base, createWorkspace(base.graph, source.context), {
+    const handle = await makeHandle(createWorkspace(base.graph, source.context), { kind: 'migration', source,
       expected: saved.expected, base, table: session.table, corrections: saved.corrections, fresh: true });
     return preview(handle, 'migration');
   }
@@ -146,7 +172,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     // A rollback/restore cannot make IDs from later committed checkpoints reusable.
     if (!workspace.receipts.some(c => c.operationId === command.operationId)) {
       const occupied = sourceUuids(handle.source);
-      [...detail.expected.issuedIds, ...issuedIds(detail.table, workspace, detail.corrections)].forEach(id => occupied.add(idTail(id)));
+      [...detail.expected.issuedIds, ...sessionIssuedIds, ...(detail.kind === 'new-plan' ? newPlanIssuedIds(workspace) : issuedIds(detail.table, workspace, detail.corrections))].forEach(id => occupied.add(idTail(id)));
       checkFreshCommandIds(command, occupied);
     }
     return applyCommand(workspace, command, handle.source.context);
@@ -155,7 +181,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     const detail = requireHandle(handle); let workspace = handle.workspace;
     if (detail.recovery) throw new Error('unconfirmed_recovery');
     for (const command of commands) workspace = dispatch(handle, workspace, command);
-    return preview(await makeHandle(handle.source, detail.table, detail.base, workspace, detail), 'edit');
+    return preview(await makeHandle(workspace, detail), 'edit');
   }
   async function createBackup(handle: PersistenceHandle, createdAt = new Date().toISOString()) {
     const detail = requireHandle(handle);
@@ -167,63 +193,67 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     if (!Number.isFinite(Date.parse(createdAt)) || new Date(createdAt).toISOString() !== createdAt) throw new Error('backup_date');
     const replay = await validateState(state);
     const reservedIds = unionReservations(current.issuedIds, replay.requiredReservations);
-    const body = { format: BACKUP_FORMAT, backupVersion: BACKUP_VERSION, createdAt, state, reservedIds } as const;
-    const backup: AttemptBackup = { ...body, sha256: await backupDigest(body) };
+    const body = { format: BACKUP_FORMAT, backupVersion: state.schemaVersion === 24 ? NEW_BACKUP_VERSION : BACKUP_VERSION, createdAt, state, reservedIds } as const;
+    const backup = { ...body, sha256: await backupDigest(body) };
     return JSON.stringify(backup);
   }
   async function inspectBackup(raw: string) {
     const parsed = parseMigrationJson(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('unsupported_backup');
     const value = parsed as Record<string, unknown>;
-    exactKeys(value, ['format', 'backupVersion', 'createdAt', 'state', 'sha256', ...(value.backupVersion === 2 ? ['reservedIds'] : [])], 'backup');
-    if (value.format !== BACKUP_FORMAT || ![1, BACKUP_VERSION].includes(value.backupVersion as number)) throw new Error('unsupported_backup: 旧v1/v2は明示移行へ、protectionは原文保護専用です。');
+    exactKeys(value, ['format', 'backupVersion', 'createdAt', 'state', 'sha256', ...((value.backupVersion === 2 || value.backupVersion === NEW_BACKUP_VERSION) ? ['reservedIds'] : [])], 'backup');
+    if (value.format !== BACKUP_FORMAT || ![1, BACKUP_VERSION, NEW_BACKUP_VERSION].includes(value.backupVersion as number)) throw new Error('unsupported_backup: Attempt backup v1/v2/v3のみ。旧Planner backupは明示移行へ、protectionは原文保護専用です。');
+    const schemaVersion = (value.state as { schemaVersion?: unknown } | null)?.schemaVersion;
+    if (schemaVersion !== (value.backupVersion === NEW_BACKUP_VERSION ? 24 : 23)) throw new Error('backup_source_version_mismatch');
     if (typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt)) || new Date(value.createdAt).toISOString() !== value.createdAt) throw new Error('backup_date');
     const { sha256, ...body } = value;
     if (sha256 !== await backupDigest(body)) throw new Error('backup_digest');
-    if (value.backupVersion === 2) {
+    if (value.backupVersion === BACKUP_VERSION) {
       // Necessary catalog subset only: reject missing restrictions cheaply.
       // A passing preflight still requires the complete source/history replay.
-      const state = value.state as AttemptState23 | null;
+      const environment = await migrationEnvironment();
+      const state = value.state as { source?: { catalog?: unknown } } | null;
       requireReservations(value.reservedIds, [...referencedUuids([state?.source?.catalog, environment.catalog])]);
     }
     const expected = await read();
     // v1 omitted the host's rollback tombstones. Do not infer missing history.
     const r = value.backupVersion === 1 ? await witness(value.state, expected) : await validateState(value.state);
     const reserved = value.backupVersion === 1 ? unionReservations(expected.issuedIds, r.state.history.issuedIds) : value.reservedIds;
-    const required = value.backupVersion === 2 ? r.requiredReservations : r.state.history.issuedIds;
+    const required = (value.backupVersion === 2 || value.backupVersion === NEW_BACKUP_VERSION) ? r.requiredReservations : r.state.history.issuedIds;
     requireReservations(reserved, required);
     unionReservations(reserved, r.requiredReservations);
     await checkReplacement(r.state, r.source, reserved, expected);
     const recovery: Recovery = { raw, rawSha256: await backupRawDigest(raw), reservedIds: reserved,
       portable: !expected.committed.includes(await backupDigest(r.state)) || reserved.some(id => !expected.issuedIds.includes(id)) };
-    const handle = await makeHandle(r.source, r.state.assignments, r.base, r.workspace, { expected, base: r.base, table: r.state.assignments, corrections: r.state.corrections, fresh: false, recovery });
+    const handle = await makeHandle(r.workspace, { ...replayOrigin(r), expected, fresh: false, recovery });
     return preview(handle, 'restore');
   }
   async function commit(proposed: PersistencePreview, confirmed: boolean, protectedRaw: string | null, protectedSourceRaw: string, consent?: PortableConsent) {
     if (!previews.has(proposed) || !confirmed) throw new Error('explicit_confirmation_required');
     const handle = proposed.handle, detail = requireHandle(handle);
-    if (protectedRaw !== detail.expected.raw || protectedSourceRaw !== handle.state.source.raw) throw new Error('original_protection_required');
+    if (protectedRaw !== detail.expected.raw || protectedSourceRaw !== sourceProtection(handle.source)) throw new Error('original_protection_required');
     if (detail.recovery?.portable && (consent?.acceptedBackupRawSha256 !== detail.recovery.rawSha256
       || consent.protectedBackupRaw !== detail.recovery.raw)) throw new Error('portable_adoption_and_protection_required');
     // Re-decode raw6/catalog/source, replay all commands and validate every field.
     if (detail.recovery) {
       if (proposed.action !== 'restore') throw new Error('unconfirmed_recovery');
       await checkReplacement(handle.state, handle.source, detail.recovery.reservedIds, detail.expected);
-    } else if (detail.fresh) requireLiveMigration(handle.source, detail.table, detail.base);
-    else await witness(handle.state, detail.expected).catch(async error => {
+    } else if (detail.fresh) {
+      if (detail.kind === 'migration') requireLiveMigration(detail.source, detail.table, detail.base);
+    } else await witness(handle.state, detail.expected).catch(async error => {
       // An edit candidate is not committed yet; authenticate the unchanged base
       // checkpoint, then derive the candidate by its recorded ordered commands.
       if (proposed.action !== 'edit' || detail.expected.raw === null) throw error;
       const previous = await witness(parseMigrationJson(detail.expected.raw), detail.expected);
-      if (!sameAttemptData(previous.state.assignments, handle.state.assignments)
-        || !sameAttemptData(previous.state.source, handle.state.source)
+      if ((previous.state.schemaVersion === 23 && handle.state.schemaVersion === 23
+        && !sameAttemptData(previous.state.assignments, handle.state.assignments))
+        || previous.state.schemaVersion !== handle.state.schemaVersion || !sameAttemptData(previous.state.source, handle.state.source)
         || !sameAttemptData(previous.state.history.commands, handle.state.history.commands.slice(0, previous.state.history.commands.length))) throw new Error('history_fork');
     });
     const replay = await validateState(handle.state);
-    if (!sameAttemptData(replay.environment.target, environment.target)) throw new Error('target_catalog_changed');
     const raw = JSON.stringify(replay.state), digest = await backupDigest(replay.state);
     const next: AuthorityRecord = { raw, revision: detail.expected.revision + 1,
-      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
+      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
     validateAuthority(next);
     if (utf8Bytes(JSON.stringify(next)) > maxRecordBytes) throw new Error(`capacity_limit: ${maxRecordBytes} bytes。archiveは省略しません。`);
     // Same lock as legacy Planner. IDB adds atomic CAS + one-record put; no
@@ -234,5 +264,5 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     previews.delete(proposed);
     return loaded;
   }
-  return { load, protectCurrent, inspectLegacy, proposeDate, confirmDate, prepareMigration, dispatch, prepareEdits, createBackup, inspectBackup, commit };
+  return { load, protectCurrent, prepareNewPlan, inspectLegacy, proposeDate, confirmDate, prepareMigration, dispatch, prepareEdits, createBackup, inspectBackup, commit };
 }

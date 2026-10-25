@@ -1,4 +1,5 @@
 import type { SourceArchive } from '../migration/contracts';
+import type { PersistenceSource } from './contracts';
 import type { Command } from '../workbench/operations';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -15,17 +16,17 @@ export function referencedUuids(value: unknown): Set<string> {
   };
   visit(value); return ids;
 }
-export function sourceUuids(source: SourceArchive): Set<string> {
-  return new Set([...referencedUuids(source.state), ...catalogUuids(source)]);
+export function sourceUuids(source: PersistenceSource): Set<string> {
+  return new Set([...referencedUuids(source.kind === 'new-plan' ? source.evidence : source.state), ...catalogUuids(source)]);
 }
-export function catalogUuids(source: SourceArchive): Set<string> {
-  return referencedUuids([source.sourceCatalog, source.context.catalog]);
+export function catalogUuids(source: PersistenceSource): Set<string> {
+  return referencedUuids([...(source.kind === 'new-plan' ? [] : [source.sourceCatalog]), source.context.catalog]);
 }
 /** Complete backup/commit minimum, computed only after integrity replay.
  * Replayed history includes initial assignments, every receipt, deleted TODOs,
  * unused reservations and all earlier correction assignments. Catalog/source
  * references from every decoded correction source are restrictions as well. */
-export function requiredReservations(source: SourceArchive, historyIds: string[], previousSources: readonly SourceArchive[] = []): string[] {
+export function requiredReservations(source: PersistenceSource, historyIds: string[], previousSources: readonly SourceArchive[] = []): string[] {
   return unionReservations(historyIds, [...sourceUuids(source)], ...previousSources.map(previous => [...sourceUuids(previous)]));
 }
 export function checkSourceTodoIds(source: SourceArchive): void {

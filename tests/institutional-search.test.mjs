@@ -363,5 +363,5 @@ test('search: entire runtime dependency graph excludes annual/legacy/storage/Pla
 test('search: production application does not import new adapter even transitively', () => {
   const graph = runtimeGraph('src/main.tsx');
   assert.ok(graph.size > 10);
-  assert.ok([...graph].every(path => !/institutional\/(currentSearch|search)\.ts$/.test(path)));
+  assert.ok([...graph].every(path => !/(?:institutional\/(?:currentSearch|search)\.ts$|attempts\/persistence\/)/.test(path)));
 });

@@ -1,5 +1,7 @@
 # YI-06 隔離Attempt永続化・復旧基盤
 
+新規ユーザー用のsource・schema24・backup v3は[新規計画契約](new-plan.md)を参照。下記のschema23・backup v1/v2は旧v22移行用の既存契約として維持する。
+
 Issue [#175](https://github.com/wata-0911/housei-media/issues/175)。基準は作業開始時にfetchした `origin/dev=a0fa267ca1acd4663c399da394552c46de366cbc`。専用clone・`feat/yi-06-attempt-persistence`。独立監査P1修正後もDraftを維持する。一般利用者のv22、primary/recovery、公式集計、卒業engineを切り替えない。
 
 **独立監査P1修正で、backup v2から別profile・別originの空DBへ可搬復旧できる契約を追加した。** 通常再読込は引き続きhostの確定履歴を必須とする。可搬復旧は未信頼ファイルの全整合性検証と利用者による明示採用を分離し、発行者認証とは表示しない。旧Attempt backup v1はstate外の予約を欠くため同一host復元のみを維持する。[可搬復旧の保証・脅威モデル](portable-recovery.md)、[保存契約](persistence-contract.md)、[backup契約](backup-contract.md)、[P1受入結果](acceptance-p1.md)、[初回実装の記録](acceptance.md)、[引継ぎ](handoff.md)。
