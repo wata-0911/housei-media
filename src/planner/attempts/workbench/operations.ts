@@ -1,5 +1,5 @@
 import type { Attempt, AttemptGraph, AttemptId, AttemptOperationId, AttemptOwnedRecord, AttemptValidationContext, OwnedRecordId } from '../types';
-import { sameAttemptData, snapshotAttemptGraph } from '../validation';
+import { sameAttemptData, snapshotAttemptGraph, snapshotAttemptGraphJson } from '../validation';
 import { validateAttemptPlanTransition } from '../planTransition';
 import { freeze } from '../migration/contracts';
 
@@ -25,6 +25,13 @@ function requireValid(graph: unknown, context: AttemptValidationContext): Attemp
 }
 export function createWorkspace(graph: AttemptGraph, context: AttemptValidationContext): Workspace {
   graph = requireValid(graph, context);
+  return freeze({ graph, receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
+}
+/** The JSON snapshot already owns the graph; do not capture it a second time. */
+export function createWorkspaceJson(raw: string, context: AttemptValidationContext): Workspace {
+  const checked = snapshotAttemptGraphJson(raw, context);
+  if (!checked.valid) throw new Error(checked.issues.map(i => `${i.code}: ${i.message}`).join('\n'));
+  const graph = checked.graph;
   return freeze({ graph, receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
 }
 function keys(value: object, allowed: string[]) {
