@@ -5,6 +5,7 @@ import type {
 import { validateAttemptGraphShape } from './schema';
 import { sameDigests, idPattern } from '../institutional/validation';
 import { validateInstitutionalLegacyArchive } from '../institutional/legacyArchive';
+import { AttemptJsonInputError, parseAttemptGraphJson } from './jsonInput';
 
 /** Compare plain data without invoking accessors or skipping array holes.
  * Object-key order is immaterial; omissions and array order are payload data.
@@ -194,6 +195,22 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
 export function validateAttemptGraph(value: unknown, context: AttemptValidationContext): AttemptValidationResult {
   const { valid, issues } = snapshotAttemptGraph(value, context);
   return { valid, issues };
+}
+
+/** Primitive JSON only: parsing owns every node, so external-object capture and
+ * subtree guards are unnecessary. Certification is representation-only; the
+ * same private tree still receives all schema/semantic/context checks. */
+export function snapshotAttemptGraphJson(raw: string, context: AttemptValidationContext): AttemptGraphSnapshotResult {
+  let snapshot: unknown;
+  try { snapshot = parseAttemptGraphJson(raw); }
+  catch (error) {
+    if (!(error instanceof AttemptJsonInputError)) throw error;
+    return { valid: false, issues: [{ code: error.code, path: '', message: error.message }] };
+  }
+  freezeCaptured(snapshot);
+  const checked = validateCapturedGraph(snapshot, context);
+  return checked.valid ? { valid: true, issues: checked.issues, graph: snapshot as AttemptGraph }
+    : { valid: false, issues: checked.issues };
 }
 
 /** Private: only the independently captured data reaches AJV/semantic checks. */
