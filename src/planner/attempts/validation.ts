@@ -63,6 +63,10 @@ export type AttemptGraphSnapshotResult =
 // Provenance of plain, recursively frozen nodes created only by this module.
 // This certifies JSON representation, never schema validity or a context binding.
 const capturedNodes = new WeakSet<object>();
+// The closed graph schema has no recursive fields (maximum container depth 7).
+// Bound untrusted capture before schema/native serialization, including unknown
+// fields, with ample headroom. This is an input limit, not an exception catch-all.
+export const MAX_ATTEMPT_GRAPH_DEPTH = 64;
 function freezeCaptured(value: unknown): void {
   if (!value || typeof value !== 'object' || capturedNodes.has(value)) return;
   for (const child of Object.values(value)) freezeCaptured(child);
@@ -86,10 +90,11 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
     issues.push({ code: 'non_json_value', path, message });
     return failed;
   };
-  const capture = (v: unknown, path: string): unknown => {
+  const capture = (v: unknown, path: string, depth = 0): unknown => {
     if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
     if (typeof v === 'number' && Number.isFinite(v) && !Object.is(v, -0)) return v;
     if (typeof v !== 'object' || v === null) return invalid(path, 'Value cannot be preserved as JSON');
+    if (depth > MAX_ATTEMPT_GRAPH_DEPTH) return invalid(path, `Maximum graph depth (${MAX_ATTEMPT_GRAPH_DEPTH}) exceeded`);
     if (capturedNodes.has(v)) return v;
     if (ancestors.has(v)) return invalid(path, 'Cyclic input');
     const array = reflectInput(() => Array.isArray(v)), prototype = reflectInput(() => Object.getPrototypeOf(v));
@@ -123,7 +128,7 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
           invalid(path, 'Only enumerable JSON data properties are supported');
           continue;
         }
-        const child = capture(descriptor.value, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`);
+        const child = capture(descriptor.value, `${path}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`, depth + 1);
         if (child === failed) continue;
         // defineProperty also preserves __proto__ as data, without a setter.
         Object.defineProperty(copy, key, { value: child, enumerable: true, writable: true, configurable: true });

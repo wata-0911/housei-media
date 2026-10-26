@@ -357,3 +357,22 @@ test('clone failure on already certified data propagates instead of blaming inpu
     }
   } finally { globalThis.structuredClone = native; }
 });
+
+test('deep parsed JSON is rejected explicitly without RangeError at every entry point', () => {
+  for (const depth of [5000, 10000]) {
+    const raw = '{"attempts":[],"ownedRecords":[],"removals":[],"extra":'
+      + '{"child":'.repeat(depth) + 'null' + '}'.repeat(depth) + '}';
+    for (const entry of ['validator', 'snapshot', 'adapter']) {
+      const graph = JSON.parse(raw); let result;
+      assert.doesNotThrow(() => {
+        result = entry === 'validator' ? validateAttemptGraph(graph, source.context)
+          : entry === 'snapshot' ? snapshotAttemptGraph(graph, source.context)
+            : adaptAttemptGraduation({ graph, retained: retained(source.state) }, source, scope);
+      }, `${entry} / ${depth} levels`);
+      assert.equal(entry === 'adapter' ? result.status === 'rejected' : !result.valid, true);
+      const issues = entry === 'adapter' ? result.diagnostics : result.issues;
+      assert.ok(issues.some(i => /maximum graph depth/i.test(i.message)));
+      assert.equal(Object.hasOwn(result, 'graph'), false);
+    }
+  }
+});
