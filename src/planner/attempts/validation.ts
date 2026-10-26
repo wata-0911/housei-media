@@ -78,6 +78,23 @@ function reflectInput<T>(read: () => T): T {
   try { return read(); } catch { throw new CaptureFailure('Input reflection failed'); }
 }
 
+/** Only compare module-built JSON copies with native serialization results.
+ * Neither side is caller data: capture already checked the copy's representation,
+ * and native serialization produces data properties. Keep sameAttemptData's
+ * descriptor checks for callers that have not established these guarantees. */
+function sameGuardCopies(left: unknown, right: unknown): boolean {
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return left === right;
+  const array = Array.isArray(left);
+  if (array !== Array.isArray(right)) return false;
+  const prototype = Object.getPrototypeOf(right);
+  if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return false;
+  if (array && (left as unknown[]).length !== (right as unknown[]).length) return false;
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length) return false;
+  return keys.every(key => Object.hasOwn(right, key)
+    && sameGuardCopies((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]));
+}
+
 /** Capture own data descriptors once, recursively copying each value immediately.
  * Bottom-up native clone guards reject Proxy/exotic inputs before any ancestor
  * is cloned. Reflection traps may mutate originals, never captured data.
@@ -103,8 +120,9 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
     }
     // Map/Set serialization traverses internal entries, outside own descriptors.
     // Probe their internal slots without reading properties or invoking getters.
-    // A Proxy fails these probes and will fail the native clone guard below.
-    for (const has of [Map.prototype.has, Set.prototype.has]) {
+    // Arrays cannot have Map/Set internal slots. Array Proxies still fail the
+    // native clone guard below; non-array records still need both slot probes.
+    if (!array) for (const has of [Map.prototype.has, Set.prototype.has]) {
       let collection = false;
       try { has.call(v, null); collection = true; } catch { /* Not this native collection. */ }
       if (collection) return invalid(path, 'Native collections are not JSON records');
@@ -147,7 +165,7 @@ export function snapshotAttemptGraph(value: unknown, context: AttemptValidationC
         }
         throw error;
       }
-      if (!sameAttemptData(copy, clone)) return invalid(path, 'Cloning changes graph data');
+      if (!sameGuardCopies(copy, clone)) return invalid(path, 'Cloning changes graph data');
       Object.freeze(copy);
       capturedNodes.add(copy);
       return copy;

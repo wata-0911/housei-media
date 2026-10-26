@@ -14,6 +14,67 @@ const fixture = () => {
   const a = newAttempt(master);
   return { a, graph: { attempts: [a], ownedRecords: [], removals: [] } };
 };
+
+test('A2 cold capture avoids collection receiver exceptions for arrays but still probes records', () => {
+  const { graph } = fixture();
+  const originalMapHas = Map.prototype.has, originalSetHas = Set.prototype.has;
+  let arrayProbes = 0, recordProbes = 0;
+  const counted = original => function (...args) {
+    if (Array.isArray(this)) arrayProbes++;
+    else if (Object.getPrototypeOf(this) === Object.prototype || Object.getPrototypeOf(this) === null) recordProbes++;
+    return Reflect.apply(original, this, args);
+  };
+  let result;
+  try {
+    Map.prototype.has = counted(originalMapHas);
+    Set.prototype.has = counted(originalSetHas);
+    result = snapshotAttemptGraph(graph, source.context);
+  } finally {
+    Map.prototype.has = originalMapHas;
+    Set.prototype.has = originalSetHas;
+  }
+  assert.equal(result.valid, true);
+  assert.equal(arrayProbes, 0, 'genuine arrays cannot contain Map/Set internal slots');
+  assert.ok(recordProbes > 0, 'ordinary records still need the disguised-collection guard');
+});
+
+test('A2 guard comparisons avoid repeating descriptor scans of native-owned clones', () => {
+  const { graph } = fixture();
+  const native = globalThis.structuredClone, descriptor = Object.getOwnPropertyDescriptor;
+  const nativeNodes = new WeakSet();
+  const inputNodes = new Set();
+  const countInput = value => {
+    if (!value || typeof value !== 'object' || inputNodes.has(value)) return;
+    inputNodes.add(value);
+    for (const child of Object.values(value)) countInput(child);
+  };
+  countInput(graph);
+  let repeatedDescriptors = 0, cloneCalls = 0;
+  const remember = value => {
+    if (!value || typeof value !== 'object' || nativeNodes.has(value)) return;
+    nativeNodes.add(value);
+    for (const child of Object.values(value)) remember(child);
+  };
+  let result;
+  try {
+    globalThis.structuredClone = (...args) => {
+      cloneCalls++;
+      const copy = native(...args); remember(copy); return copy;
+    };
+    Object.getOwnPropertyDescriptor = (value, key) => {
+      if (nativeNodes.has(value)) repeatedDescriptors++;
+      return descriptor(value, key);
+    };
+    result = snapshotAttemptGraph(graph, source.context);
+  } finally {
+    globalThis.structuredClone = native;
+    Object.getOwnPropertyDescriptor = descriptor;
+  }
+  assert.equal(result.valid, true);
+  assert.equal(repeatedDescriptors, 0, 'native-owned JSON copies do not need the external-data comparator');
+  assert.equal(cloneCalls, inputNodes.size + 1, 'every fresh node guard and the final public clone remain');
+  assert.deepEqual(result.graph, graph);
+});
 // Same ownKeys/getter attack as independent PR #181 audit N2. Each entry point
 // receives a fresh attack: a previous call must not disarm the next test.
 function n2(mode) {
