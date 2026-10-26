@@ -1,0 +1,112 @@
+[
+  {
+    "mode": "valid",
+    "identical": true,
+    "result": {
+      "valid": true,
+      "issues": []
+    }
+  },
+  {
+    "mode": "multi-non-json",
+    "identical": true,
+    "result": {
+      "valid": false,
+      "issues": [
+        {
+          "code": "non_json_value",
+          "path": "/attempts/0/plan/contribution/value",
+          "message": "Value cannot be preserved as JSON"
+        },
+        {
+          "code": "non_json_value",
+          "path": "/attempts/1/plan/contribution/value",
+          "message": "Value cannot be preserved as JSON"
+        }
+      ]
+    }
+  },
+  {
+    "mode": "schema",
+    "identical": true,
+    "result": {
+      "valid": false,
+      "issues": [
+        {
+          "code": "shape_anyOf",
+          "path": "/attempts/0/plan",
+          "message": "must match a schema in anyOf: {}"
+        },
+        {
+          "code": "shape_type",
+          "path": "/attempts/0/plan",
+          "message": "must be null: {\"type\":\"null\"}"
+        },
+        {
+          "code": "shape_anyOf",
+          "path": "/attempts/0/plan/contribution/value",
+          "message": "must match a schema in anyOf: {}"
+        },
+        {
+          "code": "shape_minimum",
+          "path": "/attempts/0/plan/contribution/value",
+          "message": "must be >= 0: {\"comparison\":\">=\",\"limit\":0}"
+        },
+        {
+          "code": "shape_type",
+          "path": "/attempts/0/plan/contribution/value",
+          "message": "must be null: {\"type\":\"null\"}"
+        }
+      ]
+    }
+  },
+  {
+    "mode": "semantic",
+    "identical": true,
+    "result": {
+      "valid": false,
+      "issues": [
+        {
+          "code": "duplicate_attempt_id",
+          "path": "/attempts/hosei:attempt:00000000-0000-4000-8000-000000002000",
+          "message": "Duplicate key; no winner selected"
+        },
+        {
+          "code": "dangling_owner",
+          "path": "/ownedRecords/hosei:owned:00000000-0000-4000-8000-000000004000",
+          "message": "Unknown or duplicate Attempt owner"
+        },
+        {
+          "code": "dangling_owner",
+          "path": "/ownedRecords/hosei:owned:00000000-0000-4000-8000-000000004001",
+          "message": "Unknown or duplicate Attempt owner"
+        },
+        {
+          "code": "dangling_owner",
+          "path": "/ownedRecords/hosei:owned:00000000-0000-4000-8000-000000004002",
+          "message": "Unknown or duplicate Attempt owner"
+        },
+        {
+          "code": "dangling_owner",
+          "path": "/ownedRecords/hosei:owned:00000000-0000-4000-8000-000000004003",
+          "message": "Unknown or duplicate Attempt owner"
+        },
+        {
+          "code": "dangling_owner",
+          "path": "/ownedRecords/hosei:owned:00000000-0000-4000-8000-000000004004",
+          "message": "Unknown or duplicate Attempt owner"
+        },
+        {
+          "code": "dangling_owner",
+          "path": "/ownedRecords/hosei:owned:00000000-0000-4000-8000-000000004005",
+          "message": "Unknown or duplicate Attempt owner"
+        },
+        {
+          "code": "uuid_collision",
+          "path": "/uuid/00000000-0000-4000-8000-000000002000",
+          "message": "Duplicate key; no winner selected"
+        }
+      ]
+    }
+  }
+]

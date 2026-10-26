@@ -1,0 +1,4 @@
+{"n":10,"createMs":226.26898100000017,"times":[30.481936000000132,16.80422499999986,9.845432000000073],"medianMs":16.80422499999986,"instrumentedCloneCalls":8}
+{"n":100,"createMs":464.64550699999927,"times":[274.02277800000047,298.1567359999999,101.14504699999998],"medianMs":274.02277800000047,"instrumentedCloneCalls":8}
+{"n":500,"createMs":1610.6013080000002,"times":[783.9338040000002,936.3305899999996,1329.064832],"medianMs":936.3305899999996,"instrumentedCloneCalls":8}
+{"diagnostics":{"valid":false,"issues":[{"code":"non_json_value","path":"/attempts/0/plan/contribution/value","message":"Value cannot be preserved as JSON"},{"code":"non_json_value","path":"/attempts/1/plan/contribution/value","message":"Value cannot be preserved as JSON"}]}}
