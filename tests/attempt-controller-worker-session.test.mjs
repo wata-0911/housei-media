@@ -1,0 +1,70 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {createPreviewSession,createReadonlyStore} from '../src/planner/attempts/persistence/worker/session.ts';
+import {SessionQueue} from '../src/planner/attempts/persistence/worker/queue.ts';
+import {Registry} from '../src/planner/attempts/persistence/worker/registry.ts';
+import {createAttemptPersistence} from '../src/planner/attempts/persistence/controller.ts';
+import {emptyAuthority} from '../src/planner/attempts/persistence/contracts.ts';
+import {replayState} from '../src/planner/attempts/persistence/codec.ts';
+import {backupDigest} from '../src/planner/backup/plannerBackupCompatibility.ts';
+import {replayFixture} from './fixtures/replay-state-fixture.mjs';
+import {env,mixed} from './fixtures/migration-fixture.mjs';
+const command=(id,op,guard={},extra={})=>({version:1,boot:1,requestId:id,op,...guard,...extra});
+const guard=x=>({session:x.session,expectedView:x.view});
+const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+async function host(raw){const replay=await replayState(JSON.parse(raw));return {raw,revision:1,committed:[await backupDigest(replay.state)],issuedIds:replay.requiredReservations};}
+test('read bridge preflights and returns exact same record; commit always throws',async()=>{const record=emptyAuthority();let seen;const store=createReadonlyStore(async()=>record,r=>seen=r);assert.equal(await store.read(),record);assert.equal(seen,record);await assert.rejects(store.commit(record,record),{code:'readonly_mode'});await assert.rejects(createReadonlyStore(async()=>({...record,raw:'{"x":-0}'})).read());});
+test('queue joins duplicates, detects conflicting resend, serializes await, bounds raw and cancels',async()=>{
+ const q=new SessionQueue(),d=defer();let calls=0;const a=q.run(1,['same'],true,async()=>{calls++;await d.promise;q.check(1);return 1;});const b=q.run(1,['same'],true,()=>{throw Error('twice');});
+ const conflict=q.run(1,['other'],true,async()=>2);await assert.rejects(conflict,{code:'protocol'});await assert.rejects(q.run(2,['raw'],true,async()=>2),{code:'busy'});
+ const c=q.run(3,['next'],false,async()=>{calls++;return 3;});await new Promise(r=>setTimeout(r,0));assert.equal(calls,1);q.cancel(1);d.resolve();await assert.rejects(a,{code:'cancelled'});await assert.rejects(b,{code:'cancelled'});assert.equal(await c,3);assert.equal(calls,2);await assert.rejects(q.run(2,['old'],false,async()=>0),{code:'protocol'});q.close();await assert.rejects(q.run(4,[''],false,async()=>0),{code:'closed'});
+});
+test('registry rejects fake, wrong kind, clone, other Worker and stale vectors',()=>{
+ const vector={boot:1,sourceEpoch:1,contextRevision:1,draftRevision:1,authorityRevision:0};const a=new Registry(vector),b=new Registry(vector),target={private:true},t=a.mint('draft',target,['save']);assert.equal(a.get(t,'draft','save'),target);for(const [r,k,op,x] of [[a,'preview','save',t],[b,'draft','save',t],[a,'draft','save',structuredClone(target)],[a,'draft','commit',t]])assert.throws(()=>r.get(x,k,op));a.advance({...vector,draftRevision:2});assert.throws(()=>a.get(t,'draft','save'));
+});
+for(const version of [23,24])test(`schema${version} load and prepareSave match old controller summary; full oracle`,{timeout:180000},async()=>{
+ const f=await replayFixture(version,'normal',100),record=await host(f.raw);const old=createAttemptPersistence({read:async()=>structuredClone(record),commit:async()=>{throw Error('write');}},undefined,env);const expected=await old.load();assert.deepEqual(expected.state,f.state);assert.deepEqual(expected.workspace,f.workspace);
+ const s=createPreviewSession(async()=>structuredClone(record),async()=>env,1),start=await s.request(command(1,'startSession'));const loaded=await s.request(command(2,'openCommitted',guard(start)));assert.equal(loaded.summary.receipts,100);assert.equal(loaded.summary.officialAchievementCount,expected.state.retained.importedCourseAchievements.length);
+ const g={session:start.session,expectedView:loaded.view};const save=await s.request(command(3,'prepareSave',g,{draft:loaded.draft}));assert.equal(save.preview.canCommit,false);assert.equal(save.preview.candidateBytes,Buffer.byteLength(JSON.stringify(expected.state)));assert.equal(save.recoveryHint.candidateStateSha256,await backupDigest(expected.state));
+ await assert.rejects(s.request(command(4,'prepareSave',g,{draft:'a'.repeat(48)})),{code:'stale_view'});
+ const page=await s.request(command(5,'readPage',g,{kind:'attempts'}));assert.ok(page.rows.length<=50);assert.ok(page.rows.every(r=>r.excerpt.length<=80));assert.ok(!JSON.stringify(loaded).includes('rawFiles'));
+ record.issuedIds.reverse();record.revision++;await assert.rejects(s.request(command(6,'prepareSave',g,{draft:loaded.draft})),{code:'stale_authority'});assert.equal((await s.request(command(7,'readPage',g,{kind:'attempts'}))).total,page.total);s.close();
+});
+test('legacy duplicate request mints IDs once; clone/other source/stale view rejected', {timeout:180000},async()=>{
+ const s=createPreviewSession(async()=>emptyAuthority(),async()=>env,1),start=await s.request(command(1,'startSession')),raw=JSON.stringify(mixed()),c=command(2,'inspectLegacyRaw',guard(start));let ids=0;const native=crypto.randomUUID.bind(crypto);crypto.randomUUID=()=>{ids++;return native();};try{
+ const [a,b]=await Promise.all([s.request(c,raw),s.request(c,raw)]);assert.deepEqual(a,b);assert.equal(a.status,'ready');const first=ids;const again=await s.request(command(3,'inspectLegacyRaw',{session:start.session,expectedView:a.view}),raw);assert.equal(ids,first);
+ await assert.rejects(s.request(command(4,'prepareMigration',{session:start.session,expectedView:a.view},{migration:a.migration})),{code:'stale_view'});
+ const p=await s.request(command(5,'prepareMigration',{session:start.session,expectedView:again.view},{migration:again.migration}));assert.equal(p.canCommit,false);
+ await assert.rejects(s.request(command(6,'inspectLegacyRaw',{session:start.session,expectedView:p.view}),raw+' '),{code:'stale_view'});
+ const out=await s.request(command(7,'prepareSave',{session:start.session,expectedView:p.view},{draft:p.draft}));assert.equal(out.preview.canCommit,false);assert.equal(ids,first);
+ }finally{crypto.randomUUID=native;s.close();}
+});
+test('await cancellation and close cannot publish load; raw remains unmodified',{timeout:180000},async()=>{
+ const f=await replayFixture(24,'normal',1),record=await host(f.raw),d=defer();let n=0;const s=createPreviewSession(async()=>++n===1?record:await d.promise,async()=>env,1),start=await s.request(command(1,'startSession'));const p=s.request(command(2,'openCommitted',guard(start)));await new Promise(r=>setTimeout(r,0));s.cancel(2);d.resolve(record);await assert.rejects(p,{code:'cancelled'});assert.equal(record.raw,f.raw);s.close();
+});
+test('empty load preserves usable guard for subsequent inspection',async()=>{const s=createPreviewSession(async()=>emptyAuthority(),async()=>env,1),start=await s.request(command(1,'startSession')),g=guard(start);assert.equal(await s.request(command(2,'openCommitted',g)),null);const r=await s.request(command(3,'inspectLegacyRaw',g),'{"schemaVersion":999}');assert.equal(r.status,'rejected');s.close();});
+test('bounded pages are projected without raw; capacity failure leaves prior rows releasable',async()=>{
+ const {displayRows}=await import('../src/planner/attempts/persistence/worker/display.ts');const vector={boot:1,sourceEpoch:1,contextRevision:1,draftRevision:1,authorityRevision:0},r=new Registry(vector),source={diagnostics:[],handle:{workspace:{graph:{attempts:Array.from({length:101},()=>({originalTitle:'\u0001'.repeat(10000),raw:'NEVER_SEND_RAW'}))}}}};
+ const first=displayRows(source,'attempts',0,r);assert.equal(first.rows.length,50);assert.equal(first.rows[0].excerpt.length,64);assert.equal(first.rows[0].fullLength,10000);assert.ok(JSON.stringify(first).length<32768);assert.ok(!JSON.stringify(first).includes('NEVER_SEND_RAW'));for(const row of first.rows)r.release(row.row);assert.equal(displayRows(source,'attempts',100,r).rows.length,1);
+});
+test('new save revokes prior preview, preserves its draft and requires restore kind',{timeout:60000},async()=>{
+ const f=await replayFixture(24,'normal',1),record=await host(f.raw),s=createPreviewSession(async()=>structuredClone(record),async()=>env,1),start=await s.request(command(1,'startSession')),loaded=await s.request(command(2,'openCommitted',guard(start))),g={session:start.session,expectedView:loaded.view};const a=await s.request(command(3,'prepareSave',g,{draft:loaded.draft})),b=await s.request(command(4,'prepareSave',g,{draft:loaded.draft}));assert.notEqual(a.preview.preview,b.preview.preview);await assert.rejects(s.request(command(5,'prepareSave',g,{restorePreview:a.preview.preview})),{code:'stale_view'});await assert.rejects(s.request(command(6,'prepareSave',g,{restorePreview:b.preview.preview})),{code:'stale_view'});assert.ok((await s.request(command(7,'readPage',g,{kind:'attempts'}))).rows.length);s.close();
+});
+test('approved controller probe validates both private qualifications without minting any',{timeout:60000},async()=>{
+ const store={read:async()=>emptyAuthority(),commit:async()=>{throw Error('write forbidden');}},a=createAttemptPersistence(store,undefined,env),b=createAttemptPersistence(store,undefined,env),p=await a.prepareNewPlan();a.assertPreview(p);for(const fake of [structuredClone(p),{...p},{handle:structuredClone(p.handle)},Object.freeze({canCommit:true}),{kind:'read-only-replay'}])assert.throws(()=>a.assertPreview(fake),/unknown_persistence_preview/);assert.throws(()=>b.assertPreview(p),/unknown_persistence_preview/);a.assertPreview(p);
+});
+test('cached migration never rebinds to a later authority with the same revision',{timeout:60000},async()=>{
+ const f=await replayFixture(24,'normal',1),record=await host(f.raw),s=createPreviewSession(async()=>structuredClone(record),async()=>env,1),start=await s.request(command(1,'startSession')),raw=JSON.stringify(mixed()),i=await s.request(command(2,'inspectLegacyRaw',guard(start)),raw),g={session:start.session,expectedView:i.view};record.committed.push('f'.repeat(64));await assert.rejects(s.request(command(3,'inspectLegacyRaw',g),raw),{code:'stale_authority'});const p=await s.request(command(4,'prepareMigration',g,{migration:i.migration}));await assert.rejects(s.request(command(5,'prepareSave',{session:start.session,expectedView:p.view},{draft:p.draft})),{code:'stale_authority'});s.close();
+});
+test('awaited raw completion releases admission before the next raw request',async()=>{const q=new SessionQueue();assert.equal(await q.run(1,['a'],true,async()=>1),1);assert.equal(await q.run(2,['b'],true,async()=>2),2);q.close();});
+test('queue capacity eight and ledger 1024 preserve settled duplicate results',async()=>{
+ const q=new SessionQueue(),d=defer(),jobs=[];for(let id=1;id<=8;id++)jobs.push(q.run(id,[''+id],false,async()=>{await d.promise;return id;}));await assert.rejects(q.run(9,['9'],false,async()=>9),{code:'busy'});d.resolve();assert.deepEqual(await Promise.all(jobs),[1,2,3,4,5,6,7,8]);for(let id=9;id<=1024;id++)assert.equal(await q.run(id,[''+id],false,async()=>id),id);await assert.rejects(q.run(1025,['1025'],false,async()=>1025),{code:'resource_limit'});assert.equal(await q.run(1,['1'],false,async()=>{throw Error('reexecuted');}),1);q.close();
+});
+test('registry 512 and cursor four reject without evicting active qualification',()=>{
+ const v={boot:1,sourceEpoch:0,contextRevision:1,draftRevision:0,authorityRevision:0},r=new Registry(v),target={},draft=r.mint('draft',target,['save']);for(let i=0;i<511;i++)r.mint('row',{},['display']);assert.throws(()=>r.mint('row',{},['display']),{code:'resource_limit'});assert.equal(r.get(draft,'draft','save'),target);const c=new Registry(v),tokens=Array.from({length:4},()=>c.mint('cursor',{},['readPage']));assert.throws(()=>c.mint('cursor',{},['readPage']),{code:'resource_limit'});c.release(tokens[0]);c.mint('cursor',{},['readPage']);c.advance({...v,sourceEpoch:1});assert.throws(()=>c.get(tokens[1],'cursor','readPage'),{code:'stale_view'});
+});
+test('changed authority revision rejects inspection before issuing IDs; explicit reload is separate',{timeout:60000},async()=>{
+ const f=await replayFixture(24,'normal',1);let record=emptyAuthority();const s=createPreviewSession(async()=>structuredClone(record),async()=>env,1),start=await s.request(command(1,'startSession')),raw=JSON.stringify(mixed()),i=await s.request(command(2,'inspectLegacyRaw',guard(start)),raw),g={session:start.session,expectedView:i.view};record=await host(f.raw);let ids=0;const uuid=crypto.randomUUID.bind(crypto);crypto.randomUUID=()=>{ids++;return uuid();};try{await assert.rejects(s.request(command(3,'inspectLegacyRaw',g),raw),{code:'stale_authority'});assert.equal(ids,0);const p=await s.request(command(4,'prepareMigration',g,{migration:i.migration}));await assert.rejects(s.request(command(5,'prepareSave',{session:start.session,expectedView:p.view},{draft:p.draft})),{code:'stale_authority'});assert.equal((await s.request(command(6,'readPage',{session:start.session,expectedView:p.view},{kind:'attempts'}))).total,p.summary.active+p.summary.detached);const loaded=await s.request(command(7,'openCommitted',{session:start.session,expectedView:p.view}));assert.equal(loaded.summary.schemaVersion,24);}finally{crypto.randomUUID=uuid;s.close();}
+});
+test('external authority erasure cannot make an old view current by returning null',{timeout:60000},async()=>{
+ const f=await replayFixture(24,'normal',1);let record=await host(f.raw);const s=createPreviewSession(async()=>structuredClone(record),async()=>env,1),start=await s.request(command(1,'startSession')),v=await s.request(command(2,'openCommitted',guard(start))),g={session:start.session,expectedView:v.view};record=emptyAuthority();await assert.rejects(s.request(command(3,'openCommitted',g)),{code:'stale_authority'});assert.ok((await s.request(command(4,'readPage',g,{kind:'attempts'}))).rows.length);s.close();
+});

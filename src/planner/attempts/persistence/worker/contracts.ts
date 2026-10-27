@@ -1,0 +1,25 @@
+/** Preview-only capabilities. No commit, mode switch, export or editing API. */
+export type Token<K extends string> = string & {readonly __tokenKind:K};
+export type SessionToken=Token<'session'>;
+export type ViewToken=Token<'view'>;
+export type MigrationToken=Token<'migration'>;
+export type DraftToken=Token<'draft'>;
+export type HandleToken=Token<'handle'>;
+export type PreviewToken=Token<'preview'>;
+export type CursorToken=Token<'cursor'>;
+export type Guard=Readonly<{session:SessionToken;expectedView:ViewToken}>;
+export type SnapshotDTO=Readonly<{schemaVersion:23|24;sourceKind:'new-plan'|'local-v22'|'backup-v1'|'backup-v2';active:number;detached:number;ownedRecords:number;receipts:number;reservationCount:number;officialAchievementCount:number;applicability:'unknown';graduationCheckComplete:false;sourceLinksReverified:false}>;
+export type StateView=Readonly<{view:ViewToken;handle:HandleToken;draft:DraftToken;summary:SnapshotDTO;evidence:'local-witness'}>;
+export type InspectionDTO=Readonly<{view:ViewToken;status:'ready'|'held'|'rejected';migration?:MigrationToken;restorePreview?:PreviewToken;diagnosticCount:number;diagnosticsCursor?:CursorToken;backupVersion?:1|2|3;evidence?:'local-witness'|'portable-unadopted'}>;
+export type PreviewDTO=Readonly<{view:ViewToken;preview:PreviewToken;summary:SnapshotDTO;candidateBytes:number;previousPresent:boolean;previousBytes:number;portableAdoptionRequired:boolean;canCommit:false}&({action:'migration'|'edit';draft:DraftToken}|{action:'restore'})>;
+export type PreparedSave=Readonly<{preview:PreviewDTO;recoveryHint:Readonly<{kind:'untrusted-recovery-hint';version:1;submissionKey:string;baseAuthoritySha256:string;candidateStateSha256:string;candidateRawSha256:string}>}>;
+export type PageKind='attempts'|'records'|'removals'|'official'|'diagnostics';
+export type DisplayRow=Readonly<{row:Token<'row'>;kind:string;excerpt:string;fullLength:number;quantity:number|null}>;
+export type PageDTO=Readonly<{view:ViewToken;rows:readonly DisplayRow[];cursor?:CursorToken;total:number}>;
+export type Started=Readonly<{session:SessionToken;view:ViewToken;mode:'preview-only'}>;
+export type ErrorCode='startup_failure'|'protocol'|'busy'|'cancelled'|'stale_view'|'stale_authority'|'readonly_mode'|'resource_limit'|'invalid_input'|'internal'|'closed';
+export class ControllerWorkerError extends Error {constructor(readonly code:ErrorCode){super(code);this.name='ControllerWorkerError';}}
+export type Operation='startSession'|'openCommitted'|'inspectLegacyRaw'|'inspectBackupRaw'|'prepareMigration'|'prepareSave'|'readPage'|'release';
+export type Control=Readonly<{version:1;boot:number;requestId:number;op:Operation;session?:string;expectedView?:string;migration?:string;draft?:string;restorePreview?:string;kind?:PageKind;cursor?:string;token?:string}>;
+export type Result=Started|StateView|InspectionDTO|PreviewDTO|PreparedSave|PageDTO|null;
+export type Response=Readonly<{version:1;boot:number;requestId:number;type:'result';value:Result}|{version:1;boot:number;requestId:number;type:'error';code:ErrorCode}>;
