@@ -152,6 +152,11 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     sessions.set(next, { ...previous, corrections: [...previous.corrections, evidence] }); return next;
     })(); confirmedDates.set(proposal, task); return task;
   }
+  // Read-only qualification probe: never constructs or upgrades credentials.
+  function assertPreview(proposed: PersistencePreview): void {
+    if (!previews.has(proposed)) throw new Error('unknown_persistence_preview');
+    requireHandle(proposed.handle);
+  }
   async function preview(handle: PersistenceHandle, action: PersistencePreview['action']): Promise<PersistencePreview> {
     const detail = requireHandle(handle);
     const result = freeze({ handle, action, previousRaw: detail.expected.raw, sourceRaw: sourceProtection(handle.source), recovery: detail.recovery ?? null,
@@ -264,5 +269,5 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     previews.delete(proposed);
     return loaded;
   }
-  return { load, protectCurrent, prepareNewPlan, inspectLegacy, proposeDate, confirmDate, prepareMigration, dispatch, prepareEdits, createBackup, inspectBackup, commit };
+  return { assertPreview, load, protectCurrent, prepareNewPlan, inspectLegacy, proposeDate, confirmDate, prepareMigration, dispatch, prepareEdits, createBackup, inspectBackup, commit };
 }
