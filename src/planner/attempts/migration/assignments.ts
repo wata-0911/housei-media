@@ -67,12 +67,15 @@ export function validateMigrationAssignments(source: SourceArchive, table: IdAss
 
 /** ONLY issuance boundary. Re-preview must pass the returned table (or existing).
  * Do not call without existing for a retry. No storage, clocks or derived IDs. */
-export function prepareMigrationIds(source: SourceArchive, reservedIds: readonly string[] = [], existing?: IdAssignments): IdAssignments {
+export function prepareMigrationIds(source: SourceArchive, reservedIds: readonly string[] = [], existing?: IdAssignments, onIssued?: (id: string) => void): IdAssignments {
   requireDecoded(source);
   if (existing) { validateMigrationAssignments(source, existing, reservedIds); return existing; }
   const slots = sourceSlots(source);
+  // Notify synchronously, before table validation or any subsequent allocation.
+  // The trusted owner keeps this restriction even when issuance later throws.
+  const mint = <P extends string>(prefix: P) => { const id = `${prefix}${crypto.randomUUID()}` as const; onIssued?.(id); return id; };
   const table: IdAssignments = { binding: bindingFor(source), reservedIds: [...reservedIds],
-    attempts: slots.attempts.map(slot => ({ ...slot, attemptId: `hosei:attempt:${crypto.randomUUID()}`, operationId: `hosei:attempt-op:${crypto.randomUUID()}` })),
-    records: slots.records.map(slot => ({ ...slot, recordId: `hosei:owned:${crypto.randomUUID()}` })) };
+    attempts: slots.attempts.map(slot => ({ ...slot, attemptId: mint('hosei:attempt:'), operationId: mint('hosei:attempt-op:') })),
+    records: slots.records.map(slot => ({ ...slot, recordId: mint('hosei:owned:') })) };
   checkMigrationAssignmentStructure(source, table, reservedIds); freeze(table); issued.add(table); return table;
 }

@@ -28,6 +28,8 @@ const sourceProtection = (source: PersistenceSource) => source.kind === 'new-pla
 // New source evidence contains shared document references, no learner identities.
 const stateReferences = (source: PersistenceSource) => source.kind === 'new-plan' ? new Set<string>() : referencedUuids(source.state);
 type Environment = Awaited<ReturnType<typeof prepareMigrationEnvironment>>;
+// Trusted factory dependencies only; reservations restrict IDs, never grant trust.
+type MigrationIdReservations = { issued: (id: string) => void; reserved: () => readonly string[] };
 const utf8Bytes = (raw: string) => new TextEncoder().encode(raw).byteLength;
 function validateAuthority(record: AuthorityRecord) {
   exactKeys(record, ['raw', 'revision', 'committed', 'issuedIds'], 'authority');
@@ -42,7 +44,7 @@ function validateAuthority(record: AuthorityRecord) {
 /** Reload requires a host checkpoint. Portable recovery instead requires complete
  * integrity validation plus separate explicit adoption of the selected file.
  * Neither a hash nor user consent authenticates its issuer. */
-export function createAttemptPersistence(store: AtomicAttemptStore, locks: PlannerWriteLocks | undefined, environmentInput?: Environment | (() => Promise<Environment>), maxRecordBytes = 32 * 1024 * 1024) {
+export function createAttemptPersistence(store: AtomicAttemptStore, locks: PlannerWriteLocks | undefined, environmentInput?: Environment | (() => Promise<Environment>), maxRecordBytes = 32 * 1024 * 1024, migrationIds?: MigrationIdReservations) {
   if (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes <= 0) throw new Error('capacity_policy');
   let environmentTask: Promise<Environment> | undefined;
   async function migrationEnvironment() {
@@ -52,7 +54,27 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
   const handles = new WeakMap<PersistenceHandle, PrivateHandle>();
   const previews = new WeakSet<PersistencePreview>();
   const sessions = new WeakMap<MigrationSession, { expected: AuthorityRecord; corrections: CorrectionEvidence[] }>();
-  const sessionIssuedIds = new Set<string>();
+  const sessionIssuedIds = new Map<string, string>();
+  function migrationIdSink(source: SourceArchive, reservedIds: readonly string[]) {
+    // Preserve the canonical spelling of an already occupied UUID (including a
+    // bare source reference). A rejected namespace alias must not poison replay.
+    const known = new Map([...sourceUuids(source)].map(id => [id, id]));
+    reservedIds.forEach(id => known.set(idTail(id), id));
+    return (id: string) => {
+      const tail = idTail(id);
+      if (!sessionIssuedIds.has(tail)) sessionIssuedIds.set(tail, known.get(tail) ?? id);
+      migrationIds?.issued(id);
+    };
+  }
+  function migrationReservations(previous: readonly string[]): string[] {
+    // Snapshot before minting. Deduplicate restriction aliases by bare UUID;
+    // never mutate this table's validation input from the issuance callback.
+    const ids = new Map(previous.map(id => [idTail(id), id]));
+    for (const id of [...sessionIssuedIds.values(), ...(migrationIds?.reserved() ?? [])]) {
+      if (!ids.has(idTail(id))) ids.set(idTail(id), id);
+    }
+    return [...ids.values()];
+  }
   const inspected = new Map<string, Promise<MigrationSession>>();
   const confirmedDates = new WeakMap<DateCorrection, Promise<MigrationSession>>();
   const corrections = new WeakSet<DateCorrection>();
@@ -121,9 +143,8 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     if (inspected.has(cacheKey)) return inspected.get(cacheKey)!;
     const task = (async () => {
     const decoded = await decodeMigrationSource(raw, environment, environment.origin);
-    const reservedIds = [...new Set([...expected.issuedIds, ...sessionIssuedIds])];
-    const table = decoded.status === 'decoded' ? prepareMigrationIds(decoded.source, reservedIds) : null;
-    if (table) assignmentIds(table).forEach(id => sessionIssuedIds.add(id));
+    const reservedIds = migrationReservations(expected.issuedIds);
+    const table = decoded.status === 'decoded' ? prepareMigrationIds(decoded.source, reservedIds, undefined, migrationIdSink(decoded.source, reservedIds)) : null;
     const preview = decoded.status === 'decoded' && table ? previewMigration(decoded.source, table, reservedIds) : null;
     const session = freeze({ raw, decoded, table, preview, reservedIds }); sessions.set(session, { expected, corrections: [] }); return session;
     })(); inspected.set(cacheKey, task);
@@ -142,9 +163,8 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     if (confirmedDates.has(proposal)) return confirmedDates.get(proposal)!;
     const task = (async () => {
     const decoded = await decodeMigrationSource(proposal.proposedRaw, environment, environment.origin);
-    const reservedIds = [...new Set([...session.reservedIds, ...sessionIssuedIds, ...assignmentIds(originalTable)])];
-    const table = decoded.status === 'decoded' ? prepareMigrationIds(decoded.source, reservedIds) : null;
-    if (table) assignmentIds(table).forEach(id => sessionIssuedIds.add(id));
+    const reservedIds = migrationReservations([...session.reservedIds, ...assignmentIds(originalTable)]);
+    const table = decoded.status === 'decoded' ? prepareMigrationIds(decoded.source, reservedIds, undefined, migrationIdSink(decoded.source, reservedIds)) : null;
     const preview = decoded.status === 'decoded' && table ? previewMigration(decoded.source, table, reservedIds) : null;
     const next = freeze({ raw: proposal.proposedRaw, decoded, table, preview, reservedIds });
     const evidence: CorrectionEvidence = { originalRaw: session.raw, proposedRaw: proposal.proposedRaw, offeringId: proposal.offeringId,
@@ -177,7 +197,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     // A rollback/restore cannot make IDs from later committed checkpoints reusable.
     if (!workspace.receipts.some(c => c.operationId === command.operationId)) {
       const occupied = sourceUuids(handle.source);
-      [...detail.expected.issuedIds, ...sessionIssuedIds, ...(detail.kind === 'new-plan' ? newPlanIssuedIds(workspace) : issuedIds(detail.table, workspace, detail.corrections))].forEach(id => occupied.add(idTail(id)));
+      [...detail.expected.issuedIds, ...sessionIssuedIds.values(), ...(detail.kind === 'new-plan' ? newPlanIssuedIds(workspace) : issuedIds(detail.table, workspace, detail.corrections))].forEach(id => occupied.add(idTail(id)));
       checkFreshCommandIds(command, occupied);
     }
     return applyCommand(workspace, command, handle.source.context);
@@ -258,7 +278,7 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     const replay = await validateState(handle.state);
     const raw = JSON.stringify(replay.state), digest = await backupDigest(replay.state);
     const next: AuthorityRecord = { raw, revision: detail.expected.revision + 1,
-      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
+      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, [...sessionIssuedIds.values()], replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
     validateAuthority(next);
     if (utf8Bytes(JSON.stringify(next)) > maxRecordBytes) throw new Error(`capacity_limit: ${maxRecordBytes} bytes。archiveは省略しません。`);
     // Same lock as legacy Planner. IDB adds atomic CAS + one-record put; no

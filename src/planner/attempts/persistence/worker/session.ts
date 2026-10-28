@@ -44,11 +44,12 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
   observed=structuredClone(r);
  });
  let environmentTask:Promise<Environment>|undefined;const environment=()=>environmentTask??=loadEnvironment();
- const controller=createAttemptPersistence(store,undefined,environment);
+ const editIds=new EditIds();
+ const controller=createAttemptPersistence(store,undefined,environment,undefined,{issued:id=>editIds.restrict([id]),reserved:()=>editIds.reservations()});
  const current=(id:number)=>{queue.check(id);if(closed)throw new Fault('closed');};
  function guard(c:Control){requireCandidateAuthority(c.op);if(c.session!==session||c.expectedView!==view)throw new Fault('stale_view');registry.get(c.expectedView,'view',c.op);}
  const editSubmissions=new Set<string>();
- const editIds=new EditIds();let activeMigration:MigrationSession|undefined,corrected=false,correctionCount=0;
+ let activeMigration:MigrationSession|undefined,corrected=false,correctionCount=0;
  const operations=['openCommitted','inspectLegacyRaw','inspectBackupRaw','prepareMigration','prepareSave','readPage','release','prepareNewPlan','prepareEdits','proposeDate','confirmDate'];
  function publish(delta:Partial<Vector>={}){vector={...vector,...delta};for(const n of Object.values(vector))if(!Number.isSafeInteger(n))throw new Fault('resource_limit');registry.advance(vector);view=registry.mint('view',{},operations);return view;}
  function select(kind:string,raw:string){if(selected&&(selected.kind!==kind||selected.raw!==raw))throw new Fault('stale_view');selected??={kind,raw};}

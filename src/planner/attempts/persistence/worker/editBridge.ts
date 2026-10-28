@@ -15,6 +15,7 @@ export type EditRow={purpose:'attempt'|'record'|'removal'|'selection'|'assessmen
 export class EditIds {
  private burned=new Set<string>();
  restrict(ids:readonly string[]){ids.forEach(id=>this.burned.add(idTail(id)));}
+ reservations(){return [...this.burned];}
  prepare(handle:PersistenceHandle,expected:AuthorityRecord){return new Set([...this.burned,...sourceUuids(handle.source),...referencedUuids([handle.state,handle.workspace,expected.issuedIds])]);}
  mint(occupied:Set<string>,prefix=''){
   for(let n=0;n<128;n++){const uuid=crypto.randomUUID();if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(uuid))throw new Fault('internal');if(occupied.has(uuid)||this.burned.has(uuid))continue;this.burned.add(uuid);occupied.add(uuid);return prefix+uuid;}
