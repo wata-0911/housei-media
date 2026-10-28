@@ -2,7 +2,7 @@ import {build} from 'esbuild';import {readFile,writeFile} from 'node:fs/promises
 const root=new URL('../',import.meta.url).pathname;
 const base='1f75d6db958608dfb149d1aa0f610e3c58a21d2d';
 const bundle=await build({entryPoints:[root+'src/planner/attempts/persistence/worker/client.ts'],bundle:true,write:false,format:'esm',platform:'browser',metafile:true});const inputs=Object.keys(bundle.metafile.inputs);
-assert.ok(inputs.every(x=>/worker\/(client|protocol|contracts)\.ts$/.test(x)));const code=bundle.outputFiles[0].text;assert.ok(!/createAttemptPersistence|prepareMigrationEnvironment|indexedDB/.test(code));
+assert.ok(inputs.every(x=>/worker\/(client|protocol|contracts|editInput)\.ts$/.test(x)));const code=bundle.outputFiles[0].text;assert.ok(!/createAttemptPersistence|prepareMigrationEnvironment|indexedDB/.test(code));
 const old=execFileSync('git',['show',base+':src/planner/attempts/persistence/indexedDb.ts'],{cwd:root,encoding:'utf8'}),now=await readFile(root+'src/planner/attempts/persistence/indexedDb.ts','utf8'),reader=await readFile(root+'src/planner/attempts/persistence/indexedDbRead.ts','utf8');
 assert.equal(old.slice(old.indexOf('    async commit(')),now.slice(now.indexOf('    async commit(')));
 const readBody=old.slice(old.indexOf("      if (!factory.databases)"),old.indexOf('    async commit(')).trim().replace(/},$/,'}');assert.ok(reader.trimEnd().endsWith(readBody));

@@ -23,3 +23,42 @@ Worker control cancellation is soft: it marks queued/running requests and checks
 Tests: `npm run test:attempt-controller-worker`; additional audit/ABA cases: `node --import tsx --test --test-concurrency=1 tests/attempt-controller-worker-audit-regression.test.mjs tests/attempt-controller-worker-revocation.test.mjs`; real browser: `npm run test:attempt-controller-worker-browser` with optional `PLANNER_PLAYWRIGHT_MODULE` and `PLANNER_BROWSER_EXECUTABLE`. `CONTROLLER_EVIDENCE` selects an external evidence directory. Private oracle instrumentation compares all state/Workspace/source/reservation values in a test-only Worker bundle, without a product hook or graph-returning RPC. `scripts/verify-controller-worker-scope.mjs` checks reader extraction, writer preservation and import boundaries. `scripts/benchmark-controller-worker.mjs` measures a fresh page per scenario, 100 page/release cycles and 30 start/close sessions; it requires local browser/ps access and writes raw fixtures only to the external evidence directory.
 
 Known limits remain total replay CPU, module/environment startup cost, long-lived raw/cache/ledger memory, postMessage copies, RSS residue, worst-case OOM, and the unexplained prior 429ms Long Task. Node22, Safari, real iPhone/Android and low-memory devices remain unverified. Neither this stage nor its local tests approve PR #183's P2 closure, dev integration, public release, or stage3C writes. Stage3B2's editing/new-plan/date correction and stage3C's commit/Lock/CAS/artifact/backup export remain separate work, with independent audits required.
+
+
+## 段階3B2のローカル編集境界
+
+`prepareNewPlan` / `prepareEdits` / `proposeDate` / `confirmDate`を追加した。
+保存API、DB writer、Lock request、export、portable adoption、write-mode昇格は提供しない。
+controller・codec・schema・IndexedDB reader/writerは3B1から不変。
+
+`EditIntent`は`worker/editTypes.ts`の閉じたunion。全8 Command種を扱う。
+UIは用途別RowTokenを渡し、Command・operationId・恒久ID・source/context・公式証拠を渡さない。
+search/attempt/record/removal/assessment/既存owner/held dateは現在のviewの実objectへ束縛する。
+新規recordは空の進捗配列を作り、後続のviewで取得したtokenによる単項目patchで編集する。
+TODO以外のowner=null、plan=nullへの部分plan編集、未知intent・fieldは明示拒否。
+省略は元値保持、nullと0は変換しない。元official linkや進捗行/識別子はpatch中に保持する。
+
+batchは1–50件、intent全体UTF-8 1MiB、単純文字列4096 UTF-16 units、note8192 units。
+frameはparse前にdecoded duplicate key・過深・unsafe integer・-0/非有限を拒否する。
+既存domain enum/range/transitionの判定は既存Command validatorへ通す。
+Command/IDをWorker内で一度構築し、controllerの順序付きdispatchと候補admissionを全件成功したときだけpublishする。
+失敗・取消時は元draft/viewを維持し、発行済みUUIDは生存session中の全namespaceで再利用禁止。
+同requestId/同payloadはledgerにjoin。異payloadはprotocol。
+別requestIdの同view/draft/intentsは、失敗後もprotocol拒否し、再UUID発行しない。
+新しい操作には新viewまたは明示的に異なるintentが必要。
+
+queueは同時受付8件、待機intent payload（他操作はcontrol）UTF-8 1MiBに加え、保持header合計4Mi UTF-16 unitsを上限とする。
+後者に達したらresource_limitとして新規受付を停止し、draft/原文/既存ledgerをevictしない。
+元rawは従来どおりcanonicalな1参照を共有し、このheader上限に原rawを加算しない。
+
+日付はheld date row→controller実proposal→限定oldDate/newDate表示→`confirmed:true`でのみ訂正する。
+元raw、元assignment、公式数量、訂正連鎖、旧予約はcontrollerの既存契約で保持。
+元rawの再inspectは訂正後の現在の実sessionを表示し、訂正前の資格へ巻き戻さない。
+訂正はsource/draft revisionを進め、旧proposal/preview/row/cursorを失効させる。
+編集済みdraftの再inspectやsource選択後のopenCommittedはstale_viewで拒否し、別sessionでの再検証を要求する。
+
+検証: `npm run test:attempt-controller-edits`、`npm run test:attempt-controller-edits-browser`。
+全値観測・決定的UUID・await延期はtest-only bundle/injectionに限り、製品RPCにhookはない。
+性能計測は`scripts/benchmark-controller-edits.mjs`。固定fixtureを`CONTROLLER_EVIDENCE`の
+`performance-fixtures.json`へ事前配置する。schema23の過去180秒timeout/58.57秒の記録は維持し、
+今回の速度差を性能改善と主張しない。自己検証は独立監査PASSではない。

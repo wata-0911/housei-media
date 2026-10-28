@@ -31,6 +31,8 @@
     "test:attempt-replay": "node --import tsx --test --test-concurrency=1 tests/attempt-replay-json.test.mjs tests/attempt-replay-limits.test.mjs tests/attempt-replay-client.test.mjs tests/attempt-replay-equality.test.mjs",
     "test:attempt-replay-browser": "node --import tsx --test tests/attempt-replay.browser.mjs",
     "test:attempt-controller-worker": "node --import tsx --test --test-concurrency=1 tests/attempt-controller-worker-input.test.mjs tests/attempt-controller-worker-reader.test.mjs tests/attempt-controller-worker-session.test.mjs tests/attempt-controller-worker-client.test.mjs",
+    "test:attempt-controller-edits": "node --import tsx --test --test-concurrency=1 tests/attempt-controller-edits.test.mjs",
+    "test:attempt-controller-edits-browser": "node --import tsx --test --test-concurrency=1 tests/attempt-controller-edits.browser.mjs",
     "test:attempt-controller-worker-browser": "node --import tsx --test --test-concurrency=1 tests/attempt-controller-worker.browser.mjs"
   },
   "dependencies": {
