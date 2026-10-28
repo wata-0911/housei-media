@@ -1,3 +1,5 @@
+import {EDIT_CONTROL_LIMIT} from './editInput';
+import type {EditIntent,RowToken,CorrectionToken,CorrectionDTO} from './editTypes';
 import {ControllerWorkerError as Fault,type Guard,type Started,type StateView,type InspectionDTO,type PreviewDTO,type PreparedSave,type PageDTO,type PageKind,type MigrationToken,type DraftToken,type PreviewToken,type CursorToken,type Operation,type Result} from './contracts';
 import {dataRecord,keys,parseFrame,parseResponse,validateControl,CONTROL_LIMIT,RAW_LIMIT} from './protocol';
 export type WorkerPort={postMessage(data:string):void;terminate():void;onmessage:((event:MessageEvent<unknown>)=>void)|null;onerror:((event:ErrorEvent)=>void)|null;onmessageerror:((event:MessageEvent<unknown>)=>void)|null};
@@ -32,10 +34,10 @@ export function createControllerWorkerClient(factory:()=>WorkerPort=()=>new Work
  let uploading=false;
  async function call<T extends Result>(op:Operation,input:unknown={},options:Options={}):Promise<T>{
   if(closed)throw new Fault('closed');const r=dataRecord(input),hasRaw=op==='inspectLegacyRaw'||op==='inspectBackupRaw';
-  const fields:Record<Operation,string[]>={startSession:[],openCommitted:[],inspectLegacyRaw:['raw'],inspectBackupRaw:['raw'],prepareMigration:['migration'],prepareSave:['draft','restorePreview'],readPage:['kind','cursor'],release:['token']};
+  const fields:Record<Operation,string[]>={startSession:[],openCommitted:[],inspectLegacyRaw:['raw'],inspectBackupRaw:['raw'],prepareMigration:['migration'],prepareSave:['draft','restorePreview'],readPage:['kind','cursor'],release:['token'],prepareNewPlan:[],prepareEdits:['draft','intents'],proposeDate:['date','newDate'],confirmDate:['correction','confirmed']};
   keys(r,op==='startSession'?[]:['session','expectedView'],fields[op]);
   let raw:string|undefined;if(hasRaw){if(typeof r.raw!=='string')throw new Fault('invalid_input');raw=r.raw;if(raw.length>RAW_LIMIT)throw new Fault('resource_limit');delete r.raw;}
-  const requestId=++sequence,c=validateControl({...r,version:1,boot,requestId,op});const header=JSON.stringify(c);if(header.length>CONTROL_LIMIT)throw new Fault('resource_limit');
+  const requestId=++sequence,c=validateControl({...r,version:1,boot,requestId,op});const header=JSON.stringify(c);if(header.length>(op==='prepareEdits'?EDIT_CONTROL_LIMIT:CONTROL_LIMIT))throw new Fault('resource_limit');
   if(admissions.size>=8||hasRaw&&uploading)throw new Fault('busy');
   const signal=options.signal,abort=()=>shutdown(new Fault('cancelled'));
   let rejectWaiting:(error:Fault)=>void;
@@ -61,6 +63,10 @@ export function createControllerWorkerClient(factory:()=>WorkerPort=()=>new Work
   openCommitted:(g:Guard,o?:Options)=>call<StateView|null>('openCommitted',g,o),
   inspectLegacyRaw:(g:Guard&{raw:string},o?:Options)=>call<InspectionDTO>('inspectLegacyRaw',g,o),
   inspectBackupRaw:(g:Guard&{raw:string},o?:Options)=>call<InspectionDTO>('inspectBackupRaw',g,o),
+  prepareNewPlan:(g:Guard,o?:Options)=>call<PreviewDTO>('prepareNewPlan',g,o),
+  prepareEdits:(g:Guard&{draft:DraftToken;intents:readonly EditIntent[]},o?:Options)=>call<StateView>('prepareEdits',g,o),
+  proposeDate:(g:Guard&{date:RowToken;newDate:string|null},o?:Options)=>call<CorrectionDTO>('proposeDate',g,o),
+  confirmDate:(g:Guard&{correction:CorrectionToken;confirmed:true},o?:Options)=>call<InspectionDTO>('confirmDate',g,o),
   prepareMigration:(g:Guard&{migration:MigrationToken},o?:Options)=>call<PreviewDTO>('prepareMigration',g,o),
   prepareSave:(g:Guard&({draft:DraftToken;restorePreview?:never}|{restorePreview:PreviewToken;draft?:never}),o?:Options)=>call<PreparedSave>('prepareSave',g,o),
   readPage:(g:Guard&{kind:PageKind;cursor?:CursorToken},o?:Options)=>call<PageDTO>('readPage',g,o),

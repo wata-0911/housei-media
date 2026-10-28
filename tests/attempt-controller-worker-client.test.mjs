@@ -5,7 +5,8 @@ const t='a'.repeat(48),u='b'.repeat(48);
 function mock(){const sent=[];let killed=0;const w={postMessage:x=>sent.push(x),terminate:()=>killed++,onmessage:null,onerror:null,onmessageerror:null};const client=createControllerWorkerClient(()=>w,{startup:1000,job:1000});const boot=JSON.parse(sent[0]).boot;const send=r=>w.onmessage?.({data:JSON.stringify(r)});return {w,client,sent,boot,send,get killed(){return killed;},ready(){send({version:1,boot,type:'ready',mode:'preview-only'});}};}
 const tick=()=>new Promise(r=>setTimeout(r,0));
 test('strict protocol rejects write opcodes, caller flags and malformed DTOs',()=>{
- for(const op of ['commit','commitPreview','prepareEdits','writeMode','prepareNewPlan','proposeDate'])assert.throws(()=>validateControl({version:1,boot:1,requestId:1,op,session:t,expectedView:u}));
+ for(const op of ['commit','commitPreview','prepareEdits','writeMode','protectCurrent','exportBackup','reconcileUnknownCommit','proposeDate'])assert.throws(()=>validateControl({version:1,boot:1,requestId:1,op,session:t,expectedView:u}));
+ assert.doesNotThrow(()=>validateControl({version:1,boot:1,requestId:1,op:'prepareNewPlan',session:t,expectedView:u}));
  assert.throws(()=>parseResponse(JSON.stringify({version:1,boot:1,requestId:1,type:'result',value:{view:t,preview:u,canCommit:true}}),'prepareMigration'));
 });
 test('separate primitive raw frame and exact guarded control; no object crosses port',async()=>{

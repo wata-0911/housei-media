@@ -1,3 +1,4 @@
+import {EDIT_CONTROL_LIMIT} from './editInput';
 import {readIndexedDbAuthority} from '../indexedDbRead';
 import {loadWorkerEnvironment} from './environment';
 import {createPreviewSession} from './session';
@@ -22,7 +23,8 @@ scope.onmessage=(event)=>{
   const raw=event.data;
   if(typeof raw!=='string')throw new ControllerWorkerError('protocol');
   if(upload){const c=upload;upload=undefined;if(raw.length>RAW_LIMIT)throw new ControllerWorkerError('resource_limit');void dispatch(c,raw);return;}
-  const r=parseFrame(raw);
+  const r=parseFrame(raw,EDIT_CONTROL_LIMIT);
+  if(raw.length>CONTROL_LIMIT&&r.op!=='prepareEdits')throw new ControllerWorkerError('resource_limit');
   if(!boot){keys(r,['version','boot','type']);if(r.version!==1||r.type!=='hello'||!integer(r.boot)||r.boot===0)throw new ControllerWorkerError('protocol');boot=r.boot;session=createPreviewSession(()=>readIndexedDbAuthority(indexedDB),loadWorkerEnvironment,boot);send({version:1,boot,type:'ready',mode:'preview-only'});return;}
   if(r.type==='cancel'){keys(r,['version','boot','type','requestId']);if(r.version!==1||r.boot!==boot||!integer(r.requestId)||r.requestId===0)throw new ControllerWorkerError('protocol');session!.cancel(r.requestId);return;}
   if(r.type==='close'){keys(r,['version','boot','type']);if(r.version!==1||r.boot!==boot)throw new ControllerWorkerError('protocol');stop();return;}

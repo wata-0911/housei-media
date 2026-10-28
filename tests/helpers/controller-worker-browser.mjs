@@ -16,8 +16,8 @@ const nativeSend=globalThis.postMessage.bind(globalThis);globalThis.postMessage=
 const rawPlugin={name:'raw-files',setup(b){b.onResolve({filter:/\?raw$/},a=>({path:resolve(a.resolveDir,a.path.slice(0,-4)),namespace:'exact-raw'}));b.onLoad({filter:/.*/,namespace:'exact-raw'},async a=>({contents:await readFile(a.path,'utf8'),loader:'text'}));}};
 const oraclePlugin={name:'private-controller-oracle',setup(b){b.onResolve({filter:/^audit-base-controller$/},()=>({path:'base-controller',namespace:'audit-base'}));b.onLoad({filter:/.*/,namespace:'audit-base'},()=>({contents:execFileSync('git',['show','1f75d6db958608dfb149d1aa0f610e3c58a21d2d:src/planner/attempts/persistence/controller.ts'],{cwd:root,encoding:'utf8'}),loader:'ts',resolveDir:root+'src/planner/attempts/persistence'}));b.onLoad({filter:/worker\/session\.ts$/},async a=>{
 let s=await readFile(a.path,'utf8');s="import {createAttemptPersistence as createBaselinePersistence} from 'audit-base-controller';\nimport {sameAttemptData as auditEqual} from '../../validation';\nimport {replayState as auditReplay} from '../codec';\n"+s;
-s=s.replace('const controller=createAttemptPersistence(store,undefined,environment);',`const controller=createAttemptPersistence(store,undefined,environment);
-const oracle=createBaselinePersistence(store,undefined,environment),auditMigrations=new WeakMap(),auditHandles=new WeakMap();
+s=s.replace('const controller=createAttemptPersistence(store,undefined,environment,undefined,{issued:id=>editIds.restrict([id]),reserved:()=>editIds.reservations()});',`const controller=createAttemptPersistence(store,undefined,environment,undefined,{issued:id=>editIds.restrict([id]),reserved:()=>editIds.reservations()});
+const oracle=createBaselinePersistence(store,undefined,environment),auditMigrations=new WeakMap(),auditHandles=new WeakMap(),auditProposals=new WeakMap();
 async function auditHandle(actual,expected){
  if(actual===null||expected===null){if(actual!==expected)throw Error('audit_null');return;}
  if(!auditEqual([actual.state,actual.workspace,actual.source],[expected.state,expected.workspace,expected.source]))throw Error('audit_all_values');
@@ -25,14 +25,23 @@ async function auditHandle(actual,expected){
  if(!auditEqual([a.state,a.workspace,a.requiredReservations],[b.state,b.workspace,b.requiredReservations]))throw Error('audit_reservations');
  auditHandles.set(actual,expected);globalThis.__audit.oracle++;
 }
+async function auditConfirm(target){const native=crypto.randomUUID.bind(crypto),tape=[];let m,o,i=0;
+ try{crypto.randomUUID=()=>{const id=native();tape.push(id);return id;};m=await controller.confirmDate(target.session,target.proposal,true);crypto.randomUUID=()=>{if(i>=tape.length)throw Error('oracle_ID_count');return tape[i++];};o=await oracle.confirmDate(auditMigrations.get(target.session),auditProposals.get(target.proposal),true);}
+ finally{crypto.randomUUID=native;}
+ if(i!==tape.length||!auditEqual(m,o))throw Error('audit_corrected_session');auditMigrations.set(m,o);globalThis.__audit.oracle++;return m;
+}
 async function auditLegacy(raw){const native=crypto.randomUUID.bind(crypto),tape=[];let m,o,i=0;
  try{crypto.randomUUID=()=>{const id=native();tape.push(id);return id;};m=await controller.inspectLegacy(raw);crypto.randomUUID=()=>{if(i>=tape.length)throw Error('oracle_ID_count');return tape[i++];};o=await oracle.inspectLegacy(raw);}
  finally{crypto.randomUUID=native;}
  if(i!==tape.length||!auditEqual(m,o))throw Error('audit_migration_session');auditMigrations.set(m,o);globalThis.__audit.oracle++;return m;
 }`);
 s=s.replace('try{h=await controller.load();}', 'try{h=await controller.load();await auditHandle(h,await oracle.load());}');
-s=s.replace('const m=await controller.inspectLegacy(raw);','const m=await auditLegacy(raw);');
+s=s.replace('const m=corrected&&activeMigration?(await store.read(),activeMigration):await controller.inspectLegacy(raw);','const m=corrected&&activeMigration?(await store.read(),activeMigration):await auditLegacy(raw);');
+s=s.replace('const p=await controller.prepareNewPlan();','const p=await controller.prepareNewPlan();await auditHandle(p.handle,(await oracle.prepareNewPlan()).handle);');
+s=s.replace('const p=await controller.prepareEdits(d.handle,commands);','const p=await controller.prepareEdits(d.handle,commands);await auditHandle(p.handle,(await oracle.prepareEdits(auditHandles.get(d.handle),commands)).handle);');
 s=s.replace('const p=await controller.prepareMigration(m.session);','const p=await controller.prepareMigration(m.session);await auditHandle(p.handle,(await oracle.prepareMigration(auditMigrations.get(m.session))).handle);');
+s=s.replace('const proposal=await controller.proposeDate(target.session,target.date.offeringId,target.date.assessmentId,c.newDate!);','const proposal=await controller.proposeDate(target.session,target.date.offeringId,target.date.assessmentId,c.newDate!);auditProposals.set(proposal,await oracle.proposeDate(auditMigrations.get(target.session),target.date.offeringId,target.date.assessmentId,c.newDate!));');
+s=s.replace('const m=await controller.confirmDate(target.session,target.proposal,true);','const m=await auditConfirm(target);');
 s=s.replace('const p=await controller.inspectBackup(raw);','const p=await controller.inspectBackup(raw);const oraclePreview=await oracle.inspectBackup(raw);if(!auditEqual(p,oraclePreview))throw Error("audit_backup_preview");await auditHandle(p.handle,oraclePreview.handle);');
 s=s.replace('const p=await controller.prepareEdits(d.handle,[]);','const p=await controller.prepareEdits(d.handle,[]);await auditHandle(p.handle,(await oracle.prepareEdits(auditHandles.get(d.handle),[])).handle);');
 return {contents:s,loader:'ts',resolveDir:dirname(a.path)};
@@ -44,7 +53,8 @@ export async function controllerBrowser(){
  compile('src/planner/attempts/persistence/worker/preview.worker.ts',{banner:{js:auditPrelude}}),
  compile('src/planner/attempts/persistence/worker/preview.worker.ts',{banner:{js:auditPrelude},plugins:[rawPlugin,oraclePlugin]}),
  compile('src/planner/attempts/persistence/worker/client.ts'),compile('src/planner/attempts/persistence/worker/preview.worker.ts'),compile('src/planner/attempts/persistence/worker/preview.worker.ts',{banner:{js:auditPrelude},plugins:[rawPlugin,cloneFault('migration')]}),compile('src/planner/attempts/persistence/worker/preview.worker.ts',{banner:{js:auditPrelude},plugins:[rawPlugin,cloneFault('preview')]}),compile('src/planner/attempts/persistence/worker/preview.worker.ts',{banner:{js:auditPrelude},plugins:[rawPlugin,{name:'test-deferred-read',setup(b){b.onLoad({filter:/preview\.worker\.ts$/},async a=>({contents:(await readFile(a.path,'utf8')).replace('()=>readIndexedDbAuthority(indexedDB)','()=>new Promise<void>(resolve=>setTimeout(resolve,75)).then(()=>readIndexedDbAuthority(indexedDB))'),loader:'ts'}));}}]})]);
- const assets={'/pending.js':pending,'/clone-migration.js':cloneMigration,'/clone-preview.js':clonePreview,'/native/preview.worker.ts':plain,'/native/client.js':client,'/preview.worker.ts':worker,'/observed.js':observed,'/client.js':client,'/fault.js':'throw new Error("PRIVATE_SECRET");'};
+ const delayedEdit=await compile('src/planner/attempts/persistence/worker/preview.worker.ts',{banner:{js:auditPrelude},plugins:[rawPlugin,{name:'test-await-edit',setup(b){b.onLoad({filter:/worker\/session\.ts$/},async a=>({contents:(await readFile(a.path,'utf8')).replace('const p=await controller.prepareEdits(d.handle,commands);',"const p=await controller.prepareEdits(d.handle,commands);globalThis.postMessage(JSON.stringify({testEditAwait:true}));await new Promise(resolve=>setTimeout(resolve,250));"),loader:'ts'}));}}]});
+ const assets={'/delayed-edit.js':delayedEdit,'/pending.js':pending,'/clone-migration.js':cloneMigration,'/clone-preview.js':clonePreview,'/native/preview.worker.ts':plain,'/native/client.js':client,'/preview.worker.ts':worker,'/observed.js':observed,'/client.js':client,'/fault.js':'throw new Error("PRIVATE_SECRET");'};
  const server=createServer((req,res)=>{res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Content-Type',req.url==='/'?'text/html':'text/javascript');if(req.url==='/')res.end('<!doctype html><title>Controller Worker isolation test</title>');else if(assets[req.url])res.end(assets[req.url]);else{res.statusCode=404;res.end();}});
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
  const module=process.env.PLANNER_PLAYWRIGHT_MODULE||'playwright', {chromium}=await import(module);let browser;
