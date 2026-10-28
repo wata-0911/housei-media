@@ -27,17 +27,21 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
  const migrationSnapshots=new WeakMap<MigrationSession,AuthorityRecord>();
  const queue=new SessionQueue();let vector:Vector={boot,sourceEpoch:0,contextRevision:1,draftRevision:0,authorityRevision:0};
  const registry=new Registry(vector);let session:SessionToken,view:ViewToken,started=false,closed=false;
- let transportRaw:string|undefined,allowAuthorityRefresh=false;
+ let transportRaw:string|undefined,allowAuthorityRefresh=false,authorityRevoked=false;
+ // Keep the current view/Workspace for display; candidate authority never revives.
+ const viewingOperations:readonly Control['op'][]=['readPage','release'];
+ function requireCandidateAuthority(op:Control['op']){if(authorityRevoked&&!viewingOperations.includes(op))throw new Fault('stale_authority');}
+ function invalidateAuthority():never{authorityRevoked=true;registry.revokeKinds(['draft','preview','migration']);throw new Fault('stale_authority');}
  let observed:AuthorityRecord|undefined,authority:AuthorityRecord|undefined,selected:{kind:string;raw:string}|undefined;
  let pages:PageSource={diagnostics:[]};let activeDraft:Draft|undefined,activePreview:Candidate|undefined;
  const store=createReadonlyStore(read,r=>{
-  if(authority&&!allowAuthorityRefresh&&!sameAuthority(authority,r))throw new Fault('stale_authority');
+  if(authority&&!allowAuthorityRefresh&&!sameAuthority(authority,r))invalidateAuthority();
   observed=structuredClone(r);
  });
  let environmentTask:Promise<Environment>|undefined;const environment=()=>environmentTask??=loadEnvironment();
  const controller=createAttemptPersistence(store,undefined,environment);
  const current=(id:number)=>{queue.check(id);if(closed)throw new Fault('closed');};
- function guard(c:Control){if(c.session!==session||c.expectedView!==view)throw new Fault('stale_view');registry.get(c.expectedView,'view',c.op);}
+ function guard(c:Control){requireCandidateAuthority(c.op);if(c.session!==session||c.expectedView!==view)throw new Fault('stale_view');registry.get(c.expectedView,'view',c.op);}
  const operations=['openCommitted','inspectLegacyRaw','inspectBackupRaw','prepareMigration','prepareSave','readPage','release'];
  function publish(delta:Partial<Vector>={}){vector={...vector,...delta};for(const n of Object.values(vector))if(!Number.isSafeInteger(n))throw new Fault('resource_limit');registry.advance(vector);view=registry.mint('view',{},operations);return view;}
  function select(kind:string,raw:string){if(selected&&(selected.kind!==kind||selected.raw!==raw))throw new Fault('stale_view');selected??={kind,raw};}
@@ -62,7 +66,7 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
    current(c.requestId);guard(c);
    // Null has no replacement ViewToken. An unchanged empty DB preserves the
    // draft; an externally erased authority requires a fresh session instead.
-   if(!h){if(authority&&!sameAuthority(authority,observed!))throw new Fault('stale_authority');return null;}
+   if(!h){if(authority&&!sameAuthority(authority,observed!))invalidateAuthority();return null;}
    authority=observed!;publish({authorityRevision:authority.revision});activeDraft=undefined;activePreview=undefined;pages={diagnostics:[],...(h?{handle:h}:{})};
    activeDraft={handle:h,expected:authority};
    return {view,handle:registry.mint('handle',h,['display']),draft:registry.mint('draft',activeDraft,['prepareSave']),summary:snapshot(h),evidence:'local-witness'};
@@ -74,7 +78,7 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
     // A controller cache hit retains its ORIGINAL authority, including fields
     // that may change without a revision increment. Never rebind its metadata.
     const actual=observed!,expected=migrationSnapshots.get(m)??actual;migrationSnapshots.set(m,expected);
-    current(c.requestId);guard(c);if(!sameAuthority(expected,actual))throw new Fault('stale_authority');
+    current(c.requestId);guard(c);if(!sameAuthority(expected,actual))invalidateAuthority();
     const diagnostics:readonly Diagnostic[]=m.decoded.status!=='decoded'?m.decoded.diagnostics:m.preview?.diagnostics??[];
     const status=m.preview?.status??(m.decoded.status==='decoded'?'rejected':m.decoded.status);
     publish({sourceEpoch:1,authorityRevision:expected.revision});authority=expected;activeDraft=undefined;activePreview=undefined;pages={diagnostics};
@@ -100,7 +104,7 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
    }else {candidate=registry.get<Candidate>(c.restorePreview!,'preview',c.op);if(candidate.preview.action!=='restore')throw new Fault('stale_view');}
    controller.assertPreview(candidate.preview);
    const actual=await store.read();current(c.requestId);guard(c);
-   if(!sameAuthority(candidate.expected,actual))throw new Fault('stale_authority');
+   if(!sameAuthority(candidate.expected,actual))invalidateAuthority();
    preflight(JSON.stringify(candidate.preview.handle.state),'state');
    const hint={kind:'untrusted-recovery-hint' as const,version:1 as const,submissionKey:opaqueIdentifier(),
     baseAuthoritySha256:await backupDigest(actual),candidateStateSha256:await backupDigest(candidate.preview.handle.state),candidateRawSha256:await backupRawDigest(JSON.stringify(candidate.preview.handle.state))};
@@ -119,7 +123,8 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
  return {
   request(c:Control,raw?:string){
    if(closed)return Promise.reject(new Fault('closed'));
-   try{if(raw!==undefined){checkRawString(raw);checkRawBytes(raw,INPUT_PROFILES[c.op==='inspectLegacyRaw'?'legacy':'backup']);
+   // Also gate settled-ledger replay: an old successful DTO cannot renew eligibility.
+   try{requireCandidateAuthority(c.op);if(raw!==undefined){checkRawString(raw);checkRawBytes(raw,INPUT_PROFILES[c.op==='inspectLegacyRaw'?'legacy':'backup']);
     if(!queue.has(c.requestId)){guard(c);if(transportRaw!==undefined&&transportRaw!==raw)throw new Fault('stale_view');transportRaw??=raw;raw=transportRaw;}
    }}catch(e){return Promise.reject(e);}
    // Exact collision-free key: bounded header plus ONE canonical selected raw

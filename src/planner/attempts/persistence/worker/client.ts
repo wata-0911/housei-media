@@ -8,11 +8,12 @@ let nextBoot=0;
 export function createControllerWorkerClient(factory:()=>WorkerPort=()=>new Worker(new URL('./preview.worker.ts',import.meta.url),{type:'module'}),timeouts={startup:30_000,job:300_000}) {
  const boot=++nextBoot;if(!Number.isSafeInteger(boot))throw new Fault('resource_limit');
  let worker:WorkerPort|undefined,closed=false,ready=false,sequence=0,generation=1,started=false;
- type Pending={op:Operation;generation:number;resolve:(x:Result)=>void;reject:(e:unknown)=>void;timer:ReturnType<typeof setTimeout>;cleanup:()=>void};
+ type Pending={op:Operation;generation:number;resolve:(x:Result)=>void;reject:(e:unknown)=>void;timer:ReturnType<typeof setTimeout>};
+ const admissions=new Set<{cancel:(error:Fault)=>void}>();
  const pending=new Map<number,Pending>();let readyResolve:()=>void,readyReject:(e:unknown)=>void;
  const readiness=new Promise<void>((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});void readiness.catch(()=>{});
  const startup=setTimeout(()=>shutdown(new Fault('startup_failure')),timeouts.startup);
- function shutdown(error:Fault){if(closed)return;closed=true;generation++;clearTimeout(startup);if(worker){worker.onmessage=null;worker.onerror=null;worker.onmessageerror=null;worker.terminate();worker=undefined;}for(const p of pending.values()){clearTimeout(p.timer);p.cleanup();p.reject(error);}pending.clear();readyReject(error);}
+ function shutdown(error:Fault){if(closed)return;closed=true;generation++;clearTimeout(startup);if(worker){worker.onmessage=null;worker.onerror=null;worker.onmessageerror=null;worker.terminate();worker=undefined;}for(const p of pending.values()){clearTimeout(p.timer);p.reject(error);}pending.clear();for(const admission of [...admissions])admission.cancel(error);readyReject(error);}
  try{
   worker=factory();worker.onerror=()=>shutdown(new Fault(ready?'internal':'startup_failure'));worker.onmessageerror=()=>shutdown(new Fault('protocol'));
   worker.onmessage=event=>{
@@ -22,7 +23,7 @@ export function createControllerWorkerClient(factory:()=>WorkerPort=()=>new Work
     const header=parseFrame(event.data),id=header.requestId;
     if(typeof id!=='number'||!pending.has(id))throw new Fault('protocol');
     const p=pending.get(id)!;const r=parseResponse(event.data,p.op);if(r.boot!==boot||r.requestId!==id||p.generation!==generation)throw new Fault('protocol');
-    pending.delete(id);clearTimeout(p.timer);p.cleanup();if(r.type==='error')p.reject(new Fault(r.code));else p.resolve(r.value);
+    pending.delete(id);clearTimeout(p.timer);if(r.type==='error')p.reject(new Fault(r.code));else p.resolve(r.value);
    }catch{shutdown(new Fault('protocol'));}
   };
   worker.postMessage(JSON.stringify({version:1,boot,type:'hello'}));
@@ -35,15 +36,25 @@ export function createControllerWorkerClient(factory:()=>WorkerPort=()=>new Work
   keys(r,op==='startSession'?[]:['session','expectedView'],fields[op]);
   let raw:string|undefined;if(hasRaw){if(typeof r.raw!=='string')throw new Fault('invalid_input');raw=r.raw;if(raw.length>RAW_LIMIT)throw new Fault('resource_limit');delete r.raw;}
   const requestId=++sequence,c=validateControl({...r,version:1,boot,requestId,op});const header=JSON.stringify(c);if(header.length>CONTROL_LIMIT)throw new Fault('resource_limit');
-  if(pending.size>=8||hasRaw&&uploading)throw new Fault('busy');if(hasRaw)uploading=true;
-  try{if(raw!==undefined)await transport(raw);await readiness;if(closed)throw new Fault('closed');if(options.signal?.aborted){shutdown(new Fault('cancelled'));throw new Fault('cancelled');}
+  if(admissions.size>=8||hasRaw&&uploading)throw new Fault('busy');
+  const signal=options.signal,abort=()=>shutdown(new Fault('cancelled'));
+  let rejectWaiting:(error:Fault)=>void;
+  const interrupted=new Promise<never>((_,reject)=>{rejectWaiting=reject;});void interrupted.catch(()=>{});
+  const release=()=>{if(!admissions.delete(admission))return;if(hasRaw)uploading=false;signal?.removeEventListener('abort',abort);};
+  const admission={cancel(error:Fault){release();rejectWaiting(error);}};
+  // Reserve synchronously, including transport/ready preparation, before any await.
+  admissions.add(admission);if(hasRaw)uploading=true;
+  try{
+   signal?.addEventListener('abort',abort,{once:true});
+   if(signal?.aborted){shutdown(new Fault('cancelled'));throw new Fault('cancelled');}
+   if(raw!==undefined)await Promise.race([transport(raw),interrupted]);
+   await Promise.race([readiness,interrupted]);if(closed)throw new Fault('closed');
    return await new Promise<T>((resolve,reject)=>{
-    const abort=()=>shutdown(new Fault('cancelled'));const cleanup=()=>options.signal?.removeEventListener('abort',abort);
     const timer=setTimeout(()=>shutdown(new Fault('cancelled')),timeouts.job);
-    pending.set(requestId,{op,generation,resolve:x=>resolve(x as T),reject,timer,cleanup});options.signal?.addEventListener('abort',abort,{once:true});
+    pending.set(requestId,{op,generation,resolve:x=>{release();resolve(x as T);},reject:e=>{release();reject(e);},timer});
     try{worker!.postMessage(header);if(raw!==undefined)worker!.postMessage(raw);}catch{shutdown(new Fault('internal'));}
    });
-  }finally{if(hasRaw)uploading=false;}
+  }finally{release();}
  }
  return {
   startSession(o?:Options):Promise<Started>{if(started)return Promise.reject(new Fault('protocol'));started=true;return call('startSession',{},o);},
