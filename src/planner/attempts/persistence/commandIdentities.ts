@@ -81,11 +81,17 @@ export function checkIntroducedIdentities(introduced: readonly IdentityOccurrenc
   validateReservations(ids); return ids;
 }
 
-/** Shared ordered step for replay and trusted live batch construction. */
-export function advanceCommandIdentities(before: Workspace, command: Command, context: AttemptValidationContext, occupied: Set<string>) {
+/** Inspect the real prestate without applying or certifying a graph transition. */
+export function inspectCommandIdentities(before: Workspace, command: Command, occupied: Set<string>) {
   const delta = analyzeCommandIdentities(before, command);
   for (const id of referencedUuids(before)) occupied.add(id);
   const ids = checkIntroducedIdentities(delta.introduced, occupied);
+  return { delta, ids };
+}
+
+/** Pure replay owns its ordered apply. Live Worker checks run inside dispatch. */
+export function advanceCommandIdentities(before: Workspace, command: Command, context: AttemptValidationContext, occupied: Set<string>) {
+  const { delta, ids } = inspectCommandIdentities(before, command, occupied);
   // Return only domain-transition failure as data. The trusted Worker can let
   // its qualified controller report that failure at the existing validation
   // boundary. Freshness/identity errors above are never deferred.
