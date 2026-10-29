@@ -4,7 +4,9 @@ import {makeAttempt,selectedReferences} from '../../workbench/catalogView';
 import {makeSearchAttempt} from '../../workbench/searchBridge';
 import type {Command} from '../../workbench/operations';
 import type {InstitutionalSearchRow} from '../../../institutional/search';
-import {sourceUuids,referencedUuids,idTail,checkFreshCommandIds} from '../identity';
+import {sourceUuids} from '../identity';
+import {SessionIdentityAllocator, type IdentityPrefix} from '../sessionIds';
+import {advanceCommandIdentities} from '../commandIdentities';
 import type {AuthorityRecord} from '../contracts';
 import {ControllerWorkerError as Fault} from './contracts';
 import type {EditIntent,RowToken} from './editTypes';
@@ -12,14 +14,10 @@ import type {Registry} from './registry';
 export type EditRow={purpose:'attempt'|'record'|'removal'|'selection'|'assessment'|'owner';value:unknown;recordId?:string};
 /** Private lifetime restriction, never an issuance credential. Every minted UUID
  * is burned immediately, including build/dispatch/encode/cancel failures. */
-export class EditIds {
- private burned=new Set<string>();
- restrict(ids:readonly string[]){ids.forEach(id=>this.burned.add(idTail(id)));}
- reservations(){return [...this.burned];}
- prepare(handle:PersistenceHandle,expected:AuthorityRecord){return new Set([...this.burned,...sourceUuids(handle.source),...referencedUuids([handle.state,handle.workspace,expected.issuedIds])]);}
- mint(occupied:Set<string>,prefix=''){
-  for(let n=0;n<128;n++){const uuid=crypto.randomUUID();if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(uuid))throw new Fault('internal');if(occupied.has(uuid)||this.burned.has(uuid))continue;this.burned.add(uuid);occupied.add(uuid);return prefix+uuid;}
-  throw new Fault('resource_limit');
+export class EditIds extends SessionIdentityAllocator {
+ prepare(handle:PersistenceHandle,expected:AuthorityRecord){return this.snapshot([...sourceUuids(handle.source),handle.state,handle.workspace,expected.issuedIds]);}
+ override mint(occupied:Set<string>,prefix:IdentityPrefix=''){
+  try{return super.mint(occupied,prefix);}catch(error){throw new Fault(error instanceof Error&&error.message==='allocator_exhausted'?'resource_limit':'internal');}
  }
 }
 export function buildEdits(handle:PersistenceHandle,expected:AuthorityRecord,intents:readonly EditIntent[],registry:Registry,ids:EditIds):readonly Command[]{
@@ -85,9 +83,19 @@ export function buildEdits(handle:PersistenceHandle,expected:AuthorityRecord,int
    case 'delete_todo':command={kind:'delete_todo',operationId,recordId:record(intent.todo).id};break;
    default:throw new Fault('unsupported_intent');
   }
-  // Also check every fresh Command ID against prior failed/cancelled batches;
-  // the controller independently checks source/history/authority reservations.
-  const fresh=checkFreshCommandIds(command,before);fresh.forEach(id=>before.add(idTail(id)));commands.push(command);
+  commands.push(command);
+ }
+ // Mint the batch first, preserving 3B2's immediate burn even for a later invalid
+ // command. Then use the REAL pre-command Workspace for every identity step.
+ // The controller independently validates its qualified handle and rule1 state.
+ let workspace=handle.workspace;
+ for(const command of commands){
+  const step=advanceCommandIdentities(workspace,command,handle.source.context,before);
+  // An invalid domain transition has no subsequent prestate. Keep the existing
+  // qualified-controller validation boundary; it must reject the same batch.
+  // Identity/freshness failures throw above and cannot take this path.
+  if(step.status==='invalid-transition')return commands;
+  workspace=step.workspace;
  }
  return commands;
 }
