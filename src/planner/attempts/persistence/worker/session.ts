@@ -45,7 +45,7 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
  });
  let environmentTask:Promise<Environment>|undefined;const environment=()=>environmentTask??=loadEnvironment();
  const editIds=new EditIds();
- const controller=createAttemptPersistence(store,undefined,environment,undefined,{issued:id=>editIds.restrict([id]),reserved:()=>editIds.reservations()});
+ const controller=createAttemptPersistence(store,undefined,environment,undefined,{issued:id=>editIds.restrict([id]),reserved:()=>editIds.reservations(),beforeCommand:(workspace,command)=>editIds.checkCommand(workspace,command)});
  const current=(id:number)=>{queue.check(id);if(closed)throw new Fault('closed');};
  function guard(c:Control){requireCandidateAuthority(c.op);if(c.session!==session||c.expectedView!==view)throw new Fault('stale_view');registry.get(c.expectedView,'view',c.op);}
  const editSubmissions=new Set<string>();

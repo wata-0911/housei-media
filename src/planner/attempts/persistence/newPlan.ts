@@ -1,3 +1,5 @@
+import { foldCommandIdentities, requireFoldWorkspace } from './identityFold';
+import { NEW_PERSISTENCE_RULE2, type AttemptState24Rule2 } from './contracts';
 import { backupDigest } from '../../backup/plannerBackupCompatibility';
 import { CURRENT_CURRICULUM_SEARCH_TARGET } from '../../institutional/currentSearch';
 import { createInstitutionalSearchAdapter } from '../../institutional/search';
@@ -61,4 +63,31 @@ export async function replayNewPlan(value: unknown) {
   const expected = await encodeNewPlan(source, workspace);
   if (!sameAttemptData(state, expected)) throw new Error('state_replay_mismatch');
   return { state: expected, source, workspace, requiredReservations: requiredReservations(source, expected.history.issuedIds) };
+}
+
+/** Opt-in rule2 construction: replay from the empty new-plan state. */
+export async function encodeNewPlanRule2(source: NewPlanSource, workspace: Workspace): Promise<AttemptState24Rule2> {
+  const pinned = await createNewPlanSource();
+  if (!sameAttemptData(source, pinned)) throw new Error('new_plan_source_mismatch');
+  source = pinned;
+  const legacy = await encodeNewPlan(source, workspace);
+  const structural = { ...legacy, rule: NEW_PERSISTENCE_RULE2 };
+  const fold = foldCommandIdentities({ source, initial: emptyNewPlanWorkspace(source) }, workspace.receipts, structural);
+  requireFoldWorkspace(workspace, fold.workspace);
+  return freeze({ ...structural, history: { ...legacy.history, issuedIds: fold.issuedIds } });
+}
+export async function replayNewPlanRule2(value: unknown) {
+  exactKeys(value, ['format', 'schemaVersion', 'rule', 'source', 'graph', 'retained', 'history', 'verification'], 'new_plan_state');
+  if (value.format !== STATE_FORMAT || value.schemaVersion !== NEW_STATE_VERSION || !sameAttemptData(value.rule, NEW_PERSISTENCE_RULE2)) throw new Error('unsupported_persistence_version');
+  const state = value as unknown as AttemptState24Rule2;
+  exactKeys(state.source, ['origin', 'initializationVersion', 'curriculumVersionId', 'sourceRevisionId', 'sourceDigest', 'masterSha256'], 'new_plan_source');
+  const source = await createNewPlanSource();
+  if (!sameAttemptData(state.source, source.evidence)) throw new Error('new_plan_source_mismatch');
+  exactKeys(state.history, ['commands', 'issuedIds', 'usedTodoIds'], 'history');
+  if (!Array.isArray(state.history.commands)) throw new Error('history_shape');
+  const fold = foldCommandIdentities({ source, initial: emptyNewPlanWorkspace(source) }, state.history.commands, state);
+  const legacy = await encodeNewPlan(source, fold.workspace);
+  const expected = freeze({ ...legacy, rule: NEW_PERSISTENCE_RULE2, history: { ...legacy.history, issuedIds: fold.issuedIds } });
+  if (!sameAttemptData(state, expected)) throw new Error('state_replay_mismatch');
+  return { state: expected, source, workspace: fold.workspace, requiredReservations: fold.requiredReservations };
 }

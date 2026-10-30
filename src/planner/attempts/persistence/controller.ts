@@ -29,7 +29,9 @@ const sourceProtection = (source: PersistenceSource) => source.kind === 'new-pla
 const stateReferences = (source: PersistenceSource) => source.kind === 'new-plan' ? new Set<string>() : referencedUuids(source.state);
 type Environment = Awaited<ReturnType<typeof prepareMigrationEnvironment>>;
 // Trusted factory dependencies only; reservations restrict IDs, never grant trust.
-type MigrationIdReservations = { issued: (id: string) => void; reserved: () => readonly string[] };
+type MigrationIdReservations = { issued: (id: string) => void; reserved: () => readonly string[];
+  // Trusted, synchronous validation only. Never supplied through Worker RPC.
+  beforeCommand?: (workspace: Workspace, command: Command) => void };
 const utf8Bytes = (raw: string) => new TextEncoder().encode(raw).byteLength;
 function validateAuthority(record: AuthorityRecord) {
   exactKeys(record, ['raw', 'revision', 'committed', 'issuedIds'], 'authority');
@@ -46,6 +48,7 @@ function validateAuthority(record: AuthorityRecord) {
  * Neither a hash nor user consent authenticates its issuer. */
 export function createAttemptPersistence(store: AtomicAttemptStore, locks: PlannerWriteLocks | undefined, environmentInput?: Environment | (() => Promise<Environment>), maxRecordBytes = 32 * 1024 * 1024, migrationIds?: MigrationIdReservations) {
   if (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes <= 0) throw new Error('capacity_policy');
+  const beforeCommand = migrationIds?.beforeCommand;
   let environmentTask: Promise<Environment> | undefined;
   async function migrationEnvironment() {
     if (!environmentInput) throw new Error('migration_environment_required');
@@ -199,6 +202,9 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
       const occupied = sourceUuids(handle.source);
       [...detail.expected.issuedIds, ...sessionIssuedIds.values(), ...(detail.kind === 'new-plan' ? newPlanIssuedIds(workspace) : issuedIds(detail.table, workspace, detail.corrections))].forEach(id => occupied.add(idTail(id)));
       checkFreshCommandIds(command, occupied);
+      // requireHandle/recovery and legacy freshness checks precede this hook.
+      // The next line outside this block remains the sole graph application.
+      beforeCommand?.(workspace, command);
     }
     return applyCommand(workspace, command, handle.source.context);
   }
