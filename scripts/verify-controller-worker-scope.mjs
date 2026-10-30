@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto';import {build} from 'esbuild';import {readFile,writeFile} from 'node:fs/promises';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';import {build} from 'esbuild';import {readFile,writeFile,lstat} from 'node:fs/promises';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';
 const root=new URL('../',import.meta.url).pathname;
 const base='1f75d6db958608dfb149d1aa0f610e3c58a21d2d';
 const bundle=await build({entryPoints:[root+'src/planner/attempts/persistence/worker/client.ts'],bundle:true,write:false,format:'esm',platform:'browser',metafile:true});const inputs=Object.keys(bundle.metafile.inputs);
@@ -62,4 +62,38 @@ assert.ok(changes.every(([status,path,...extra])=>!extra.length&&allowed.get(pat
 const changed=changes.map(([,path])=>path);
 const untracked=execFileSync('git',['ls-files','--others','--exclude-standard'],{cwd:root,encoding:'utf8'}).trim().split('\n').filter(Boolean);
 assert.ok(untracked.every(path=>allowed.get(path)==='A'),'scope_untracked_change:'+JSON.stringify(untracked));
+// The published PR must retain all 14 approved changes.
+assert.equal(changes.length, allowed.size, 'scope_missing_required_files');
+
+// A committed addition must remain a regular file in both
+// the working tree and Git index.
+for (const [path, status] of allowed) {
+  if (status !== 'A') continue;
+
+  const info = await lstat(root + path).catch(() => null);
+  assert.ok(info?.isFile() && !info.isSymbolicLink(),
+    `scope_added_file_type:${path}`);
+
+  const index = execFileSync('git', ['ls-files', '--stage', '--', path], {
+    cwd: root,
+    encoding: 'utf8'
+  }).trim();
+
+  assert.match(index, /^100(?:644|755) /,
+    `scope_added_file_index_mode:${path}`);
+}
+
+// Also reject forbidden staged or unstaged mutations
+// relative to the currently checked-out commit.
+const localChanges = execFileSync('git', [
+  'diff', '--name-status', '--no-renames', 'HEAD'
+], {cwd: root, encoding: 'utf8'})
+  .trim().split('\n').filter(Boolean)
+  .map(line => line.split('\t'));
+
+assert.ok(
+  localChanges.every(([status, path, ...extra]) =>
+    extra.length === 0 && status === 'M' && allowed.has(path)),
+  'scope_local_mutation:' + JSON.stringify(localChanges)
+);
 const result={base,implementationBase:'81f98862f1cd62aa4d9d9cc04d7f83864ea1858f',changed,untracked,mainInputs:inputs,mainBundleBytes:Buffer.byteLength(code),productionInputs:production.length,productionWorkerInputs:production.filter(x=>/persistence\/worker\//.test(x)),readerMechanical:true,writerByteIdentical:true,controllerSha256,controllerOnlyApprovedReadonlyProbeAndIdReservations:true,qualifiedIdentityHookDeltaOnly:true,sessionOnlyIdentityHookWiring:true,exactChangeStatus:true,rule1IdentityUnchanged:true,rule2PureAndDisconnected:true};console.log(JSON.stringify(result,null,2));if(process.env.CONTROLLER_EVIDENCE)await writeFile(process.env.CONTROLLER_EVIDENCE+'/scope.json',JSON.stringify(result,null,2)+'\n');

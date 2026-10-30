@@ -58,14 +58,40 @@ test('Worker applies each Command once; 50 edits, assessment sequence and failed
 });
 
 test('standard scope accepts fully tracked future commit tree and rejects tracked/untracked/protected mutations',async()=>{
- const checkout=await mkdtemp(resolve(evidence,'../scope-checkout-'));execFileSync('git',['clone','--no-hardlinks','--no-checkout',root,checkout],{stdio:'pipe'});execFileSync('git',['checkout','--detach','7bcad0403e3bac8389a638abe006bd6de2e81419'],{cwd:checkout,stdio:'pipe'});
+ const checkout=await mkdtemp(resolve(evidence,'../scope-checkout-'));execFileSync('git',['clone','--no-hardlinks','--no-checkout',root,checkout],{stdio:'pipe'});const publicHead=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();execFileSync('git',['checkout','--detach',publicHead],{cwd:checkout,stdio:'pipe'});
  const paths=[...new Set([...execFileSync('git',['diff','--name-only','HEAD'],{cwd:root,encoding:'utf8'}).trim().split('\n'),...execFileSync('git',['ls-files','--others','--exclude-standard'],{cwd:root,encoding:'utf8'}).trim().split('\n')].filter(Boolean))];
  for(const p of paths){await mkdir(dirname(resolve(checkout,p)),{recursive:true});await copyFile(resolve(root,p),resolve(checkout,p));}
- await symlink(resolve(root,'node_modules'),resolve(checkout,'node_modules'),'dir');execFileSync('git',['add','--',...paths],{cwd:checkout});execFileSync('git',['diff','--exit-code'],{cwd:checkout});const tree=execFileSync('git',['write-tree'],{cwd:checkout,encoding:'utf8'}).trim();
+ await symlink(resolve(root,'node_modules'),resolve(checkout,'node_modules'),'dir');if(paths.length>0)execFileSync('git',['add','--',...paths],{cwd:checkout});execFileSync('git',['diff','--exit-code'],{cwd:checkout});const tree=execFileSync('git',['write-tree'],{cwd:checkout,encoding:'utf8'}).trim();
  const status=execFileSync('git',['diff','--name-status','--no-renames','81f98862f1cd62aa4d9d9cc04d7f83864ea1858f'],{cwd:checkout,encoding:'utf8'});assert.equal(status,execFileSync('git',['diff','--cached','--name-status','--no-renames','81f98862f1cd62aa4d9d9cc04d7f83864ea1858f'],{cwd:checkout,encoding:'utf8'}));assert.equal(execFileSync('git',['ls-files','--others','--exclude-standard'],{cwd:checkout,encoding:'utf8'}),'');
  const run=name=>{const r=spawnSync(process.execPath,['scripts/verify-controller-worker-scope.mjs'],{cwd:checkout,encoding:'utf8'});return writeFile(resolve(evidence,'scope-'+name+'.log'),r.stdout+r.stderr).then(()=>r.status);};
  assert.equal(await run('tracked-clean-equivalent'),0);const readme=resolve(checkout,'README.md'),raw=await readFile(readme);await writeFile(readme,Buffer.concat([raw,Buffer.from('\nforbidden scope test\n')]));assert.equal(await run('negative-tracked'),1);await writeFile(readme,raw);
  const extra=resolve(checkout,'outside-allowed.txt');await writeFile(extra,'forbidden');assert.equal(await run('negative-untracked'),1);await unlink(extra);
  for(const path of ['src/planner/attempts/persistence/controller.ts','src/planner/attempts/migration/source.ts']){const p=resolve(checkout,path),raw=await readFile(p);await writeFile(p,Buffer.concat([raw,Buffer.from('\n// forbidden invariant change\n')]));assert.equal(await run('negative-'+path.split('/').at(-1)),1);await writeFile(p,raw);}
- assert.equal(await run('restored'),0);await writeFile(resolve(evidence,'scope-clean-equivalent.json'),JSON.stringify({base:'81f98862f1cd62aa4d9d9cc04d7f83864ea1858f',publicHead:'7bcad0403e3bac8389a638abe006bd6de2e81419',futureTree:tree,worktreeEqualsIndex:true,untracked:[],noCommitCreated:true,status,negativeTracked:true,negativeUntracked:true,protectedController:true,protectedSource:true},null,2));
+
+  // R3 regression: committed additions must not disappear or change type.
+  const added='tests/attempt-identity-boundary.test.mjs';
+  const addedPath=resolve(checkout,added);
+  const addedRaw=await readFile(addedPath);
+
+  await unlink(addedPath);
+  assert.equal(await run('negative-added-delete'),1);
+  execFileSync('git',['add','-u','--',added],{cwd:checkout});
+  assert.equal(await run('negative-added-delete-staged'),1);
+  await writeFile(addedPath,addedRaw);
+  execFileSync('git',['add','--',added],{cwd:checkout});
+
+  const doc='docs/attempt-identity-rule2-3c0a.md';
+  const docPath=resolve(checkout,doc);
+  const docRaw=await readFile(docPath);
+
+  await unlink(docPath);
+  await symlink('../README.md',docPath);
+  assert.equal(await run('negative-added-symlink'),1);
+  execFileSync('git',['add','--',doc],{cwd:checkout});
+  assert.equal(await run('negative-added-symlink-staged'),1);
+  await unlink(docPath);
+  await writeFile(docPath,docRaw);
+  execFileSync('git',['add','--',doc],{cwd:checkout});
+
+  assert.equal(await run('restored'),0);await writeFile(resolve(evidence,'scope-clean-equivalent.json'),JSON.stringify({base:'81f98862f1cd62aa4d9d9cc04d7f83864ea1858f',publicHead,futureTree:tree,worktreeEqualsIndex:true,untracked:[],noCommitCreated:true,status,negativeTracked:true,negativeUntracked:true,protectedController:true,protectedSource:true},null,2));
 });
