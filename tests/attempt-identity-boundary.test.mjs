@@ -63,7 +63,20 @@ test('standard scope accepts fully tracked future commit tree and rejects tracke
  for(const p of paths){await mkdir(dirname(resolve(checkout,p)),{recursive:true});await copyFile(resolve(root,p),resolve(checkout,p));}
  await symlink(resolve(root,'node_modules'),resolve(checkout,'node_modules'),'dir');if(paths.length>0)execFileSync('git',['add','--',...paths],{cwd:checkout});execFileSync('git',['diff','--exit-code'],{cwd:checkout});const tree=execFileSync('git',['write-tree'],{cwd:checkout,encoding:'utf8'}).trim();
  const status=execFileSync('git',['diff','--name-status','--no-renames','81f98862f1cd62aa4d9d9cc04d7f83864ea1858f'],{cwd:checkout,encoding:'utf8'});assert.equal(status,execFileSync('git',['diff','--cached','--name-status','--no-renames','81f98862f1cd62aa4d9d9cc04d7f83864ea1858f'],{cwd:checkout,encoding:'utf8'}));assert.equal(execFileSync('git',['ls-files','--others','--exclude-standard'],{cwd:checkout,encoding:'utf8'}),'');
- const run=name=>{const r=spawnSync(process.execPath,['scripts/verify-controller-worker-scope.mjs'],{cwd:checkout,encoding:'utf8'});return writeFile(resolve(evidence,'scope-'+name+'.log'),r.stdout+r.stderr).then(()=>r.status);};
+ const run=(name,expectedReason)=>{const r=spawnSync(process.execPath,['scripts/verify-controller-worker-scope.mjs'],{cwd:checkout,encoding:'utf8'});return writeFile(resolve(evidence,'scope-'+name+'.log'),r.stdout+r.stderr).then(()=>{
+  if(expectedReason){
+    assert.ifError(r.error);
+    assert.equal(r.signal,null);
+    assert.equal(r.status,1);
+    const signature='AssertionError [ERR_ASSERTION]: '+expectedReason;
+    assert.ok(r.stderr.includes(signature),
+      'wrong_scope_reason:'+name+':'+r.stderr);
+    assert.match(r.stderr,
+      /at .*verify-controller-worker-scope\.mjs:\d+:\d+/,
+      'wrong_scope_origin:'+name);
+  }
+  return r.status;
+});};
  assert.equal(await run('tracked-clean-equivalent'),0);const readme=resolve(checkout,'README.md'),raw=await readFile(readme);await writeFile(readme,Buffer.concat([raw,Buffer.from('\nforbidden scope test\n')]));assert.equal(await run('negative-tracked'),1);await writeFile(readme,raw);
  const extra=resolve(checkout,'outside-allowed.txt');await writeFile(extra,'forbidden');assert.equal(await run('negative-untracked'),1);await unlink(extra);
  for(const path of ['src/planner/attempts/persistence/controller.ts','src/planner/attempts/migration/source.ts']){const p=resolve(checkout,path),raw=await readFile(p);await writeFile(p,Buffer.concat([raw,Buffer.from('\n// forbidden invariant change\n')]));assert.equal(await run('negative-'+path.split('/').at(-1)),1);await writeFile(p,raw);}
@@ -74,9 +87,9 @@ test('standard scope accepts fully tracked future commit tree and rejects tracke
   const addedRaw=await readFile(addedPath);
 
   await unlink(addedPath);
-  assert.equal(await run('negative-added-delete'),1);
+  assert.equal(await run('negative-added-delete','scope_missing_required_files'),1);
   execFileSync('git',['add','-u','--',added],{cwd:checkout});
-  assert.equal(await run('negative-added-delete-staged'),1);
+  assert.equal(await run('negative-added-delete-staged','scope_missing_required_files'),1);
   await writeFile(addedPath,addedRaw);
   execFileSync('git',['add','--',added],{cwd:checkout});
 
@@ -86,12 +99,49 @@ test('standard scope accepts fully tracked future commit tree and rejects tracke
 
   await unlink(docPath);
   await symlink('../README.md',docPath);
-  assert.equal(await run('negative-added-symlink'),1);
+  assert.equal(await run('negative-added-symlink','scope_added_file_type'),1);
   execFileSync('git',['add','--',doc],{cwd:checkout});
-  assert.equal(await run('negative-added-symlink-staged'),1);
+  assert.equal(await run('negative-added-symlink-staged','scope_added_file_type'),1);
   await unlink(docPath);
   await writeFile(docPath,docRaw);
   execFileSync('git',['add','--',doc],{cwd:checkout});
+
+
+  // Hidden staged README modification.
+  const hiddenReadme=await readFile(readme);
+  await writeFile(readme,Buffer.concat([
+    hiddenReadme,Buffer.from('\\naudit forbidden in index\\n')
+  ]));
+  execFileSync('git',['add','--','README.md'],{cwd:checkout});
+  await writeFile(readme,hiddenReadme);
+  assert.equal(execFileSync('git',[
+    'diff','--name-status','HEAD','--','README.md'
+  ],{cwd:checkout,encoding:'utf8'}).trim(),'');
+  assert.equal(await run(
+    'negative-hidden-index-readme','scope_staged_mutation'
+  ),1);
+  execFileSync('git',['restore','--staged','--','README.md'],{
+    cwd:checkout
+  });
+
+  // Hidden staged symlink on an existing allowed file.
+  const helper='tests/helpers/controller-worker-browser.mjs';
+  const helperPath=resolve(checkout,helper);
+  const helperRaw=await readFile(helperPath);
+  await unlink(helperPath);
+  await symlink('../../README.md',helperPath);
+  execFileSync('git',['add','--',helper],{cwd:checkout});
+  await unlink(helperPath);
+  await writeFile(helperPath,helperRaw);
+  assert.equal(execFileSync('git',[
+    'diff','--name-status','HEAD','--',helper
+  ],{cwd:checkout,encoding:'utf8'}).trim(),'');
+  assert.equal(await run(
+    'negative-hidden-index-symlink','scope_staged_mutation'
+  ),1);
+  execFileSync('git',['restore','--staged','--',helper],{
+    cwd:checkout
+  });
 
   assert.equal(await run('restored'),0);await writeFile(resolve(evidence,'scope-clean-equivalent.json'),JSON.stringify({base:'81f98862f1cd62aa4d9d9cc04d7f83864ea1858f',publicHead,futureTree:tree,worktreeEqualsIndex:true,untracked:[],noCommitCreated:true,status,negativeTracked:true,negativeUntracked:true,protectedController:true,protectedSource:true},null,2));
 });

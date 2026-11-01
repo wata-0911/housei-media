@@ -96,4 +96,41 @@ assert.ok(
     extra.length === 0 && status === 'M' && allowed.has(path)),
   'scope_local_mutation:' + JSON.stringify(localChanges)
 );
+
+// Validate HEAD -> index and index -> working tree independently.
+// A final HEAD -> working-tree diff cannot reveal cancellation.
+const scopeLayerChanges = args => execFileSync('git', [
+  'diff', '--name-status', '--no-renames', ...args
+], {cwd:root,encoding:'utf8'})
+  .trim().split('\n').filter(Boolean)
+  .map(line => line.split('\t'));
+
+for (const [layer,args] of [
+  ['staged',['--cached','HEAD']],
+  ['unstaged',[]]
+]) {
+  const rows=scopeLayerChanges(args);
+  assert.ok(rows.every(([status,path,...extra]) =>
+    extra.length===0 && status==='M' && allowed.has(path)),
+    'scope_'+layer+'_mutation:'+JSON.stringify(rows));
+
+  const modes=execFileSync('git',[
+    'diff','--summary','--no-renames',...args
+  ],{cwd:root,encoding:'utf8'});
+  assert.equal(modes,'','scope_'+layer+'_mode_change');
+}
+
+// Protected, exact-content files must also be correct in the index.
+for (const path of [
+  'src/planner/attempts/persistence/controller.ts',
+  'src/planner/attempts/persistence/worker/session.ts'
+]) {
+  const staged=execFileSync('git',['show',':'+path],{
+    cwd:root,encoding:'utf8'
+  });
+  const working=await readFile(root+path,'utf8');
+  assert.equal(staged,working,
+    'scope_index_protected_content:'+path);
+}
+
 const result={base,implementationBase:'81f98862f1cd62aa4d9d9cc04d7f83864ea1858f',changed,untracked,mainInputs:inputs,mainBundleBytes:Buffer.byteLength(code),productionInputs:production.length,productionWorkerInputs:production.filter(x=>/persistence\/worker\//.test(x)),readerMechanical:true,writerByteIdentical:true,controllerSha256,controllerOnlyApprovedReadonlyProbeAndIdReservations:true,qualifiedIdentityHookDeltaOnly:true,sessionOnlyIdentityHookWiring:true,exactChangeStatus:true,rule1IdentityUnchanged:true,rule2PureAndDisconnected:true};console.log(JSON.stringify(result,null,2));if(process.env.CONTROLLER_EVIDENCE)await writeFile(process.env.CONTROLLER_EVIDENCE+'/scope.json',JSON.stringify(result,null,2)+'\n');
