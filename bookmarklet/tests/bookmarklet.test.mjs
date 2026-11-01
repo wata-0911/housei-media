@@ -30,8 +30,8 @@ const table = rows => ({ querySelectorAll(selector) {
   assert.equal(selector, 'tr.column_even, tr.column_odd');
   return rows.map(domRow);
 } });
-function harness(tables = [[], [], fixture(), fixture()], { clipboard = 'success', fallback = true, hostname = 'www.tsukyo.hosei.ac.jp', protocol = 'https:' } = {}) {
-  const copied = [], alerts = [], diagnostics = [], fields = [], events = [];
+function harness(tables = [[], [], fixture(), fixture()], { clipboard = 'success', fallback = true, hostname = 'www.tsukyo.hosei.ac.jp', protocol = 'https:', popup = 'opened' } = {}) {
+  const copied = [], alerts = [], diagnostics = [], fields = [], events = [], opens = [];
   const body = { append(field) { fields.push(field); events.push('append'); } };
   const document = {
     body,
@@ -55,10 +55,15 @@ function harness(tables = [[], [], fixture(), fixture()], { clipboard = 'success
     if (clipboard === 'denied') throw new Error('denied');
     copied.push(text);
   } } };
-  const context = vm.createContext({ document, navigator, location: { hostname, protocol }, Date: FixedDate,
+  const context = vm.createContext({ window: { open(...args) {
+    opens.push(args);
+    assert.ok(copied.length > 0, 'navigation must follow confirmed copy');
+    if (popup === 'throw') throw new Error('PRIVATE_SENTINEL_course_grade_ID_cookie_html');
+    return popup === 'opened' ? {} : null;
+  } }, document, navigator, location: { hostname, protocol }, Date: FixedDate,
     alert: message => alerts.push(message), console: { info: (_, value) => diagnostics.push(value) },
   });
-  return { context, copied, alerts, diagnostics, events, fields };
+  return { context, copied, alerts, diagnostics, events, fields, opens };
 }
 const plain = value => JSON.parse(JSON.stringify(value));
 function extract(h) { vm.runInContext(extension, h.context); return plain(h.context.HoseiPlannerGradeExtractor.extractCurrentDocument()); }
@@ -134,6 +139,7 @@ for (const clipboard of ['denied', 'missing']) test(`clipboard ${clipboard}: loc
 });
 for (const fallback of [false, 'throw']) test(`both copy methods fail (${fallback}): explicit failure, no false success, temporary field removed`, async () => {
   const h = await run(harness(undefined, { clipboard: 'denied', fallback }));
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0);
   assert.match(h.alerts[0], /32科目/);
   assert.match(h.alerts[0], /コピーに失敗/);
@@ -142,6 +148,7 @@ for (const fallback of [false, 'throw']) test(`both copy methods fail (${fallbac
 for (const [tables, message] of [[[], /成績表が見つかりません/], [[[cells('***カテゴリ')]], /科目行が見つかりません/]]) test(`missing table/course rows reports explicit error: ${message}`, async () => {
   const h = await run(harness(tables));
   assert.match(h.alerts[0], message);
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0);
 });
 
@@ -156,14 +163,18 @@ test('unsupported origins stop before reading DOM or copying', async () => {
 test('invalid generated contract aborts before clipboard', async () => {
   // An overflowing numeric value is not finite, so the shared contract validator rejects it.
   const h = await run(harness([[cells('科目', { 2: '9'.repeat(400) })]]));
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0);
   assert.match(h.alerts[0], /形式検証に失敗/);
 });
 
-test('artifact has no network, remote code, navigation transport, persistent storage or private-page readers', () => {
+test('artifact permits only a literal isolated Planner tab, with no network/data transport or private-page readers', () => {
   assert.match(artifact.bookmarklet, /^javascript:/);
   assert.doesNotMatch(artifact.bookmarklet, /[\r\n#]/);
-  assert.doesNotMatch(code, /\b(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|importScripts|eval|Function|Image|Worker|SharedWorker)\b|import\s*\(|createElement\(["'](?:script|img|iframe|link)|\.src\s*=|\.href\s*=|postMessage|window\.open|location\.(?:assign|replace|href|search|hash)|localStorage|sessionStorage|\.cookie\b|innerHTML|outerHTML/);
+  const allowedOpen = /window\.open\("https:\/\/hosei-tsukyo-media\.com\/planner#grade-import","_blank","noopener,noreferrer"\)/g;
+  assert.equal([...code.matchAll(allowedOpen)].length, 1);
+  const restrictedCode = code.replace(allowedOpen, 'ALLOWED_PLANNER_TAB');
+  assert.doesNotMatch(restrictedCode, /\b(fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|importScripts|eval|Function|Image|Worker|SharedWorker)\b|import\s*\(|createElement\(["'](?:script|img|iframe|link)|\.src\s*=|\.href\s*=|postMessage|window\.open|location\.(?:assign|replace|href|search|hash)|localStorage|sessionStorage|\.cookie\b|innerHTML|outerHTML/);
 });
 
 test('existing importPreview yields exactly the same preview from clipboard JSON and extension JSON', async t => {
@@ -201,6 +212,7 @@ test('extract exception has a distinct fixed code and never logs exception data'
   const h = harness(); h.context.document.querySelectorAll = privateError;
   await run(h);
   assert.match(h.alerts[0], /GI_EXTRACT_EXCEPTION/);
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0); assertPrivate(h);
 });
 
@@ -208,6 +220,7 @@ test('contract rejection identifies only course index, static field path and cat
   const h = await run(harness([[cells(secret, { 2: '9'.repeat(400) })]]));
   assert.match(h.alerts[0], /GI_CONTRACT_INVALID/);
   assert.match(h.alerts[0], /course index: 0 \/ field: courses\[0\]\.compositionCredits.value \/ category: non_finite/);
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0); assertPrivate(h);
 });
 
@@ -217,6 +230,7 @@ test('contract validator exception has a distinct code with no original error', 
   vm.runInContext(`Date = class extends Date { static parse() { throw new Error('${secret}'); } };`, h.context);
   await run(h);
   assert.match(h.alerts[0], /GI_CONTRACT_EXCEPTION/);
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0); assertPrivate(h);
 });
 
@@ -228,6 +242,7 @@ for (const [setup, expected] of [
   const h = harness(); vm.runInContext(setup, h.context);
   await run(h);
   assert.match(h.alerts[0], new RegExp(expected));
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0); assertPrivate(h);
   if (expected === 'GI_SERIALIZE_FINAL') assert.match(h.alerts[0], /field: courses \/ category: type/);
 });
@@ -281,6 +296,7 @@ test('primary rejection and fallback failure both retain stage codes with no ori
   assert.match(h.alerts[0], /GI_CLIPBOARD_PRIMARY_FAILED/);
   assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_FAILED/);
   assert.match(h.alerts[0], /コピーに失敗/);
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0); assertPrivate(h);
 });
 
@@ -306,6 +322,7 @@ for (const step of ['createElement', 'append', 'select']) test(`fallback setup $
   }
   await run(h);
   assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_FAILED/);
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0); assertPrivate(h);
 });
 
@@ -343,6 +360,7 @@ test('fallback cleanup errors cannot mask an unsuccessful copy either', async ()
   const h = harness([[cells(secret)]], { clipboard: 'denied', fallback: false });
   h.context.document.activeElement.focus = privateError;
   await run(h);
+  assert.equal(h.opens.length, 0);
   assert.equal(h.copied.length, 0);
   assert.match(h.alerts[0], /コピーに失敗/);
   assert.match(h.alerts[0], /GI_CLIPBOARD_FALLBACK_FAILED/);
@@ -386,4 +404,32 @@ test('real-world-style unrecognized cell text remains raw + null, without weaken
     assert.ok(isHoseiGradeImportV1(payload));
     assert.equal(diagnoseHoseiGradeImportV1(payload), null);
   }
+});
+
+for (const clipboard of ['success', 'denied', 'missing']) {
+  for (const popup of ['opened', 'blocked', 'throw']) test(`confirmed ${clipboard} copy / popup ${popup}: fixed isolated destination and honest manual guidance`, async () => {
+    const h = await run(harness([[cells(secret)]], { clipboard, popup }));
+    assert.deepEqual(h.opens, [['https://hosei-tsukyo-media.com/planner#grade-import', '_blank', 'noopener,noreferrer']]);
+    assert.match(h.alerts[0], /コピーしました/);
+    assert.match(h.alerts[0], /新しいタブのアドレス欄/);
+    assert.match(h.alerts[0], /https:\/\/hosei-tsukyo-media\.com\/planner#grade-import/);
+    assert.doesNotMatch(h.alerts[0], /開きました/);
+    assert.equal(h.alerts[0].includes('GI_PLANNER_OPEN_FAILED'), popup === 'throw');
+    assertPrivate(h);
+  });
+}
+
+test('pending clipboard promise cannot open a tab; rejection plus failed fallback cannot navigate', async () => {
+  const h = harness(undefined, { fallback: false });
+  let reject;
+  h.context.navigator.clipboard.writeText = () => new Promise((_, no) => { reject = no; });
+  await run(h);
+  assert.equal(h.opens.length, 0);
+  assert.equal(h.alerts.length, 0);
+  reject(new Error(secret));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.opens.length, 0);
+  assert.match(h.alerts[0], /コピーに失敗/);
+  assert.doesNotMatch(h.alerts[0], /コピーしました|https:\/\//);
+  assertPrivate(h);
 });

@@ -63,8 +63,17 @@ async function run() {
   try { result = await copyText(text); }
   catch { notify('[GI_CLIPBOARD_EXCEPTION] コピー結果を確認できませんでした。'); return; }
   const codes = result.codes.length ? `\n診断コード: ${result.codes.join(', ')}` : '';
+  // The only navigation exception: after confirmed copy, open this literal URL.
+  // noopener/noreferrer isolate the source tab and suppress its URL as referrer.
+  // With noopener, null also occurs on success; never claim the tab opened.
+  let navigation = '';
+  if (result.ok) {
+    try { window.open('https://hosei-tsukyo-media.com/planner#grade-import', '_blank', 'noopener,noreferrer'); }
+    catch { navigation = '\n[GI_PLANNER_OPEN_FAILED] Plannerを自動で開けませんでした。'; }
+    navigation += '\nPlannerの成績取込画面を別タブで開くよう要求しました。開かない場合は、新しいタブのアドレス欄に次のURLを入力してください。\nhttps://hosei-tsukyo-media.com/planner#grade-import';
+  }
   notify(`${payload.courses.length}科目の成績JSONを生成しました。${tieNote}\n${result.ok
     ? 'コピーしました。Plannerの「JSONを貼り付け」に貼り付け、「読み込み・検証」を押してください。'
-    : 'クリップボードへのコピーに失敗しました。ブラウザのコピー権限を確認して再実行するか、Chrome拡張のJSON保存をご利用ください。'}${codes}`);
+    : 'クリップボードへのコピーに失敗しました。ブラウザのコピー権限を確認して再実行するか、Chrome拡張のJSON保存をご利用ください。'}${codes}${navigation}`);
 }
 void run();
