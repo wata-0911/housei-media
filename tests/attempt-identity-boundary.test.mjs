@@ -5,6 +5,7 @@ import {readFile,writeFile,mkdir,mkdtemp,symlink,copyFile,unlink,realpath} from 
 import {realpathSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {stripVTControlCharacters} from 'node:util';
 import {resolve,dirname} from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=process.env.BOUNDARY_EVIDENCE;
@@ -24,7 +25,7 @@ const commit=(c,p)=>c.commit(p,true,p.previousRaw,p.sourceRaw);
 
 // Require one exact uncaught assertion and its first stack frame.
 function checkScopeDiagnostic(stderr, expectedMessage, scopeUrl) {
-  const normalized=stderr.replace(/\r\n/g,'\n');
+  const normalized=stripVTControlCharacters(stderr).replace(/\r\n/g,'\n');
   const errors=[...normalized.matchAll(
     /^([A-Za-z]*Error)(?: \[([A-Z0-9_]+)\])?: ([^\n]*)$/gm
   )];
@@ -40,10 +41,30 @@ function checkScopeDiagnostic(stderr, expectedMessage, scopeUrl) {
   const firstFrame=after.split('\n')
     .find(line=>/^\s+at /.test(line))?.trim() ?? '';
 
-  const frame=/^at (file:\/\/\/[^\r\n]+):\d+:\d+(?: \{)?$/.exec(firstFrame);
-  assert.ok(frame,'scope_error_origin:'+firstFrame);
+  const cleanFrame=firstFrame.endsWith(' {')
+    ? firstFrame.slice(0,-2)
+    : firstFrame;
+
+  assert.ok(cleanFrame.startsWith('at file:///'),
+    'scope_error_frame:'+firstFrame);
+
+  const location=cleanFrame.slice(3);
+  const last=location.lastIndexOf(':');
+  const second=location.lastIndexOf(':',last-1);
+
+  assert.ok(second>0 && last>second,
+    'scope_error_location:'+firstFrame);
+
+  const line=location.slice(second+1,last);
+  const column=location.slice(last+1);
+
+  assert.match(line,/^[0-9]+$/);
+  assert.match(column,/^[0-9]+$/);
+
+  const actualUrl=location.slice(0,second);
+
   assert.equal(
-    realpathSync(fileURLToPath(frame[1])),
+    realpathSync(fileURLToPath(actualUrl)),
     realpathSync(fileURLToPath(scopeUrl)),
     'scope_error_origin:'+firstFrame
   );
