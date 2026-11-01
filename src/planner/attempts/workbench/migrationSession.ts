@@ -25,7 +25,7 @@ export function createMigrationWorkbench(environment: Awaited<ReturnType<typeof 
     const task = (async () => {
       const decoded = await decodeMigrationSource(raw, environment, localCatalog);
       const reservedIds = [...issuedIds];
-      const table = decoded.status === 'decoded' ? prepareMigrationIds(decoded.source, reservedIds) : null;
+      const table = decoded.status === 'decoded' ? prepareMigrationIds(decoded.source, reservedIds, undefined, id => issuedIds.add(id)) : null;
       const preview = decoded.status === 'decoded' && table ? previewMigration(decoded.source, table, reservedIds) : null;
       const session = freeze({ raw, decoded, table, preview, reservedIds });
       table?.attempts.forEach(a => { issuedIds.add(a.attemptId); issuedIds.add(a.operationId); });

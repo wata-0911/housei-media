@@ -1,5 +1,6 @@
+import { createSynchronousAttemptSession } from '../../src/planner/attempts/persistence/syncSession';
 import { useEffect, useRef, useState } from 'react';
-import { createAttemptPersistence, type PersistenceHandle, type PersistencePreview } from '../../src/planner/attempts/persistence/controller';
+import { type PersistenceHandle, type PersistencePreview } from '../../src/planner/attempts/persistence/controller';
 import { createIndexedDbAttemptStore } from '../../src/planner/attempts/persistence/indexedDb';
 import { heldDates, type MigrationSession, type DateCorrection } from '../../src/planner/attempts/workbench/migrationSession';
 import type { Command } from '../../src/planner/attempts/workbench/operations';
@@ -7,7 +8,7 @@ import { Workbench } from '../attempts/Workbench';
 import { loadMigrationEnvironment, fixtureRaw, type FixtureName } from '../attempts/fixtures';
 import { buttonClass, Field, inputClass } from '../attempts/Fields';
 
-type Controller = ReturnType<typeof createAttemptPersistence>;
+type Controller = ReturnType<typeof createSynchronousAttemptSession>;
 function download(name: string, raw: string) {
   const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -25,7 +26,7 @@ export function PersistencePage() {
     let active = true;
     void (async () => {
       try {
-        const controller = createAttemptPersistence(createIndexedDbAttemptStore(indexedDB), navigator.locks, loadMigrationEnvironment);
+        const controller = createSynchronousAttemptSession(createIndexedDbAttemptStore(indexedDB), navigator.locks, loadMigrationEnvironment);
         if (active) setApi(controller);
         const current = await controller.load();
         if (active) { setApi(controller); setLoaded(current); setNotice(current ? '隔離保存を再検証して読み込みました。' : '隔離保存は空です。新規作成または明示移行から開始してください。'); }
@@ -94,6 +95,6 @@ export function PersistencePage() {
       })}>確認して隔離保存</button>
       <button className={buttonClass} onClick={() => setProposed(null)}>取消（保存しない）</button>
     </fieldset>}
-    {editing && api && <fieldset disabled={busy || proposed !== null} className="min-w-0"><legend>編集draft（保存preview後に確定）</legend><Workbench key={epoch} mode={editing.source.kind === 'new-plan' ? 'institutional-search' : 'legacy-migration'} seed={{ workspace: editing.workspace, context: editing.source.context }} dispatch={(workspace, command) => api.dispatch(editing, workspace, command)} onCommand={command => { commands.current.push(command); }} /></fieldset>}
+    {editing && api && <fieldset disabled={busy || proposed !== null} className="min-w-0"><legend>編集draft（保存preview後に確定）</legend><Workbench identities={api.identities(editing)} key={epoch} mode={editing.source.kind === 'new-plan' ? 'institutional-search' : 'legacy-migration'} seed={{ workspace: editing.workspace, context: editing.source.context }} dispatch={(workspace, command) => api.dispatch(editing, workspace, command)} onCommand={command => { commands.current.push(command); }} /></fieldset>}
   </main>;
 }

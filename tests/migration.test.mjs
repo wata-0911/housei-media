@@ -260,11 +260,12 @@ test('valid UUID swaps and newly fabricated assignment tables cannot forge issua
   const again = await decode(x.source.state);
   assert.equal(previewMigration(again.source, x.table).status, 'ready');
 });
-test('allocator refuses random generator collision without retrying into a new identity', async () => {
+test('allocator bounds source-collision retries at 128 without notifying occupied IDs', async () => {
   const d = await decode(initialState());
   const s = mixed(), decoded = await decode(s), old = crypto.randomUUID;
-  crypto.randomUUID = () => media.id;
-  try { assert.throws(() => prepareMigrationIds(decoded.source), /assignment_uuid_collision/); assert.ok(prepareMigrationIds(d.source)); }
+  let calls = 0, notifications = 0;
+  crypto.randomUUID = () => { calls++; return media.id; };
+  try { assert.throws(() => prepareMigrationIds(decoded.source, [], undefined, () => { notifications++; }), /allocator_exhausted/); assert.equal(calls, 128); assert.equal(notifications, 0); assert.ok(prepareMigrationIds(d.source)); }
   finally { crypto.randomUUID = old; }
 });
 test('scope guidance, complete recognition and ordered official sources preserve every field', async () => {

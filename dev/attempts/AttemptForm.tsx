@@ -1,8 +1,9 @@
+import type { WorkbenchIdentities } from '../../src/planner/attempts/workbench/sessionIdentities';
 import { nullableText, preventImeSubmit, text } from './formHelpers';
 import { useRef, useState } from 'react';
 import type { Attempt, AttemptValidationContext } from '../../src/planner/attempts/types';
 import { courseChoices, makeAttempt, optionalNumber, placementChoices } from '../../src/planner/attempts/workbench/catalogView';
-import { newAttemptIds, newOperationId, type Command } from '../../src/planner/attempts/workbench/operations';
+import { type Command } from '../../src/planner/attempts/workbench/operations';
 import { buttonClass, Field, inputClass } from './Fields';
 import type { InstitutionalSearchRow } from '../../src/planner/institutional/search';
 import { makeSearchAttempt } from '../../src/planner/attempts/workbench/searchBridge';
@@ -10,15 +11,16 @@ import { PlacementSearch } from './PlacementSearch';
 
 const statuses = { planned: '予定', in_progress: '履修中', waiting: '結果待ち', earned: '修得', failed: '不合格', dropped: '中止' };
 const methods = { unknown: '未定', correspondence: '通信', schooling: 'スクーリング', media: 'メディア' };
-export function AttemptForm({ context, attempt, submit, close, searchEnabled = false }: { searchEnabled?: boolean; context: AttemptValidationContext; attempt?: Attempt; submit: (command: Command) => boolean; close: () => void }) {
+export function AttemptForm({ context, attempt, submit, close, identities, searchEnabled = false }: { identities: WorkbenchIdentities; searchEnabled?: boolean; context: AttemptValidationContext; attempt?: Attempt; submit: (command: Command) => boolean; close: () => void }) {
+  const { newAttemptIds, newOperationId } = identities;
   const [query, setQuery] = useState(''), [courseId, setCourseId] = useState(''), [placementId, setPlacementId] = useState('');
   const [selection, setSelection] = useState<InstitutionalSearchRow | null>(null);
   const [error, setError] = useState('');
   const [contributionMode, setContributionMode] = useState(attempt?.plan?.contribution ? attempt.plan.contribution.value === null ? 'null' : 'number' : 'unset');
   // A successful request stays fixed until the form is closed. Failed validation keeps the draft.
   const request = useRef<Command | null>(null);
-  const [creationIds] = useState(newAttemptIds);
-  const [editOperationId] = useState(newOperationId);
+  const [creationIds, setCreationIds] = useState(() => attempt ? { id: attempt.id, creationOperationId: attempt.creationOperationId } : newAttemptIds());
+  const [editOperationId, setEditOperationId] = useState(() => attempt ? newOperationId() : null);
   const course = context.catalog.institutionalCourses.find(c => c.id === courseId);
   const placements = placementChoices(context.catalog, courseId || null);
   return <form aria-label={attempt ? 'Attempt編集' : '新規履修回'} className="space-y-4 rounded-xl border border-indigo-200 bg-white p-4" onKeyDown={preventImeSubmit} onSubmit={e => {
@@ -37,14 +39,17 @@ export function AttemptForm({ context, attempt, submit, close, searchEnabled = f
       const value = text(data, 'method') as Attempt['method']['value'];
       const note = text(data, 'note');
       const oldNote = attempt?.method.evidence?.kind === 'learner' ? attempt.method.evidence.note : '';
-      const command: Command = request.current ?? (attempt ? { kind: 'edit', operationId: editOperationId, attemptId: attempt.id, changes: {
+      const command: Command = request.current ?? (attempt ? { kind: 'edit', operationId: editOperationId!, attemptId: attempt.id, changes: {
         plan, method: attempt.method.value === value && oldNote === note ? attempt.method : { value, source: 'learner', evidence: { kind: 'learner', note: note || '本人希望（公式実績ではない）' } },
       } } : (() => {
         const created = selection ? makeSearchAttempt(context.catalog, selection, { plan, method: value, note }, creationIds)
           : makeAttempt(context.catalog, { title: course?.officialName ?? text(data, 'title'), courseId: courseId || null, placementId: placementId || null, plan, method: value, note }, creationIds);
         return { kind: 'add' as const, operationId: created.creationOperationId, attempt: created };
       })());
-      if (submit(command)) { request.current = command; close(); }
+      if (submit(command)) { request.current = command; close(); } else {
+        // An intentional retry gets new identities; failed ones stay burned.
+        if (attempt) setEditOperationId(newOperationId()); else setCreationIds(newAttemptIds());
+      }
     } catch (err) { setError(String(err)); }
   }}>
     <h3 className="text-lg font-semibold">{attempt ? `${attempt.originalTitle} の予定を編集` : '新しい履修回を追加'}</h3>

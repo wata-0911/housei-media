@@ -1,12 +1,14 @@
+import type { WorkbenchIdentities } from '../../src/planner/attempts/workbench/sessionIdentities';
 import { nullableText, preventImeSubmit, text } from './formHelpers';
 import { useState } from 'react';
 import type { AttemptOwnedRecord } from '../../src/planner/attempts/types';
-import { newOperationId, type Command } from '../../src/planner/attempts/workbench/operations';
+import { type Command } from '../../src/planner/attempts/workbench/operations';
 import { optionalNumber } from '../../src/planner/attempts/workbench/catalogView';
 import { buttonClass, Field, Grade, inputClass } from './Fields';
 
 type Progress = Exclude<AttemptOwnedRecord, { kind: 'todo' }>;
-export function ProgressEditor({ record, submit }: { record: Progress; submit: (command: Command) => boolean }) {
+export function ProgressEditor({ record, submit, identities }: { identities: WorkbenchIdentities; record: Progress; submit: (command: Command) => boolean }) {
+  const { newOperationId } = identities;
   const [draft, setDraft] = useState(record), [error, setError] = useState('');
   const title = record.kind === 'media' ? 'メディア進捗' : record.kind === 'correspondence' ? '通信進捗' : '科目評価';
   const grade = (data: FormData, name: string) => nullableText(data, name) as Extract<Progress, { kind: 'evaluation' }>['payload']['finalGrade'];
@@ -29,6 +31,10 @@ export function ProgressEditor({ record, submit }: { record: Progress; submit: (
       };
       else payload = { finalGrade: grade(data, 'finalGrade'), reportGrade: grade(data, 'reportGrade'), schoolingGrade: grade(data, 'schoolingGrade') };
       if (submit({ kind: 'edit_payload', operationId: newOperationId(), recordId: record.id, payload })) setError('');
+      else if (draft.kind === 'media' && record.kind === 'media') {
+        const previous = new Set(record.payload.assessments.map(a => a.id));
+        setDraft({ ...draft, payload: { ...draft.payload, assessments: draft.payload.assessments.map(a => previous.has(a.id) ? a : { ...a, id: identities.newAssessmentId() }) } });
+      }
     } catch (err) { setError(String(err)); }
   }}>
     <h4 className="font-semibold">{title}</h4>
@@ -46,7 +52,7 @@ export function ProgressEditor({ record, submit }: { record: Progress; submit: (
         <label className="self-center"><input type="checkbox" name={`complete-${i}`} defaultChecked={a.completed} /> 試験完了 {i + 1}</label>
         <p className="break-all text-xs text-slate-500 sm:col-span-2">assessment ID: {a.id}</p>
       </fieldset>)}
-      <button type="button" className={buttonClass} onClick={() => setDraft({ ...draft, payload: { ...draft.payload, assessments: [...draft.payload.assessments, { id: crypto.randomUUID(), type: 'other', label: '', scheduledDate: null, completed: false }] } })}>試験を追加</button>
+      <button type="button" className={buttonClass} onClick={() => setDraft({ ...draft, payload: { ...draft.payload, assessments: [...draft.payload.assessments, { id: identities.newAssessmentId(), type: 'other', label: '', scheduledDate: null, completed: false }] } })}>試験を追加</button>
     </>}
     {draft.kind === 'correspondence' && <>
       <Field label="必要リポート数（空欄=null）"><input className={inputClass} name="requiredReports" inputMode="numeric" defaultValue={draft.payload.requiredReports ?? ''} /></Field>
