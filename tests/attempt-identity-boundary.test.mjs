@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-import {readFile,writeFile,mkdir,mkdtemp,symlink,copyFile,unlink} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,mkdtemp,symlink,copyFile,unlink,realpath} from 'node:fs/promises';
+import {realpathSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve,dirname} from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const evidence=process.env.BOUNDARY_EVIDENCE;
@@ -20,6 +21,34 @@ function add(h,n){const attempt=api.makeAttempt(h.source.context.catalog,input,{
 function memory(){let record=api.emptyAuthority();return {writes:0,read:async()=>structuredClone(record),async commit(expected,next){assert.deepEqual(expected,record);record=structuredClone(next);this.writes++;},snapshot:()=>structuredClone(record)};}
 const locks={request:async(_n,_o,f)=>f()};
 const commit=(c,p)=>c.commit(p,true,p.previousRaw,p.sourceRaw);
+
+// Require one exact uncaught assertion and its first stack frame.
+function checkScopeDiagnostic(stderr, expectedMessage, scopeUrl) {
+  const normalized=stderr.replace(/\r\n/g,'\n');
+  const errors=[...normalized.matchAll(
+    /^([A-Za-z]*Error)(?: \[([A-Z0-9_]+)\])?: ([^\n]*)$/gm
+  )];
+
+  assert.equal(errors.length,1,'scope_error_header_count');
+  const [header,kind,code,message]=errors[0];
+
+  assert.equal(kind,'AssertionError','scope_error_kind');
+  assert.equal(code,'ERR_ASSERTION','scope_error_code');
+  assert.equal(message,expectedMessage,'scope_error_reason');
+
+  const after=normalized.slice(errors[0].index+header.length);
+  const firstFrame=after.split('\n')
+    .find(line=>/^\s+at /.test(line))?.trim() ?? '';
+
+  const frame=/^at (file:\/\/\/[^\r\n]+):\d+:\d+(?: \{)?$/.exec(firstFrame);
+  assert.ok(frame,'scope_error_origin:'+firstFrame);
+  assert.equal(
+    realpathSync(fileURLToPath(frame[1])),
+    realpathSync(fileURLToPath(scopeUrl)),
+    'scope_error_origin:'+firstFrame
+  );
+}
+
 
 test('qualified factory hook sees actual prestates, preserves duplicates, rejects copied handles before callback, aborts atomically',async()=>{
  const store=memory(),seen=[];let reject=false;
@@ -57,26 +86,95 @@ test('Worker applies each Command once; 50 edits, assessment sequence and failed
  }finally{s.close();delete globalThis.__boundaryApplyCalls;}
 });
 
+
+test('scope diagnostics reject contaminated and unrelated errors',async()=>{
+  const scopeUrl=pathToFileURL(await realpath(
+    resolve(root,'scripts/verify-controller-worker-scope.mjs')
+  )).href;
+  const reason='scope_missing_required_files';
+  const valid=`AssertionError [ERR_ASSERTION]: ${reason}
+    at ${scopeUrl}:99:1
+`;
+
+  assert.doesNotThrow(()=>
+    checkScopeDiagnostic(valid,reason,scopeUrl));
+
+  // Accept the actual Node frame suffix and a symlink alias of this script.
+  const aliasDir=await mkdtemp(resolve(evidence,'scope-alias-'));
+  const alias=resolve(aliasDir,'scope.mjs');
+  await symlink(fileURLToPath(scopeUrl),alias);
+  assert.doesNotThrow(()=>checkScopeDiagnostic(
+    valid.replace(scopeUrl,pathToFileURL(alias).href).replace(':99:1',':66:8 {'),
+    reason,scopeUrl));
+
+  const invalid=[
+    // An existing but different file must fail canonical path comparison.
+    valid.replace(scopeUrl,import.meta.url),
+    // Reject malformed frames, including trailing log text.
+    valid.replace(':99:1',':99:1 contaminated'),
+    // Audit reproduction: unrelated exception with prefixed fake logs.
+    `cached diagnostic: AssertionError [ERR_ASSERTION]: ${reason}_UNRELATED
+cached frame: at unrelated (/tmp/verify-controller-worker-scope.mjs:999:1)
+Error [ERR_MODULE_NOT_FOUND]: synthetic dependency failure
+    at file:///tmp/inject.cjs:1:1`,
+
+    // An incorrect suffix must not be accepted.
+    `AssertionError [ERR_ASSERTION]: ${reason}_UNRELATED
+    at ${scopeUrl}:99:1`,
+
+    // A same-named file outside the actual checkout is not trusted.
+    `AssertionError [ERR_ASSERTION]: ${reason}
+    at file:///tmp/verify-controller-worker-scope.mjs:999:1`,
+
+    // Two independent exceptions cannot be combined.
+    valid+`Error [ERR_MODULE_NOT_FOUND]: synthetic failure
+    at file:///tmp/inject.cjs:1:1`
+  ];
+
+  for(const output of invalid){
+    assert.throws(()=>
+      checkScopeDiagnostic(output,reason,scopeUrl));
+  }
+});
+
 test('standard scope accepts fully tracked future commit tree and rejects tracked/untracked/protected mutations',async()=>{
  const checkout=await mkdtemp(resolve(evidence,'../scope-checkout-'));execFileSync('git',['clone','--no-hardlinks','--no-checkout',root,checkout],{stdio:'pipe'});const publicHead=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();execFileSync('git',['checkout','--detach',publicHead],{cwd:checkout,stdio:'pipe'});
  const paths=[...new Set([...execFileSync('git',['diff','--name-only','HEAD'],{cwd:root,encoding:'utf8'}).trim().split('\n'),...execFileSync('git',['ls-files','--others','--exclude-standard'],{cwd:root,encoding:'utf8'}).trim().split('\n')].filter(Boolean))];
  for(const p of paths){await mkdir(dirname(resolve(checkout,p)),{recursive:true});await copyFile(resolve(root,p),resolve(checkout,p));}
  await symlink(resolve(root,'node_modules'),resolve(checkout,'node_modules'),'dir');if(paths.length>0)execFileSync('git',['add','--',...paths],{cwd:checkout});execFileSync('git',['diff','--exit-code'],{cwd:checkout});const tree=execFileSync('git',['write-tree'],{cwd:checkout,encoding:'utf8'}).trim();
  const status=execFileSync('git',['diff','--name-status','--no-renames','81f98862f1cd62aa4d9d9cc04d7f83864ea1858f'],{cwd:checkout,encoding:'utf8'});assert.equal(status,execFileSync('git',['diff','--cached','--name-status','--no-renames','81f98862f1cd62aa4d9d9cc04d7f83864ea1858f'],{cwd:checkout,encoding:'utf8'}));assert.equal(execFileSync('git',['ls-files','--others','--exclude-standard'],{cwd:checkout,encoding:'utf8'}),'');
- const run=(name,expectedReason)=>{const r=spawnSync(process.execPath,['scripts/verify-controller-worker-scope.mjs'],{cwd:checkout,encoding:'utf8'});return writeFile(resolve(evidence,'scope-'+name+'.log'),r.stdout+r.stderr).then(()=>{
-  if(expectedReason){
-    assert.ifError(r.error);
-    assert.equal(r.signal,null);
-    assert.equal(r.status,1);
-    const signature='AssertionError [ERR_ASSERTION]: '+expectedReason;
-    assert.ok(r.stderr.includes(signature),
-      'wrong_scope_reason:'+name+':'+r.stderr);
-    assert.match(r.stderr,
-      /at .*verify-controller-worker-scope\.mjs:\d+:\d+/,
-      'wrong_scope_origin:'+name);
+ // The future tree can stage approved edits that are not yet in publicHead.
+ const stagedBaseline=execFileSync('git',[
+  'diff','--cached','--name-status','--no-renames','HEAD'
+ ],{cwd:checkout,encoding:'utf8'}).trim().split('\n').filter(Boolean)
+  .map(line=>line.split('\t'));
+ const stagedMutationMessage=(status,path)=>{
+  const rows=new Map(stagedBaseline.map(([s,p])=>[p,s]));
+  rows.set(path,status);
+  return 'scope_staged_mutation:'+JSON.stringify(
+   [...rows].sort(([a],[b])=>a<b?-1:a>b?1:0).map(([p,s])=>[s,p])
+  );
+ };
+ const run=async(name,expectedMessage)=>{
+  const r=spawnSync(process.execPath,
+    ['scripts/verify-controller-worker-scope.mjs'],
+    {cwd:checkout,encoding:'utf8'});
+
+  await writeFile(resolve(evidence,'scope-'+name+'.log'),
+    r.stdout+r.stderr);
+
+  assert.ifError(r.error);
+  assert.equal(r.signal,null,name+':signal');
+
+  if(expectedMessage!==undefined){
+    assert.equal(r.status,1,name+':exit');
+    const scopeUrl=pathToFileURL(await realpath(
+      resolve(checkout,'scripts/verify-controller-worker-scope.mjs')
+    )).href;
+    checkScopeDiagnostic(r.stderr,expectedMessage,scopeUrl);
   }
   return r.status;
-});};
+};
  assert.equal(await run('tracked-clean-equivalent'),0);const readme=resolve(checkout,'README.md'),raw=await readFile(readme);await writeFile(readme,Buffer.concat([raw,Buffer.from('\nforbidden scope test\n')]));assert.equal(await run('negative-tracked'),1);await writeFile(readme,raw);
  const extra=resolve(checkout,'outside-allowed.txt');await writeFile(extra,'forbidden');assert.equal(await run('negative-untracked'),1);await unlink(extra);
  for(const path of ['src/planner/attempts/persistence/controller.ts','src/planner/attempts/migration/source.ts']){const p=resolve(checkout,path),raw=await readFile(p);await writeFile(p,Buffer.concat([raw,Buffer.from('\n// forbidden invariant change\n')]));assert.equal(await run('negative-'+path.split('/').at(-1)),1);await writeFile(p,raw);}
@@ -99,9 +197,9 @@ test('standard scope accepts fully tracked future commit tree and rejects tracke
 
   await unlink(docPath);
   await symlink('../README.md',docPath);
-  assert.equal(await run('negative-added-symlink','scope_added_file_type'),1);
+  assert.equal(await run('negative-added-symlink','scope_added_file_type:docs/attempt-identity-rule2-3c0a.md'),1);
   execFileSync('git',['add','--',doc],{cwd:checkout});
-  assert.equal(await run('negative-added-symlink-staged','scope_added_file_type'),1);
+  assert.equal(await run('negative-added-symlink-staged','scope_added_file_type:docs/attempt-identity-rule2-3c0a.md'),1);
   await unlink(docPath);
   await writeFile(docPath,docRaw);
   execFileSync('git',['add','--',doc],{cwd:checkout});
@@ -118,7 +216,7 @@ test('standard scope accepts fully tracked future commit tree and rejects tracke
     'diff','--name-status','HEAD','--','README.md'
   ],{cwd:checkout,encoding:'utf8'}).trim(),'');
   assert.equal(await run(
-    'negative-hidden-index-readme','scope_staged_mutation'
+    'negative-hidden-index-readme',stagedMutationMessage('M','README.md')
   ),1);
   execFileSync('git',['restore','--staged','--','README.md'],{
     cwd:checkout
@@ -137,7 +235,7 @@ test('standard scope accepts fully tracked future commit tree and rejects tracke
     'diff','--name-status','HEAD','--',helper
   ],{cwd:checkout,encoding:'utf8'}).trim(),'');
   assert.equal(await run(
-    'negative-hidden-index-symlink','scope_staged_mutation'
+    'negative-hidden-index-symlink',stagedMutationMessage('T',helper)
   ),1);
   execFileSync('git',['restore','--staged','--',helper],{
     cwd:checkout
