@@ -27,7 +27,7 @@ const commit=(c,p)=>c.commit(p,true,p.previousRaw,p.sourceRaw);
 function checkScopeDiagnostic(stderr, expectedMessage, scopeUrl) {
   const normalized=stripVTControlCharacters(stderr).replace(/\r\n/g,'\n');
   const errors=[...normalized.matchAll(
-    /^([A-Za-z]*Error)(?: \[([A-Z0-9_]+)\])?: ([^\n]*)$/gm
+    /^([A-Za-z]*Error)(?: \[([A-Z0-9_]+)\])?(?:: ?([^\n]*))?$/gm
   )];
 
   assert.equal(errors.length,1,'scope_error_header_count');
@@ -129,6 +129,11 @@ test('scope diagnostics reject contaminated and unrelated errors',async()=>{
     reason,scopeUrl));
 
   const invalid=[
+  // Native Node exceptions without messages must not be ignored.
+    valid+'Error\n    at file:///tmp/inject.cjs:26:15',
+    valid+'Error [ERR_MODULE_NOT_FOUND]\n    at file:///tmp/inject.cjs:26:15',
+    valid+'SyntaxError\n    at file:///tmp/inject.cjs:26:15',
+
     // An existing but different file must fail canonical path comparison.
     valid.replace(scopeUrl,import.meta.url),
     // Reject malformed frames, including trailing log text.
