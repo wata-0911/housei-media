@@ -2,6 +2,7 @@ import { createNewPlanSource, emptyNewPlanWorkspace, encodeNewPlan } from '../..
 import { encodeState } from '../../src/planner/attempts/persistence/codec.ts';
 import { createWorkspace, applyCommand, newOperationId } from '../../src/planner/attempts/workbench/operations.ts';
 import { makeAttempt } from '../../src/planner/attempts/workbench/catalogView.ts';
+import { createWorkbenchIdentityOwner } from '../../src/planner/attempts/workbench/sessionIdentities.ts';
 import { emptyProgress } from '../../dev/attempts/progressDefaults.ts';
 
 const input = title => ({ title, courseId:null, placementId:null, plan:{status:'planned', plannedYear:null, plannedTerm:null, studyYear:null, earnedOrder:null}, method:'media', note:'' });
@@ -26,8 +27,9 @@ export async function replayFixture(version = 24, scale = 'normal', count = 100)
   }
   const attemptId = (scale === 'heavy' ? workspace.graph.attempts.at(-1) : workspace.graph.attempts[0]).id;
   if (scale === 'heavy') {
+    const identities = createWorkbenchIdentityOwner(() => [source, table, workspace]).ids;
     for (const kind of ['media', 'correspondence', 'evaluation']) {
-      const record = emptyProgress(kind, attemptId);
+      const record = emptyProgress(kind, attemptId, identities);
       if (kind === 'media') record.payload = { totalLessons: 1000, lessons: Array.from({length:1000}, (_, i) => ({ lesson:i+1, videoCompleted:true, testCompleted:false })), assessments:Array.from({length:100}, (_, i) => ({ id:'synthetic-assessment-'+i, type:'other', label:'synthetic', scheduledDate:null, completed:false })) };
       if (kind === 'correspondence') record.payload = { requiredReports:1000, reports:Array.from({length:1000}, (_, i) => ({ reportNumber:i+1, status:'passed', grade:'A' })), examGrade:null };
       submit({ kind:'add_record', operationId:newOperationId(), record });
