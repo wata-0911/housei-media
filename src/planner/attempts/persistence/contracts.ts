@@ -70,3 +70,10 @@ export function exactKeys(value: unknown, keys: readonly string[], name: string)
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || Object.keys(value).sort().join(',') !== [...keys].sort().join(',')) throw new Error(`${name}_shape`);
 }
+
+// Pure rule2 codecs are opt-in. Existing controller/backup types remain rule1.
+export const PERSISTENCE_RULE2 = { id: 'yi-06:replay', version: 2 } as const;
+export const NEW_PERSISTENCE_RULE2 = { id: 'yi-new-plan:replay', version: 2 } as const;
+export type AttemptState23Rule2 = Omit<AttemptState23, 'rule'> & { rule: typeof PERSISTENCE_RULE2 };
+export type AttemptState24Rule2 = Omit<AttemptState24, 'rule'> & { rule: typeof NEW_PERSISTENCE_RULE2 };
+export type AttemptStateRule2 = AttemptState23Rule2 | AttemptState24Rule2;

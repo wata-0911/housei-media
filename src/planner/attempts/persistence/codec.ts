@@ -1,4 +1,4 @@
-import { replayNewPlan } from './newPlan';
+import { replayNewPlan, replayNewPlanRule2 } from './newPlan';
 import { backupDigest } from '../../backup/plannerBackupCompatibility';
 import { sameAttemptData, validateAttemptGraph } from '../validation';
 import { checkMigrationAssignmentStructure, validateMigrationAssignments } from '../migration/assignments';
@@ -7,6 +7,8 @@ import { prepareMigrationEnvironment, decodeMigrationSource, parseMigrationJson 
 import { verifyMigrationPreservation } from '../migration/preview';
 import { buildMigrationTarget } from '../migration/transform';
 import { applyCommand, createWorkspace, type Workspace } from '../workbench/operations';
+import { foldCommandIdentities, assignmentRestrictions } from './identityFold';
+import { PERSISTENCE_RULE2, type AttemptState23Rule2 } from './contracts';
 import { STATE_FORMAT, STATE_VERSION, PERSISTENCE_RULE, exactKeys, type AttemptState23, type SourceEvidence, type CorrectionEvidence } from './contracts';
 import { checkFreshCommandIds, checkSourceTodoIds, idTail, requiredReservations, sourceUuids, unionReservations, validateReservations } from './identity';
 
@@ -17,7 +19,7 @@ export function sourceEvidence(source: SourceArchive): SourceEvidence {
     rawFiles: source.rawFiles, rawFileSha256: source.rawFileSha256, compatibilityVersion: 1 });
 }
 export function assignmentIds(table: IdAssignments): string[] {
-  return [...table.reservedIds, ...table.attempts.flatMap(a => [a.attemptId, a.operationId]), ...table.records.map(r => r.recordId)];
+  return assignmentRestrictions(table);
 }
 export function issuedIds(table: IdAssignments, workspace: Workspace, corrections: CorrectionEvidence[]): string[] {
   return [...new Set([...corrections.flatMap(c => assignmentIds(c.originalAssignments)), ...assignmentIds(table),
@@ -41,8 +43,16 @@ export function requireLiveMigration(source: SourceArchive, table: IdAssignments
  * a local checkpoint (reload) or explicit adoption of a validated portable backup.
  * Never registers a copied table in YI-04's WeakSet. */
 export async function replayMigrationState(value: unknown) {
+  const result = await replayMigration(value, false);
+  return { ...result, state: result.state as AttemptState23 };
+}
+export async function replayMigrationStateRule2(value: unknown) {
+  const result = await replayMigration(value, true);
+  return { ...result, state: result.state as AttemptState23Rule2 };
+}
+async function replayMigration(value: unknown, rule2: boolean, encoding = false) {
   exactKeys(value, ['format', 'schemaVersion', 'rule', 'binding', 'source', 'corrections', 'catalog', 'catalogSha256', 'assignments', 'ledger', 'graph', 'retained', 'history', 'verification'], 'state');
-  if (value.format !== STATE_FORMAT || value.schemaVersion !== STATE_VERSION || !sameAttemptData(value.rule, PERSISTENCE_RULE)) throw new Error('unsupported_persistence_version');
+  if (value.format !== STATE_FORMAT || value.schemaVersion !== STATE_VERSION || !sameAttemptData(value.rule, rule2 ? PERSISTENCE_RULE2 : PERSISTENCE_RULE)) throw new Error('unsupported_persistence_version');
   const state = value as unknown as AttemptState23;
   exactKeys(state.source, ['kind', 'schemaVersion', 'raw', 'rawSha256', 'stateSha256', 'catalog', 'catalogSha256', 'catalogSemanticSha256', 'catalogMetadata', 'rawFiles', 'rawFileSha256', 'compatibilityVersion'], 'source_evidence');
   exactKeys(state.history, ['commands', 'issuedIds', 'usedTodoIds'], 'history');
@@ -60,14 +70,17 @@ export async function replayMigrationState(value: unknown) {
   // are verified by ordered YI-05 replay, NOT original-source equality.
   const base = buildMigrationTarget(source, state.assignments);
   let workspace = createWorkspace(base.graph, source.context);
-  const occupied = sourceUuids(source);
-  for (const id of assignmentIds(state.assignments)) occupied.add(idTail(id));
-  for (const command of state.history.commands) {
-    const freshIds = checkFreshCommandIds(command, occupied);
-    const next = applyCommand(workspace, command, source.context);
-    if (next === workspace) throw new Error('duplicate_receipt');
-    freshIds.forEach(id => occupied.add(idTail(id))); workspace = next;
-  }
+  const replayRule1 = () => {
+    const occupied = sourceUuids(source);
+    for (const id of assignmentIds(state.assignments)) occupied.add(idTail(id));
+    for (const command of state.history.commands) {
+      const freshIds = checkFreshCommandIds(command, occupied);
+      const next = applyCommand(workspace, command, source.context);
+      if (next === workspace) throw new Error('duplicate_receipt');
+      freshIds.forEach(id => occupied.add(idTail(id))); workspace = next;
+    }
+  };
+  if (!rule2) replayRule1();
   const previousSources: SourceArchive[] = [];
   for (let i = 0; i < state.corrections.length; i++) {
     const c = state.corrections[i];
@@ -96,16 +109,33 @@ export async function replayMigrationState(value: unknown) {
     const nextTable = state.corrections[i + 1]?.originalAssignments ?? state.assignments;
     if (assignmentIds(c.originalAssignments).some(id => !nextTable.reservedIds.includes(id))) throw new Error('correction_assignment_history');
   }
-  // Includes unused reservations and IDs from earlier date-correction tables.
-  unionReservations(issuedIds(state.assignments, workspace, state.corrections));
-  const expected = await encodeState(source, state.assignments, base, workspace, environment.target, state.corrections);
-  if (!sameAttemptData(state, expected)) throw new Error('state_replay_mismatch');
+  // Rule2 validates ALL correction sources/tables before the ordered fold.
+  const fold = rule2 ? foldCommandIdentities({ source, initial: workspace,
+    tables: [...state.corrections.map(c => c.originalAssignments), state.assignments], previousSources },
+    state.history.commands, state) : undefined;
+  if (fold) workspace = fold.workspace;
+  if (!rule2) unionReservations(issuedIds(state.assignments, workspace, state.corrections));
+  const legacy = await encodeState(source, state.assignments, base, workspace, environment.target, state.corrections);
+  const expected = fold ? freeze({ ...legacy, rule: PERSISTENCE_RULE2, history: { ...legacy.history, issuedIds: fold.issuedIds } }) : legacy;
+  const compared = encoding ? { ...state, history: { ...state.history, issuedIds: expected.history.issuedIds } } : state;
+  if (!sameAttemptData(compared, expected)) throw new Error('state_replay_mismatch');
   return { state: expected, workspace, source, base, environment,
-    requiredReservations: requiredReservations(source, expected.history.issuedIds, previousSources) };
+    requiredReservations: fold?.requiredReservations ?? requiredReservations(source, expected.history.issuedIds, previousSources) };
 }
 
 /** Version dispatch preserves the migration-only schema23 decoder unchanged. */
 export async function replayState(value: unknown) {
   if (value && typeof value === 'object' && (value as { schemaVersion?: unknown }).schemaVersion === 24) return replayNewPlan(value);
   return replayMigrationState(value);
+}
+
+/** Explicit pure encoder. No controller, authority, backup or storage connection. */
+export async function encodeStateRule2(...args: Parameters<typeof encodeState>): Promise<AttemptState23Rule2> {
+  const legacy = await encodeState(...args);
+  const result = await replayMigration({ ...legacy, rule: PERSISTENCE_RULE2 }, true, true);
+  return result.state as AttemptState23Rule2;
+}
+export async function replayStateRule2(value: unknown) {
+  if (value && typeof value === 'object' && (value as { schemaVersion?: unknown }).schemaVersion === 24) return replayNewPlanRule2(value);
+  return replayMigrationStateRule2(value);
 }
