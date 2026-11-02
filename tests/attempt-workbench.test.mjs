@@ -6,6 +6,7 @@ import { applyCommand, createWorkspace, newAttemptIds, newOperationId, newRecord
 import { makeAttempt, selectedReferences, contributionLabel, attemptView, optionalNumber, courseChoices, placementChoices } from '../src/planner/attempts/workbench/catalogView.ts';
 import { createMigrationWorkbench, heldDates } from '../src/planner/attempts/workbench/migrationSession.ts';
 import { attemptWorkbenchEnabled } from '../dev/attempts/gate.ts';
+import { createWorkbenchIdentityOwner } from '../src/planner/attempts/workbench/sessionIdentities.ts';
 import { nullableText } from '../dev/attempts/formHelpers.ts';
 import { env, catalog, mixed, media } from './fixtures/migration-fixture.mjs';
 import { verifyMigrationPreservation } from '../src/planner/attempts/migration/preview.ts';
@@ -457,7 +458,11 @@ test('search bridge UI stays opt-in; the shared YI-06 form keeps its legacy sele
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { AttemptForm } = await import('../dev/attempts/AttemptForm.tsx');
   const context = { catalog: searchMaster, officialAchievementIds: [], officialStudyRecordIds: [] };
-  const render = props => renderToStaticMarkup(createElement(AttemptForm, { context, submit: () => true, close: () => {}, ...props }));
+  const render = props => {
+    // Each independent SSR mount has its own form/session lifetime.
+    const identities = createWorkbenchIdentityOwner(() => context).ids;
+    return renderToStaticMarkup(createElement(AttemptForm, { context, identities, submit: () => true, close: () => {}, ...props }));
+  };
   assert.match(render({}), /Placement候補/); assert.doesNotMatch(render({}), /Placement検索結果/);
   assert.match(render({ searchEnabled: true }), /Placement検索結果/); assert.doesNotMatch(render({ searchEnabled: true }), /Placement候補/);
 });

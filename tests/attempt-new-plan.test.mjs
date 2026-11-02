@@ -10,6 +10,7 @@ import { CURRENT_CURRICULUM_SEARCH_TARGET } from '../src/planner/institutional/c
 import { makeSearchAttempt } from '../src/planner/attempts/workbench/searchBridge.ts';
 import { makeAttempt } from '../src/planner/attempts/workbench/catalogView.ts';
 import { newOperationId, newRecordId } from '../src/planner/attempts/workbench/operations.ts';
+import { createWorkbenchIdentityOwner } from '../src/planner/attempts/workbench/sessionIdentities.ts';
 import { emptyProgress } from '../dev/attempts/progressDefaults.ts';
 
 const locks = { request: async (_name, _options, action) => action() };
@@ -96,7 +97,8 @@ test('Placement safe/ambiguous/conflict, bucket refusal, duplicates and idempote
 
 test('owner/progress/evaluation/TODO, plan edit, strict LIFO and deleted ID reservations persist', async () => {
   let { api, store, loaded } = await start(); const c1 = add(loaded), c2 = add(loaded); loaded = await save(api, loaded, [c1, c2]);
-  const records = ['media', 'correspondence', 'evaluation'].map(kind => emptyProgress(kind, c1.attempt.id));
+  const identities = createWorkbenchIdentityOwner(() => [loaded.source, loaded.state, loaded.workspace]).ids;
+  const records = ['media', 'correspondence', 'evaluation'].map(kind => emptyProgress(kind, c1.attempt.id, identities));
   records[0].payload = { totalLessons: 1, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: false }], assessments: [] };
   records[1].payload = { requiredReports: 1, reports: [{ reportNumber: 1, status: 'passed', grade: 'A' }], examGrade: null };
   records[2].payload.finalGrade = 'A';

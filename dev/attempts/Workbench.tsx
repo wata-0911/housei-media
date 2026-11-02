@@ -1,7 +1,8 @@
+import { createWorkbenchIdentityOwner, type WorkbenchIdentities } from '../../src/planner/attempts/workbench/sessionIdentities';
 import { useRef, useState } from 'react';
 import { loadYi01InstitutionalCatalog } from '../../src/planner/institutional/yi01';
 import type { Attempt, AttemptValidationContext } from '../../src/planner/attempts/types';
-import { applyCommand, createWorkspace, newOperationId, type Command, type Workspace } from '../../src/planner/attempts/workbench/operations';
+import { applyCommand, createWorkspace, type Command, type Workspace } from '../../src/planner/attempts/workbench/operations';
 import { attemptView, ownerLabel } from '../../src/planner/attempts/workbench/catalogView';
 import type { MigrationSession } from '../../src/planner/attempts/workbench/migrationSession';
 import { AttemptForm } from './AttemptForm';
@@ -13,24 +14,32 @@ import { buttonClass, Field, inputClass } from './Fields';
 
 const master = loadYi01InstitutionalCatalog();
 const initialContext: AttemptValidationContext = { catalog: master, officialAchievementIds: [], officialStudyRecordIds: [] };
-type Props = { mode?: 'institutional-search' | 'legacy-migration'; seed?: { workspace: Workspace; context: AttemptValidationContext }; dispatch?: (workspace: Workspace, command: Command) => Workspace; onCommand?: (command: Command) => void };
-export function Workbench({ seed, dispatch, onCommand, mode }: Props = {}) {
+type Props = { identities?: WorkbenchIdentities; mode?: 'institutional-search' | 'legacy-migration'; seed?: { workspace: Workspace; context: AttemptValidationContext }; dispatch?: (workspace: Workspace, command: Command) => Workspace; onCommand?: (command: Command) => void };
+export function Workbench({ seed, dispatch, onCommand, mode, identities }: Props = {}) {
   const institutionalSearch = mode ? mode === 'institutional-search' : !seed;
   const [state, setState] = useState(() => seed ?? ({ workspace: createWorkspace({ attempts: [], ownedRecords: [], removals: [] }, initialContext), context: initialContext }));
   // Synchronous latest-state reference makes event replays atomic between React renders.
   const current = useRef(state);
+  const [memoryIds] = useState(() => {
+    let latest = state;
+    const owner = createWorkbenchIdentityOwner(() => latest);
+    return { ...owner, observe(next: typeof state) { latest = next; } };
+  });
+  if (dispatch && !identities) throw new Error('session_identities_required');
+  const ids = identities ?? memoryIds.ids;
+  const { newOperationId } = ids;
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [form, setForm] = useState<'new' | Attempt | null>(null);
   const [sort, setSort] = useState('plan');
   function submit(command: Command) {
     try {
       const next = { ...current.current, workspace: dispatch ? dispatch(current.current.workspace, command) : applyCommand(current.current.workspace, command, current.current.context) };
-      onCommand?.(command); current.current = next; setState(next); setError(''); setNotice('隔離メモリに反映しました。未保存です。'); return true;
+      onCommand?.(command); memoryIds.observe(next); current.current = next; setState(next); setError(''); setNotice('隔離メモリに反映しました。未保存です。'); return true;
     } catch (err) { setError(String(err)); setNotice('入力を反映できませんでした。draftを確認してください。'); return false; }
   }
   function start(session: MigrationSession) {
     if (session.decoded.status !== 'decoded' || session.preview?.status !== 'ready') return;
     const next = { context: session.decoded.source.context, workspace: createWorkspace(session.preview.target.graph, session.decoded.source.context) };
-    current.current = next; setState(next); setForm(null); setError(''); setNotice('readyを初期状態にしました。未保存です。');
+    memoryIds.observe(next); current.current = next; setState(next); setForm(null); setError(''); setNotice('readyを初期状態にしました。未保存です。');
   }
   const { workspace, context } = state, graph = workspace.graph;
   const active = graph.attempts.filter(a => a.membership.kind === 'active');
@@ -63,8 +72,8 @@ export function Workbench({ seed, dispatch, onCommand, mode }: Props = {}) {
       <details><summary>このAttemptの進捗・評価（方式を問わず保持）</summary><div className="mt-3 space-y-3">
         {(['media', 'correspondence', 'evaluation'] as const).map(kind => {
           const record = view.records.find(r => r.kind === kind);
-          return record && record.kind !== 'todo' ? <ProgressEditor key={JSON.stringify(record)} record={record} submit={submit} />
-            : <button key={kind} className={`${buttonClass} mr-2`} onClick={() => submit({ kind: 'add_record', operationId: newOperationId(), record: emptyProgress(kind, a.id) })}>{kind === 'media' ? 'メディア進捗を開始' : kind === 'correspondence' ? '通信進捗を開始' : '科目評価を開始'}</button>;
+          return record && record.kind !== 'todo' ? <ProgressEditor key={JSON.stringify(record)} record={record} identities={ids} submit={submit} />
+            : <button key={kind} className={`${buttonClass} mr-2`} onClick={() => submit({ kind: 'add_record', operationId: newOperationId(), record: emptyProgress(kind, a.id, ids) })}>{kind === 'media' ? 'メディア進捗を開始' : kind === 'correspondence' ? '通信進捗を開始' : '科目評価を開始'}</button>;
         })}
       </div></details>
     </article>;
@@ -75,12 +84,12 @@ export function Workbench({ seed, dispatch, onCommand, mode }: Props = {}) {
     <div aria-live="polite" className="space-y-2">{notice && <p role="status">{notice}</p>}{error && <p role="alert" className="whitespace-pre-wrap rounded border border-red-500 bg-red-50 p-3 text-red-900">{error}</p>}</div>
     <section className="space-y-4" aria-labelledby="plan-heading"><div className="flex flex-wrap items-center justify-between gap-3"><h2 id="plan-heading" className="text-xl font-bold">履修計画 / active {active.length}件</h2><button className={buttonClass} onClick={() => setForm('new')}>新しい履修回</button></div>
       <Field label="表示順（ID・計画順は維持）"><select className={`${inputClass} sm:max-w-xs`} value={sort} onChange={e => setSort(e.target.value)}><option value="plan">計画順</option><option value="name">科目名</option><option value="year">予定年度</option></select></Field>
-      {form && <AttemptForm key={form === 'new' ? 'new' : form.id} context={context} searchEnabled={institutionalSearch} attempt={form === 'new' ? undefined : form} submit={submit} close={() => setForm(null)} />}
+      {form && <AttemptForm identities={ids} key={form === 'new' ? 'new' : form.id} context={context} searchEnabled={institutionalSearch} attempt={form === 'new' ? undefined : form} submit={submit} close={() => setForm(null)} />}
       <div className="space-y-4">{active.map(card)}</div>{active.length === 0 && <p>制度科目を選択するか、未確定の名称で追加できます。</p>}
     </section>
     <section className="space-y-4" aria-labelledby="detached-heading"><h2 className="text-xl font-bold" id="detached-heading">detached / 計画外のowner {detached.length}件</h2><p>削除しても進捗・評価・TODOは元Attemptに残ります。Undoと新しい履修回の追加は別操作です。複数削除した場合は、最後に削除した履修回から逆順にUndoしてください。削除順を確認できない場合は復元を停止します。</p>{detached.map(card)}</section>
-    <section className="space-y-3"><h2 className="text-xl font-bold">未解決の旧ownerの進捗</h2>{graph.ownedRecords.filter(r => r.owner?.kind === 'unresolved_legacy' && r.kind !== 'todo').map(r => r.kind !== 'todo' && <div key={r.id}><p className="break-all text-sm">{ownerLabel(r.owner, graph)}</p><ProgressEditor key={JSON.stringify(r)} record={r} submit={submit} /></div>)}</section>
-    <TodoPanel graph={graph} submit={submit} />
+    <section className="space-y-3"><h2 className="text-xl font-bold">未解決の旧ownerの進捗</h2>{graph.ownedRecords.filter(r => r.owner?.kind === 'unresolved_legacy' && r.kind !== 'todo').map(r => r.kind !== 'todo' && <div key={r.id}><p className="break-all text-sm">{ownerLabel(r.owner, graph)}</p><ProgressEditor key={JSON.stringify(r)} record={r} identities={ids} submit={submit} /></div>)}</section>
+    <TodoPanel identities={ids} graph={graph} submit={submit} />
     <footer className="border-t pt-4 text-sm text-slate-600">ページ内操作receipt: {workspace.receipts.length}件。{seed ? '編集は未保存です。上部で比較・確認して隔離保存してください。' : '保存はYI-06、卒業計算adapterはYI-07、公開判断はYI-08の対象です。'}</footer>
   </main>;
 }

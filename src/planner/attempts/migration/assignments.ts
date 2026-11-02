@@ -1,3 +1,4 @@
+import { SessionIdentityAllocator, type IdentityPrefix } from '../persistence/sessionIds';
 import { sameAttemptData } from '../validation';
 import { bindingFor, freeze, pointer, type AttemptSlot, type RecordSlot, type IdAssignments, type SourceArchive } from './contracts';
 import { requireDecoded } from './source';
@@ -73,7 +74,10 @@ export function prepareMigrationIds(source: SourceArchive, reservedIds: readonly
   const slots = sourceSlots(source);
   // Notify synchronously, before table validation or any subsequent allocation.
   // The trusted owner keeps this restriction even when issuance later throws.
-  const mint = <P extends string>(prefix: P) => { const id = `${prefix}${crypto.randomUUID()}` as const; onIssued?.(id); return id; };
+  const allocator = new SessionIdentityAllocator(onIssued);
+  const occupied = occupiedUuids(source, reservedIds);
+  allocator.restrict([...occupied]);
+  const mint = <P extends IdentityPrefix>(prefix: P) => allocator.mint(occupied, prefix) as `${P}${string}`;
   const table: IdAssignments = { binding: bindingFor(source), reservedIds: [...reservedIds],
     attempts: slots.attempts.map(slot => ({ ...slot, attemptId: mint('hosei:attempt:'), operationId: mint('hosei:attempt-op:') })),
     records: slots.records.map(slot => ({ ...slot, recordId: mint('hosei:owned:') })) };

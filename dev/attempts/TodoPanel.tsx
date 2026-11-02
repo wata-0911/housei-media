@@ -1,8 +1,9 @@
+import type { WorkbenchIdentities } from '../../src/planner/attempts/workbench/sessionIdentities';
 import { preventImeSubmit, text } from './formHelpers';
 import { useState } from 'react';
 import type { AttemptGraph, AttemptOwnedRecord } from '../../src/planner/attempts/types';
 import { ownerLabel } from '../../src/planner/attempts/workbench/catalogView';
-import { newOperationId, newRecordId, type Command } from '../../src/planner/attempts/workbench/operations';
+import { type Command } from '../../src/planner/attempts/workbench/operations';
 import { buttonClass, Field, inputClass } from './Fields';
 
 type Todo = Extract<AttemptOwnedRecord, { kind: 'todo' }>;
@@ -17,7 +18,8 @@ function ownerChoices(graph: AttemptGraph) {
   }
   return choices;
 }
-function TodoRow({ todo, graph, submit }: { todo: Todo; graph: AttemptGraph; submit: (command: Command) => boolean }) {
+function TodoRow({ todo, graph, submit, identities }: { identities: WorkbenchIdentities; todo: Todo; graph: AttemptGraph; submit: (command: Command) => boolean }) {
+  const { newOperationId } = identities;
   const [owner, setOwner] = useState('keep');
   const choices = ownerChoices(graph);
   return <article className="space-y-3 rounded border p-3" aria-label={`TODO ${todo.payload.text}`}>
@@ -34,14 +36,15 @@ function TodoRow({ todo, graph, submit }: { todo: Todo; graph: AttemptGraph; sub
     <p className="break-all text-xs">TODO ID: {todo.payload.id}</p>
   </article>;
 }
-export function TodoPanel({ graph, submit }: { graph: AttemptGraph; submit: (command: Command) => boolean }) {
+export function TodoPanel({ graph, submit, identities }: { identities: WorkbenchIdentities; graph: AttemptGraph; submit: (command: Command) => boolean }) {
+  const { newOperationId, newRecordId } = identities;
   const choices = ownerChoices(graph);
   return <section className="space-y-3" aria-labelledby="todos-heading"><h2 className="text-xl font-bold" id="todos-heading">TODOとowner</h2>
     <form className="grid gap-2 rounded border bg-white p-3 sm:grid-cols-2" aria-label="TODO追加" onKeyDown={preventImeSubmit} onSubmit={e => {
       e.preventDefault(); const data = new FormData(e.currentTarget);
       if (submit({ kind: 'add_record', operationId: newOperationId(), record: { id: newRecordId(), kind: 'todo', owner: choices.find(c => c.key === text(data, 'owner'))!.owner,
-        payload: { id: crypto.randomUUID(), text: text(data, 'text'), done: false } } })) e.currentTarget.reset();
+        payload: { id: identities.newTodoId(), text: text(data, 'text'), done: false } } })) e.currentTarget.reset();
     }}><Field label="新しいTODO"><input className={inputClass} name="text" required /></Field><Field label="追加先owner"><select className={inputClass} name="owner">{choices.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select></Field><button className={buttonClass}>TODOを追加</button></form>
-    {graph.ownedRecords.filter((r): r is Todo => r.kind === 'todo').map(todo => <TodoRow key={JSON.stringify(todo)} todo={todo} graph={graph} submit={submit} />)}
+    {graph.ownedRecords.filter((r): r is Todo => r.kind === 'todo').map(todo => <TodoRow key={JSON.stringify(todo)} todo={todo} graph={graph} identities={identities} submit={submit} />)}
   </section>;
 }
