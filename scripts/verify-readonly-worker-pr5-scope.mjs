@@ -10,7 +10,8 @@ export const allowed=new Map([
  ...['client','contracts','display','preview.worker','protocol','session','workerInput'].map(x=>['src/planner/attempts/persistence/worker/'+x+'.ts','M']),
  ['src/planner/attempts/persistence/worker/versionedRead.ts','A'],
  ['src/planner/attempts/persistence/worker/diagnostics.ts','A'],
- ...['attempt-worker-held-diagnostics.test.mjs','attempt-worker-held-diagnostics.browser.mjs','helpers/held-diagnostic-probe.mjs'].map(x=>['tests/'+x,'A']),
+ ['docs/attempt-worker-f01-f02-pr214-fix.md','A'],
+ ...['attempt-worker-held-diagnostics.test.mjs','attempt-worker-held-diagnostics.browser.mjs','attempt-worker-operation-validation.test.mjs','helpers/held-diagnostic-probe.mjs','helpers/worker-operation-probe.mjs'].map(x=>['tests/'+x,'A']),
  ['docs/attempt-readonly-worker-3c0b-pr5.md','A'],
  ['scripts/verify-readonly-worker-pr5-scope.mjs','A'],
  ...['attempt-worker-versioned.test.mjs','attempt-worker-versioned.browser.mjs','attempt-worker-pr5-scope.test.mjs','helpers/worker-versioned-browser.mjs','helpers/worker-versioned-fixture.mjs'].map(x=>['tests/'+x,'A']),
@@ -41,8 +42,8 @@ export async function verify(){
  const rawPlugin={name:'scope-exact-raw',setup(b){b.onResolve({filter:/\?raw$/},a=>({path:resolve(a.resolveDir,a.path.slice(0,-4)),namespace:'raw'}));b.onLoad({filter:/.*/,namespace:'raw'},async a=>({contents:await readFile(a.path,'utf8'),loader:'text'}));}};
  const worker=await build({...options,entryPoints:[root+'src/planner/attempts/persistence/worker/preview.worker.ts'],plugins:[rawPlugin]});
  const workerInputs=Object.keys(worker.metafile.inputs);
- assert.ok(!/testOracle|__audit|testAudit/.test(worker.outputFiles[0].text),'product_test_hook');
- assert.ok(!workerInputs.some(x=>/persistence\/(?:persistentSession|syncSession|indexedDb|artifacts|sessionIdentityOwner)\.ts$|dev\//.test(x)),'worker_writer_dependency');
+ assert.ok(!/testOracle|__audit|testAudit|operationProbe|testBlockers/.test(worker.outputFiles[0].text),'product_test_hook');
+ assert.ok(!workerInputs.some(x=>/persistence\/(?:persistentSession|syncSession|indexedDb|artifacts|sessionIdentityOwner)\.ts$|dev\/|tests\//.test(x)),'worker_writer_dependency');
  const entry=await readFile(root+'src/planner/attempts/persistence/worker/preview.worker.ts','utf8'),session=await readFile(root+'src/planner/attempts/persistence/worker/session.ts','utf8');
  assert.ok(!/from ['"].*(?:persistentSession|syncSession|indexedDb['"])/.test(entry+session));assert.ok(session.includes('async commit(){throw new Fault(\'readonly_mode\');}'));assert.ok(session.includes('createAttemptPersistence(store,undefined,environment'));
  return {parent,changes:rows(parent),untracked,mainInputs,mainBundleBytes:main.outputFiles[0].contents.length,productionWorkerInputs:0,workerInputs,workerBundleBytes:worker.outputFiles[0].contents.length,frozenBoundaries:protectedPaths,oldScopeVerifierUnchanged:true,nativeRuntimeCountersRequiredSeparately:true};

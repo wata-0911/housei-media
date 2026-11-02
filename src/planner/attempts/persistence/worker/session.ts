@@ -1,8 +1,8 @@
 import {rule2Diagnostics} from './diagnostics';
-import {readAuthoritySnapshot,isVersioned,replayReadonlyState,content,type ReadHandle} from './versionedRead';
+import {readAuthoritySnapshot,captureAuthoritySnapshot,readState,replayAdmittedState,isVersioned,replayReadonlyState,content,type ReadHandle} from './versionedRead';
 import {sameAuthoritySnapshot} from '../authoritySnapshot';
 import {sameAttemptData} from '../../validation';
-import {decodeStateJson,decodeBackupJson} from '../contractDecoders';
+import {decodeBackupJson} from '../contractDecoders';
 import {legacyReservationAnalysis,previewLegacyRule2Migration} from '../legacyPreview';
 import type {ReservationCoverage} from '../versionedContracts';
 import type {ContentDTO} from './contracts';
@@ -45,22 +45,38 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
  const viewingOperations:readonly Control['op'][]=['readPage','release'];
  function requireCandidateAuthority(op:Control['op']){if(authorityRevoked&&!viewingOperations.includes(op))throw new Fault('stale_authority');}
  function invalidateAuthority():never{authorityRevoked=true;registry.revokeKinds(['draft','preview','migration','correction']);throw new Fault('stale_authority');}
- let operation:{snapshot?:AuthorityRecord}|undefined;let authority:AuthorityRecord|undefined,selected:{kind:string;raw:string}|undefined;
+ type OperationRead={identity:object;requestId:number;view?:string;sourceVector:Vector;environment?:Environment;raw?:string;snapshot?:AuthorityRecord;checked?:AuthorityRecord;loadingLegacy?:boolean};
+ let operation:OperationRead|undefined;let authority:AuthorityRecord|undefined,selected:{kind:string;raw:string}|undefined;
  let pages:PageSource={diagnostics:[]};let activeDraft:Draft|undefined,activePreview:Candidate|undefined;
- const validatedStore=createReadonlyStore(read);
- const store:AtomicAttemptStore={...validatedStore,async read(){
+ const store:AtomicAttemptStore={async commit(){throw new Fault('readonly_mode');},async read(){
   // Capture this operation BEFORE the backend/decoder awaits. The queue never
   // overlaps executions; completion additionally checks the captured context.
   const observation=operation;
-  try{const record=await validatedStore.read();
+  try{
    if(!observation||closed)throw new Fault('closed');
-   if(authority&&!sameAuthority(authority,record))invalidateAuthority();
-   editIds.restrict(record.issuedIds);observation.snapshot=record;return record;
+   // Original descriptors/shape are checked on EVERY backend result, before
+   // cloning. A reused proof is private to this execution and full snapshot.
+   const original=await read();
+   if(operation!==observation||closed)throw new Fault('closed');
+   if(observation.view!==undefined&&observation.view!==view||observation.sourceVector.sourceEpoch!==vector.sourceEpoch||observation.sourceVector.contextRevision!==vector.contextRevision)throw new Fault('stale_view');
+   const captured=captureAuthoritySnapshot(original);
+   if(authority&&!sameAuthority(authority,captured))invalidateAuthority();
+   let record:AuthorityRecord;
+   if(observation.checked&&sameAuthority(observation.checked,captured))record=observation.checked;
+   else if(observation.loadingLegacy){
+    if(isVersioned(captured))invalidateAuthority();
+    if(captured.raw!==null)preflight(captured.raw,'state');
+    record=captured; // not yet validated; controller.load must finish first
+   }else{record=await readAuthoritySnapshot(captured);observation.checked=record;}
+   observation.snapshot=record;
+   if(observation.checked)editIds.restrict(record.issuedIds);
+   return record;
   }catch(error){authorityRevoked=true;registry.revokeKinds(['draft','preview','migration','correction']);if(authority&&!(error instanceof Fault&&error.code==='closed'))throw new Fault('stale_authority');throw error;}
+
  }};
  let initialEnvironment:Environment|undefined;
  async function environment(){
-  try{const latest=await loadEnvironment();if(initialEnvironment&&!sameAttemptData(initialEnvironment,latest))throw new Fault('environment_changed');return latest;}
+  try{const latest=await loadEnvironment();if(initialEnvironment&&!sameAttemptData(initialEnvironment,latest))throw new Fault('environment_changed');if(operation)operation.environment=latest;return latest;}
   catch{authorityRevoked=true;registry.revokeKinds(['draft','preview','migration','correction']);throw new Fault('environment_changed');}
  }
  async function verifyEnvironment(){await environment();}
@@ -94,7 +110,7 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
   return {view,status,diagnosticCount:diagnostics.length,...(status==='ready'?{migration:registry.mint('migration',{session:m,expected},['prepareMigration'])}:{}),...(diagnostics.length?{diagnosticsCursor:registry.mint('cursor',{kind:'diagnostics',offset:0},['readPage'])}:{})};
  }
  async function execute(c:Control,raw?:string):Promise<Result>{
-  const observation:{snapshot?:AuthorityRecord}={};operation=observation;
+  const observation:OperationRead={identity:{},requestId:c.requestId,view:c.expectedView,sourceVector:{...vector},raw};operation=observation;
   current(c.requestId);
   if(c.op==='startSession'){
    if(started)throw new Fault('protocol');started=true;
@@ -107,10 +123,10 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
   if(readCandidate&&['prepareEdits','prepareNewPlan','proposeDate','confirmDate'].includes(c.op))throw new Fault('readonly_mode');
   if(c.op==='openCommitted'){
    if(selected)throw new Fault('stale_view');
-   const initial=await store.read();
-   current(c.requestId);guard(c);
+   if(isVersioned(authority!)){
+    const initial=await store.read();current(c.requestId);guard(c);
    if(isVersioned(initial)&&initial.raw!==null){
-    const checked=await decodeStateJson(initial.raw),handle=await replayReadonlyState(checked.value);await checkReplayEnvironment(handle);
+    const handle=await replayReadonlyState(JSON.parse(initial.raw));await checkReplayEnvironment(handle);
     // Recheck exactly this operation's record after replay; never use a later
     // shared observation as provenance for an earlier handle.
     if(!sameAuthority(initial,await store.read()))invalidateAuthority();await verifyEnvironment();current(c.requestId);guard(c);
@@ -120,9 +136,15 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
     return {view,handle:registry.mint('handle',handle,['display']),summary:snapshot(handle),content:meta,evidence:'local-witness'};
    }
    if(isVersioned(initial)){if(!sameAuthority(authority,initial))invalidateAuthority();await verifyEnvironment();current(c.requestId);guard(c);return null;}
-   let h:PersistenceHandle|null;
-   try{h=await controller.load();}finally{current(c.requestId);}
-   current(c.requestId);guard(c);if(!sameAuthority(initial,observation.snapshot))invalidateAuthority();await verifyEnvironment();current(c.requestId);guard(c);
+   }
+   let h:PersistenceHandle|null;observation.loadingLegacy=true;
+   try{h=await controller.load();}finally{observation.loadingLegacy=false;current(c.requestId);}
+   current(c.requestId);guard(c);
+   // Only this controller's actual completed load authenticates this operation's
+   // captured legacy record. No caller or structural handle can set this field.
+   if(!observation.snapshot)throw new Fault('internal');
+   observation.checked=observation.snapshot;editIds.restrict(observation.checked.issuedIds);
+   await finish(c);
    readCandidate=undefined;
    // Null has no replacement ViewToken. An unchanged empty DB preserves the
    // draft; an externally erased authority requires a fresh session instead.
@@ -173,18 +195,17 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
    const expected=await store.read();current(c.requestId);guard(c);
    if(c.op==='inspectAttemptRaw'||isVersioned(expected)||![1,2,3].includes((admitted.value as {backupVersion:number}).backupVersion)){
     if(activeDraft?.preview?.action==='edit')throw new Fault('stale_view');select(c.op,raw);
-    const decoded=c.op==='inspectAttemptRaw'?await decodeStateJson(raw):await decodeBackupJson(raw);
-    const state='backupVersion' in decoded.value?decoded.value.state:decoded.value;
-    const handle=await replayReadonlyState(state);await checkReplayEnvironment(handle);
+    const decoded=c.op==='inspectBackupRaw'?await decodeBackupJson(raw):undefined;
+    const handle=decoded?await replayReadonlyState(decoded.value.state):await replayAdmittedState(admitted.value),state=handle.state;await checkReplayEnvironment(handle);
     const analysis=c.op==='inspectAttemptRaw'&&state.rule.version===1?await legacyReservationAnalysis(raw):undefined;
-    if('backupVersion' in decoded.value&&decoded.value.backupVersion===1&&!expected.committed.includes(await backupDigest(state)))throw new Error('backup_unknown_checkpoint');
+    if(decoded&&decoded.value.backupVersion===1&&!expected.committed.includes(await backupDigest(state)))throw new Error('backup_unknown_checkpoint');
     await finish(c);
-    const coverage='reservationCoverage' in decoded.value?decoded.value.reservationCoverage:undefined;
+    const coverage=decoded&&'reservationCoverage' in decoded.value?decoded.value.reservationCoverage:undefined;
     const diagnostics=rule2Diagnostics(analysis?.blockers??[]);
     const meta=content(state,c.op==='inspectAttemptRaw'?'submitted-state':'unadopted-backup',coverage,analysis?(analysis.status==='held'?'held':'candidate'):'none');
     publish({sourceEpoch:vector.sourceEpoch+1,draftRevision:vector.draftRevision+1,authorityRevision:expected.revision});authority=expected;activeDraft=undefined;activePreview=undefined;activeMigration=undefined;pages={handle,diagnostics,readonly:true};
-    const candidate:ReadCandidate={kind:'readonly',handle,raw:JSON.stringify(state),expected,content:meta,action:'restore',portable:c.op==='inspectBackupRaw'&&(decoded.value as {backupVersion?:number}).backupVersion!==1};readCandidate=candidate;
-    return {view,status:analysis?.status==='held'?'held':'ready',diagnosticCount:diagnostics.length,...(diagnostics.length?{diagnosticsCursor:registry.mint('cursor',{kind:'diagnostics',offset:0},['readPage'])}:{}),summary:snapshot(handle),content:meta,...(analysis?.status==='migration-candidate'?{migration:registry.mint('migration',{kind:'rule2',raw,expected} satisfies RuleMigration,['prepareMigration'])}:{}),...(c.op==='inspectBackupRaw'?{backupVersion:(decoded.value as {backupVersion:1|2|3|4}).backupVersion,evidence:((decoded.value as {backupVersion:number}).backupVersion===1?'local-witness':'portable-unadopted') as 'local-witness'|'portable-unadopted',restorePreview:registry.mint('preview',candidate,['prepareSave'])}:{})};
+    const candidate:ReadCandidate={kind:'readonly',handle,raw:JSON.stringify(state),expected,content:meta,action:'restore',portable:c.op==='inspectBackupRaw'&&(decoded!.value as {backupVersion?:number}).backupVersion!==1};readCandidate=candidate;
+    return {view,status:analysis?.status==='held'?'held':'ready',diagnosticCount:diagnostics.length,...(diagnostics.length?{diagnosticsCursor:registry.mint('cursor',{kind:'diagnostics',offset:0},['readPage'])}:{}),summary:snapshot(handle),content:meta,...(analysis?.status==='migration-candidate'?{migration:registry.mint('migration',{kind:'rule2',raw,expected} satisfies RuleMigration,['prepareMigration'])}:{}),...(c.op==='inspectBackupRaw'?{backupVersion:(decoded!.value as {backupVersion:1|2|3|4}).backupVersion,evidence:((decoded!.value as {backupVersion:number}).backupVersion===1?'local-witness':'portable-unadopted') as 'local-witness'|'portable-unadopted',restorePreview:registry.mint('preview',candidate,['prepareSave'])}:{})};
    }
   }
   if(c.op==='inspectLegacyRaw'||c.op==='inspectBackupRaw'){
@@ -229,7 +250,7 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
     const candidate=registry.get<ReadCandidate>(c.draft??c.restorePreview!,c.draft?'draft':'preview',c.op);
     if(candidate.kind!=='readonly'||candidate!==readCandidate||(c.restorePreview&&candidate.action!=='restore'))throw new Fault('stale_view');
     const actual=await store.read();if(!sameAuthority(candidate.expected,actual))invalidateAuthority();
-    const checked=await decodeStateJson(candidate.raw),handle=await replayReadonlyState(checked.value);await checkReplayEnvironment(handle);
+    const handle=await readState(candidate.raw);await checkReplayEnvironment(handle);
     const hint={kind:'untrusted-recovery-hint' as const,version:1 as const,submissionKey:opaqueIdentifier(),baseAuthoritySha256:await backupDigest(actual),candidateStateSha256:await backupDigest(handle.state),candidateRawSha256:await backupRawDigest(candidate.raw)};
     await finish(c);registry.revokeKinds(['preview']);return {preview:readonlyPreview(candidate,c.draft as DraftToken|undefined),recoveryHint:hint};
    }
