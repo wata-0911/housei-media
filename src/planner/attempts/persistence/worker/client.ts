@@ -33,8 +33,8 @@ export function createControllerWorkerClient(factory:()=>WorkerPort=()=>new Work
  async function transport(raw:string){if(raw.length<=Math.floor(RAW_LIMIT/3))return;let bytes=0;for(let i=0;i<raw.length;){if(closed)throw new Fault('closed');const end=Math.min(raw.length,i+65536);for(;i<end;i++){const u=raw.charCodeAt(i);if(u<=127)bytes++;else if(u<=2047)bytes+=2;else if(u>=0xd800&&u<=0xdbff&&raw.charCodeAt(i+1)>=0xdc00&&raw.charCodeAt(i+1)<=0xdfff){bytes+=4;i++;}else bytes+=3;}if(bytes>RAW_LIMIT)throw new Fault('resource_limit');if(i<raw.length)await new Promise<void>(resolve=>setTimeout(resolve,0));}}
  let uploading=false;
  async function call<T extends Result>(op:Operation,input:unknown={},options:Options={}):Promise<T>{
-  if(closed)throw new Fault('closed');const r=dataRecord(input),hasRaw=op==='inspectLegacyRaw'||op==='inspectBackupRaw';
-  const fields:Record<Operation,string[]>={startSession:[],openCommitted:[],inspectLegacyRaw:['raw'],inspectBackupRaw:['raw'],prepareMigration:['migration'],prepareSave:['draft','restorePreview'],readPage:['kind','cursor'],release:['token'],prepareNewPlan:[],prepareEdits:['draft','intents'],proposeDate:['date','newDate'],confirmDate:['correction','confirmed']};
+  if(closed)throw new Fault('closed');const r=dataRecord(input),hasRaw=op==='inspectLegacyRaw'||op==='inspectBackupRaw'||op==='inspectAttemptRaw';
+  const fields:Record<Operation,string[]>={startSession:[],openCommitted:[],inspectLegacyRaw:['raw'],inspectBackupRaw:['raw'],inspectAttemptRaw:['raw'],prepareMigration:['migration'],prepareSave:['draft','restorePreview'],readPage:['kind','cursor'],release:['token'],prepareNewPlan:[],prepareEdits:['draft','intents'],proposeDate:['date','newDate'],confirmDate:['correction','confirmed']};
   keys(r,op==='startSession'?[]:['session','expectedView'],fields[op]);
   let raw:string|undefined;if(hasRaw){if(typeof r.raw!=='string')throw new Fault('invalid_input');raw=r.raw;if(raw.length>RAW_LIMIT)throw new Fault('resource_limit');delete r.raw;}
   const requestId=++sequence,c=validateControl({...r,version:1,boot,requestId,op});const header=JSON.stringify(c);if(header.length>(op==='prepareEdits'?EDIT_CONTROL_LIMIT:CONTROL_LIMIT))throw new Fault('resource_limit');
@@ -63,6 +63,7 @@ export function createControllerWorkerClient(factory:()=>WorkerPort=()=>new Work
   openCommitted:(g:Guard,o?:Options)=>call<StateView|null>('openCommitted',g,o),
   inspectLegacyRaw:(g:Guard&{raw:string},o?:Options)=>call<InspectionDTO>('inspectLegacyRaw',g,o),
   inspectBackupRaw:(g:Guard&{raw:string},o?:Options)=>call<InspectionDTO>('inspectBackupRaw',g,o),
+  inspectAttemptRaw:(g:Guard&{raw:string},o?:Options)=>call<InspectionDTO>('inspectAttemptRaw',g,o),
   prepareNewPlan:(g:Guard,o?:Options)=>call<PreviewDTO>('prepareNewPlan',g,o),
   prepareEdits:(g:Guard&{draft:DraftToken;intents:readonly EditIntent[]},o?:Options)=>call<StateView>('prepareEdits',g,o),
   proposeDate:(g:Guard&{date:RowToken;newDate:string|null},o?:Options)=>call<CorrectionDTO>('proposeDate',g,o),
