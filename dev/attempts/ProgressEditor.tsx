@@ -10,10 +10,20 @@ type Progress = Exclude<AttemptOwnedRecord, { kind: 'todo' }>;
 export function ProgressEditor({ record, submit, identities }: { identities: WorkbenchIdentities; record: Progress; submit: (command: Command) => boolean }) {
   const { newOperationId } = identities;
   const [draft, setDraft] = useState(record), [error, setError] = useState('');
+  const updateAssessment = (index: number, patch: Partial<Extract<Progress, { kind: 'media' }>['payload']['assessments'][number]>) => {
+    setDraft(previous => previous.kind === 'media' ? { ...previous, payload: { ...previous.payload,
+      assessments: previous.payload.assessments.map((a, i) => i === index ? { ...a, ...patch } : a) } } : previous);
+  };
   const title = record.kind === 'media' ? 'メディア進捗' : record.kind === 'correspondence' ? '通信進捗' : '科目評価';
   const grade = (data: FormData, name: string) => nullableText(data, name) as Extract<Progress, { kind: 'evaluation' }>['payload']['finalGrade'];
   return <form aria-label={title} className="space-y-3 rounded border border-slate-300 p-3" onKeyDown={preventImeSubmit} onSubmit={e => {
     e.preventDefault();
+    const retry = () => {
+      if (draft.kind !== 'media' || record.kind !== 'media') return;
+      const previous = new Set(record.payload.assessments.map(a => a.id));
+      setDraft({ ...draft, payload: { ...draft.payload, assessments: draft.payload.assessments.map(a => previous.has(a.id) ? a : { ...a, id: identities.newAssessmentId() }) } });
+    };
+    let submitted = false;
     try {
       const data = new FormData(e.currentTarget);
       let payload: Progress['payload'];
@@ -30,12 +40,13 @@ export function ProgressEditor({ record, submit, identities }: { identities: Wor
         ...(text(data, 'batch') ? { calligraphyBatchStatus: text(data, 'batch') as 'not_submitted' | 'grading' | 'passed' } : {}),
       };
       else payload = { finalGrade: grade(data, 'finalGrade'), reportGrade: grade(data, 'reportGrade'), schoolingGrade: grade(data, 'schoolingGrade') };
-      if (submit({ kind: 'edit_payload', operationId: newOperationId(), recordId: record.id, payload })) setError('');
-      else if (draft.kind === 'media' && record.kind === 'media') {
-        const previous = new Set(record.payload.assessments.map(a => a.id));
-        setDraft({ ...draft, payload: { ...draft.payload, assessments: draft.payload.assessments.map(a => previous.has(a.id) ? a : { ...a, id: identities.newAssessmentId() }) } });
-      }
-    } catch (err) { setError(String(err)); }
+      const command: Command = { kind: 'edit_payload', operationId: newOperationId(), recordId: record.id, payload };
+      submitted = true;
+      if (submit(command)) setError(''); else retry();
+    } catch (err) {
+      if (submitted) { try { retry(); } catch (allocationError) { setError(String(allocationError)); return; } }
+      setError(String(err));
+    }
   }}>
     <h4 className="font-semibold">{title}</h4>
     {draft.kind === 'media' && <>
@@ -45,11 +56,11 @@ export function ProgressEditor({ record, submit, identities }: { identities: Wor
         <label><input type="checkbox" name={`test-${i}`} defaultChecked={l.testCompleted} /> テスト 第{l.lesson}回</label>
       </fieldset>)}
       <button className={buttonClass} type="button" onClick={() => setDraft({ ...draft, payload: { ...draft.payload, lessons: [...draft.payload.lessons, { lesson: Math.max(0, ...draft.payload.lessons.map(l => l.lesson)) + 1, videoCompleted: false, testCompleted: false }] } })}>動画・テスト回を追加</button>
-      {draft.payload.assessments.map((a, i) => <fieldset key={a.id} className="grid gap-2 rounded border p-2 sm:grid-cols-2"><legend>試験 {i + 1}</legend>
-        <Field label={`試験種別 ${i + 1}`}><select className={inputClass} name={`type-${i}`} defaultValue={a.type}><option value="midterm">中間</option><option value="final">期末</option><option value="other">その他</option></select></Field>
-        <Field label={`試験名 ${i + 1}`}><input className={inputClass} name={`label-${i}`} defaultValue={a.label} /></Field>
-        <Field label={`予定日 ${i + 1}（YYYY-MM-DD・空欄=null）`}><input className={inputClass} name={`date-${i}`} defaultValue={a.scheduledDate ?? ''} placeholder="2027-02-28" /></Field>
-        <label className="self-center"><input type="checkbox" name={`complete-${i}`} defaultChecked={a.completed} /> 試験完了 {i + 1}</label>
+      {draft.payload.assessments.map((a, i) => <fieldset key={i} className="grid gap-2 rounded border p-2 sm:grid-cols-2"><legend>試験 {i + 1}</legend>
+        <Field label={`試験種別 ${i + 1}`}><select className={inputClass} name={`type-${i}`} value={a.type} onChange={e => updateAssessment(i, { type: e.target.value as typeof a.type })}><option value="midterm">中間</option><option value="final">期末</option><option value="other">その他</option></select></Field>
+        <Field label={`試験名 ${i + 1}`}><input className={inputClass} name={`label-${i}`} value={a.label} onChange={e => updateAssessment(i, { label: e.target.value })} /></Field>
+        <Field label={`予定日 ${i + 1}（YYYY-MM-DD・空欄=null）`}><input className={inputClass} name={`date-${i}`} value={a.scheduledDate ?? ''} onChange={e => updateAssessment(i, { scheduledDate: e.target.value || null })} placeholder="2027-02-28" /></Field>
+        <label className="self-center"><input type="checkbox" name={`complete-${i}`} checked={a.completed} onChange={e => updateAssessment(i, { completed: e.target.checked })} /> 試験完了 {i + 1}</label>
         <p className="break-all text-xs text-slate-500 sm:col-span-2">assessment ID: {a.id}</p>
       </fieldset>)}
       <button type="button" className={buttonClass} onClick={() => setDraft({ ...draft, payload: { ...draft.payload, assessments: [...draft.payload.assessments, { id: identities.newAssessmentId(), type: 'other', label: '', scheduledDate: null, completed: false }] } })}>試験を追加</button>

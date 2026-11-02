@@ -1,4 +1,5 @@
 import { createAttemptPersistence, type PersistenceHandle, type PersistencePreview } from './controller';
+import { decodeAuthorityJson } from './contractDecoders';
 import { replayState } from './codec';
 import { createWorkbenchIdentityOwner } from '../workbench/sessionIdentities';
 import type { Command, Workspace } from '../workbench/operations';
@@ -10,19 +11,28 @@ export function createSynchronousAttemptSession(...args: [Parameters<typeof crea
   const [store, locks, environment, maxBytes] = args;
   const live = new WeakMap<PersistenceHandle, Workspace>();
   let active: PersistenceHandle | undefined;
-  let observed: string[] = [];
   let checkingHandle: PersistenceHandle | undefined;
   const owner = createWorkbenchIdentityOwner(() => {
     if (!active || !live.has(active)) throw new Error('unverified_identity_handle');
     return [active.source, active.state, live.get(active)];
   }, () => active);
   const controller = createAttemptPersistence({
-    async read() { const record = await store.read(); observed = [...record.issuedIds]; return record; },
+    async read() {
+      // Capture and validate THIS read before importing restrictions. Concurrent
+      // operations may finish in any order; none can replace another's snapshot.
+      const snapshot = structuredClone(await store.read());
+      const checked = await decodeAuthorityJson(JSON.stringify(snapshot));
+      if (checked.authorityKind !== 'legacy') throw new Error('unsupported_authority_version');
+      owner.restrict(checked.value.issuedIds);
+      // This is only a monotonic restriction, never a handle/save qualification.
+      // The controller still performs its own source/environment and trust checks.
+      return checked.value;
+    },
     commit: (expected, next) => store.commit(expected, next),
   }, locks, environment, maxBytes, { issued: id => owner.restrict([id]), reserved: () => owner.reservations(), beforeCommand: (workspace, command) => owner.check(workspace, command, checkingHandle) });
   async function handle(h: PersistenceHandle) {
     const replay = await replayState(h.state);
-    owner.restrict(observed); owner.restrict(replay.requiredReservations); live.set(h, h.workspace); return h;
+    owner.restrict(replay.requiredReservations); live.set(h, h.workspace); return h;
   }
   async function preview(p: PersistencePreview) { await handle(p.handle); return p; }
   return { ...controller,
