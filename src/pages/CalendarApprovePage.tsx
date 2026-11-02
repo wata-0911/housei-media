@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import liff from '@line/liff';
 
 type AuthState =
@@ -10,6 +10,24 @@ type AuthState =
     | { status: 'auth_error'; message: string }
     | { status: 'api_error'; message: string }
     | { status: 'error'; message: string };
+
+type DraftState =
+    | { status: 'idle' | 'loading' }
+    | { status: 'ready'; url: string; yearMonth: string; generatedAt: string }
+    | { status: 'error'; message: string };
+
+const authErrorMessages: Record<string, string> = {
+    auth_server_config: '認証サーバーの設定が不足しています。',
+    auth_invalid_request: '認証リクエストが不正です。再ログインしてください。',
+    line_token_invalid: 'LINE認証情報が無効または期限切れです。再ログインしてください。',
+    line_nonmember: '承認用グループへの所属を確認できません。',
+    line_verification_unavailable: 'LINE認証サービスを確認できませんでした。時間をおいて再度お試しください。',
+    line_membership_unavailable: 'LINEグループへの所属を確認できませんでした。時間をおいて再度お試しください。',
+};
+
+function authErrorMessage(code: unknown): string | undefined {
+    return typeof code === 'string' && Object.hasOwn(authErrorMessages, code) ? authErrorMessages[code] : undefined;
+}
 
 let initPromise: Promise<void> | null = null;
 
@@ -28,6 +46,9 @@ export default function CalendarApprovePage() {
         status: 'loading',
     });
 
+    const previewUrlRef = useRef<string | null>(null);
+    const [draft, setDraft] = useState<DraftState>({ status: 'idle' });
+
     useEffect(() => {
         const meta = document.createElement('meta');
         meta.name = 'robots';
@@ -41,6 +62,59 @@ export default function CalendarApprovePage() {
     useEffect(() => {
         let cancelled = false;
         const controller = new AbortController();
+        let previewUrl: string | null = null;
+
+        async function loadDraft(idToken: string) {
+            setDraft({ status: 'loading' });
+            try {
+                const response = await fetch('/api/calendar-draft', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idToken }),
+                    cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
+                });
+                if (cancelled) return;
+                if (!response.ok) {
+                    const messages: Record<number, string> = {
+                        400: '認証リクエストが不正です。再ログインしてください。',
+                        401: 'LINE認証情報が無効または期限切れです。再ログインしてください。',
+                        403: '承認用グループへの所属を確認できません。',
+                        404: '表示できる下書きはまだありません。',
+                        503: '下書き取得サーバーの設定が不足しています。',
+                        504: '下書き取得がタイムアウトしました。',
+                    };
+                    const data: unknown = await response.json().catch(() => null);
+                    if (cancelled) return;
+                    const code = data && typeof data === 'object' && 'code' in data ? data.code : null;
+                    const message = authErrorMessage(code) || (code === 'draft_bridge_auth'
+                        ? '下書き取得先の認証設定を確認してください。'
+                        : code === 'draft_invalid_response'
+                            ? '有効なカレンダー画像と日時情報を取得できませんでした。'
+                            : code === 'draft_upstream'
+                                ? '下書き取得先でエラーが発生しました。'
+                                : messages[response.status] || '下書き取得サーバーまたはLINE APIでエラーが発生しました。');
+                    setDraft({ status: 'error', message });
+                    return;
+                }
+                const yearMonth = response.headers.get('X-Calendar-Year-Month');
+                const generatedAt = response.headers.get('X-Calendar-Generated-At');
+                if (response.headers.get('Content-Type') !== 'image/png' ||
+                    !yearMonth || !/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth) ||
+                    generatedAt === null || (generatedAt !== '' &&
+                        (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(generatedAt) || !Number.isFinite(Date.parse(generatedAt))))) {
+                    throw new Error('Invalid preview response');
+                }
+                const blob = await response.blob();
+                if (cancelled) return;
+                if (!blob.size || blob.size > 2_621_440) throw new Error('Invalid preview size');
+                previewUrl = URL.createObjectURL(blob);
+                previewUrlRef.current = previewUrl;
+                setDraft({ status: 'ready', url: previewUrl, yearMonth, generatedAt });
+            } catch {
+                if (cancelled || controller.signal.aborted) return;
+                setDraft({ status: 'error', message: 'カレンダー画像を取得できませんでした。通信環境を確認してください。' });
+            }
+        }
 
         async function initialize() {
             try {
@@ -110,6 +184,7 @@ export default function CalendarApprovePage() {
                                 status: 'authorized',
                                 displayName,
                             });
+                            await loadDraft(idToken);
                         } else {
                             setAuth({
                                 status: 'api_error',
@@ -120,6 +195,11 @@ export default function CalendarApprovePage() {
 
                         return;
                     }
+
+                    const errorData: unknown = await response.json().catch(() => null);
+                    if (cancelled) return;
+                    const errorCode = errorData && typeof errorData === 'object' && 'code' in errorData ? errorData.code : null;
+                    const errorMessage = authErrorMessage(errorCode);
 
                     if (response.status === 403) {
                         setAuth({
@@ -134,7 +214,7 @@ export default function CalendarApprovePage() {
                         setAuth({
                             status: 'auth_error',
                             message:
-                                'LINE認証情報が無効または期限切れです。再ログインしてください。',
+                                errorMessage || 'LINE認証情報が無効または期限切れです。再ログインしてください。',
                         });
                         return;
                     }
@@ -143,7 +223,7 @@ export default function CalendarApprovePage() {
                         setAuth({
                             status: 'auth_error',
                             message:
-                                '認証リクエストが不正です。設定を確認してください。',
+                                errorMessage || '認証リクエストが不正です。設定を確認してください。',
                         });
                         return;
                     }
@@ -151,7 +231,9 @@ export default function CalendarApprovePage() {
                     setAuth({
                         status: 'api_error',
                         message:
-                            `認証サーバーまたはLINE APIでエラーが発生しました（HTTP ${response.status}）。`,
+                            errorMessage || (response.status === 503
+                                ? '認証サーバーの設定が不足しています。'
+                                : `認証サーバーまたはLINE APIでエラーが発生しました（HTTP ${response.status}）。`),
                     });
                 } catch {
                     if (cancelled || controller.signal.aborted) {
@@ -180,6 +262,10 @@ export default function CalendarApprovePage() {
         return () => {
             cancelled = true;
             controller.abort();
+            if (previewUrl && previewUrlRef.current === previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+                previewUrlRef.current = null;
+            }
         };
     }, []);
 
@@ -274,21 +360,33 @@ export default function CalendarApprovePage() {
 
 
                     <p className="mb-4 text-sm text-amber-700">
-                        現在は認証確認フェーズです。
+                        下書きの確認専用です。承認・修正依頼・配信はまだ行えません。
                     </p>
-                    <p className="mb-4 text-sm text-gray-500">
-                        対象月：未取得
+                    <p className="mb-2 text-sm text-gray-500">
+                        対象月：{draft.status === 'ready' ? draft.yearMonth : '未取得'}
                     </p>
-
-                    <div className="mb-6 flex aspect-video items-center justify-center rounded-lg border border-dashed bg-gray-50">
-                        <p className="text-sm text-gray-500">
-                            権限確認後にカレンダー画像を表示します
+                    {draft.status === 'ready' && (
+                        <p className="mb-4 text-sm text-gray-500">
+                            生成日時：{draft.generatedAt
+                                ? <time dateTime={draft.generatedAt}>{draft.generatedAt}</time>
+                                : '不明'}
                         </p>
+                    )}
+                    <div className="mb-6 rounded-lg border bg-gray-50 p-2" aria-busy={draft.status === 'loading'}>
+                        {draft.status === 'ready' ? (
+                            <img src={draft.url} alt={`${draft.yearMonth} カレンダー下書き`} className="h-auto w-full rounded" onError={() => {
+                                if (previewUrlRef.current !== draft.url) return;
+                                URL.revokeObjectURL(draft.url);
+                                previewUrlRef.current = null;
+                                setDraft({ status: 'error', message: 'カレンダー画像を表示できませんでした。' });
+                            }} />
+                        ) : (
+                            <p className="py-12 text-center text-sm text-gray-500" role={draft.status === 'error' ? 'alert' : 'status'}>
+                                {draft.status === 'loading' ? 'カレンダー画像を取得中...' :
+                                    draft.status === 'error' ? draft.message : '権限確認後にカレンダー画像を表示します'}
+                            </p>
+                        )}
                     </div>
-
-                    <p className="mb-4 text-sm text-amber-700">
-                        グループ所属確認が完了するまで承認できません。
-                    </p>
 
                     <div className="grid grid-cols-2 gap-4">
                         <button
