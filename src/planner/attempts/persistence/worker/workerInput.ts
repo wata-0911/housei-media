@@ -202,6 +202,9 @@ export function preflight(raw:unknown,kind:ProfileName,profile:InputProfile=INPU
   const state=kind==='backup'?object(root.state):root, history=object(state.history),graph=object(state.graph);
   if(![23,24].includes(state.schemaVersion as number)||!Array.isArray(history.commands)||!['attempts','ownedRecords','removals'].every(k=>Array.isArray(graph[k])))throw new WorkerInputError('state_shape');
   commands=history.commands.length;checkBudget(profile,'commands',commands);
+  // Existing reservation ceiling also applies to the newly admitted rule2
+  // history; the raw/structure/work gates still run.
+  for(const value of [history.issuedIds,history.usedTodoIds])if(value!==undefined){if(!Array.isArray(value))throw new WorkerInputError('state_shape');checkBudget(profile,'reservedIds',value.length);}
   owners=(graph.ownedRecords as unknown[]).length+history.commands.filter(c=>object(c).kind==='add_record').length;
   if(state.schemaVersion===23){if(!Array.isArray(state.corrections))throw new WorkerInputError('state_shape');corrections=state.corrections.length;checkBudget(profile,'corrections',corrections);embedded(object(state.source).raw);for(const c of state.corrections){const x=object(c);embedded(x.originalRaw);embedded(x.proposedRaw);}}
  }

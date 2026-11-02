@@ -1,4 +1,6 @@
 import type {PersistenceHandle} from '../controller';
+import type {ReadHandle} from './versionedRead';
+type DisplayHandle=PersistenceHandle|ReadHandle;
 import type {Diagnostic} from '../../migration/contracts';
 import type {MigrationSession} from '../../workbench/migrationSession';
 import {heldDates} from '../../workbench/migrationSession';
@@ -8,14 +10,14 @@ import type {DisplayRow,PageKind,SnapshotDTO} from './contracts';
 import {ControllerWorkerError as Fault} from './contracts';
 import type {EditRow} from './editBridge';
 import {Registry} from './registry';
-export function snapshot(handle:PersistenceHandle):SnapshotDTO {
+export function snapshot(handle:DisplayHandle):SnapshotDTO {
  const {state,workspace,source}=handle, records=workspace.graph.ownedRecords;
  return Object.freeze({schemaVersion:state.schemaVersion,sourceKind:source.kind,active:workspace.graph.attempts.filter(a=>a.membership.kind==='active').length,
  detached:workspace.graph.attempts.filter(a=>a.membership.kind==='detached').length,ownedRecords:records.length,receipts:workspace.receipts.length,
  reservationCount:state.history.issuedIds.length,officialAchievementCount:state.retained.importedCourseAchievements.length,
  applicability:'unknown',graduationCheckComplete:false,sourceLinksReverified:false});
 }
-export type PageSource={handle?:PersistenceHandle;diagnostics:readonly Diagnostic[];migration?:MigrationSession};
+export type PageSource={handle?:DisplayHandle;diagnostics:readonly Diagnostic[];migration?:MigrationSession;readonly?:boolean};
 // Purpose-bound references are private; no raw/source/IDs are serialized.
 export function displayRows(source:PageSource,kind:PageKind,offset:number,registry:Registry,replacingCursor=false):{rows:DisplayRow[];total:number;next:number|null}{
  const h=source.handle;let data:readonly unknown[];
@@ -37,7 +39,7 @@ export function displayRows(source:PageSource,kind:PageKind,offset:number,regist
   if(kind==='diagnostics'){
    const safe=['unsupported_state_version','invalid_json','invalid_date','invalid_state','unsupported_backup','protection_not_migratable'];text=safe.includes(v.code as string)?v.code as string:'input_diagnostic';
   }
-  if(purpose){privateValue={purpose,value:privateValue,...(kind==='assessments'?{recordId:v.recordId as string}:{})} satisfies EditRow;ops=['prepareEdits'];}
+  if(purpose){privateValue={purpose,value:privateValue,...(kind==='assessments'?{recordId:v.recordId as string}:{})} satisfies EditRow;ops=source.readonly?['display']:['prepareEdits'];}
   return Object.freeze({row:registry.mint('row',privateValue,ops),kind:rowKind,excerpt:text.slice(0,64),fullLength:text.length,quantity});
  });
  const next=offset+rows.length;return {rows,total:data.length,next:next<data.length?next:null};
