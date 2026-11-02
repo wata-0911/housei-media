@@ -7,7 +7,7 @@ import { applyCommand, type Command, type Workspace } from '../workbench/operati
 import { createWorkbenchIdentityOwner } from '../workbench/sessionIdentities';
 import { replayState, replayStateRule2, encodeStateRule2 } from './codec';
 import { assertCoverageContinuation, decodeAuthorityJson, decodeBackupJson } from './contractDecoders';
-import { type AtomicAttemptStore, type AuthorityRecord, type AttemptState, type AttemptStateRule2, type PersistenceSource } from './contracts';
+import { exactKeys, type AtomicAttemptStore, type AuthorityRecord, type AttemptState, type AttemptStateRule2, type PersistenceSource } from './contracts';
 import { catalogUuids, idTail, referencedUuids, unionReservations } from './identity';
 import { type ReservationCoverage, type AuthorityV2, AUTHORITY_FORMAT, AUTHORITY_VERSION } from './versionedContracts';
 import { previewLegacyRule2Migration } from './legacyPreview';
@@ -46,14 +46,15 @@ export function createPersistentAttemptSession(store: AtomicAttemptStore, locks:
   const proposals = new WeakMap<PersistentPreview, Proposal>();
   const inspections = new WeakMap<BackupInspection, { expected: Host; decoded: Awaited<ReturnType<typeof decodeBackupJson>> }>();
   const committing = new WeakSet<PersistentPreview>();
-  let active: PersistentHandle | undefined, environmentTask: Promise<Environment> | undefined;
+  let active: PersistentHandle | undefined;
   const owner = createWorkbenchIdentityOwner(() => active ? [active.source, active.state, live.get(active)] : [], () => active);
   async function validateEnvironment(replay: Awaited<ReturnType<typeof replayState>> | Rule2Replay) {
     if ('environment' in replay) {
       if (!environmentInput) throw new Error('migration_environment_required');
-      const environment = typeof environmentInput === 'function' ? await (environmentTask ??= environmentInput()) : environmentInput;
-      if (!sameAttemptData(replay.environment.target, environment.target) || !sameAttemptData(replay.environment.rawFiles, environment.rawFiles)
-        || !sameAttemptData(replay.environment.catalog, environment.catalog)) throw new Error('target_catalog_changed');
+      // Dynamic providers are sampled afresh at every validation, including
+      // after Lock acquisition and immediately before the atomic store call.
+      const environment = typeof environmentInput === 'function' ? await environmentInput() : environmentInput;
+      if (!sameAttemptData(replay.environment, environment)) throw new Error('target_catalog_changed');
     }
     return replay;
   }
@@ -61,8 +62,17 @@ export function createPersistentAttemptSession(store: AtomicAttemptStore, locks:
   async function read(): Promise<Host> {
     // Snapshot before awaiting validation; restrictions only accumulate after a
     // complete validation of THIS read. Rescue never passes through this path.
-    const snapshot = structuredClone(await store.read());
+    const original: unknown = await store.read();
+    // This comparator inspects descriptors recursively without invoking getters.
+    // Validate BEFORE structuredClone/JSON can discard or normalize information.
+    if (!sameAuthoritySnapshot(original, original)) throw new Error('authority_record_invalid');
+    const versioned = original !== null && typeof original === 'object'
+      && ['format', 'authorityVersion', 'reservationCoverage'].some(key => Object.hasOwn(original, key));
+    exactKeys(original, ['raw', 'revision', 'committed', 'issuedIds', ...(versioned ? ['format', 'authorityVersion', 'reservationCoverage'] : [])], 'authority');
+    if (versioned) exactKeys(original.reservationCoverage, ['policyVersion', 'kind', 'baselineStateSha256'], 'reservation_coverage');
+    const snapshot = structuredClone(original);
     const checked = await decodeAuthorityJson(JSON.stringify(snapshot));
+    if (!sameAuthoritySnapshot(snapshot, checked.value)) throw new Error('authority_record_invalid');
     if (checked.value.raw !== null) {
       const state = parseMigrationJson(checked.value.raw);
       await validateEnvironment(checked.authorityKind === 'v2' ? await replayStateRule2(state) : await replayState(state));
@@ -223,6 +233,9 @@ export function createPersistentAttemptSession(store: AtomicAttemptStore, locks:
           issuedIds: unionReservations(current.issuedIds, r.requiredReservations, saved.reserved, owner.reservations()) };
         await decodeAuthorityJson(JSON.stringify(next));
         if (bytes(JSON.stringify(next)) > maxRecordBytes) throw new Error('capacity_limit');
+        // Last external-environment sample: after full candidate validation and
+        // while holding the common Lock, before store.commit can perform a put.
+        await validateEnvironment(r);
         await store.commit(current, next);
         // Success is only published after atomic completion AND strict reread.
         // Failure here is unknown, never a rollback or automatic retry.
