@@ -13,7 +13,7 @@ function download(name: string, raw: string) {
 export function AuthorityV2Page() {
   const [api, setApi] = useState<Controller | null>(null), [loaded, setLoaded] = useState<PersistentHandle | null>(null);
   const [proposed, setProposed] = useState<PersistentPreview | null>(null), [inspection, setInspection] = useState<BackupInspection | null>(null);
-  const [error, setError] = useState(''), [notice, setNotice] = useState('読込中'), [busy, setBusy] = useState(false);
+  const [error, setError] = useState(''), [notice, setNotice] = useState('読込中'), [busy, setBusy] = useState(true);
   const [protectedFile, setProtectedFile] = useState(false), [confirmed, setConfirmed] = useState(false), [adopted, setAdopted] = useState(false);
   const [epoch, setEpoch] = useState(0), [diagnostic, setDiagnostic] = useState('');
   const commands = useRef<Command[]>([]);
@@ -22,7 +22,8 @@ export function AuthorityV2Page() {
     const controller = createPersistentAttemptSession(createIndexedDbAttemptStore(indexedDB), navigator.locks, loadMigrationEnvironment);
     setApi(controller);
     void controller.load().then(h => { if (alive) { setLoaded(h); setNotice(h ? '確定保存を再読込しました' : '隔離hostは空です'); } })
-      .catch(e => { if (alive) { setError(`再読込拒否: ${String(e)}`); setNotice('原文保護を利用できます'); } });
+      .catch(e => { if (alive) { setError(`再読込拒否: ${String(e)}`); setNotice('原文保護を利用できます'); } })
+      .finally(() => { if (alive) setBusy(false); });
     return () => { alive = false; };
   }, []);
   async function run(action: () => Promise<void>) {

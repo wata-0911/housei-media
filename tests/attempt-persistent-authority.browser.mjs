@@ -12,10 +12,11 @@ before(async()=>{
  const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});console.log('Chromium '+browser.version());
 });
 after(async()=>{await browser?.close();server?.kill('SIGTERM');});
-async function open(t){const context=await browser.newContext({acceptDownloads:true});
+async function open(t,holdInitialRead=false){const context=await browser.newContext({acceptDownloads:true});
  await context.addInitScript(()=>{window.legacyCalls=0;for(const name of ['getItem','setItem','removeItem','clear'])Storage.prototype[name]=function(){window.legacyCalls++;throw Error('legacy forbidden');};
   window.puts=[];const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...a){window.puts.push(this.transaction.mode);if(window.failure==='quota')throw new DOMException('full','QuotaExceededError');const request=put.apply(this,a);if(window.failure==='abort')this.transaction.abort();return request;};});
- const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/__dev/persistence-v2');await page.getByRole('status').filter({hasText:'隔離hostは空です'}).waitFor();
+ if(holdInitialRead)await context.addInitScript(()=>{const databases=IDBFactory.prototype.databases;const gate=new Promise(resolve=>window.releaseInitialRead=resolve);IDBFactory.prototype.databases=async function(){await gate;return databases.call(this);};});
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/__dev/persistence-v2');if(!holdInitialRead)await page.getByRole('status').filter({hasText:'隔離hostは空です'}).waitFor();
  t.after(async()=>{try{assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>window.legacyCalls),0);}finally{await context.close();}});return {page,context};}
 async function modules(page){await page.evaluate(async(writerPath)=>{const {createPersistentAttemptSession}=await import('/src/planner/attempts/persistence/persistentSession.ts');const {createIndexedDbAttemptStore}=await import(writerPath);window.store=createIndexedDbAttemptStore(indexedDB);window.factory=(...args)=>createPersistentAttemptSession(window.store,args.length?args[0]:navigator.locks);window.api=window.factory();},process.env.PR4_WRITER_MODULE||'/src/planner/attempts/persistence/indexedDb.ts');}
 async function saveUI(page){const wait=page.waitForEvent('download');await page.getByRole('button',{name:'置換前authority・source・選択原文を保護'}).click();await wait;const adoption=page.getByLabel('発行者未認証の選択ファイルを復旧元として採用する');if(await adoption.count())await adoption.check();await page.getByLabel('保護ファイルと差分を確認し、全件置換を確定する').check();await page.getByRole('button',{name:'確認してv2保存'}).click();await page.getByRole('status').filter({hasText:'隔離保存と正規再読込が完了'}).waitFor({timeout:120000});}
@@ -88,4 +89,8 @@ test('native portable v4 adoption into a separate empty BrowserContext: inspect 
  await page.getByRole('button',{name:'選択ファイルを復元preview'}).click();await page.getByText(/操作: restore/).waitFor();assert.equal(await page.getByRole('button',{name:'確認してv2保存'}).isDisabled(),true);await saveUI(page);assert.deepEqual(await page.evaluate(()=>window.puts),['versionchange']);
  await page.reload();await page.getByRole('status').filter({hasText:'再読込'}).waitFor();await modules(page);const result=await page.evaluate(async id=>{const h=await api.load(),record=await store.read(),original=crypto.randomUUID;crypto.randomUUID=()=>id;let error='';try{api.identities(h).newOperationId();}catch(e){error=String(e);}finally{crypto.randomUUID=original;}return {state:h.state,ids:record.issuedIds,error};},backup.abandoned);
  assert.deepEqual(result.state,backup.state);assert.ok(result.ids.includes(backup.abandoned));assert.match(result.error,/allocator_exhausted/);
+});
+
+test('startup: actions wait for the initial host read so a late load cannot replace a newer saved display',async t=>{
+ const {page}=await open(t,true);await page.waitForFunction(()=>typeof window.releaseInitialRead==='function');assert.equal(await page.getByRole('button',{name:'native-v2 新規計画preview'}).isDisabled(),true);await page.evaluate(()=>window.releaseInitialRead());await page.getByRole('status').filter({hasText:'隔離hostは空です'}).waitFor();assert.equal(await page.getByRole('button',{name:'native-v2 新規計画preview'}).isDisabled(),false);
 });
