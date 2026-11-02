@@ -15,6 +15,11 @@ export default defineConfig(({ command, mode }) => {
           try { for (let i = 0; i < 3; i++) { const decoded = decodeURIComponent(path); if (decoded === path) break; path = decoded; } }
           catch { res.statusCode = 404; res.end('Not found'); return; }
           path = posix.normalize(path);
+          if (path === '/__dev/persistence-v2' || path === '/__dev/persistence-v2/') {
+            if (!persistence) { res.statusCode = 404; res.end('Not found'); return; }
+            const html = await server.transformIndexHtml('/__dev/persistence-v2', '<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PR4 隔離authority v2</title></head><body><div id="root"></div><script type="module" src="/dev/persistence/v2-main.tsx"></script></body></html>');
+            res.setHeader('Content-Type', 'text/html'); res.end(html); return;
+          }
           if (path === '/__dev/persistence' || path === '/__dev/persistence/') {
             if (!persistence) { res.statusCode = 404; res.end('Not found'); return; }
             const html = await server.transformIndexHtml('/__dev/persistence', '<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YI-06 隔離保存</title></head><body><div id="root"></div><script type="module" src="/dev/persistence/main.tsx"></script></body></html>');
