@@ -1,5 +1,6 @@
 import { readIndexedDbAuthority } from './indexedDbRead';
 import { emptyAuthority, type AtomicAttemptStore, type AuthorityRecord } from './contracts';
+import { sameAuthoritySnapshot } from './authoritySnapshot';
 
 const DATABASE = 'hosei-yi06-isolated-v1';
 const STORE = 'authority';
@@ -16,9 +17,7 @@ export function createIndexedDbAttemptStore(factory: IDBFactory): AtomicAttemptS
           const get = bucket.get('current');
           get.onsuccess = () => {
             const current: AuthorityRecord = get.result ?? emptyAuthority();
-            if (current.raw !== expected.raw || current.revision !== expected.revision
-              || JSON.stringify(current.committed) !== JSON.stringify(expected.committed)
-              || JSON.stringify(current.issuedIds) !== JSON.stringify(expected.issuedIds)) {
+            if (!sameAuthoritySnapshot(current, expected)) {
               failure = new Error('stale_commit'); tx.abort(); return;
             }
             try { bucket.put(next, 'current'); }
