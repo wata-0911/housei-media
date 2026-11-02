@@ -9,6 +9,12 @@ import type { Command, Workspace } from '../workbench/operations';
  * Session burns deliberately do NOT enter its persisted authority (PR4). */
 export function createSynchronousAttemptSession(...args: [Parameters<typeof createAttemptPersistence>[0], Parameters<typeof createAttemptPersistence>[1], Parameters<typeof createAttemptPersistence>[2]?, Parameters<typeof createAttemptPersistence>[3]?]) {
   const [store, locks, environment, maxBytes] = args;
+  // Rescue reads must preserve even corrupt raw. Export only this method from
+  // a separate read-only controller; never toggle the strict adapter's policy.
+  const { protectCurrent } = createAttemptPersistence({
+    read: () => store.read(),
+    commit: async () => { throw new Error('protection_readonly'); },
+  }, undefined);
   const live = new WeakMap<PersistenceHandle, Workspace>();
   let active: PersistenceHandle | undefined;
   let checkingHandle: PersistenceHandle | undefined;
@@ -35,7 +41,7 @@ export function createSynchronousAttemptSession(...args: [Parameters<typeof crea
     owner.restrict(replay.requiredReservations); live.set(h, h.workspace); return h;
   }
   async function preview(p: PersistencePreview) { await handle(p.handle); return p; }
-  return { ...controller,
+  return { ...controller, protectCurrent,
     async load() { const h = await controller.load(); return h ? handle(h) : null; },
     async prepareNewPlan() { return preview(await controller.prepareNewPlan()); },
     async prepareMigration(...a: Parameters<typeof controller.prepareMigration>) { return preview(await controller.prepareMigration(...a)); },
