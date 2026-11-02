@@ -37,7 +37,7 @@ export function displayRows(source:PageSource,kind:PageKind,offset:number,regist
   if(kind==='dates'){text=String(v.date);privateValue={session:source.migration,date:value};ops=['proposeDate'];}
   if(kind==='official'){text=typeof v.rawName==='string'?v.rawName:'';quantity=typeof v.earnedCreditsTotal==='number'?v.earnedCreditsTotal:null;}
   if(kind==='diagnostics'){
-   const safe=['unsupported_state_version','invalid_json','invalid_date','invalid_state','unsupported_backup','protection_not_migratable'];text=safe.includes(v.code as string)?v.code as string:'input_diagnostic';
+   const safe=['unsupported_state_version','invalid_json','invalid_date','invalid_state','unsupported_backup','protection_not_migratable','rule2_prohibited_introduction','rule2_uuid_collision','rule2_evidence_insufficient'];text=safe.includes(v.code as string)?v.code as string:'input_diagnostic';
   }
   if(purpose){privateValue={purpose,value:privateValue,...(kind==='assessments'?{recordId:v.recordId as string}:{})} satisfies EditRow;ops=source.readonly?['display']:['prepareEdits'];}
   return Object.freeze({row:registry.mint('row',privateValue,ops),kind:rowKind,excerpt:text.slice(0,64),fullLength:text.length,quantity});

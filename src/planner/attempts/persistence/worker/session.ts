@@ -1,3 +1,4 @@
+import {rule2Diagnostics} from './diagnostics';
 import {readAuthoritySnapshot,isVersioned,replayReadonlyState,content,type ReadHandle} from './versionedRead';
 import {sameAuthoritySnapshot} from '../authoritySnapshot';
 import {sameAttemptData} from '../../validation';
@@ -179,10 +180,11 @@ export function createPreviewSession(read:()=>Promise<AuthorityRecord>,loadEnvir
     if('backupVersion' in decoded.value&&decoded.value.backupVersion===1&&!expected.committed.includes(await backupDigest(state)))throw new Error('backup_unknown_checkpoint');
     await finish(c);
     const coverage='reservationCoverage' in decoded.value?decoded.value.reservationCoverage:undefined;
+    const diagnostics=rule2Diagnostics(analysis?.blockers??[]);
     const meta=content(state,c.op==='inspectAttemptRaw'?'submitted-state':'unadopted-backup',coverage,analysis?(analysis.status==='held'?'held':'candidate'):'none');
-    publish({sourceEpoch:vector.sourceEpoch+1,draftRevision:vector.draftRevision+1,authorityRevision:expected.revision});authority=expected;activeDraft=undefined;activePreview=undefined;activeMigration=undefined;pages={handle,diagnostics:[],readonly:true};
+    publish({sourceEpoch:vector.sourceEpoch+1,draftRevision:vector.draftRevision+1,authorityRevision:expected.revision});authority=expected;activeDraft=undefined;activePreview=undefined;activeMigration=undefined;pages={handle,diagnostics,readonly:true};
     const candidate:ReadCandidate={kind:'readonly',handle,raw:JSON.stringify(state),expected,content:meta,action:'restore',portable:c.op==='inspectBackupRaw'&&(decoded.value as {backupVersion?:number}).backupVersion!==1};readCandidate=candidate;
-    return {view,status:analysis?.status==='held'?'held':'ready',diagnosticCount:analysis?.blockers.length??0,summary:snapshot(handle),content:meta,...(analysis?.status==='migration-candidate'?{migration:registry.mint('migration',{kind:'rule2',raw,expected} satisfies RuleMigration,['prepareMigration'])}:{}),...(c.op==='inspectBackupRaw'?{backupVersion:(decoded.value as {backupVersion:1|2|3|4}).backupVersion,evidence:((decoded.value as {backupVersion:number}).backupVersion===1?'local-witness':'portable-unadopted') as 'local-witness'|'portable-unadopted',restorePreview:registry.mint('preview',candidate,['prepareSave'])}:{})};
+    return {view,status:analysis?.status==='held'?'held':'ready',diagnosticCount:diagnostics.length,...(diagnostics.length?{diagnosticsCursor:registry.mint('cursor',{kind:'diagnostics',offset:0},['readPage'])}:{}),summary:snapshot(handle),content:meta,...(analysis?.status==='migration-candidate'?{migration:registry.mint('migration',{kind:'rule2',raw,expected} satisfies RuleMigration,['prepareMigration'])}:{}),...(c.op==='inspectBackupRaw'?{backupVersion:(decoded.value as {backupVersion:1|2|3|4}).backupVersion,evidence:((decoded.value as {backupVersion:number}).backupVersion===1?'local-witness':'portable-unadopted') as 'local-witness'|'portable-unadopted',restorePreview:registry.mint('preview',candidate,['prepareSave'])}:{})};
    }
   }
   if(c.op==='inspectLegacyRaw'||c.op==='inspectBackupRaw'){

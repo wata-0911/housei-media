@@ -9,6 +9,8 @@ const root=new URL('../',import.meta.url).pathname;
 export const allowed=new Map([
  ...['client','contracts','display','preview.worker','protocol','session','workerInput'].map(x=>['src/planner/attempts/persistence/worker/'+x+'.ts','M']),
  ['src/planner/attempts/persistence/worker/versionedRead.ts','A'],
+ ['src/planner/attempts/persistence/worker/diagnostics.ts','A'],
+ ...['attempt-worker-held-diagnostics.test.mjs','attempt-worker-held-diagnostics.browser.mjs','helpers/held-diagnostic-probe.mjs'].map(x=>['tests/'+x,'A']),
  ['docs/attempt-readonly-worker-3c0b-pr5.md','A'],
  ['scripts/verify-readonly-worker-pr5-scope.mjs','A'],
  ...['attempt-worker-versioned.test.mjs','attempt-worker-versioned.browser.mjs','attempt-worker-pr5-scope.test.mjs','helpers/worker-versioned-browser.mjs','helpers/worker-versioned-fixture.mjs'].map(x=>['tests/'+x,'A']),
