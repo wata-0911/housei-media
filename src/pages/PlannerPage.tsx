@@ -58,7 +58,7 @@ export default function PlannerPage() {
   const [notice, setNotice] = useState('');
   const [undoItem, setUndoItem] = useState<RemovedPlanEntry | null>(null);
   const [undoImport, setUndoImport] = useState<PlannerState | null>(null);
-  const [activeTab, setActiveTab] = useState<'annual' | 'media' | 'profile'>(() => location.hash === '#media' ? 'media' : 'annual');
+  const [activeTab, setActiveTab] = useState<'annual' | 'media' | 'profile'>(() => ['#media', '#media-panel'].includes(location.hash) ? 'media' : 'annual');
   const [gradeImportOpen, setGradeImportOpen] = useState(() => location.hash === '#grade-import');
   const navigationKey = `${location.key}:${location.hash}`;
   const [destinationKey, setDestinationKey] = useState(navigationKey);
@@ -69,21 +69,30 @@ export default function PlannerPage() {
   // Adjust before rendering so conditional panels/details are ready for layout.
   if (destinationKey !== navigationKey) {
     setDestinationKey(navigationKey);
-    if (location.hash === '#media') setActiveTab('media');
-    if (location.hash === '#grade-import' || !location.hash) setActiveTab('annual');
+    if (['#media', '#media-panel'].includes(location.hash)) setActiveTab('media');
+    if (['#grade-import', '#course-query', '#graduation-progress-heading', '#planned-heading'].includes(location.hash) || !location.hash) setActiveTab('annual');
     if (location.hash === '#grade-import') setGradeImportOpen(true);
   }
 
   useLayoutEffect(() => {
     if (scrolledDestinationKey.current === navigationKey) return;
     const id = location.hash === '#grade-import' ? 'grade-import'
-      : location.hash === '#media' ? 'media-panel' : !location.hash ? 'planner-start' : null;
+      : ['#media', '#media-panel'].includes(location.hash) ? 'media-panel'
+      : ['#course-query', '#graduation-progress-heading', '#planned-heading'].includes(location.hash) ? location.hash.slice(1)
+      : !location.hash ? 'planner-start' : null;
     // In particular, leave #hosei-import to the extension handoff.
     if (!id) { scrolledDestinationKey.current = navigationKey; return; }
-    const target = document.getElementById(id);
+    let target = document.getElementById(id);
+    if (!target || target.matches(':disabled')) {
+      // Missing profile-dependent sections and disabled inputs have a useful exit.
+      setNotice('このセクションは現在利用できません。プロフィール設定や保存状態を確認してください。');
+      target = document.getElementById('planner-start');
+    }
     if (!target) return;
     scrolledDestinationKey.current = navigationKey;
     // Instant navigation also respects reduced motion and cannot restart on edits.
+    target.style.scrollMarginTop = `${Math.max(160, (document.querySelector('header')?.getBoundingClientRect().height ?? 144) + 40)}px`;
+    if (!target.matches('input, button, [tabindex]')) target.tabIndex = -1;
     target.scrollIntoView({ block: 'start', behavior: 'instant' });
     target.focus({ preventScroll: true });
   }, [navigationKey, location.hash, activeTab, gradeImportOpen]);

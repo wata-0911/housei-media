@@ -110,7 +110,7 @@ test('desktop hover: disclosure uses shared white/navy and navy/orange colors in
     return { background: style.backgroundColor, color: style.color };
   });
   assert.equal(await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches), true);
-  const reference = page.getByRole('button', { name: '科目検索へ戻る', exact: true });
+  const reference = page.getByRole('navigation', { name: 'ページ移動', exact: true }).getByRole('button', { name: 'ショートカット', exact: true });
   await reference.hover();
   t.diagnostic(JSON.stringify({ referenceHover: await colors(reference) }));
   const control = toggle(page, 0);
