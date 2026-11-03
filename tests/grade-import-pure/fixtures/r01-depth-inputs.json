@@ -1,0 +1,1362 @@
+{
+  "archive": {
+    "format": "hosei-g01a-source-prototype",
+    "contractVersion": "0.1.0-prototype",
+    "policy": {
+      "id": "g01a-source-utf8-v1-prototype",
+      "dtoContract": "hosei_web_learning_grade_table/v1",
+      "normalization": "pinned-v1-allowlist",
+      "digest": "sha256/utf8-raw+canonical-sorted-keys-preserve-array-order",
+      "numericPolicy": "decimal-roundtrip-no-underflow-or-rounding"
+    },
+    "inputContract": {
+      "source": "hosei_web_learning_grade_table",
+      "schemaVersion": 1
+    },
+    "raw": "{\"schemaVersion\":1,\"source\":\"hosei_web_learning_grade_table\",\"capturedAt\":\"2026-11-03T00:00:00Z\",\"courses\":[{\"rawName\":\"独立depth反例\",\"categoryRaw\":null,\"compositionCredits\":{\"raw\":\"\",\"value\":null},\"additionalEnrollment\":{\"raw\":\"\",\"value\":null},\"recognizedExemption\":{\"raw\":\"\",\"value\":null},\"earnedCredits\":{\"raw\":\"4\",\"value\":4},\"schoolingCredits\":{\"raw\":\"\",\"value\":null},\"reports\":[{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null}],\"creditExam\":{\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"date\":null,\"credits\":null,\"grade\":null,\"pendingMarker\":false},\"schoolings\":[{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null},{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null}],\"unknown\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":0}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}]}",
+    "rawUtf8Bytes": 1504,
+    "rawSha256": "6d0e1d138c1d72c5931924305a8f37c9120c00fbe4397a6062345ce110128546",
+    "dto": {
+      "schemaVersion": 1,
+      "source": "hosei_web_learning_grade_table",
+      "capturedAt": "2026-11-03T00:00:00Z",
+      "courses": [
+        {
+          "rawName": "独立depth反例",
+          "categoryRaw": null,
+          "compositionCredits": {
+            "raw": "",
+            "value": null
+          },
+          "additionalEnrollment": {
+            "raw": "",
+            "value": null
+          },
+          "recognizedExemption": {
+            "raw": "",
+            "value": null
+          },
+          "earnedCredits": {
+            "raw": "4",
+            "value": 4
+          },
+          "schoolingCredits": {
+            "raw": "",
+            "value": null
+          },
+          "reports": [
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            },
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            },
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            },
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            }
+          ],
+          "creditExam": {
+            "rawDate": "",
+            "rawCredits": "",
+            "rawGrade": "",
+            "date": null,
+            "credits": null,
+            "grade": null,
+            "pendingMarker": false
+          },
+          "schoolings": [
+            {
+              "rawYear": "",
+              "rawTerm": "",
+              "rawDate": "",
+              "rawCredits": "",
+              "rawGrade": "",
+              "year": null,
+              "term": null,
+              "date": null,
+              "credits": null,
+              "grade": null
+            },
+            {
+              "rawYear": "",
+              "rawTerm": "",
+              "rawDate": "",
+              "rawCredits": "",
+              "rawGrade": "",
+              "year": null,
+              "term": null,
+              "date": null,
+              "credits": null,
+              "grade": null
+            }
+          ]
+        }
+      ]
+    },
+    "dtoSha256": "20b360b84068ab11bccb13d8415ac854c99aa1b3c2c1bf39785e1b8bf168e1cf",
+    "archiveSha256": "26696c2621e090ed9e484241e35bbbcebf5852a385ffd6e98e306393d6422b65"
+  },
+  "ledger": {
+    "format": "hosei-g01b-ledger-prototype",
+    "contractVersion": "0.1.0-prototype",
+    "journal": {
+      "format": "hosei-g01b-journal-prototype",
+      "contractVersion": "0.1.0-prototype",
+      "seedReservedIds": [],
+      "entries": [
+        {
+          "operation": {
+            "kind": "import_snapshot",
+            "operationId": "hosei:g01b-operation:00000000-0000-4000-8000-000000900001",
+            "expectedTipSha256": null,
+            "snapshotId": "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+            "archive": {
+              "format": "hosei-g01a-source-prototype",
+              "contractVersion": "0.1.0-prototype",
+              "policy": {
+                "id": "g01a-source-utf8-v1-prototype",
+                "dtoContract": "hosei_web_learning_grade_table/v1",
+                "normalization": "pinned-v1-allowlist",
+                "digest": "sha256/utf8-raw+canonical-sorted-keys-preserve-array-order",
+                "numericPolicy": "decimal-roundtrip-no-underflow-or-rounding"
+              },
+              "inputContract": {
+                "source": "hosei_web_learning_grade_table",
+                "schemaVersion": 1
+              },
+              "raw": "{\"schemaVersion\":1,\"source\":\"hosei_web_learning_grade_table\",\"capturedAt\":\"2026-11-03T00:00:00Z\",\"courses\":[{\"rawName\":\"独立depth反例\",\"categoryRaw\":null,\"compositionCredits\":{\"raw\":\"\",\"value\":null},\"additionalEnrollment\":{\"raw\":\"\",\"value\":null},\"recognizedExemption\":{\"raw\":\"\",\"value\":null},\"earnedCredits\":{\"raw\":\"4\",\"value\":4},\"schoolingCredits\":{\"raw\":\"\",\"value\":null},\"reports\":[{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null}],\"creditExam\":{\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"date\":null,\"credits\":null,\"grade\":null,\"pendingMarker\":false},\"schoolings\":[{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null},{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null}]}]}",
+              "rawUtf8Bytes": 952,
+              "rawSha256": "0a5ab20675f7f164b29e14a83923f4463fe218c87534728e531fd13779b86a1d",
+              "dto": {
+                "schemaVersion": 1,
+                "source": "hosei_web_learning_grade_table",
+                "capturedAt": "2026-11-03T00:00:00Z",
+                "courses": [
+                  {
+                    "rawName": "独立depth反例",
+                    "categoryRaw": null,
+                    "compositionCredits": {
+                      "raw": "",
+                      "value": null
+                    },
+                    "additionalEnrollment": {
+                      "raw": "",
+                      "value": null
+                    },
+                    "recognizedExemption": {
+                      "raw": "",
+                      "value": null
+                    },
+                    "earnedCredits": {
+                      "raw": "4",
+                      "value": 4
+                    },
+                    "schoolingCredits": {
+                      "raw": "",
+                      "value": null
+                    },
+                    "reports": [
+                      {
+                        "raw": "",
+                        "status": "none",
+                        "date": null
+                      },
+                      {
+                        "raw": "",
+                        "status": "none",
+                        "date": null
+                      },
+                      {
+                        "raw": "",
+                        "status": "none",
+                        "date": null
+                      },
+                      {
+                        "raw": "",
+                        "status": "none",
+                        "date": null
+                      }
+                    ],
+                    "creditExam": {
+                      "rawDate": "",
+                      "rawCredits": "",
+                      "rawGrade": "",
+                      "date": null,
+                      "credits": null,
+                      "grade": null,
+                      "pendingMarker": false
+                    },
+                    "schoolings": [
+                      {
+                        "rawYear": "",
+                        "rawTerm": "",
+                        "rawDate": "",
+                        "rawCredits": "",
+                        "rawGrade": "",
+                        "year": null,
+                        "term": null,
+                        "date": null,
+                        "credits": null,
+                        "grade": null
+                      },
+                      {
+                        "rawYear": "",
+                        "rawTerm": "",
+                        "rawDate": "",
+                        "rawCredits": "",
+                        "rawGrade": "",
+                        "year": null,
+                        "term": null,
+                        "date": null,
+                        "credits": null,
+                        "grade": null
+                      }
+                    ]
+                  }
+                ]
+              },
+              "dtoSha256": "20b360b84068ab11bccb13d8415ac854c99aa1b3c2c1bf39785e1b8bf168e1cf",
+              "archiveSha256": "350e8186b55cd6d994ee8df9c764c9892adf37bdb28e69eba25e7719c54c9855"
+            },
+            "rows": [
+              {
+                "observationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+                "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+                "revisionId": "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+                "previousRevisionId": null,
+                "details": [
+                  {
+                    "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+                    "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+                    "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008",
+                    "previousRevisionId": null
+                  },
+                  {
+                    "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+                    "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+                    "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b",
+                    "previousRevisionId": null
+                  },
+                  {
+                    "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+                    "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+                    "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e",
+                    "previousRevisionId": null
+                  },
+                  {
+                    "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+                    "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+                    "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011",
+                    "previousRevisionId": null
+                  },
+                  {
+                    "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+                    "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+                    "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014",
+                    "previousRevisionId": null
+                  },
+                  {
+                    "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+                    "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+                    "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017",
+                    "previousRevisionId": null
+                  },
+                  {
+                    "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+                    "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+                    "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a",
+                    "previousRevisionId": null
+                  }
+                ]
+              }
+            ]
+          },
+          "previousSha256": null,
+          "payloadSha256": "a2afee08593282a77d082fe891e940bb652c24ea77c00b2bf616b47038f728f6",
+          "eventSha256": "c8ed83694c9082dcd7271e5a34ed98dcb5fa3a58641cca78574250c3b5976dc4"
+        }
+      ]
+    },
+    "view": {
+      "snapshots": [
+        {
+          "id": "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+          "archive": {
+            "format": "hosei-g01a-source-prototype",
+            "contractVersion": "0.1.0-prototype",
+            "policy": {
+              "id": "g01a-source-utf8-v1-prototype",
+              "dtoContract": "hosei_web_learning_grade_table/v1",
+              "normalization": "pinned-v1-allowlist",
+              "digest": "sha256/utf8-raw+canonical-sorted-keys-preserve-array-order",
+              "numericPolicy": "decimal-roundtrip-no-underflow-or-rounding"
+            },
+            "inputContract": {
+              "source": "hosei_web_learning_grade_table",
+              "schemaVersion": 1
+            },
+            "raw": "{\"schemaVersion\":1,\"source\":\"hosei_web_learning_grade_table\",\"capturedAt\":\"2026-11-03T00:00:00Z\",\"courses\":[{\"rawName\":\"独立depth反例\",\"categoryRaw\":null,\"compositionCredits\":{\"raw\":\"\",\"value\":null},\"additionalEnrollment\":{\"raw\":\"\",\"value\":null},\"recognizedExemption\":{\"raw\":\"\",\"value\":null},\"earnedCredits\":{\"raw\":\"4\",\"value\":4},\"schoolingCredits\":{\"raw\":\"\",\"value\":null},\"reports\":[{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null}],\"creditExam\":{\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"date\":null,\"credits\":null,\"grade\":null,\"pendingMarker\":false},\"schoolings\":[{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null},{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null}]}]}",
+            "rawUtf8Bytes": 952,
+            "rawSha256": "0a5ab20675f7f164b29e14a83923f4463fe218c87534728e531fd13779b86a1d",
+            "dto": {
+              "schemaVersion": 1,
+              "source": "hosei_web_learning_grade_table",
+              "capturedAt": "2026-11-03T00:00:00Z",
+              "courses": [
+                {
+                  "rawName": "独立depth反例",
+                  "categoryRaw": null,
+                  "compositionCredits": {
+                    "raw": "",
+                    "value": null
+                  },
+                  "additionalEnrollment": {
+                    "raw": "",
+                    "value": null
+                  },
+                  "recognizedExemption": {
+                    "raw": "",
+                    "value": null
+                  },
+                  "earnedCredits": {
+                    "raw": "4",
+                    "value": 4
+                  },
+                  "schoolingCredits": {
+                    "raw": "",
+                    "value": null
+                  },
+                  "reports": [
+                    {
+                      "raw": "",
+                      "status": "none",
+                      "date": null
+                    },
+                    {
+                      "raw": "",
+                      "status": "none",
+                      "date": null
+                    },
+                    {
+                      "raw": "",
+                      "status": "none",
+                      "date": null
+                    },
+                    {
+                      "raw": "",
+                      "status": "none",
+                      "date": null
+                    }
+                  ],
+                  "creditExam": {
+                    "rawDate": "",
+                    "rawCredits": "",
+                    "rawGrade": "",
+                    "date": null,
+                    "credits": null,
+                    "grade": null,
+                    "pendingMarker": false
+                  },
+                  "schoolings": [
+                    {
+                      "rawYear": "",
+                      "rawTerm": "",
+                      "rawDate": "",
+                      "rawCredits": "",
+                      "rawGrade": "",
+                      "year": null,
+                      "term": null,
+                      "date": null,
+                      "credits": null,
+                      "grade": null
+                    },
+                    {
+                      "rawYear": "",
+                      "rawTerm": "",
+                      "rawDate": "",
+                      "rawCredits": "",
+                      "rawGrade": "",
+                      "year": null,
+                      "term": null,
+                      "date": null,
+                      "credits": null,
+                      "grade": null
+                    }
+                  ]
+                }
+              ]
+            },
+            "dtoSha256": "20b360b84068ab11bccb13d8415ac854c99aa1b3c2c1bf39785e1b8bf168e1cf",
+            "archiveSha256": "350e8186b55cd6d994ee8df9c764c9892adf37bdb28e69eba25e7719c54c9855"
+          },
+          "rows": [
+            {
+              "observationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+              "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+              "revisionId": "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+              "previousRevisionId": null,
+              "details": [
+                {
+                  "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+                  "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+                  "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008",
+                  "previousRevisionId": null
+                },
+                {
+                  "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+                  "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+                  "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b",
+                  "previousRevisionId": null
+                },
+                {
+                  "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+                  "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+                  "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e",
+                  "previousRevisionId": null
+                },
+                {
+                  "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+                  "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+                  "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011",
+                  "previousRevisionId": null
+                },
+                {
+                  "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+                  "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+                  "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014",
+                  "previousRevisionId": null
+                },
+                {
+                  "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+                  "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+                  "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017",
+                  "previousRevisionId": null
+                },
+                {
+                  "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+                  "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+                  "revisionId": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a",
+                  "previousRevisionId": null
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "observations": [
+        {
+          "id": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "snapshotId": "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+          "rowIndex": 0,
+          "detailObservationIds": [
+            "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+            "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+            "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+            "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+            "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+            "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+            "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018"
+          ]
+        }
+      ],
+      "achievements": [
+        {
+          "id": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "revisionIds": [
+            "hosei:g01b-revision:00000000-0000-4000-8000-000000900005"
+          ],
+          "activeRevisionId": null
+        }
+      ],
+      "revisions": [
+        {
+          "id": "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "observationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "previousRevisionId": null,
+          "record": {
+            "rawName": "独立depth反例",
+            "categoryRaw": null,
+            "compositionCredits": {
+              "raw": "",
+              "value": null
+            },
+            "additionalEnrollment": {
+              "raw": "",
+              "value": null
+            },
+            "recognizedExemption": {
+              "raw": "",
+              "value": null
+            },
+            "earnedCredits": {
+              "raw": "4",
+              "value": 4
+            },
+            "schoolingCredits": {
+              "raw": "",
+              "value": null
+            },
+            "reports": [
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              },
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              },
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              },
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              }
+            ],
+            "creditExam": {
+              "rawDate": "",
+              "rawCredits": "",
+              "rawGrade": "",
+              "date": null,
+              "credits": null,
+              "grade": null,
+              "pendingMarker": false
+            },
+            "schoolings": [
+              {
+                "rawYear": "",
+                "rawTerm": "",
+                "rawDate": "",
+                "rawCredits": "",
+                "rawGrade": "",
+                "year": null,
+                "term": null,
+                "date": null,
+                "credits": null,
+                "grade": null
+              },
+              {
+                "rawYear": "",
+                "rawTerm": "",
+                "rawDate": "",
+                "rawCredits": "",
+                "rawGrade": "",
+                "year": null,
+                "term": null,
+                "date": null,
+                "credits": null,
+                "grade": null
+              }
+            ]
+          }
+        }
+      ],
+      "detailObservations": [
+        {
+          "id": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+          "rowObservationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "kind": "report",
+          "index": 0
+        },
+        {
+          "id": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+          "rowObservationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "kind": "report",
+          "index": 1
+        },
+        {
+          "id": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+          "rowObservationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "kind": "report",
+          "index": 2
+        },
+        {
+          "id": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+          "rowObservationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "kind": "report",
+          "index": 3
+        },
+        {
+          "id": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+          "rowObservationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "kind": "credit_exam",
+          "index": 0
+        },
+        {
+          "id": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+          "rowObservationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "kind": "schooling",
+          "index": 0
+        },
+        {
+          "id": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+          "rowObservationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+          "kind": "schooling",
+          "index": 1
+        }
+      ],
+      "details": [
+        {
+          "id": "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "kind": "report",
+          "index": 0,
+          "revisionIds": [
+            "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008"
+          ]
+        },
+        {
+          "id": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "kind": "report",
+          "index": 1,
+          "revisionIds": [
+            "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b"
+          ]
+        },
+        {
+          "id": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "kind": "report",
+          "index": 2,
+          "revisionIds": [
+            "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e"
+          ]
+        },
+        {
+          "id": "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "kind": "report",
+          "index": 3,
+          "revisionIds": [
+            "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011"
+          ]
+        },
+        {
+          "id": "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "kind": "credit_exam",
+          "index": 0,
+          "revisionIds": [
+            "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014"
+          ]
+        },
+        {
+          "id": "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "kind": "schooling",
+          "index": 0,
+          "revisionIds": [
+            "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017"
+          ]
+        },
+        {
+          "id": "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+          "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+          "kind": "schooling",
+          "index": 1,
+          "revisionIds": [
+            "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a"
+          ]
+        }
+      ],
+      "detailRevisions": [
+        {
+          "id": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008",
+          "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+          "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+          "previousRevisionId": null,
+          "record": {
+            "raw": "",
+            "status": "none",
+            "date": null
+          }
+        },
+        {
+          "id": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b",
+          "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+          "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+          "previousRevisionId": null,
+          "record": {
+            "raw": "",
+            "status": "none",
+            "date": null
+          }
+        },
+        {
+          "id": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e",
+          "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+          "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+          "previousRevisionId": null,
+          "record": {
+            "raw": "",
+            "status": "none",
+            "date": null
+          }
+        },
+        {
+          "id": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011",
+          "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+          "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+          "previousRevisionId": null,
+          "record": {
+            "raw": "",
+            "status": "none",
+            "date": null
+          }
+        },
+        {
+          "id": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014",
+          "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+          "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+          "previousRevisionId": null,
+          "record": {
+            "rawDate": "",
+            "rawCredits": "",
+            "rawGrade": "",
+            "date": null,
+            "credits": null,
+            "grade": null,
+            "pendingMarker": false
+          }
+        },
+        {
+          "id": "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017",
+          "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+          "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+          "previousRevisionId": null,
+          "record": {
+            "rawYear": "",
+            "rawTerm": "",
+            "rawDate": "",
+            "rawCredits": "",
+            "rawGrade": "",
+            "year": null,
+            "term": null,
+            "date": null,
+            "credits": null,
+            "grade": null
+          }
+        },
+        {
+          "id": "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a",
+          "detailId": "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+          "observationId": "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+          "previousRevisionId": null,
+          "record": {
+            "rawYear": "",
+            "rawTerm": "",
+            "rawDate": "",
+            "rawCredits": "",
+            "rawGrade": "",
+            "year": null,
+            "term": null,
+            "date": null,
+            "credits": null,
+            "grade": null
+          }
+        }
+      ],
+      "associations": []
+    },
+    "issuedIds": [
+      "hosei:g01b-operation:00000000-0000-4000-8000-000000900001",
+      "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+      "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+      "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+      "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a"
+    ],
+    "reservedIds": [
+      "hosei:g01b-operation:00000000-0000-4000-8000-000000900001",
+      "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+      "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+      "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+      "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a"
+    ],
+    "tipSha256": "c8ed83694c9082dcd7271e5a34ed98dcb5fa3a58641cca78574250c3b5976dc4"
+  },
+  "floor": {
+    "issuedIds": [
+      "hosei:g01b-operation:00000000-0000-4000-8000-000000900001",
+      "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+      "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+      "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+      "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a"
+    ],
+    "reservedIds": [
+      "hosei:g01b-operation:00000000-0000-4000-8000-000000900001",
+      "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+      "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+      "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+      "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900007",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900006",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900008",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000a",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900009",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000b",
+      "hosei:g01b-detail:00000000-0000-4000-8000-00000090000d",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000c",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090000e",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900010",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-00000090000f",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900011",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900013",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900012",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900014",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900016",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900015",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-000000900017",
+      "hosei:g01b-detail:00000000-0000-4000-8000-000000900019",
+      "hosei:g01b-detail-observation:00000000-0000-4000-8000-000000900018",
+      "hosei:g01b-detail-revision:00000000-0000-4000-8000-00000090001a"
+    ]
+  },
+  "preview": {
+    "format": "hosei-g02a-preview-prototype",
+    "contractVersion": "0.1.0-prototype",
+    "policy": "literal-name-candidates/all-revisions/no-identity-confirmation/v1-prototype",
+    "binding": {
+      "archiveSha256": "26696c2621e090ed9e484241e35bbbcebf5852a385ffd6e98e306393d6422b65",
+      "rawSha256": "6d0e1d138c1d72c5931924305a8f37c9120c00fbe4397a6062345ce110128546",
+      "ledgerSha256": "566d30d42bca3e73cd1db218a5e668d9626593a0cfc649d8e3d5375ec75753c1",
+      "ledgerTipSha256": "c8ed83694c9082dcd7271e5a34ed98dcb5fa3a58641cca78574250c3b5976dc4",
+      "minimumIdsRawSha256": "ef5e2ebe1fb4121480b7ea7165c42a74eca9dd564913807c870c703bdfdd4efd"
+    },
+    "sourceArchive": {
+      "format": "hosei-g01a-source-prototype",
+      "contractVersion": "0.1.0-prototype",
+      "policy": {
+        "id": "g01a-source-utf8-v1-prototype",
+        "dtoContract": "hosei_web_learning_grade_table/v1",
+        "normalization": "pinned-v1-allowlist",
+        "digest": "sha256/utf8-raw+canonical-sorted-keys-preserve-array-order",
+        "numericPolicy": "decimal-roundtrip-no-underflow-or-rounding"
+      },
+      "inputContract": {
+        "source": "hosei_web_learning_grade_table",
+        "schemaVersion": 1
+      },
+      "raw": "{\"schemaVersion\":1,\"source\":\"hosei_web_learning_grade_table\",\"capturedAt\":\"2026-11-03T00:00:00Z\",\"courses\":[{\"rawName\":\"独立depth反例\",\"categoryRaw\":null,\"compositionCredits\":{\"raw\":\"\",\"value\":null},\"additionalEnrollment\":{\"raw\":\"\",\"value\":null},\"recognizedExemption\":{\"raw\":\"\",\"value\":null},\"earnedCredits\":{\"raw\":\"4\",\"value\":4},\"schoolingCredits\":{\"raw\":\"\",\"value\":null},\"reports\":[{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null},{\"raw\":\"\",\"status\":\"none\",\"date\":null}],\"creditExam\":{\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"date\":null,\"credits\":null,\"grade\":null,\"pendingMarker\":false},\"schoolings\":[{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null},{\"rawYear\":\"\",\"rawTerm\":\"\",\"rawDate\":\"\",\"rawCredits\":\"\",\"rawGrade\":\"\",\"year\":null,\"term\":null,\"date\":null,\"credits\":null,\"grade\":null}],\"unknown\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":{\"next\":0}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}]}",
+      "rawUtf8Bytes": 1504,
+      "rawSha256": "6d0e1d138c1d72c5931924305a8f37c9120c00fbe4397a6062345ce110128546",
+      "dto": {
+        "schemaVersion": 1,
+        "source": "hosei_web_learning_grade_table",
+        "capturedAt": "2026-11-03T00:00:00Z",
+        "courses": [
+          {
+            "rawName": "独立depth反例",
+            "categoryRaw": null,
+            "compositionCredits": {
+              "raw": "",
+              "value": null
+            },
+            "additionalEnrollment": {
+              "raw": "",
+              "value": null
+            },
+            "recognizedExemption": {
+              "raw": "",
+              "value": null
+            },
+            "earnedCredits": {
+              "raw": "4",
+              "value": 4
+            },
+            "schoolingCredits": {
+              "raw": "",
+              "value": null
+            },
+            "reports": [
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              },
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              },
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              },
+              {
+                "raw": "",
+                "status": "none",
+                "date": null
+              }
+            ],
+            "creditExam": {
+              "rawDate": "",
+              "rawCredits": "",
+              "rawGrade": "",
+              "date": null,
+              "credits": null,
+              "grade": null,
+              "pendingMarker": false
+            },
+            "schoolings": [
+              {
+                "rawYear": "",
+                "rawTerm": "",
+                "rawDate": "",
+                "rawCredits": "",
+                "rawGrade": "",
+                "year": null,
+                "term": null,
+                "date": null,
+                "credits": null,
+                "grade": null
+              },
+              {
+                "rawYear": "",
+                "rawTerm": "",
+                "rawDate": "",
+                "rawCredits": "",
+                "rawGrade": "",
+                "year": null,
+                "term": null,
+                "date": null,
+                "credits": null,
+                "grade": null
+              }
+            ]
+          }
+        ]
+      },
+      "dtoSha256": "20b360b84068ab11bccb13d8415ac854c99aa1b3c2c1bf39785e1b8bf168e1cf",
+      "archiveSha256": "26696c2621e090ed9e484241e35bbbcebf5852a385ffd6e98e306393d6422b65"
+    },
+    "snapshotStatus": "new_snapshot",
+    "matchingSnapshotIds": [],
+    "rows": [
+      {
+        "rowIndex": 0,
+        "record": {
+          "rawName": "独立depth反例",
+          "categoryRaw": null,
+          "compositionCredits": {
+            "raw": "",
+            "value": null
+          },
+          "additionalEnrollment": {
+            "raw": "",
+            "value": null
+          },
+          "recognizedExemption": {
+            "raw": "",
+            "value": null
+          },
+          "earnedCredits": {
+            "raw": "4",
+            "value": 4
+          },
+          "schoolingCredits": {
+            "raw": "",
+            "value": null
+          },
+          "reports": [
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            },
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            },
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            },
+            {
+              "raw": "",
+              "status": "none",
+              "date": null
+            }
+          ],
+          "creditExam": {
+            "rawDate": "",
+            "rawCredits": "",
+            "rawGrade": "",
+            "date": null,
+            "credits": null,
+            "grade": null,
+            "pendingMarker": false
+          },
+          "schoolings": [
+            {
+              "rawYear": "",
+              "rawTerm": "",
+              "rawDate": "",
+              "rawCredits": "",
+              "rawGrade": "",
+              "year": null,
+              "term": null,
+              "date": null,
+              "credits": null,
+              "grade": null
+            },
+            {
+              "rawYear": "",
+              "rawTerm": "",
+              "rawDate": "",
+              "rawCredits": "",
+              "rawGrade": "",
+              "year": null,
+              "term": null,
+              "date": null,
+              "credits": null,
+              "grade": null
+            }
+          ]
+        },
+        "kind": "reimport_candidate",
+        "suggestion": "reimport_candidate",
+        "resolution": "unverified",
+        "identicalIncomingRowIndexes": [],
+        "conflicts": [],
+        "candidates": [
+          {
+            "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+            "revisionId": "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+            "observationId": "hosei:g01b-observation:00000000-0000-4000-8000-000000900003",
+            "sourceRef": {
+              "snapshotId": "hosei:g01b-snapshot:00000000-0000-4000-8000-000000900002",
+              "rowIndex": 0,
+              "archiveSha256": "350e8186b55cd6d994ee8df9c764c9892adf37bdb28e69eba25e7719c54c9855",
+              "rawSha256": "0a5ab20675f7f164b29e14a83923f4463fe218c87534728e531fd13779b86a1d"
+            },
+            "currentLatestRevisionId": "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+            "currentActiveRevisionId": null,
+            "isLatest": true,
+            "isActive": false,
+            "sameRecord": true,
+            "evidence": "same_full_dto_only",
+            "identity": "unverified",
+            "before": {
+              "rawName": "独立depth反例",
+              "categoryRaw": null,
+              "compositionCredits": {
+                "raw": "",
+                "value": null
+              },
+              "additionalEnrollment": {
+                "raw": "",
+                "value": null
+              },
+              "recognizedExemption": {
+                "raw": "",
+                "value": null
+              },
+              "earnedCredits": {
+                "raw": "4",
+                "value": 4
+              },
+              "schoolingCredits": {
+                "raw": "",
+                "value": null
+              },
+              "reports": [
+                {
+                  "raw": "",
+                  "status": "none",
+                  "date": null
+                },
+                {
+                  "raw": "",
+                  "status": "none",
+                  "date": null
+                },
+                {
+                  "raw": "",
+                  "status": "none",
+                  "date": null
+                },
+                {
+                  "raw": "",
+                  "status": "none",
+                  "date": null
+                }
+              ],
+              "creditExam": {
+                "rawDate": "",
+                "rawCredits": "",
+                "rawGrade": "",
+                "date": null,
+                "credits": null,
+                "grade": null,
+                "pendingMarker": false
+              },
+              "schoolings": [
+                {
+                  "rawYear": "",
+                  "rawTerm": "",
+                  "rawDate": "",
+                  "rawCredits": "",
+                  "rawGrade": "",
+                  "year": null,
+                  "term": null,
+                  "date": null,
+                  "credits": null,
+                  "grade": null
+                },
+                {
+                  "rawYear": "",
+                  "rawTerm": "",
+                  "rawDate": "",
+                  "rawCredits": "",
+                  "rawGrade": "",
+                  "year": null,
+                  "term": null,
+                  "date": null,
+                  "credits": null,
+                  "grade": null
+                }
+              ]
+            },
+            "recordChanges": [],
+            "sourceRowChanges": [
+              {
+                "path": "/unknown",
+                "before": {
+                  "present": false
+                },
+                "after": {
+                  "present": true,
+                  "value": {
+                    "next": {
+                      "next": {
+                        "next": {
+                          "next": {
+                            "next": {
+                              "next": {
+                                "next": {
+                                  "next": {
+                                    "next": {
+                                      "next": {
+                                        "next": {
+                                          "next": {
+                                            "next": {
+                                              "next": {
+                                                "next": {
+                                                  "next": {
+                                                    "next": {
+                                                      "next": {
+                                                        "next": {
+                                                          "next": {
+                                                            "next": {
+                                                              "next": {
+                                                                "next": {
+                                                                  "next": {
+                                                                    "next": {
+                                                                      "next": {
+                                                                        "next": {
+                                                                          "next": {
+                                                                            "next": {
+                                                                              "next": {
+                                                                                "next": {
+                                                                                  "next": {
+                                                                                    "next": {
+                                                                                      "next": {
+                                                                                        "next": {
+                                                                                          "next": {
+                                                                                            "next": {
+                                                                                              "next": {
+                                                                                                "next": {
+                                                                                                  "next": {
+                                                                                                    "next": {
+                                                                                                      "next": {
+                                                                                                        "next": {
+                                                                                                          "next": {
+                                                                                                            "next": {
+                                                                                                              "next": {
+                                                                                                                "next": {
+                                                                                                                  "next": {
+                                                                                                                    "next": {
+                                                                                                                      "next": {
+                                                                                                                        "next": {
+                                                                                                                          "next": {
+                                                                                                                            "next": {
+                                                                                                                              "next": {
+                                                                                                                                "next": {
+                                                                                                                                  "next": {
+                                                                                                                                    "next": {
+                                                                                                                                      "next": {
+                                                                                                                                        "next": {
+                                                                                                                                          "next": 0
+                                                                                                                                        }
+                                                                                                                                      }
+                                                                                                                                    }
+                                                                                                                                  }
+                                                                                                                                }
+                                                                                                                              }
+                                                                                                                            }
+                                                                                                                          }
+                                                                                                                        }
+                                                                                                                      }
+                                                                                                                    }
+                                                                                                                  }
+                                                                                                                }
+                                                                                                              }
+                                                                                                            }
+                                                                                                          }
+                                                                                                        }
+                                                                                                      }
+                                                                                                    }
+                                                                                                  }
+                                                                                                }
+                                                                                              }
+                                                                                            }
+                                                                                          }
+                                                                                        }
+                                                                                      }
+                                                                                    }
+                                                                                  }
+                                                                                }
+                                                                              }
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "sourceMetadataChanges": [],
+            "manualAssociations": []
+          }
+        ],
+        "selectedAchievementId": null,
+        "requiresExplicitDecision": true
+      }
+    ],
+    "existingCoverage": [
+      {
+        "achievementId": "hosei:g01b-achievement:00000000-0000-4000-8000-000000900004",
+        "latestRevisionId": "hosei:g01b-revision:00000000-0000-4000-8000-000000900005",
+        "activeRevisionId": null,
+        "status": "candidate_only",
+        "deleteRecommended": false
+      }
+    ],
+    "authorization": {
+      "kind": "preview-only",
+      "journalDeclaration": "not-created",
+      "saveAuthority": "not-issued",
+      "canCommit": false
+    },
+    "previewSha256": "016b3be157588f0974cc0d7b5d2afb7899073002adfd373ac86529b4178f4230"
+  }
+}
