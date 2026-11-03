@@ -101,6 +101,42 @@ function aggregates(state) {
   };
 }
 
+test('desktop hover: disclosure uses shared white/navy and navy/orange colors in both states', async t => {
+  const { page, raw } = await open(t);
+  const white = 'rgb(255, 255, 255)', navy = 'rgb(0, 34, 85)', orange = 'rgb(240, 106, 20)';
+  const colors = locator => locator.evaluate(async el => {
+    await Promise.all(el.getAnimations().map(animation => animation.finished));
+    const style = getComputedStyle(el);
+    return { background: style.backgroundColor, color: style.color };
+  });
+  assert.equal(await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches), true);
+  const reference = page.getByRole('button', { name: '科目検索へ戻る', exact: true });
+  await reference.hover();
+  t.diagnostic(JSON.stringify({ referenceHover: await colors(reference) }));
+  const control = toggle(page, 0);
+  await page.mouse.move(0, 0);
+  await control.scrollIntoViewIfNeeded();
+  const normal = await colors(control);
+  t.diagnostic(JSON.stringify({ disclosureNormal: normal }));
+  assert.deepEqual(normal, { background: white, color: navy });
+  await control.hover();
+  const hovered = await colors(control);
+  t.diagnostic(JSON.stringify({ disclosureHover: hovered }));
+  assert.deepEqual(hovered, { background: navy, color: orange });
+  await control.click();
+  assert.equal(await control.getAttribute('aria-expanded'), 'true');
+  await control.hover();
+  assert.deepEqual(await colors(control), { background: navy, color: orange });
+  await page.mouse.move(0, 0);
+  assert.deepEqual(await colors(control), { background: white, color: navy });
+  await control.focus(); await control.press('Space');
+  assert.equal(await control.getAttribute('aria-expanded'), 'false');
+  const focus = await control.evaluate(el => ({ visible: el.matches(':focus-visible'), style: getComputedStyle(el).outlineStyle, width: getComputedStyle(el).outlineWidth, color: getComputedStyle(el).outlineColor }));
+  t.diagnostic(JSON.stringify({ disclosureFocus: focus }));
+  assert.deepEqual(focus, { visible: true, style: 'solid', width: '2px', color: navy });
+  await unchanged(page, raw);
+});
+
 test('desktop: independent disclosure, always-visible summaries, keyboard/focus, exact JSON and aggregates', async t => {
   const { page, state, raw } = await open(t);
   assert.match(await card(page, 0).innerText(), /動画 2\/14.*テスト 1\/14/s);
@@ -240,6 +276,7 @@ test('display-only disclosure remains usable when external-storage protection di
   const { page, context, raw } = await open(t);
   const other = await context.newPage(); await other.goto(origin);
   await other.evaluate(key => localStorage.setItem(key, 'external changed raw'), STORAGE_KEY);
+  await page.bringToFront();
   await page.getByRole('alert').filter({ hasText: '別の画面で保存データが変更' }).waitFor();
   await toggle(page, 0).click();
   assert.equal(await toggle(page, 0).getAttribute('aria-expanded'), 'true');

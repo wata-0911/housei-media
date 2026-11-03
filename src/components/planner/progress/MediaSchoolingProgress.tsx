@@ -66,7 +66,7 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
     <p className="mt-2 text-sm text-gray-600">各回の動画・テスト：{saved.totalLessons === null ? '全回数未設定（完了判定なし）' : summary.video < saved.totalLessons || summary.test < saved.totalLessons ? '未完了あり' : 'すべて完了'}</p>
     {saved.totalLessons === null ? <p className="mt-5 text-sm text-gray-600">全回数を設定すると、各回の動画とテストの進捗を記録できます。</p> : <>
-      <button type="button" aria-expanded={lessonsExpanded} aria-controls={lessonsId} aria-label={`${offering.name}の各回一覧を${lessonsExpanded ? '折りたたむ' : '表示'}`} onClick={() => setLessonsExpanded(expanded => !expanded)} className="planner-button mt-4 border border-[#002255] px-3 py-2 text-sm text-[#002255] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">各回一覧を{lessonsExpanded ? '折りたたむ' : '表示'}</button>
+      <button type="button" aria-expanded={lessonsExpanded} aria-controls={lessonsId} aria-label={`${offering.name}の各回一覧を${lessonsExpanded ? '折りたたむ' : '表示'}`} onClick={() => setLessonsExpanded(expanded => !expanded)} className="planner-button mt-4 border border-[#002255] px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">各回一覧を{lessonsExpanded ? '折りたたむ' : '表示'}</button>
       <div id={lessonsId} hidden={!lessonsExpanded}>
       <p className="mt-5 text-xs text-gray-600">動画にチェックを入れると、その回まで一括で視聴済みになります。外す場合はその回のみ解除されます。</p>
       <div className="mt-3 space-y-2">
