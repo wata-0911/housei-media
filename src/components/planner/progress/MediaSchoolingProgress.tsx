@@ -1,7 +1,7 @@
 import FuturePlanNotice from '../planning/FuturePlanNotice';
 import CommittedInput from '../common/CommittedInput';
 import { planningTermLabel } from '../../../planner/planning/futurePlanning';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { addAssessment, assessmentLabel, completeVideosThroughLesson, mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment, type ImportedMediaShareItem } from '../../../planner/progress/mediaSchooling';
 import type { MediaAssessment, MediaCourseProgress, Offering, PlannerItem } from '../../../planner/plannerCatalog';
 import MediaProgressShareModal from './MediaProgressShareModal';
@@ -22,6 +22,8 @@ type Props = {
 const statusLabels: Record<PlannerItem['status'], string> = { planned: '計画中', in_progress: '履修中', waiting: '結果待ち', earned: '修得済み', failed: '不合格', dropped: '取りやめ' };
 
 function CourseCard({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: MediaCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
+  const [lessonsExpanded, setLessonsExpanded] = useState(false);
+  const lessonsId = useId();
   const [error, setError] = useState('');
   const [totalEpoch, setTotalEpoch] = useState(0);
   const totalInput = useRef<HTMLInputElement>(null);
@@ -62,7 +64,10 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     {error && <p role="alert" className="mt-1 text-sm text-red-700">{error}</p>}
     <div className="mt-4 grid grid-cols-3 gap-2 text-sm"><p>動画 {saved.totalLessons === null ? `${summary.video}/—` : `${summary.video}/${saved.totalLessons}`}</p><p>テスト {saved.totalLessons === null ? `${summary.test}/—` : `${summary.test}/${saved.totalLessons}`}</p><p>総合 {summary.percent === null ? '—' : `${summary.percent}%`}</p></div>
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
+    <p className="mt-2 text-sm text-gray-600">各回の動画・テスト：{saved.totalLessons === null ? '全回数未設定（完了判定なし）' : summary.video < saved.totalLessons || summary.test < saved.totalLessons ? '未完了あり' : 'すべて完了'}</p>
     {saved.totalLessons === null ? <p className="mt-5 text-sm text-gray-600">全回数を設定すると、各回の動画とテストの進捗を記録できます。</p> : <>
+      <button type="button" aria-expanded={lessonsExpanded} aria-controls={lessonsId} aria-label={`${offering.name}の各回一覧を${lessonsExpanded ? '折りたたむ' : '表示'}`} onClick={() => setLessonsExpanded(expanded => !expanded)} className="planner-button mt-4 border border-[#002255] px-3 py-2 text-sm text-[#002255] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">各回一覧を{lessonsExpanded ? '折りたたむ' : '表示'}</button>
+      <div id={lessonsId} hidden={!lessonsExpanded}>
       <p className="mt-5 text-xs text-gray-600">動画にチェックを入れると、その回まで一括で視聴済みになります。外す場合はその回のみ解除されます。</p>
       <div className="mt-3 space-y-2">
       {Array.from({ length: saved.totalLessons }, (_, index) => index + 1).map(lesson => {
@@ -72,6 +77,7 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
           <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.testCompleted ?? false} disabled={disabled} onChange={() => onChange(item.offeringId, toggleLesson(saved, lesson, 'testCompleted'))} />テスト</label>
         </div>;
       })}
+      </div>
       </div>
     </>}
     <section className="mt-6 border-t border-gray-200 pt-4" aria-label={`${offering.name}の試験・評価予定`}>
