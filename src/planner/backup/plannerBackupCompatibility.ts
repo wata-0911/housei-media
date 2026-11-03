@@ -2,6 +2,8 @@ import type { PlannerCatalog } from '../plannerCatalog';
 import { validateCatalog } from '../validation';
 import { attachCurriculumCatalog } from '../catalog/curriculumCatalog';
 import { createMappingResolver } from '../plannerHelpers';
+import { canonicalBackupJson, backupDigest } from '../digest';
+export { canonicalBackupJson, backupDigest, backupRawDigest } from '../digest';
 
 export type BackupCatalogIdentity = { schemaVersion: 1; academicYear: 2026; snapshot: string; sha256: string };
 export type BackupCatalogSnapshot = BackupCatalogIdentity & { compatibilityVersion: 1; semanticSha256: string; snapshotData: PlannerCatalog };
@@ -16,19 +18,6 @@ export const LEGACY_BACKUP_CATALOGS: ReadonlyArray<BackupCatalogIdentity & { sem
     semanticSha256: 'ca8df7b7256c3db842be8c797d7169db1180658169f96d1e7ba2a6a014412dec' },
 ];
 
-export function canonicalBackupJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalBackupJson).join(',')}]`;
-  if (value && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalBackupJson(entry)}`).join(',')}}`;
-  return JSON.stringify(value);
-}
-export async function backupDigest(value: unknown): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalBackupJson(value)));
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-}
-export async function backupRawDigest(raw: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-}
 const unique = (ids: string[]) => new Set(ids).size === ids.length;
 
 /** Validate archived catalogs as untrusted data. Never install their rules as
