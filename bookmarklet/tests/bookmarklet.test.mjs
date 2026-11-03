@@ -193,6 +193,12 @@ test('Planner renders generated Bookmarklet code as inert text with the existing
   assert.doesNotMatch(html, /Chrome拡張/);
   assert.match(html, /読み込み・検証/);
   assert.match(html, /手動コピー用コード/);
+  for (const text of ['URL欄の元の内容をすべて削除', 'javascript:', 'PC Chrome：', 'iPhone Chrome：', 'アドレスバー', 'ブックマーク候補', 'Googleの検索結果', '新しいタブで開く', '元ページの通知を確認できない', '自動貼り付け・自動保存されません', 'プレビュー（Preview）', '成績JSONをここに貼り付け']) assert.ok(html.includes(text), text);
+  assert.match(html, /placeholder="ここをタップ（クリック）して、コピーした成績JSONを貼り付けてください"/);
+  assert.match(html, /入力欄を長押し/);
+  assert.match(html, /type="file" accept="application\/json,\.json"/);
+  assert.match(html, /Safariなど、今回未検証/);
+
   assert.doesNotMatch(html, /href="javascript:|<script/);
   assert.ok(html.includes(artifact.bookmarklet.replaceAll('&', '&amp;').replaceAll("'", '&#x27;')));
 });

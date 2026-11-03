@@ -93,7 +93,7 @@ test('Planner direct entry requires paste, Preview and explicit apply before sto
   const payload = JSON.parse(readFileSync(new URL('../bookmarklet/tests/fixtures/extraction-741e780.json', import.meta.url))).outcomes.normal32.value;
   payload.courses = payload.courses.slice(0, 1);
   await page.goto(origin + '/planner#grade-import');
-  const text = page.getByRole('textbox', { name: 'またはJSONを貼り付け' });
+  const text = page.getByRole('textbox', { name: '成績JSONをここに貼り付け' });
   await text.waitFor();
   assert.equal(await page.locator('#grade-import').getAttribute('open'), '');
   assert.equal(await text.inputValue(), '');
