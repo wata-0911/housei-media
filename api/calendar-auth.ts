@@ -1,3 +1,3 @@
-import { authorizeCalendarRequest } from '../server/calendar-authorization';
+import { authorizeCalendarRequest } from '../server/calendar-authorization.js';
 
 export default { fetch: authorizeCalendarRequest };

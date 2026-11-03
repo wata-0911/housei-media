@@ -1,5 +1,5 @@
-import { authorizeCalendarRequest } from '../server/calendar-authorization';
-import { decodeDraftPng, MAX_BRIDGE_BYTES, parseDraftMetadata } from '../server/calendar-draft-image';
+import { authorizeCalendarRequest } from '../server/calendar-authorization.js';
+import { decodeDraftPng, MAX_BRIDGE_BYTES, parseDraftMetadata } from '../server/calendar-draft-image.js';
 
 const headers = { 'Cache-Control': 'no-store, private', 'X-Content-Type-Options': 'nosniff' };
 function failure(code: string, error: string, status = 502): Response {
