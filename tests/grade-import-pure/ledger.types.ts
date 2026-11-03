@@ -6,7 +6,7 @@ function boundary(s: DeepReadonly<Ledger>, observation: Id<'observation'>) {
   // @ts-expect-error official revision is readonly
   s.view.revisions[0].record.earnedCredits.value = 2;
   // @ts-expect-error no save capability
-  s.canCommit;
+  void s.canCommit;
   void wrong;
 }
 void boundary;
