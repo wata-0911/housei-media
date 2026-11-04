@@ -53,6 +53,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:grade-import-pure
 
+      - name: Grade import native host types
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck:grade-import-host
+
+      - name: Grade import native host contracts
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run test:grade-import-host
+
       - name: Extension parser and handoff tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:extension
@@ -71,3 +79,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/home-planner-browser" --no-save --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/home-planner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:home-planner-browser
+
+      - name: Grade import native host (Chromium)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:grade-import-host-browser
