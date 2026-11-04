@@ -68,7 +68,21 @@ try {
     await summary.focus(); await page.keyboard.press('Enter');
     assert.equal(await first.locator('details').first().getAttribute('open'), '');
     assert.ok((await first.textContent()).includes('SHA-256:'));
+    const audit = first.locator('details details summary');
+    await audit.focus(); await page.keyboard.press('Enter');
+    assert.equal(await first.locator('details details').getAttribute('open'), '');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: `${screenshotDir}/search-${width}.png`, fullPage: true });
+    // All interactive controls remain reachable and operable with a keyboard.
+    const scopeControl = page.getByRole('combobox');
+    await scopeControl.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.getByRole('checkbox').evaluate(el => el === document.activeElement), true);
+    const commonBefore = await page.getByRole('checkbox').isChecked();
+    await page.keyboard.press('Space');
+    assert.equal(await page.getByRole('checkbox').isChecked(), !commonBefore);
+    await query.focus(); await page.keyboard.press('ControlOrMeta+A'); await page.keyboard.type('簿記');
+    assert.equal(await query.inputValue(), '簿記');
     await query.fill('存在しない科目');
     assert.equal(await items.count(), 0);
     await page.getByText('該当する配置はありません。', { exact: false }).waitFor();
