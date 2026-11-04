@@ -18,9 +18,17 @@ export function summarizeCredits(items: PlannerItem[], offerings: Map<string, Of
   return summary;
 }
 
-export function searchOfferings(offerings: Offering[], query: string) {
+export type SearchMatchMode = 'partial' | 'exact';
+
+/** Display search only: NFKC, case-insensitive, trimmed. Blank queries show all.
+ * Partial mode ANDs whitespace-separated terms across the existing fields;
+ * exact mode compares the whole query (including internal spaces) to the name.
+ */
+export function searchOfferings(offerings: Offering[], query: string, mode: SearchMatchMode = 'partial') {
   const normalize = (text: string) => text.normalize('NFKC').toLocaleLowerCase('ja');
-  const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
+  const normalizedQuery = normalize(query).trim();
+  if (mode === 'exact') return offerings.filter(o => !normalizedQuery || normalize(o.name).trim() === normalizedQuery);
+  const terms = normalizedQuery.split(/\s+/).filter(Boolean);
   return offerings.filter(o => {
     const text = normalize([o.name, o.subjectCode, o.classCode, o.deliveryCategory, o.period].filter(Boolean).join(' '));
     return terms.every(term => text.includes(term));
