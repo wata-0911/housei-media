@@ -32,7 +32,10 @@
     "typecheck:grade-import-pure": "tsc --noEmit -p tests/grade-import-pure/tsconfig.json",
     "test:grade-import-host": "node --import tsx --test --test-concurrency=1 tests/grade-import-host/*.test.mjs",
     "test:grade-import-host-browser": "node --import tsx --test --test-concurrency=1 tests/grade-import-host/native.browser.mjs",
-    "typecheck:grade-import-host": "tsc --noEmit -p tests/grade-import-host/tsconfig.json"
+    "typecheck:grade-import-host": "tsc --noEmit -p tests/grade-import-host/tsconfig.json",
+    "test:grade-import-v2": "node --import tsx --test --test-concurrency=1 tests/grade-import-v2/*.test.mjs",
+    "test:grade-import-v2-browser": "node --import tsx --test --test-concurrency=1 tests/grade-import-v2/native.browser.mjs",
+    "typecheck:grade-import-v2": "tsc --noEmit -p tests/grade-import-v2/tsconfig.json"
   },
   "dependencies": {
     "@line/liff": "^2.31.2",

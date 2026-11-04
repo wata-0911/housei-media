@@ -42,7 +42,7 @@ test('V22: production, old persistence/backup, workbench and Workers cannot reac
   if(start==='src/main.tsx'||start==='src/pages/PlannerPage.tsx'||/\/persistence\/|\/backup\/|\/workbench\/|[Ww]orker|\/gradeImport\//.test(start))assert.deepEqual(closure(nodes,start).filter(p=>p.startsWith(folder)),[],start);
  }
  for(const [start,edges]of nodes)if(start.startsWith(folder)){
-  if(start!==folder+'codec.ts')assert.deepEqual(edges.filter(p=>p.startsWith('src/planner/attempts/gradeImport/')||p==='src/planner/attempts/jsonInput.ts'),[],start);
+  if(start!==folder+'codec.ts' && start!==folder+'codecV2.ts')assert.deepEqual(edges.filter(p=>p.startsWith('src/planner/attempts/gradeImport/')||p==='src/planner/attempts/jsonInput.ts'),[],start);
  }
 });
 test('V22: browser host bundle has no AJV/validation/catalog/old host/Worker and CSP cold import performs no IO',async()=>{
