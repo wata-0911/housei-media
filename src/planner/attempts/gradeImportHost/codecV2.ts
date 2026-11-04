@@ -13,13 +13,19 @@ export function environment(origin: string): Environment { return { ...v1.enviro
 export function checkEnvironment(e: Environment) { if (!e || typeof e.origin !== 'string' || !equal(e, environment(e.origin))) fail('unsupported_policy'); }
 function keys(v: unknown, k: string[]): asserts v is Record<string, unknown> { if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).sort().join(',') !== [...k].sort().join(',')) fail('shape'); }
 export async function upgradeTarget(raw: string, provenance: Provenance):Promise<UpgradeTarget> {
- const b=await v1.decodeHost(raw);const c=await v1.ledgerContext(b);
+ return upgradeTargetFromDecoded(raw,provenance,await v1.decodeHost(raw));
+}
+// Private, call-local reuse only: both callers pass the frozen result of the
+// immediately preceding v1 decode of these exact raw bytes under the fixed
+// verifier/policy. This result never grants native save authority.
+async function upgradeTargetFromDecoded(raw:string,provenance:Provenance,b:Awaited<ReturnType<typeof v1.decodeHost>>):Promise<UpgradeTarget>{
+ const c=await v1.ledgerContext(b);
  if (!['native-v1-upgrade','native-v2-empty'].includes(provenance)) fail('shape');
  if(provenance==='native-v2-empty'&&!equal(b,await v1.createHost(b.hostId,b.environment)))fail('invalid_host');
  return {baseRawSha256:await rawDigest(raw),baseTipSha256:b.authority.tipSha256,hostId:b.hostId,ledgerSha256:await rawDigest(b.ledgerRaw),floorSha256:await rawDigest(c.floorRaw),reservationsSha256:await digest(b.authority.reservedIds),policy:POLICY,verifier:VERIFIER,provenance};
 }
 async function genesis(raw:string,provenance:Provenance,receipt:UpgradeReceipt):Promise<RecordV2>{
- const b=await v1.decodeHost(raw),target=await upgradeTarget(raw,provenance);
+ const b=await v1.decodeHost(raw),target=await upgradeTargetFromDecoded(raw,provenance,b);
  keys(receipt,[...Object.keys(target),'confirmed','reason']);
  const {confirmed,reason,...rest}=receipt;
  if(confirmed!==true||typeof reason!=='string'||!reason.trim()||!equal(rest,target))fail('unqualified');
