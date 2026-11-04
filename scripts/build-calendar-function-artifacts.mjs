@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 // deployment, settings change, or real LINE/GAS credentials are needed.
 const { build } = await import(process.env.CALENDAR_VERCEL_NODE_MODULE || '@vercel/node');
 const { glob } = await import(process.env.CALENDAR_VERCEL_BUILD_UTILS_MODULE || '@vercel/build-utils');
+const nodeMajor = process.env.CALENDAR_FUNCTION_NODE_VERSION || '22';
+if (!['22', '24'].includes(nodeMajor)) throw new Error('Calendar function runtime must be 22 or 24');
 const [sourceArgument, outputArgument] = process.argv.slice(2);
 if (!sourceArgument || !outputArgument) {
   throw new Error('Usage: node scripts/build-calendar-function-artifacts.mjs <source-root> <fresh-output-root>');
@@ -14,7 +16,7 @@ const outputRoot = resolve(outputArgument);
 // Refuse reused output so stale helper files cannot hide a tracing omission.
 await mkdir(outputRoot);
 
-for (const entrypoint of ['api/calendar-auth.ts', 'api/calendar-draft.ts']) {
+for (const entrypoint of ['api/calendar-auth.ts', 'api/calendar-draft.ts', 'api/calendar-approve.ts']) {
   const files = await glob('**', {
     cwd: workPath,
     ignore: ['node_modules/**', '.git/**', '.vercel/**', 'dist/**'],
@@ -24,10 +26,13 @@ for (const entrypoint of ['api/calendar-auth.ts', 'api/calendar-draft.ts']) {
     entrypoint,
     workPath,
     repoRootPath: workPath,
+    considerBuildCommand: true,
     config: {
       zeroConfig: true,
-      nodeVersion: '22.x',
-      functions: { [entrypoint]: { installCommand: '' } },
+      nodeVersion: `${nodeMajor}.x`,
+      // Dependencies and browser build are checked separately by CI. Enable the
+      // builder's documented project settings without invoking the app build.
+      projectSettings: { installCommand: '', buildCommand: 'node -e ""' },
     },
     meta: { skipDownload: true },
   });

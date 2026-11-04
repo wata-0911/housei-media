@@ -8,6 +8,7 @@ import { decodeDraftPng, MAX_BRIDGE_BYTES, MAX_PNG_BYTES, parseDraftMetadata } f
 
 const userId = 'U' + 'a'.repeat(32);
 const config = {
+  CALENDAR_LOCAL_TEST_MODE: 'true',
   LINE_LOGIN_CHANNEL_ID: 'test-channel', LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: 'test-bot-token', LINE_APPROVAL_GROUP_ID: 'test-group',
   GAS_CALENDAR_DRAFT_WEB_APP_URL: 'https://script.google.com/macros/s/test-deployment/exec', GAS_CALENDAR_DRAFT_SECRET: 'test-bridge-secret',
 };
@@ -39,7 +40,7 @@ test('only fresh independent authorization can obtain binary PNG and paired safe
   assert.equal(response.headers.get('x-calendar-year-month'), '2026-11'); assert.equal(response.headers.get('x-calendar-generated-at'), '2026-11-02T03:00:00.000Z');
   assert.equal(response.headers.get('cache-control'), 'no-store, private'); assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), png); assert.equal(calls.length, 3);
-  assert.deepEqual(JSON.parse(gasCalls()[0].init.body), { action: 'get_current_draft', secret: config.GAS_CALENDAR_DRAFT_SECRET });
+  assert.deepEqual(JSON.parse(gasCalls()[0].init.body), { action: 'get_current_draft', secret: config.GAS_CALENDAR_DRAFT_SECRET, includeApprovalBinding: true });
   assert.equal(gasCalls()[0].init.redirect, 'manual'); assert.ok(calls.every(c => !c.url.includes('token') && !c.url.includes('secret')));
   assert.equal(new URLSearchParams(calls[0].init.body).get('id_token'), 'raw-id-token');
 });
@@ -76,7 +77,7 @@ test('timeout is distinct and bounded', async () => { const original = AbortSign
 test('GAS redirect GET contains no secret or auth headers', async () => { mock(); const base = globalThis.fetch; globalThis.fetch = async (url, init) => { if (String(url).startsWith('https://script.google.com/')) { calls.push({url:String(url),init}); return new Response(null,{status:302,headers:{Location:'https://script.googleusercontent.com/macros/echo?user_content_key=test'}}); } return base(url,init); }; const response=await draftApi.fetch(request()); assert.equal(response.status,200); const redirect=gasCalls()[1]; assert.equal(redirect.init.method,'GET'); assert.equal(redirect.init.body,undefined); assert.equal(redirect.init.headers,undefined); });
 test('redirect to arbitrary host rejected without following it', async () => { await failure({bridgeResponse:()=>new Response(null,{status:302,headers:{Location:'https://evil.test'}})},502,'draft_invalid_response'); assert.equal(gasCalls().length,1); });
 test('strict decoder and metadata helpers reject unsafe values', () => { assert.deepEqual(decodeDraftPng(png.toString('base64')),png); assert.throws(()=>decodeDraftPng('AB==')); assert.throws(()=>parseDraftMetadata('2026-01','2026-02-30T00:00:00Z')); });
-test('approval and revision controls stay unconditionally disabled; requests use raw token', () => { const source=readFileSync(new URL('../src/pages/CalendarApprovePage.tsx',import.meta.url),'utf8'); assert.match(source,/const idToken = liff.getIDToken\(\)/); assert.match(source,/await loadDraft\(idToken\)/); for (const label of ['修正が必要','この画像を承認']) assert.match(source,new RegExp('<button[^>]*\\bdisabled\\b[^>]*>\\s*'+label)); assert.match(source,/URL.revokeObjectURL\(previewUrl\)/); assert.match(source,/controller.abort\(\)/); });
+
 test('truncated chunks, invalid zlib and decompression beyond IHDR dimensions are rejected', () => {
   assert.throws(()=>decodeDraftPng(png.subarray(0,png.length-2).toString('base64')));
   for(const raw of [Buffer.from('not zlib'),deflateSync(Buffer.alloc(100)),Buffer.concat([deflateSync(Buffer.from([0,255,0,0,255])),Buffer.from('trailing')])]) {

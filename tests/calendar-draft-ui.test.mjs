@@ -53,3 +53,115 @@ test('image display failure hides preview but never enables actions',async()=>{a
 test('initial auth config503 identifies configuration rather than generic LINE failure',async()=>{fetchHandler=async()=>Response.json({code:'auth_server_config',error:'not echoed'},{status:503});await render();assert.equal(document.querySelector('[role="alert"]').textContent,'認証サーバーの設定が不足しています。');assert.equal(calls.length,1);disabled();});
 for(const [code,text]of [['line_membership_unavailable','LINEグループへの所属を確認できませんでした。時間をおいて再度お試しください。'],['line_verification_unavailable','LINE認証サービスを確認できませんでした。時間をおいて再度お試しください。'],['auth_server_config','認証サーバーの設定が不足しています。'],['draft_upstream','下書き取得先でエラーが発生しました。']])test(`draft taxonomy ${code} is explicit and does not echo upstream`,async()=>{fetchHandler=async url=>url.includes('auth')?Response.json({authorized:true}):Response.json({code,error:'untrusted detail'},{status:code==='auth_server_config'?503:502});await render();assert.equal(document.querySelector('[role="alert"]').textContent,text);assert.ok(!document.body.textContent.includes('untrusted detail'));assert.equal(created.length,0);disabled();});
 test('image onError revokes immediately and unmount never double revokes',async()=>{await render();const image=document.querySelector('img');await act(async()=>image.dispatchEvent(new window.Event('error')));assert.deepEqual(revoked,['blob:mock-0']);assert.equal(document.querySelector('img'),null);await unmount();assert.deepEqual(revoked,['blob:mock-0']);});
+
+// Approval is bound to the exact displayed bytes and never inferred from login alone.
+const binding = { draftId: '12345678-1234-4234-8234-123456789abc', revision: '1',
+  imageSha256: (await import('node:crypto')).createHash('sha256').update(new Uint8Array([137,80,78,71])).digest('hex'), previewReceipt: 'opaque-server-receipt' };
+function boundImage({status='draft_ready', hash=binding.imageSha256, receipt=binding.previewReceipt}={}) {
+  const response=imageResponse();
+  for (const [name,value] of Object.entries({'Draft-Id':binding.draftId,Revision:binding.revision,'Image-Sha256':hash,Status:status,'Preview-Receipt':receipt})) response.headers.set(`X-Calendar-${name}`,value);
+  return response;
+}
+const success=(code='APPROVED',overrides={})=>Response.json({ok:true,code,...binding,status:'approved',approvedAt:'2026-11-03T03:00:00.000Z',...overrides});
+const button=name=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===name);
+async function settleImage(){for(let i=0;i<20&&!document.querySelector('img');i++)await act(async()=>new Promise(r=>setTimeout(r,5)));}
+async function readyApproval(handler=()=>success(),previewOptions={}) {
+  fetchHandler=async url=>url.endsWith('auth')?Response.json({authorized:true}):url.endsWith('draft')?boundImage(previewOptions):handler();
+  await render();await settleImage();
+  assert.ok(document.querySelector('img'));
+  assert.equal(button('この画像を承認').disabled,true);
+  await act(async()=>document.querySelector('img').dispatchEvent(new window.Event('load')));
+}
+
+test('bound preview enables only after display; click sends fresh raw token and exact identity once',async()=>{
+  await readyApproval();assert.equal(button('この画像を承認').disabled,false);mockLiff.token='fresh-click-token';
+  await act(async()=>{button('この画像を承認').click();button('この画像を承認').click();});
+  const approvals=calls.filter(c=>c.url==='/api/calendar-approve');assert.equal(approvals.length,1);
+  assert.deepEqual(JSON.parse(approvals[0].init.body),{idToken:'fresh-click-token',...binding});
+  assert.ok(document.body.textContent.includes('この画像の承認を記録しました'));disabled();
+});
+for(const [code,text]of [['ALREADY_APPROVED','この画像はすでに承認済み'],['ALREADY_APPROVED_BY_OTHER','別のメンバーがすでに']]) test(`canonical ${code} is shown without new success claim`,async()=>{
+  await readyApproval(()=>success(code));await act(async()=>button('この画像を承認').click());assert.ok(document.body.textContent.includes(text));assert.ok(!document.body.textContent.includes('この画像の承認を記録しました'));disabled();
+});
+test('approved preview stays disabled after image display',async()=>{await readyApproval(undefined,{status:'approved'});disabled();assert.ok(document.body.textContent.includes('すでに承認済み'));});
+test('byte hash mismatch never creates preview or enables approval',async()=>{
+  fetchHandler=async url=>url.endsWith('auth')?Response.json({authorized:true}):boundImage({hash:'0'.repeat(64)});
+  await render();await settleImage();assert.equal(created.length,0);assert.ok(document.querySelector('[role="alert"]'));disabled();
+});
+test('partial identity remains read only even after onLoad',async()=>{await readyApproval(undefined,{receipt:''});disabled();assert.ok(document.body.textContent.includes('確認専用'));});
+for(const status of [401,403,409,503])test(`approval ${status} requires explicit refresh, never retries`,async()=>{
+  await readyApproval(()=>Response.json({ok:false,code:'untrusted upstream detail'},{status}));
+  await act(async()=>button('この画像を承認').click());disabled();assert.ok(document.querySelector('[role="alert"]'));
+  assert.ok(!document.body.textContent.includes('untrusted upstream detail'));assert.equal(button('同じ画像の承認を再送信'),undefined);
+  assert.equal(calls.filter(c=>c.url.endsWith('approve')).length,1);
+  await act(async()=>button('下書きを再取得').click());await settleImage();disabled();
+  await act(async()=>document.querySelector('img').dispatchEvent(new window.Event('load')));assert.equal(button('この画像を承認').disabled,false);
+  assert.deepEqual(revoked,['blob:mock-0']);assert.equal(calls.filter(c=>c.url.endsWith('approve')).length,1);
+});
+test('ambiguous result offers explicit same-target retry with fresh token and suppresses retry double clicks',async()=>{
+  let attempt=0;await readyApproval(()=>++attempt===1?Response.json({ok:false},{status:504}):success('ALREADY_APPROVED'));
+  await act(async()=>button('この画像を承認').click());disabled();assert.ok(document.body.textContent.includes('承認済みの可能性'));
+  mockLiff.token='retry-token';await act(async()=>{const retry=button('同じ画像の承認を再送信');retry.click();retry.click();});
+  const approvals=calls.filter(c=>c.url.endsWith('approve'));assert.equal(approvals.length,2);
+  assert.deepEqual(JSON.parse(approvals[1].init.body),{idToken:'retry-token',...binding});assert.ok(document.body.textContent.includes('すでに承認済み'));disabled();
+});
+test('mismatched success tuple never claims approved',async()=>{
+  await readyApproval(()=>success('APPROVED',{revision:'2'}));await act(async()=>button('この画像を承認').click());
+  assert.ok(document.body.textContent.includes('承認結果を確認できません'));assert.ok(!document.body.textContent.includes('承認を記録しました'));disabled();
+});
+test('logout before click sends no approval',async()=>{await readyApproval();mockLiff.loggedIn=false;await act(async()=>button('この画像を承認').click());assert.equal(calls.filter(c=>c.url.endsWith('approve')).length,0);disabled();});
+test('pending approval prevents refresh and is aborted on unmount; delayed result cannot update remount',async()=>{
+  const pending=deferred();await readyApproval(()=>pending.promise);await act(async()=>button('この画像を承認').click());
+  assert.equal(button('下書きを再取得').disabled,true);disabled();const signal=calls.at(-1).init.signal;
+  await unmount();assert.equal(signal.aborted,true);await act(async()=>pending.resolve(success()));assert.equal(created.length,1);assert.deepEqual(revoked,created);
+});
+test('old image callback after refresh cannot enable replacement preview',async()=>{
+  await readyApproval();const oldImage=document.querySelector('img');await act(async()=>button('下書きを再取得').click());await settleImage();
+  await act(async()=>oldImage.dispatchEvent(new window.Event('load')));disabled();
+  await act(async()=>document.querySelector('img').dispatchEvent(new window.Event('load')));assert.equal(button('この画像を承認').disabled,false);
+});
+test('same-tick refresh cannot interrupt a newly submitted approval',async()=>{
+  const pending=deferred();await readyApproval(()=>pending.promise);
+  await act(async()=>{button('この画像を承認').click();button('下書きを再取得').click();});
+  assert.equal(calls.filter(c=>c.url.endsWith('draft')).length,1);assert.equal(button('下書きを再取得').disabled,true);
+  await act(async()=>pending.resolve(success()));assert.ok(document.body.textContent.includes('承認を記録しました'));disabled();
+});
+
+test('transport exception never claims success and explicit retry keeps exact identity with a fresh token',async()=>{
+  let attempts=0;await readyApproval(()=>{if(++attempts===1)throw new TypeError('Synthetic disconnected transport');return success('ALREADY_APPROVED');});
+  await act(async()=>button('この画像を承認').click());disabled();assert.ok(document.querySelector('[role="alert"]'));
+  assert.ok(!document.body.textContent.includes('この画像の承認を記録しました'));
+  assert.equal(calls.filter(call=>call.url.endsWith('approve')).length,1);
+  mockLiff.token='fresh-after-disconnect';await act(async()=>button('同じ画像の承認を再送信').click());
+  const bodies=calls.filter(call=>call.url.endsWith('approve')).map(call=>JSON.parse(call.init.body));
+  assert.deepEqual(bodies,[{idToken:'raw-token',...binding},{idToken:'fresh-after-disconnect',...binding}]);
+  assert.ok(document.body.textContent.includes('すでに承認済み'));assert.ok(!document.body.textContent.includes('この画像の承認を記録しました'));
+});
+test('remount during pending approval reauthenticates and ignores old response without replay',async()=>{
+  const pending=deferred();await readyApproval(()=>pending.promise);await act(async()=>button('この画像を承認').click());
+  const oldSignal=calls.at(-1).init.signal;await unmount();assert.equal(oldSignal.aborted,true);
+  fetchHandler=async url=>url.endsWith('auth')?Response.json({authorized:true}):url.endsWith('draft')?boundImage():assert.fail('No replay is permitted');
+  root=createRoot(document.getElementById('root'));await render();await settleImage();
+  await act(async()=>document.querySelector('img').dispatchEvent(new window.Event('load')));
+  assert.equal(calls.filter(call=>call.url.endsWith('auth')).length,2);assert.equal(calls.filter(call=>call.url.endsWith('draft')).length,2);
+  await act(async()=>pending.resolve(success()));
+  assert.equal(calls.filter(call=>call.url.endsWith('approve')).length,1);assert.ok(!document.body.textContent.includes('この画像の承認を記録しました'));
+  assert.equal(button('この画像を承認').disabled,false);assert.deepEqual(revoked,['blob:mock-0']);
+});
+test('explicit refresh replaces PNG bytes, receipt and identity before the next approval',async()=>{
+  await readyApproval(()=>Response.json({ok:false,code:'STALE_DRAFT'},{status:409}));await act(async()=>button('この画像を承認').click());disabled();
+  const nextPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==','base64');
+  const next={draftId:'12345678-1234-4234-8234-123456789abd',revision:'2',imageSha256:(await import('node:crypto')).createHash('sha256').update(nextPng).digest('hex'),previewReceipt:'replacement-receipt'};
+  fetchHandler=async url=>{
+    if(url.endsWith('auth'))return Response.json({authorized:true});
+    if(url.endsWith('draft'))return new Response(nextPng,{headers:{'Content-Type':'image/png','X-Calendar-Year-Month':'2026-11','X-Calendar-Generated-At':'2026-11-03T04:00:00.000Z','X-Calendar-Draft-Id':next.draftId,'X-Calendar-Revision':next.revision,'X-Calendar-Image-Sha256':next.imageSha256,'X-Calendar-Status':'draft_ready','X-Calendar-Preview-Receipt':next.previewReceipt}});
+    return success('APPROVED',next);
+  };
+  await act(async()=>button('下書きを再取得').click());await settleImage();disabled();
+  assert.equal(document.querySelector('img').src,'blob:mock-1');assert.deepEqual(revoked,['blob:mock-0']);
+  assert.equal(calls.filter(call=>call.url.endsWith('approve')).length,1);
+  await act(async()=>document.querySelector('img').dispatchEvent(new window.Event('load')));
+  await act(async()=>button('この画像を承認').click());
+  const bodies=calls.filter(call=>call.url.endsWith('approve')).map(call=>JSON.parse(call.init.body));
+  assert.deepEqual(bodies,[{idToken:'raw-token',...binding},{idToken:'raw-token',...next}]);assert.ok(document.body.textContent.includes('この画像の承認を記録しました'));
+});

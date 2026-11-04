@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "../api/calendar-*.ts",
+    "../server/calendar-*.ts"
+  ]
+}

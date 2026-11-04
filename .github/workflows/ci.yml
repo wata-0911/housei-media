@@ -91,3 +91,69 @@ jobs:
       - name: Grade import v2 native (Chromium)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:grade-import-v2-browser
+
+  calendar:
+    name: Calendar isolated contracts (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    env:
+      CALENDAR_FUNCTION_NODE_VERSION: ${{ matrix.node }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Set isolated QA paths
+        run: |
+          echo "CALENDAR_FUNCTION_ARTIFACT_ROOT=$RUNNER_TEMP/calendar-functions-${{ matrix.node }}" >> "$GITHUB_ENV"
+          echo "CALENDAR_VERCEL_NODE_MODULE=$RUNNER_TEMP/calendar-tools/node_modules/@vercel/node/dist/index.js" >> "$GITHUB_ENV"
+          echo "CALENDAR_VERCEL_BUILD_UTILS_MODULE=$RUNNER_TEMP/calendar-tools/node_modules/@vercel/build-utils/dist/index.js" >> "$GITHUB_ENV"
+          echo "CALENDAR_JSDOM_MODULE=$RUNNER_TEMP/calendar-tools/node_modules/jsdom/lib/api.js" >> "$GITHUB_ENV"
+          echo "CALENDAR_PLAYWRIGHT_MODULE=$RUNNER_TEMP/calendar-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Install product dependencies
+        id: install
+        run: npm ci
+      - name: Install isolated calendar QA tools
+        id: tools
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm install --prefix "$RUNNER_TEMP/calendar-tools" --no-save --package-lock=false @vercel/node@5.8.6 @vercel/build-utils@12.0.0 jsdom@26.1.0 playwright@1.56.1
+      - name: Calendar API types
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck:calendar
+      - name: Calendar assembled GAS parity
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run check:calendar:gas
+      - name: Calendar GAS contracts
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run test:calendar:gas
+      - name: Calendar API contracts (mock upstreams)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run test:calendar:api
+      - name: Calendar UI lifecycle contracts
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: npm run test:calendar:ui
+      - name: Main exclusion and dev viewer builds
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run test:calendar:main-exclusion
+      - name: Build official Vercel Function artifacts
+        id: functions
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: node scripts/build-calendar-function-artifacts.mjs . "$CALENDAR_FUNCTION_ARTIFACT_ROOT"
+      - name: Start emitted Functions without TypeScript loader
+        if: ${{ !cancelled() && steps.functions.outcome == 'success' }}
+        run: npm run test:calendar:function
+      - name: Install Chromium
+        id: chromium
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: node "$RUNNER_TEMP/calendar-tools/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Calendar mobile browser contracts (mock upstreams)
+        if: ${{ !cancelled() && steps.chromium.outcome == 'success' }}
+        run: npm run test:calendar:browser

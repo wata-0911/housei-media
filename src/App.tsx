@@ -151,7 +151,7 @@ export default function App() {
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/member" element={<ProfileCard />} />
             <Route path="*" element={<NotFound />} />
-            <Route path="/calendar-approve" element={<CalendarApprovePage />} />
+            {__CALENDAR_DEV_ALLOWED__ && <Route path="/calendar-approve" element={<CalendarApprovePage />} />}
           </Routes>
         </main>
 
