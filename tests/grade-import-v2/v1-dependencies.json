@@ -1,0 +1,12 @@
+{
+  "src/planner/gradeImport/gradeImportContract.ts": "c31d7438f5db1f7b44593f2dbba0d447ba472d038326b96fed6bf051ac8769f6",
+  "src/planner/attempts/jsonInput.ts": "068acba6fea88d5909f260943236bcff164bc9d94cae805f900baa21bfbc8492",
+  "src/planner/digest.ts": "b4d779674fde9c374aee890950d192b8ca853637901a38d676b128fdadebe3ec",
+  "src/planner/attempts/gradeImport/sourceArchive.ts": "071b29da4a936e235bd2522ae89b59ac76c5e937aeedc5897ff78fd4189e3092",
+  "src/planner/attempts/gradeImport/decimalPolicy.ts": "5e0af315a6d8b8f75c9a62080d73e3288b6dcec38e168c97b70dfe12e8e63ff4",
+  "src/planner/attempts/gradeImport/ledger.ts": "edcc3c01c32431864cff8ef625a129c25e5eed31562803d1c005e4118b9ce6b1",
+  "src/planner/attempts/gradeImport/preview.ts": "dc93c6775ded91a484a9442d7a4d15ec55bded852057e36cda42dea6fe574c76",
+  "src/planner/attempts/gradeImport/adoption.ts": "1568a86189c705c748a5f948fba55cd212342f02b47d25b867cbf088d8706a94",
+  "src/planner/attempts/gradeImportHost/contracts.ts": "6e8d21d4f73d941e8ffa4bcaed0cad90e8f8852503b236cf0ce2465e4ce1eb04",
+  "src/planner/attempts/gradeImportHost/codec.ts": "f4c89cf5f828988520bbff6ea55e6dfd3921943003976dac9a28f6ed2cf2c8da"
+}

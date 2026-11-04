@@ -25,6 +25,7 @@ export function createGradeImportHost(factory: IDBFactory, locks: PlannerWriteLo
   const proposals = new WeakMap<Proposal, { intent: Intent; receipt: Receipt; planJson: string; ledgerRaw: string }>();
   let stopped = false, busy = false, epoch = 0, active: PreparedIntent | null = null;
   let issuedHandle = false;
+  let qualifiedRaw: string | null = null;
   const initialEnvironment = environment(origin);
   const alive = () => { if (stopped) fail('session_stopped'); };
   function sample() {
@@ -39,9 +40,9 @@ export function createGradeImportHost(factory: IDBFactory, locks: PlannerWriteLo
   function barrier(n: number) { alive(); if (n !== epoch) fail('cancelled'); sample(); }
   function issue(raw: string, record: FrozenRecord): NativeHandle {
     owner.restrict(record);
-    const h = Object.freeze({ snapshotJson: raw }) as NativeHandle; handles.set(h, { raw, record }); issuedHandle = true; return h;
+    const h = Object.freeze({ snapshotJson: raw }) as NativeHandle; handles.set(h, { raw, record }); issuedHandle = true; qualifiedRaw = raw; return h;
   }
-  async function strictRead() {
+  async function strictRead(expectedRaw: string | null = qualifiedRaw) {
     try {
       const data = await store.read();
       if (!data.exists) {
@@ -51,6 +52,7 @@ export function createGradeImportHost(factory: IDBFactory, locks: PlannerWriteLo
       if (!data.keyExists || typeof data.value !== 'string') fail('invalid_host');
       const record = await decodeHost(data.value);
       if (!equal(record.environment, sample())) { stopped = true; fail('stale'); }
+      if (qualifiedRaw !== null && data.value !== expectedRaw) fail('stale');
       return { raw: data.value, record };
     } catch (e) {
       // Observed native read/integrity failure revokes existing live authority.
@@ -82,7 +84,7 @@ export function createGradeImportHost(factory: IDBFactory, locks: PlannerWriteLo
       stopped = true; fail('outcome_unknown');
     }
     try {
-      barrier(n); const read = await strictRead(); barrier(n);
+      barrier(n); const read = await strictRead(raw); barrier(n);
       if (!read || read.raw !== raw || !equal(read.record, next)) fail('outcome_unknown');
       return issue(read.raw, read.record);
     } catch { stopped = true; fail('outcome_unknown'); }

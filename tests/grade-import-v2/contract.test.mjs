@@ -1,0 +1,45 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {adopted,raw,confirm,json,oracle} from '../grade-import-host/fixture.mjs';
+const api=()=>import('../../src/planner/attempts/gradeImportHost/codecV2.ts');
+async function migrated(){const v=await adopted(true);const a=await api();const original=json(v.t2),target=await a.upgradeTarget(original,'native-v1-upgrade');return {v,a,original,r:await a.migrate(original,'native-v1-upgrade',{...target,confirmed:true,reason:'explicit storage upgrade'})};}
+test('T01: explicit migration preserves every v1 byte, ID, receipt, outcome',async()=>{const {v,a,original,r}=await migrated();assert.equal(r.legacyBaseRaw,original);assert.equal(r.ledgerRaw,v.t2.ledgerRaw);assert.deepEqual(r.authority.reservedIds,v.t2.authority.reservedIds);assert.deepEqual(r.receipts,v.t2.receipts);assert.deepEqual(r.outcomes,v.t2.outcomes);assert.deepEqual(await a.decodeHostV2(json(r)),r);});
+for(const active of [false,true])test(`T03/T04: 4->2, active=${active}, full immutable prefix`,async()=>{
+ const {v,a,r}=await migrated();const c=await a.sourceContext(raw(2),r);const chosen=c.preview.rows[0].candidates.find(x=>x.isLatest);const {V2IdentityOwner}=await import('../../src/planner/attempts/gradeImportHost/identityV2.ts');const owner=new V2IdentityOwner(),m=owner.mint(r,active,chosen);const grant=await a.grantFor(c,m,r.environment);const t1=await a.appendHost(r,{kind:'reserve',grant});const targets=await a.confirmationTargets(c,grant);const decision={selection:grant.selection,allocation:grant.allocation,confirmation:confirm(targets)};const {receipt,plan}=await a.receiptFor(c,grant,decision);const result=await a.appendHost(t1,{kind:'adopt',receipt},json(plan.resultLedger));
+ assert.equal(result.legacyBaseRaw,json(v.t2));assert.equal(m.ids.length,active?19:18);assert.equal(t1.ledgerRaw,r.ledgerRaw);
+ const l=JSON.parse(result.ledgerRaw),old=JSON.parse(r.ledgerRaw);assert.deepEqual(l.view.revisions[0],old.view.revisions[0]);assert.deepEqual(l.view.revisions.map(x=>x.record.earnedCredits.value),[4,2]);assert.equal(l.view.achievements[0].activeRevisionId,active?l.view.revisions[1].id:old.view.achievements[0].activeRevisionId);assert.deepEqual(l,oracle(l.journal.entries.map(x=>x.operation),[r.hostId]));assert.deepEqual(await a.decodeHostV2(json(result)),result);
+});
+async function corrected(source=raw(2)){
+ const v=await migrated(),c=await v.a.sourceContext(source,v.r),candidate=c.preview.rows[0].candidates.find(x=>x.isLatest);const {V2IdentityOwner}=await import('../../src/planner/attempts/gradeImportHost/identityV2.ts');const owner=new V2IdentityOwner(),m=owner.mint(v.r,true,candidate),g=await v.a.grantFor(c,m,v.r.environment),reserved=await v.a.appendHost(v.r,{kind:'reserve',grant:g}),targets=await v.a.confirmationTargets(c,g),d={selection:g.selection,allocation:g.allocation,confirmation:confirm(targets)},p=await v.a.receiptFor(c,g,d),r=await v.a.appendHost(reserved,{kind:'adopt',receipt:p.receipt},json(p.plan.resultLedger));return {...v,c,candidate,owner,m,g,reserved,d,p,result:r};
+}
+test('T06/T10: historical tamper, missing receipt, shrink and reordered history all reject',async()=>{
+ const v=await corrected();const mutations=[r=>r.legacyBaseRaw=r.legacyBaseRaw.replace('旧4単位','forged'),r=>r.authority.reservedIds.pop(),r=>r.receipts[0].decision.confirmation.rows[0].reason='new reason',r=>r.events.reverse(),r=>r.outcomes[0].sequence++,r=>r.ledgerRaw=r.ledgerRaw.replace('"value":4','"value":2'),r=>r.events[1].body.receipt.beforeLedgerEntries=0,r=>r.environment.policy.host='g03-native-one-row/v1',r=>r.authority.opReceipts=[]];
+ for(const f of mutations){const r=structuredClone(v.result);f(r);await assert.rejects(v.a.decodeHostV2(json(r)));}
+ const r=structuredClone(v.result);r.events[1].body.receipt.decision.confirmation.rows[0].reason='reason only';const {eventSha256,...body}=r.events[1];r.events[1].eventSha256=await v.a.digest(body);r.authority.tipSha256=r.events[1].eventSha256;await assert.rejects(v.a.decodeHostV2(json(r)));void eventSha256;
+});
+test('T07/T14: reference roles and retired burns cannot be changed or reused',async()=>{
+ const v=await corrected(),g=structuredClone(v.g);g.references.detailIds.reverse();await assert.rejects(v.a.appendHost(v.r,{kind:'reserve',grant:g}));
+ const old=crypto.randomUUID;crypto.randomUUID=()=>v.g.ids[0].split(':').at(-1);try{const {V2IdentityOwner}=await import('../../src/planner/attempts/gradeImportHost/identityV2.ts');assert.throws(()=>new V2IdentityOwner().mint(v.reserved,true,v.candidate),/allocator_exhausted/);}finally{crypto.randomUUID=old;}
+ assert.throws(()=>v.owner.verify({},v.m.ids),{code:'id_ticket'});assert.throws(()=>v.owner.verify(v.m.ticket,[...v.m.ids].reverse()),{code:'id_ticket'});
+});
+test('T15: wrapper boundary, depth and suffix event limit reject without normalization',async()=>{
+ const v=await migrated();const {LIMITS}=await import('../../src/planner/attempts/gradeImportHost/contracts.ts');assert.equal(v.a.parse(' '.repeat(LIMITS.bytes-1)+'0'),0);assert.throws(()=>v.a.parse(' '.repeat(LIMITS.bytes)+'0'),{code:'resource_limit'});
+ assert.throws(()=>v.a.parse('['.repeat(66)+'0'+']'.repeat(66)),{code:'resource_limit'});
+ const r=structuredClone(v.r);r.events=Array(129).fill({});await assert.rejects(v.a.decodeHostV2(json(r)),{code:'resource_limit'});
+ assert.equal(v.a.roles(true,true).length,19);assert.ok(1+128*27+128*27<20000,'A event/grant limits bound total IDs below global cap');
+});
+test('T18: near maximum original JSON, long reason and replay cost measured, no limits raised',async()=>{
+ const start=performance.now(),source=JSON.parse(raw()),size=1024*1024;source.metadata.pad='x'.repeat(size-Buffer.byteLength(JSON.stringify(source))-40);const original=json(source);const v=await (async()=>{const old=await adopted(true,original),a=await api(),base=json(old.t2),target=await a.upgradeTarget(base,'native-v1-upgrade');return {a,base,r:await a.migrate(base,'native-v1-upgrade',{...target,confirmed:true,reason:'x'.repeat(4096)})};})();
+ assert.equal(v.r.legacyBaseRaw,v.base);const before=json(v.r);const round=await v.a.decodeHostV2(before);assert.equal(json(round),before);console.log(JSON.stringify({T18:{rawBytes:Buffer.byteLength(original),hostBytes:Buffer.byteLength(before),milliseconds:performance.now()-start,heapUsed:process.memoryUsage().heapUsed}}));
+ const tooBig=before+' '.repeat(8*1024*1024);await assert.rejects(v.a.decodeHostV2(tooBig),{code:'resource_limit'});assert.equal(json(v.r),before);
+});
+test('T15/T18: 128 real reserve events full-replay, all unused burns retained; 129 refuses',async()=>{
+ const v=await migrated(),c=await v.a.sourceContext(raw(2),v.r),candidate=c.preview.rows[0].candidates.find(x=>x.isLatest);const {V2IdentityOwner}=await import('../../src/planner/attempts/gradeImportHost/identityV2.ts');const owner=new V2IdentityOwner(),r=structuredClone(v.r),start=performance.now();
+ for(let n=0;n<128;n++){const m=owner.mint(r,false,candidate),grant=await v.a.grantFor(c,m,r.environment),body={policy:r.environment.policy.host,sequence:n+1,previousSha256:r.events.at(-1)?.eventSha256??r.anchorSha256,body:{kind:'reserve',grant}},event={...body,eventSha256:await v.a.digest(body)};r.events.push(event);r.authority.reservedIds.push(...m.ids);r.authority.generation++;r.authority.tipSha256=event.eventSha256;}
+ const decoded=await v.a.decodeHostV2(json(r));assert.equal(json(decoded),json(r));assert.equal(r.authority.reservedIds.length,v.r.authority.reservedIds.length+128*18);assert.equal(r.ledgerRaw,v.r.ledgerRaw);assert.deepEqual(r.receipts,v.r.receipts);
+ const m=owner.mint(r,false,candidate),g=await v.a.grantFor(c,m,r.environment);await assert.rejects(v.a.appendHost(decoded,{kind:'reserve',grant:g}),{code:'resource_limit'});console.log(JSON.stringify({T18Burns:{events:128,ids:r.authority.reservedIds.length,bytes:Buffer.byteLength(json(r)),milliseconds:performance.now()-start}}));
+});
+test('T07: latest ID required; real year-change and same DTO reimport remain unsupported',async()=>{
+ const v=await corrected(),next=await v.a.sourceContext(raw(0),v.result),historical=next.preview.rows[0].candidates.find(x=>!x.isLatest);assert.throws(()=>v.a.select(next,{achievementId:historical.achievementId,revisionId:historical.revisionId,observationId:historical.observationId}),{code:'id_ticket'});
+ for(const source of [raw(0,'2023'),JSON.stringify({...JSON.parse(raw(2)),capturedAt:'2026-11-05T00:00:00.000Z'})]){const c=await v.a.sourceContext(source,v.result),x=c.preview.rows[0].candidates.find(x=>x.isLatest);assert.throws(()=>v.a.select(c,{achievementId:x.achievementId,revisionId:x.revisionId,observationId:x.observationId}),{code:'unsupported_policy'});}
+});
+test('T01: noncanonical outer whitespace is verified but never normalized on migration',async()=>{const v=await adopted(true),a=await api(),rawV1='\n'+JSON.stringify(v.t2,null,2)+'\n',target=await a.upgradeTarget(rawV1,'native-v1-upgrade'),r=await a.migrate(rawV1,'native-v1-upgrade',{...target,confirmed:true,reason:'preserve exact bytes'});assert.equal(r.legacyBaseRaw,rawV1);assert.notEqual(r.legacyBaseRaw,json(v.t2));});

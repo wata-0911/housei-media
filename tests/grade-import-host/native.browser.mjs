@@ -392,3 +392,10 @@ for(const [mode,code] of [['missing','database_missing'],['version','existing_da
   assert.deepEqual(result,{first:code,stopped:true,samples:3,puts:0,uuids:0,reconfirm:'session_stopped'});
   assert.equal((await page.evaluate(()=>record())).value,saved);
  });
+test('F-01 valid-record load ABA: observed normal update cannot revive earlier v1 proposal',async t=>{
+ const {page,ctx}=await fresh(t);await init(page);await reservation(page,raw(),true);await page.evaluate(()=>seal());const A=(await page.evaluate(()=>record())).value;
+ const other=await ctx.newPage();await setup(other);await other.evaluate(async s=>{globalThis.h=await c.load();await reserve(s,true);},raw(0));const B=(await other.evaluate(()=>record())).value;
+ const observed=await page.evaluate(async()=>({e:await error(()=>c.load()),stopped:c.isStopped()}));
+ await page.evaluate(value=>new Promise((resolve,reject)=>{const req=indexedDB.open('hosei-yi06-isolated-v1',1);req.onsuccess=()=>{const db=req.result,tx=db.transaction('authority','readwrite');tx.objectStore('authority').put(value,'current');tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>reject(tx.error);};}),A);
+ const after=await page.evaluate(async()=>{const b={...counts};return {e:await error(()=>c.commit(q)),puts:counts.puts-b.puts,ids:counts.uuids-b.uuids};});console.log(JSON.stringify({V1ValidReadABA:{observed,after,beforeH:JSON.parse(A).authority.reservedIds.length,observedH:JSON.parse(B).authority.reservedIds.length}}));assert.deepEqual(observed,{e:'stale',stopped:true});assert.deepEqual(after,{e:'session_stopped',puts:0,ids:0});
+});

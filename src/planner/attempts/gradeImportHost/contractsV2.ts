@@ -1,0 +1,17 @@
+import type { Grant as GrantV1, Receipt, Outcome, HostRecord } from './contracts';
+import { POLICY as V1POLICY } from './contracts';
+import type { Candidate } from '../gradeImport/preview';
+import type { DeepReadonly } from '../gradeImport/sourceArchive';
+export const POLICY = Object.freeze({ ...V1POLICY, host: 'g03-revision-import/v2', ids: 'g03-role-uuid/v2' });
+export const VERIFIER = 'g03-v1-base+g01b-g02b-v1-suffix/v2';
+export type Environment = Omit<HostRecord['environment'], 'policy'> & { policy: typeof POLICY };
+export type Provenance = 'native-v1-upgrade' | 'native-v2-empty';
+export type UpgradeTarget = { baseRawSha256: string; baseTipSha256: string | null; hostId: string; ledgerSha256: string; floorSha256: string; reservationsSha256: string; policy: typeof POLICY; verifier: typeof VERIFIER; provenance: Provenance };
+export type UpgradeReceipt = UpgradeTarget & { confirmed: true; reason: string };
+export type References = { candidate: { achievementId: string; revisionId: string; observationId: string } | null; sourceRef: Candidate['sourceRef'] | null; detailIds: string[] };
+export type Grant = Omit<GrantV1, 'environment'> & { environment: Environment; references: References };
+export type Body = { kind: 'reserve'; grant: Grant } | { kind: 'adopt'; receipt: Receipt };
+export type Event = { policy: string; sequence: number; previousSha256: string; body: Body; eventSha256: string };
+export type RecordV2 = { format: 'hosei-grade-import-host'; hostVersion: 2; verifier: typeof VERIFIER; environment: Environment; hostId: string; baseProvenance: Provenance; legacyBaseRaw: string; migration: UpgradeReceipt; anchorSha256: string; events: Event[]; ledgerRaw: string; receipts: Receipt[]; outcomes: (Outcome | Outcome & { policy: string })[]; authority: HostRecord['authority'] };
+export type FrozenRecord = DeepReadonly<RecordV2>;
+export type { Receipt } from './contracts';

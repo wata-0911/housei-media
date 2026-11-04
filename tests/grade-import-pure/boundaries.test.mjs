@@ -55,7 +55,7 @@ test('production entry・PlannerPage・既存保存経路からpure/parserへの
     assert.deepEqual([...closure(nodes, start)].filter(p => p.startsWith(pure) || p === parser), [], start);
   }
   // This rejects future direct consumers even if they are not reachable from main yet.
-  for (const [from, edges] of nodes) if (!from.startsWith(pure) && from !== 'src/planner/attempts/gradeImportHost/codec.ts') assert.deepEqual(edges.filter(p => p.startsWith(pure) || p === parser), [], from);
+  for (const [from, edges] of nodes) if (!from.startsWith(pure) && from !== 'src/planner/attempts/gradeImportHost/codec.ts' && from !== 'src/planner/attempts/gradeImportHost/codecV2.ts') assert.deepEqual(edges.filter(p => p.startsWith(pure) || p === parser), [], from);
 });
 test('pureの直接依存は正規parser/DTO/digestとpure内部のみ。writer/authority/Workerへ到達しない', () => {
   const nodes = graph(), allowed = new Set([parser, 'src/planner/gradeImport/gradeImportContract.ts', 'src/planner/digest.ts']);

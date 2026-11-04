@@ -61,6 +61,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:grade-import-host
 
+      - name: Grade import v2 types and contracts
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck:grade-import-v2 && npm run test:grade-import-v2
+
       - name: Extension parser and handoff tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:extension
@@ -83,3 +87,7 @@ jobs:
       - name: Grade import native host (Chromium)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:grade-import-host-browser
+
+      - name: Grade import v2 native (Chromium)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:grade-import-v2-browser
