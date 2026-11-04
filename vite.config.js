@@ -1,13 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { posix } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { exporterBuildSettings } from './scripts/grade-import-backup-revision.mjs';
 import { attemptWorkbenchEnabled } from './dev/attempts/gate.ts';
 
 export default defineConfig(({ command, mode }) => {
   const persistence = attemptWorkbenchEnabled(command, mode, process.env.YI06_PERSISTENCE, process.env.NODE_ENV);
   const enabled = attemptWorkbenchEnabled(command, mode, process.env.YI05_WORKBENCH, process.env.NODE_ENV);
+  const exporter = exporterBuildSettings(fileURLToPath(new URL('./', import.meta.url)), { command });
+  if (command === 'build' && !exporter.result.stamp) console.warn(`G03 B1 export disabled: ${exporter.result.reason}`);
   return {
-    plugins: [react(), {
+    define: exporter.define,
+    plugins: [react(), exporter.plugin, {
       name: 'isolated-attempt-workbench',
       configureServer(server) {
         server.middlewares.use(async (req, res, next) => {
