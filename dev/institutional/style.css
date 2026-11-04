@@ -1,0 +1,4 @@
+@import '../../src/index.css';
+@import '../../src/components/planner/institutional/institutionalSearch.css';
+body { margin: 0; background: #f8fafc; color: #002255; font-family: system-ui, sans-serif; }
+.institutional-dev-heading { max-width: 72rem; margin: auto; padding: 1.25rem; font-size: 1rem; }
