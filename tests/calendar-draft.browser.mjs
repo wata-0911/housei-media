@@ -1,16 +1,18 @@
 // Local deterministic UI QA; no live LINE/GAS. CALENDAR_PLAYWRIGHT_MODULE may point to an installed Playwright.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const origin = `http://127.0.0.1:${process.env.CALENDAR_BROWSER_PORT || 4193}`;
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==','base64');
+const binding = {draftId:'12345678-1234-4234-8234-123456789abc',revision:'1',imageSha256:createHash('sha256').update(png).digest('hex'),previewReceipt:'opaque-receipt'};
 let browser, server;
 before(async () => {
   const { chromium } = await import(process.env.CALENDAR_PLAYWRIGHT_MODULE || 'playwright');
   server = spawn(process.execPath, ['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port',new URL(origin).port,'--strictPort'], {
-    cwd: new URL('../', import.meta.url), env: { ...process.env, VITE_LIFF_ID: 'mock-liff-id' }, stdio: 'pipe',
+    cwd: new URL('../', import.meta.url), env: { ...process.env, VITE_LIFF_ID: 'mock-liff-id', CALENDAR_LOCAL_TEST_MODE: 'true' }, stdio: 'pipe',
   });
   let output=''; server.stdout.on('data',b=>output+=b); server.stderr.on('data',b=>output+=b);
   let ready=false;
@@ -23,7 +25,7 @@ async function open(t, options={}) {
   const context=await browser.newContext({viewport:{width:390,height:844}});t.after(()=>context.close());
   const calls=[];
   await context.addInitScript(({loggedOut})=>{
-    window.mockLoggedOut=loggedOut; window.previewCreated=[];window.previewRevoked=[];window.apiAborts=[];
+    window.mockLoggedOut=loggedOut; window.mockToken='raw-mock-token'; window.previewCreated=[];window.previewRevoked=[];window.apiAborts=[];
     const create=URL.createObjectURL.bind(URL), revoke=URL.revokeObjectURL.bind(URL);
     URL.createObjectURL=(blob)=>{const url=create(blob);window.previewCreated.push(url);return url;};
     URL.revokeObjectURL=(url)=>{window.previewRevoked.push(url);return revoke(url);};
@@ -32,13 +34,20 @@ async function open(t, options={}) {
   },{loggedOut:options.loggedOut||false});
   await context.route('**/*',async route=>{
     const url=route.request().url();
-    if(url.includes('/@line_liff')||url.includes('/@line/liff')||url.includes('/node_modules/@line/liff/')) return route.fulfill({contentType:'application/javascript',body:`export default {init:async()=>{},isLoggedIn:()=>!window.mockLoggedOut,getDecodedIDToken:()=>({name:'Mock member'}),getIDToken:()=> 'raw-mock-token',isInClient:()=>false,login:()=>{window.mockLoginCalled=true}};`});
+    if(url.includes('/@line_liff')||url.includes('/@line/liff')||url.includes('/node_modules/@line/liff/')) return route.fulfill({contentType:'application/javascript',body:`export default {init:async()=>{},isLoggedIn:()=>!window.mockLoggedOut,getDecodedIDToken:()=>({name:'Mock member'}),getIDToken:()=> window.mockToken,isInClient:()=>false,login:()=>{window.mockLoginCalled=true}};`});
     if(url.endsWith('/api/calendar-auth')) { calls.push({kind:'auth',body:route.request().postDataJSON()});return route.fulfill({status:options.authStatus||200,contentType:'application/json',body:JSON.stringify({authorized:options.authStatus?false:true})}); }
+    if(url.endsWith('/api/calendar-approve')) {
+      calls.push({kind:'approve',body:route.request().postDataJSON()});
+      if(options.approve) return options.approve(route);
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,code:'APPROVED',...binding,status:'approved',approvedAt:'2026-11-03T03:00:00.000Z'})});
+    }
     if(url.endsWith('/api/calendar-draft')) {
       calls.push({kind:'draft',body:route.request().postDataJSON()});
       if(options.holdDraft){options.holdDraft(route);return;}
       if(options.draftStatus) return route.fulfill({status:options.draftStatus,contentType:'application/json',body:JSON.stringify({ok:false,code:options.code})});
-      return route.fulfill({status:200,contentType:'image/png',headers:{'X-Calendar-Year-Month':options.month||'2026-11','X-Calendar-Generated-At':options.generatedAt??'2026-11-02T03:00:00.000Z'},body:png});
+      const preview=options.preview?.(calls.filter(call=>call.kind==='draft').length)||{};
+      const identity=preview.binding||binding;
+      return route.fulfill({status:200,contentType:'image/png',headers:{...(options.bound?{'X-Calendar-Draft-Id':identity.draftId,'X-Calendar-Revision':identity.revision,'X-Calendar-Image-Sha256':identity.imageSha256,'X-Calendar-Status':options.boundStatus||'draft_ready','X-Calendar-Preview-Receipt':identity.previewReceipt}:{}),'X-Calendar-Year-Month':options.month||'2026-11','X-Calendar-Generated-At':preview.generatedAt??options.generatedAt??'2026-11-02T03:00:00.000Z'},body:preview.png||png});
     }
     if(new URL(url).origin!==origin) return route.abort();
     return route.continue();
@@ -47,6 +56,7 @@ async function open(t, options={}) {
   return {page,calls};
 }
 async function disabled(page) { for(const name of ['修正が必要','この画像を承認']) assert.equal(await page.getByRole('button',{name,exact:true}).isDisabled(),true); }
+async function approvalReady(page) { await page.waitForFunction(()=>{const button=Array.from(document.querySelectorAll('button')).find(element=>element.textContent.trim()==='この画像を承認');return Boolean(button && !button.disabled);}); }
 
 test('authorized mobile preview uses raw ID token, paired metadata, no horizontal overflow and disabled actions',async t=>{
   const {page,calls}=await open(t);const image=page.getByRole('img',{name:'2026-11 カレンダー下書き'});await image.waitFor();
@@ -73,4 +83,88 @@ test('pending draft aborts on navigation; late response cannot create stale prev
   assert.ok((await page.evaluate(()=>window.apiAborts)).includes('/api/calendar-draft'));
   await held.fulfill({status:200,contentType:'image/png',headers:{'X-Calendar-Year-Month':'2026-11','X-Calendar-Generated-At':''},body:png}).catch(()=>{});
   assert.deepEqual(await page.evaluate(()=>window.previewCreated),[]);assert.equal(await page.getByRole('img',{name:/下書き/}).count(),0);
+});
+
+test('bound mobile preview approves exact displayed PNG once with a freshly read token',async t=>{
+  const {page,calls}=await open(t,{bound:true});const approve=page.getByRole('button',{name:'この画像を承認',exact:true});
+  await approvalReady(page);
+  await page.evaluate(()=>{window.mockToken='fresh-browser-token';const button=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='この画像を承認');button.click();button.click();});
+  await page.getByText(/この画像の承認を記録しました/).waitFor();assert.equal(await approve.isDisabled(),true);
+  assert.deepEqual(calls.filter(c=>c.kind==='approve'),[{kind:'approve',body:{idToken:'fresh-browser-token',...binding}}]);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await page.screenshot({path:'/tmp/calendar-approval-mobile.png',fullPage:true});
+});
+test('stale approval never automatically retries or approves replacement preview',async t=>{
+  const {page,calls}=await open(t,{bound:true,approve:route=>route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({ok:false,code:'STALE_DRAFT'})})});
+  await page.getByRole('button',{name:'この画像を承認',exact:true}).click();await page.getByRole('alert').waitFor();await disabled(page);
+  assert.equal(calls.filter(c=>c.kind==='approve').length,1);await page.getByRole('button',{name:'下書きを再取得'}).click();
+  await approvalReady(page);
+  assert.equal(calls.filter(c=>c.kind==='approve').length,1);assert.equal(calls.filter(c=>c.kind==='draft').length,2);
+});
+test('already approved preview never offers a new approval',async t=>{
+  const {page,calls}=await open(t,{bound:true,boundStatus:'approved'});await page.getByText(/この画像はすでに承認済み/).waitFor();await disabled(page);assert.equal(calls.filter(c=>c.kind==='approve').length,0);
+});
+test('unknown approval requires explicit same-target retry, preserving receipt and image identity',async t=>{
+  let attempts=0;const {page,calls}=await open(t,{bound:true,approve:route=>++attempts===1?route.fulfill({status:504,contentType:'application/json',body:'{"ok":false}'}):route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,code:'ALREADY_APPROVED',...binding,status:'approved',approvedAt:'2026-11-03T03:00:00.000Z'})})});
+  await page.getByRole('button',{name:'この画像を承認',exact:true}).click();await page.getByRole('alert').waitFor();await disabled(page);
+  assert.equal(calls.filter(c=>c.kind==='approve').length,1);await page.getByRole('button',{name:'同じ画像の承認を再送信'}).click();await page.getByText(/この画像はすでに承認済み/).waitFor();
+  assert.equal(calls.filter(c=>c.kind==='approve').length,2);assert.deepEqual(calls.filter(c=>c.kind==='approve')[0].body,calls.filter(c=>c.kind==='approve')[1].body);
+});
+
+
+test('transport disconnect leaves approval unknown until explicit exact-target retry',async t=>{
+  let attempts=0;
+  const {page,calls}=await open(t,{bound:true,approve:route=>++attempts===1
+    ?route.abort('internetdisconnected')
+    :route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,code:'ALREADY_APPROVED',...binding,status:'approved',approvedAt:'2026-11-03T03:00:00.000Z'})})});
+  await page.getByRole('button',{name:'この画像を承認',exact:true}).click();
+  await page.getByRole('alert').waitFor();await disabled(page);
+  assert.equal(await page.getByText(/この画像の承認を記録しました/).count(),0);
+  assert.equal(calls.filter(call=>call.kind==='approve').length,1);
+  await page.evaluate(()=>{window.mockToken='fresh-after-disconnect';});
+  await page.getByRole('button',{name:'同じ画像の承認を再送信'}).click();
+  await page.getByText(/この画像はすでに承認済み/).waitFor();
+  const submissions=calls.filter(call=>call.kind==='approve').map(call=>call.body);
+  assert.equal(submissions.length,2);assert.deepEqual(submissions[0],{idToken:'raw-mock-token',...binding});
+  assert.deepEqual(submissions[1],{idToken:'fresh-after-disconnect',...binding});
+  assert.equal(await page.getByText(/この画像の承認を記録しました/).count(),0);
+});
+
+test('browser reload during pending approval reauthenticates without replay or stale success',async t=>{
+  let held;
+  const {page,calls}=await open(t,{bound:true,approve:route=>{held=route;}});
+  await page.getByRole('button',{name:'この画像を承認',exact:true}).click();
+  await page.getByText('承認結果を確認中...').waitFor();
+  assert.ok(held);await page.reload();
+  await approvalReady(page);
+  assert.equal(calls.filter(call=>call.kind==='auth').length,2);
+  assert.equal(calls.filter(call=>call.kind==='draft').length,2);
+  assert.equal(calls.filter(call=>call.kind==='approve').length,1);
+  await held.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,code:'APPROVED',...binding,status:'approved',approvedAt:'2026-11-03T03:00:00.000Z'})}).catch(()=>{});
+  assert.equal(await page.getByText(/この画像の承認を記録しました/).count(),0);
+  assert.equal(calls.filter(call=>call.kind==='approve').length,1);
+});
+
+test('explicit refresh replaces displayed PNG and identity before any new approval',async t=>{
+  const nextPng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==','base64');
+  const nextBinding={draftId:'12345678-1234-4234-8234-123456789abd',revision:'2',imageSha256:createHash('sha256').update(nextPng).digest('hex'),previewReceipt:'replacement-receipt'};
+  let attempts=0;
+  const {page,calls}=await open(t,{bound:true,preview:count=>count===1?{}:{png:nextPng,binding:nextBinding,generatedAt:'2026-11-03T04:00:00.000Z'},approve:route=>++attempts===1
+    ?route.fulfill({status:409,contentType:'application/json',body:'{"ok":false,"code":"STALE_DRAFT"}'})
+    :route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,code:'APPROVED',...nextBinding,status:'approved',approvedAt:'2026-11-03T05:00:00.000Z'})})});
+  await page.getByRole('button',{name:'この画像を承認',exact:true}).click();await page.getByRole('alert').waitFor();
+  const previousUrl=await page.getByRole('img',{name:/下書き/}).getAttribute('src');
+  await page.getByRole('button',{name:'下書きを再取得'}).click();
+  await approvalReady(page);
+  const replacementUrl=await page.getByRole('img',{name:/下書き/}).getAttribute('src');assert.notEqual(replacementUrl,previousUrl);
+  assert.ok((await page.evaluate(()=>window.previewRevoked)).includes(previousUrl));
+  assert.equal(await page.locator('time').getAttribute('datetime'),'2026-11-03T04:00:00.000Z');
+  const displayedHash=await page.getByRole('img',{name:/下書き/}).evaluate(async image=>{
+    const bytes=await (await fetch(image.src)).arrayBuffer();
+    return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),byte=>byte.toString(16).padStart(2,'0')).join('');
+  });assert.equal(displayedHash,nextBinding.imageSha256);assert.notEqual(displayedHash,binding.imageSha256);
+  assert.equal(calls.filter(call=>call.kind==='approve').length,1);
+  await page.getByRole('button',{name:'この画像を承認',exact:true}).click();await page.getByText(/この画像の承認を記録しました/).waitFor();
+  const submissions=calls.filter(call=>call.kind==='approve').map(call=>call.body);
+  assert.deepEqual(submissions,[{idToken:'raw-mock-token',...binding},{idToken:'raw-mock-token',...nextBinding}]);
 });

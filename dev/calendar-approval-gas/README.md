@@ -1,0 +1,9 @@
+# Central approval GAS candidate, local review only
+
+See `../../docs/calendar/first-approval-local-review.md` for authority, limits, changed legacy publication behavior, tests and rollout blockers. This is a separate opt-in candidate derived from the redacted recovery sources in reference/. It has not been applied to a real GAS project. Do not paste redacted IDs into a live project.
+
+Build produces one GAS1 and one GAS2 file in candidate/. Use either the assembled candidate or the corresponding split modules, never both. The schema3 reservation envelope atomically binds current, pending, terminal receipt, monotonic generation and default-off runtime approval gate. Reserve-before-save journals source intent before any Drive write and rejects legacy sync once enabled. Nested schema2 pins byte SHA-256; existing schema1 remains read-only until explicit owner-reviewed `CalendarDraftReceiver.migrateReviewedCurrent(exactMetadata, 'MIGRATE_REVIEWED_DRAFT_WITHOUT_APPROVAL')`. That helper is not exposed over HTTP and has not been run against real data.
+
+GAS2 approval action is `approve_current_draft_v1`, with separate `CALENDAR_DRAFT_APPROVAL_SECRET`. Existing read and sync credentials are unchanged. The old five-field read success shape is preserved unless `includeApprovalBinding:true` is explicitly requested. The raw public saveImageToDrive entry point and both legacy GAS1 publication entry points intentionally throw, preventing them from treating old legacy flags as authoritative. No LINE send, publication, auto-generation or new trigger is wired to approval.
+
+See ../../docs/calendar/reservation-staged-rollout.md for separately authorized rollout/recovery/rollback. Expiry never unlocks. Unknown save outcomes require exact owner-reviewed recovery after quiescing every old and new writer. No commit, deployment or settings change has been made.

@@ -1,0 +1,85 @@
+    var lastSavedDraftResult = null;
+    var calendarUiEpoch = 0;
+    var calendarSaveBusy = false;
+    var calendarRetryBusy = false;
+    function setCalendarControlsBusy(busy) {
+      var controls = document.querySelectorAll('.toolbar input, .toolbar button');
+      for (var i = 0; i < controls.length; i++) controls[i].disabled = busy;
+    }
+    function showDraftSyncStatus(result) {
+      var recovery = result && ['SAVE_RECOVERY_REQUIRED','SAVE_RECOVERY_REVIEW_REQUIRED','RESERVATION_EXPIRED_RECOVERY_REQUIRED','SAVE_JOURNAL_CORRUPT','RESERVATION_ROLLOUT_REQUIRED'].indexOf(result.syncCode || result.code) >= 0;
+      var changed = result && ['CURRENT_DRAFT_CHANGED','NEWER_DRAFT_PENDING'].indexOf(result.syncCode || result.code) >= 0;
+      document.getElementById('statusText').innerText = recovery
+        ? '保存処理の確認が必要です。再生成・再保存せず管理者が予約と保存結果を確認してください。'
+        : changed
+        ? 'この保存後に下書きが差し替わりました。最新の保存結果を確認してください。'
+        : !result || !result.saved
+        ? '保存結果を確認できません。画像を再生成せず状態を確認してください。'
+        : result.synced ? 'PNG保存済み・GAS②同期済み'
+        : result.queued ? 'PNG保存済み・同期未完了。再同期できます。'
+        : 'PNG保存済み・同期情報の記録に失敗。再同期ボタンで復旧を試せます。';
+    }
+    function retryDraftSyncFromUi() {
+      if (calendarSaveBusy || calendarRetryBusy) return;
+      var saved = lastSavedDraftResult;
+      if (!saved || !saved.saved) {
+        document.getElementById('statusText').innerText = 'この画面の保存結果がありません。画像を再生成せず管理者が状態を確認してください。';
+        return;
+      }
+      calendarRetryBusy = true;
+      var operation = ++calendarUiEpoch;
+      setCalendarControlsBusy(true);
+      var finish = function() { calendarRetryBusy = false; setCalendarControlsBusy(false); };
+      var run = google.script.run.withSuccessHandler(function(result) {
+        if (calendarUiEpoch !== operation || lastSavedDraftResult !== saved) { finish(); return; }
+        if (result.synced && saved.revision && (result.revision !== saved.revision || result.draftId !== saved.draftId)) result.synced = false;
+        saved.synced = result.synced === true;
+        saved.queued = result.queued === true;
+        saved.syncCode = result.code || result.syncCode || '';
+        if (!saved.revision && result.revision) { saved.revision = result.revision; saved.draftId = result.draftId; }
+        showDraftSyncStatus(saved);
+        finish();
+      }).withFailureHandler(function() {
+        if (calendarUiEpoch === operation && lastSavedDraftResult === saved) document.getElementById('statusText').innerText = 'PNG保存済み・同期結果は未確認。再生成せず再同期してください。';
+        finish();
+      });
+      if (saved.queued) run.retryLatestDraftSync(saved.revision, saved.draftId);
+      else run.recoverSavedDraftSync(saved.yearMonth, saved.fileId);
+    }
+    async function startGeneration() {
+      if (calendarSaveBusy || calendarRetryBusy) return;
+      var folderId = document.getElementById('folderId').value.trim();
+      var targetMonthValue = document.getElementById('targetMonth').value;
+      if (!targetMonthValue || !folderId) { alert('生成月と保存先フォルダを確認してください'); return; }
+      calendarSaveBusy = true;
+      var operation = ++calendarUiEpoch;
+      setCalendarControlsBusy(true);
+      var parts = targetMonthValue.split('-'), year = Number(parts[0]), month = Number(parts[1]);
+      var statusText = document.getElementById('statusText');
+      lastSavedDraftResult = null;
+      try {
+        statusText.innerText = year + '年' + month + '月のデータ取得中...';
+        var eventsMap = await new Promise(function(resolve, reject) {
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCalendarEventsData(year, month);
+        });
+        if (calendarUiEpoch !== operation) return;
+        renderCalendarDom(year, month, eventsMap);
+        statusText.innerText = year + '年' + month + '月の画像キャプチャ中...';
+        await new Promise(function(resolve) { setTimeout(resolve, 500); });
+        if (calendarUiEpoch !== operation) return;
+        var canvas = await html2canvas(document.getElementById('calendarContainer'), {scale: 1, useCORS: true});
+        if (calendarUiEpoch !== operation) return;
+        statusText.innerText = year + '年' + month + '月の仮生成画像を保存中...';
+        var result = await new Promise(function(resolve, reject) {
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveDraftToDrive(canvas.toDataURL('image/png'), year, month, folderId);
+        });
+        if (calendarUiEpoch !== operation) return;
+        lastSavedDraftResult = result;
+        showDraftSyncStatus(result);
+      } catch (_) {
+        if (calendarUiEpoch === operation) statusText.innerText = '保存結果を確認できません。画像を再生成せず管理者が状態を確認してください。';
+      } finally {
+        calendarSaveBusy = false;
+        setCalendarControlsBusy(false);
+      }
+    }

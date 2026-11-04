@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { calendarDeploymentAllowed } from './server/calendar-deployment.ts';
 import { posix } from 'node:path';
 import { attemptWorkbenchEnabled } from './dev/attempts/gate.ts';
 
@@ -7,6 +8,7 @@ export default defineConfig(({ command, mode }) => {
   const persistence = attemptWorkbenchEnabled(command, mode, process.env.YI06_PERSISTENCE, process.env.NODE_ENV);
   const enabled = attemptWorkbenchEnabled(command, mode, process.env.YI05_WORKBENCH, process.env.NODE_ENV);
   return {
+    define: { __CALENDAR_DEV_ALLOWED__: JSON.stringify(calendarDeploymentAllowed()) },
     plugins: [react(), {
       name: 'isolated-attempt-workbench',
       configureServer(server) {

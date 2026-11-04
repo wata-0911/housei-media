@@ -8,7 +8,7 @@ function reply(data: Json, status: number): Response {
   });
 }
 
-export async function authorizeCalendarRequest(request: Request): Promise<Response> {
+export async function verifyCalendarRequest(request: Request): Promise<Response | { userId: string; displayName: string }> {
     if (request.method !== 'POST') {
       return Response.json(
         { error: 'Method not allowed' },
@@ -59,7 +59,7 @@ export async function authorizeCalendarRequest(request: Request): Promise<Respon
             client_id: loginChannelId,
           }),
           signal: AbortSignal.timeout(10000),
-          cache: 'no-store',
+          cache: 'no-store', redirect: 'error',
         },
       );
 
@@ -81,7 +81,7 @@ export async function authorizeCalendarRequest(request: Request): Promise<Respon
       if (
         verified.iss !== 'https://access.line.me' ||
         verified.aud !== loginChannelId ||
-        typeof verified.exp !== 'number' ||
+        typeof verified.exp !== 'number' || !Number.isFinite(verified.exp) ||
         verified.exp <= Date.now() / 1000 ||
         typeof verified.sub !== 'string' ||
         !/^U[0-9a-f]{32}$/.test(verified.sub)
@@ -103,7 +103,7 @@ export async function authorizeCalendarRequest(request: Request): Promise<Respon
             Authorization: `Bearer ${botToken}`,
           },
           signal: AbortSignal.timeout(10000),
-          cache: 'no-store',
+          cache: 'no-store', redirect: 'error',
         },
       );
 
@@ -140,20 +140,17 @@ export async function authorizeCalendarRequest(request: Request): Promise<Respon
         );
       }
 
-      return reply(
-        {
-          authorized: true,
-          displayName:
-            typeof verified.name === 'string'
-              ? verified.name
-              : 'LINEユーザー',
-        },
-        200,
-      );
+      return { userId, displayName: typeof verified.name === 'string' ? verified.name : 'LINEユーザー' };
     } catch {
       return reply(
         { authorized: false, code: stage === 'membership' ? 'line_membership_unavailable' : 'line_verification_unavailable', error: 'LINE APIとの通信に失敗しました' },
         502,
       );
     }
+}
+
+// Public authentication response never exposes the verified actor identifier.
+export async function authorizeCalendarRequest(request: Request): Promise<Response> {
+  const result = await verifyCalendarRequest(request);
+  return result instanceof Response ? result : reply({ authorized: true, displayName: result.displayName }, 200);
 }
