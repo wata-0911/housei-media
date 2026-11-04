@@ -44,7 +44,8 @@ async function open(t, path = '/', options = {}) {
 }
 const nav = page => page.getByRole('navigation', { name: 'ページ移動', exact: true });
 async function shortcut(page, name) {
-  await nav(page).getByRole('button', { name: 'ショートカット', exact: true }).focus();
+  await nav(page).locator('.edge-scroll').focus();
+  if (await nav(page).locator('.edge-scroll').getAttribute('aria-expanded') !== 'true') await page.keyboard.press('Space');
   await nav(page).getByRole('button', { name, exact: true }).click();
 }
 async function focused(page, id) {
@@ -82,7 +83,7 @@ test('Q&A → graduation, missing destination fallback, valid destination and ta
 });
 test('hover bridge, keyboard, Escape, outside, focus on close, resize and edge dragging', async t => {
   const page = await open(t, '/', { viewport: { width: 1200, height: 900 } });
-  const toggle = nav(page).getByRole('button', { name: 'ショートカット', exact: true });
+  const toggle = nav(page).locator('.edge-scroll');
   await toggle.hover();
   const item = nav(page).getByRole('button', { name: '科目検索へ', exact: true });
   await item.hover(); assert.equal(await item.isVisible(), true);
@@ -92,7 +93,7 @@ test('hover bridge, keyboard, Escape, outside, focus on close, resize and edge d
   await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
   await page.mouse.click(5, 300); assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
-  const drag = nav(page).getByRole('button', { name: /ナビを移動/ });
+  const drag = nav(page).locator('.edge-scroll');
   const start = await drag.boundingBox();
   await page.mouse.move(start.x + 20, start.y + 20); await page.mouse.down();
   await page.mouse.move(-100, -100, { steps: 12 }); await page.mouse.up();
@@ -123,18 +124,20 @@ test('ordinary edge scrolling outside Planner and scroll closes menu', async t =
   await page.waitForFunction(() => scrollY > 100);
   await nav(page).getByRole('button', { name: '↑ ページ上部へ', exact: true }).click();
   await page.waitForFunction(() => scrollY === 0);
-  await nav(page).getByRole('button', { name: 'ショートカット', exact: true }).focus();
+  await nav(page).locator('.edge-scroll').focus();
   await page.evaluate(() => scrollTo(0, 200));
-  await page.waitForFunction(() => document.querySelector('.edge-toggle').getAttribute('aria-expanded') === 'false');
+  await page.waitForFunction(() => document.querySelector('.edge-scroll').getAttribute('aria-expanded') === 'false');
 });
-test('touch tap alternative, long press slide release, early movement cancel and drag click suppression', async t => {
+test('touch long-press tap alternative, slide release, early drag and click suppression', async t => {
   const page = await open(t, '/', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
-  const toggle = nav(page).getByRole('button', { name: 'ショートカット', exact: true });
-  await toggle.tap(); assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
-  if (process.env.PLANNER_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.PLANNER_SCREENSHOT_DIR}/edge-touch.png` });
-  await nav(page).getByRole('button', { name: 'メディア記録へ', exact: true }).tap(); await focused(page, 'media-panel');
+  const toggle = nav(page).locator('.edge-scroll');
   const cdp = await page.context().newCDPSession(page);
   const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{ x, y }] });
+  const initial = await toggle.boundingBox();
+  await touch('touchStart', initial.x + initial.width / 2, initial.y + initial.height / 2); await delay(510); await touch('touchEnd');
+  assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+  if (process.env.PLANNER_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.PLANNER_SCREENSHOT_DIR}/edge-touch.png` });
+  await nav(page).getByRole('button', { name: 'メディア記録へ', exact: true }).tap(); await focused(page, 'media-panel');
   let box = await toggle.boundingBox();
   await touch('touchStart', box.x + box.width / 2, box.y + box.height / 2);
   await delay(500);
@@ -153,8 +156,8 @@ test('touch tap alternative, long press slide release, early movement cancel and
   box = await toggle.boundingBox();
   await touch('touchStart', box.x + 20, box.y + 20); await touch('touchMove', box.x + 50, box.y + 20); await delay(500); await touch('touchEnd');
   assert.equal(page.url(), url);
-  const drag = await nav(page).getByRole('button', { name: /ナビを移動/ }).boundingBox();
+  const drag = await nav(page).locator('.edge-scroll').boundingBox();
   await touch('touchStart', drag.x + 20, drag.y + 20); await touch('touchMove', 8, 8); await touch('touchEnd');
   assert.equal(page.url(), url);
-  await page.waitForFunction(() => document.querySelector('.edge-toggle').getAttribute('aria-expanded') === 'false');
+  await page.waitForFunction(() => document.querySelector('.edge-scroll').getAttribute('aria-expanded') === 'false');
 });

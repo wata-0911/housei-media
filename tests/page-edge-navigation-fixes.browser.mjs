@@ -49,7 +49,7 @@ async function open(t, path = '/', options = {}) {
   return page;
 }
 const nav = p => p.getByRole('navigation', { name: 'ページ移動', exact: true });
-const toggle = p => nav(p).getByRole('button', { name: 'ショートカット', exact: true });
+const toggle = p => nav(p).locator('.edge-scroll');
 const item = (p, i) => p.locator(`[data-edge-destination="${i}"]`);
 async function expand(p) {
   await toggle(p).focus();
@@ -129,7 +129,11 @@ test('F-02 compact: every destination reachable by keyboard and real tap; no com
     const p = await open(t, '/qa', {viewport:{width:320,height:180},isMobile:touchMode,hasTouch:touchMode,reducedMotion:'reduce'});
     for (let i=0;i<4;i++) {
       await p.goto(origin+'/qa');
-      if (touchMode) await toggle(p).tap(); else await expand(p);
+      if (touchMode) {
+        const session=await p.context().newCDPSession(p), b=await toggle(p).boundingBox();
+        await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2}]});await delay(510);
+        await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      } else await expand(p);
       for (let j=0;j<=i;j++) {
         if (!touchMode) await p.keyboard.press('Tab');
       }
@@ -158,7 +162,7 @@ test('F-02 rotation, drag, visualViewport and safe-area bounds',async t=>{
   for (const [width,height] of [[320,180],[844,390],[320,568],[375,812],[390,844]]) {
     await p.setViewportSize({width,height});
     await expand(p);
-    const drag=await nav(p).getByRole('button',{name:/ナビを移動/}).boundingBox();
+    const drag=await nav(p).locator('.edge-scroll').boundingBox();
     await p.mouse.move(drag.x+10,drag.y+10); await p.mouse.down(); await p.mouse.move(width+100,height+100,{steps:8}); await p.mouse.up();
     await expand(p);
     for(let i=0;i<4;i++){
@@ -176,6 +180,10 @@ test('F-02 rotation, drag, visualViewport and safe-area bounds',async t=>{
     return {x:b.x,y:b.y,right:b.right,bottom:b.bottom,left:v.offsetLeft,top:v.offsetTop,width:v.width,height:v.height};
   });
   assert.ok(result.x>=result.left+12&&result.y>=result.top+16&&result.right<=result.left+result.width-12&&result.bottom<=result.top+result.height-20,JSON.stringify(result));
+  for(let i=0;i<4;i++){
+    await item(p,i).focus();await item(p,i).scrollIntoViewIfNeeded();const b=await item(p,i).boundingBox();
+    assert.ok(b.height>=44&&b.x>=result.left+12&&b.y>=result.top+16&&b.x+b.width<=result.left+result.width-12&&b.y+b.height<=result.top+result.height-20,JSON.stringify(b));
+  }
 });
 test('F-01 Escape cancels active long press without navigation or synthetic click',async t=>{
   const p=await open(t,'/qa',{viewport:{width:390,height:844},hasTouch:true,isMobile:true});

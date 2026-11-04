@@ -8,91 +8,104 @@ const destinations = [
     ['planned-heading', '履修・修得一覧へ'],
     ['media-panel', 'メディア記録へ'],
 ] as const;
-const WIDTH = 304, HEIGHT = 224;
+const LONG_PRESS_MS = 450, DRAG_DISTANCE = 12;
+const MENU_WIDTH = 304, MENU_HEIGHT = 224, LIST_HEIGHT = 4 * 44 + 2, GAP = 8;
 type Point = { x: number; y: number };
-type Position = Point & { width: number; height: number; compact: boolean; overlay: boolean };
-type Gesture = { id: number; start: Point; origin: Point; mode: 'pending' | 'select' | 'drag' | 'cancelled'; timer: number; moved: boolean };
+type Size = { width: number; height: number };
+type Bounds = { left: number; top: number; right: number; bottom: number; headerBottom: number };
+type Frame = { position: Point; size: Size; bounds: Bounds };
+type Gesture = { id: number; start: Point; origin: Point; mode: 'pending' | 'drag' | 'select' | 'menu' | 'cancelled'; timer: number };
+const between = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
+function clamp(point: Point, size: Size, bounds: Bounds): Point {
+    return { x: between(point.x, bounds.left, bounds.right - size.width), y: between(point.y, bounds.top, bounds.bottom - size.height) };
+}
+
+// The button owns its position. The menu finds its own space without reducing
+// the button's movement range. Only a very short viewport needs a list overlay.
+function menuLayout({ position, size, bounds }: Frame) {
+    const radial = { x: position.x - (MENU_WIDTH - size.width) / 2, y: position.y - 90, width: MENU_WIDTH, height: MENU_HEIGHT };
+    const belowHeader = Math.max(bounds.top, bounds.headerBottom + GAP);
+    if (radial.x >= bounds.left && radial.x + radial.width <= bounds.right && radial.y >= belowHeader && radial.y + radial.height <= bounds.bottom) {
+        return { ...radial, compact: false, anchor: position };
+    }
+    const width = Math.min(MENU_WIDTH, bounds.right - bounds.left);
+    const x = between(position.x + (size.width - width) / 2, bounds.left, bounds.right - width);
+    const below = Math.max(position.y + size.height + GAP, belowHeader);
+    const above = position.y - GAP - belowHeader;
+    if (Math.max(bounds.bottom - below, above) >= 44) {
+        const down = bounds.bottom - below >= above;
+        const height = Math.min(LIST_HEIGHT, down ? bounds.bottom - below : above);
+        return { x, y: down ? below : position.y - GAP - height, width, height, compact: true, anchor: position };
+    }
+    // Prefer the safe viewport space when the header occupies most of it.
+    const safeBelow = position.y + size.height + GAP;
+    const safeAbove = position.y - GAP - bounds.top;
+    if (Math.max(bounds.bottom - safeBelow, safeAbove) >= 44) {
+        const down = bounds.bottom - safeBelow >= safeAbove;
+        const height = Math.min(LIST_HEIGHT, down ? bounds.bottom - safeBelow : safeAbove);
+        return { x, y: down ? safeBelow : position.y - GAP - height, width, height, compact: true, anchor: position };
+    }
+    // At still smaller available heights, temporarily dock the open control at
+    // the top. Closing restores the stored position; text and targets never scale.
+    const anchor = { x: position.x, y: bounds.top };
+    const y = bounds.top + size.height + GAP;
+    return { x, y, width, height: Math.min(LIST_HEIGHT, bounds.bottom - y), compact: true, anchor };
+}
 
 export default function PageEdgeNavigation() {
     const location = useLocation();
     const navigate = useNavigate();
     const root = useRef<HTMLDivElement>(null);
-    const toggle = useRef<HTMLButtonElement>(null);
+    const button = useRef<HTMLButtonElement>(null);
     const gesture = useRef<Gesture | null>(null);
     const suppressClick = useRef(false);
-    const pressOpen = useRef(false);
+    const physicalTap = useRef(false);
     const openRef = useRef(false);
-    const [position, setPosition] = useState<Position | null>(null);
+    const [frame, setFrame] = useState<Frame | null>(null);
     const [open, setOpen] = useState(false);
     const [selected, setSelected] = useState<number | null>(null);
     const [scroll, setScroll] = useState({ atTop: true, canScroll: false });
-
-    const changeOpen = useCallback((value: boolean) => {
-        openRef.current = value;
-        setOpen(value);
-    }, []);
-    const close = useCallback((restore = false) => {
-        if (root.current?.contains(document.activeElement) &&
-            (restore || root.current.querySelector('.edge-shortcuts')?.contains(document.activeElement))) {
-            toggle.current?.focus({ preventScroll: true });
-        }
-        changeOpen(false);
-        setSelected(null);
+    const changeOpen = useCallback((value: boolean) => { openRef.current = value; setOpen(value); }, []);
+    const close = useCallback(() => {
+        if (root.current?.querySelector('.edge-shortcuts')?.contains(document.activeElement)) button.current?.focus({ preventScroll: true });
+        changeOpen(false); setSelected(null);
     }, [changeOpen]);
-    function clamp(point: Point): Position {
-        const view = window.visualViewport;
-        const left = view?.offsetLeft ?? 0, top = view?.offsetTop ?? 0;
-        const width = view?.width ?? innerWidth, height = view?.height ?? innerHeight;
-        const probe = root.current?.querySelector('.edge-safe-area');
-        const safe = probe ? getComputedStyle(probe) : null;
-        const minX = left + 8 + parseFloat(safe?.paddingLeft || '0');
-        const safeTop = top + 8 + parseFloat(safe?.paddingTop || '0');
-        const maxRight = left + width - 8 - parseFloat(safe?.paddingRight || '0');
-        const maxBottom = top + height - 8 - parseFloat(safe?.paddingBottom || '0');
-        const belowHeader = Math.max(safeTop, (document.querySelector('header')?.getBoundingClientRect().bottom ?? 0) + 8);
-        const compact = maxRight - minX < WIDTH || maxBottom - belowHeader < HEIGHT;
-        // If the header leaves less than two list rows plus the controls, use a
-        // viewport panel above the header instead of shrinking text or hit areas.
-        const overlay = compact && maxBottom - belowHeader < 132;
-        const minY = overlay ? safeTop : belowHeader;
-        const panelWidth = Math.min(WIDTH, maxRight - minX);
-        const panelHeight = compact ? Math.min(HEIGHT, maxBottom - minY) : HEIGHT;
-        const footerTop = document.querySelector('footer')?.getBoundingClientRect().top ?? maxBottom;
-        const bottom = Math.min(maxBottom, Math.max(minY + panelHeight, footerTop - 8));
-        return {
-            x: Math.max(minX, Math.min(point.x, maxRight - panelWidth)),
-            y: Math.max(minY, Math.min(point.y, bottom - panelHeight)),
-            width: panelWidth, height: panelHeight, compact, overlay,
-        };
-    }
+    const cancelGesture = useCallback(() => {
+        physicalTap.current = false;
+        if (gesture.current) {
+            clearTimeout(gesture.current.timer); gesture.current.mode = 'cancelled'; suppressClick.current = true;
+        }
+    }, []);
 
     useEffect(() => {
-        let frame = 0;
+        let raf = 0;
         const update = () => {
-            frame = 0;
-            const height = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-            setScroll(previous => {
-                const next = { atTop: scrollY <= 24, canScroll: height > innerHeight + 8 };
-                return previous.atTop === next.atTop && previous.canScroll === next.canScroll ? previous : next;
+            raf = 0;
+            const view = window.visualViewport, safe = root.current?.querySelector('.edge-safe-area');
+            const padding = safe ? getComputedStyle(safe) : null;
+            const left = view?.offsetLeft ?? 0, top = view?.offsetTop ?? 0;
+            const bounds: Bounds = {
+                left: left + GAP + parseFloat(padding?.paddingLeft || '0'),
+                top: top + GAP + parseFloat(padding?.paddingTop || '0'),
+                right: left + (view?.width ?? innerWidth) - GAP - parseFloat(padding?.paddingRight || '0'),
+                bottom: top + (view?.height ?? innerHeight) - GAP - parseFloat(padding?.paddingBottom || '0'),
+                headerBottom: document.querySelector('header')?.getBoundingClientRect().bottom ?? 0,
+            };
+            const size = { width: Math.min(128, bounds.right - bounds.left), height: button.current?.offsetHeight || 44 };
+            setFrame(previous => {
+                const position = clamp(previous?.position ?? { x: bounds.right - size.width - GAP, y: bounds.bottom - size.height - GAP }, size, bounds);
+                const next = { position, size, bounds };
+                return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
             });
-            setPosition(previous => {
-                const next = clamp(previous ?? { x: innerWidth - WIDTH - 16, y: innerHeight - HEIGHT - 16 });
-                return previous?.x === next.x && previous.y === next.y && previous.width === next.width && previous.height === next.height && previous.compact === next.compact && previous.overlay === next.overlay ? previous : next;
-            });
+            const next = { atTop: scrollY <= 24, canScroll: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) > innerHeight + 8 };
+            setScroll(previous => previous.atTop === next.atTop && previous.canScroll === next.canScroll ? previous : next);
         };
-        const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
-        const cancel = () => {
-            if (gesture.current) { clearTimeout(gesture.current.timer); gesture.current.mode = 'cancelled'; suppressClick.current = true; }
-            close(); schedule();
-        };
+        const schedule = () => { if (!raf) raf = requestAnimationFrame(update); };
+        const cancel = () => { cancelGesture(); close(); schedule(); };
         const outside = (event: globalThis.PointerEvent) => { if (!root.current?.contains(event.target as Node)) close(); };
-        const escape = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') {
-                if (!gesture.current) suppressClick.current = false;
-                return;
-            }
+        const keydown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') { if (!gesture.current) suppressClick.current = false; return; }
             if (event.defaultPrevented || (!openRef.current && !gesture.current)) return;
-            // close() restores only menu-owned focus; external inputs keep theirs.
             cancel();
         };
         schedule();
@@ -101,102 +114,111 @@ export default function PageEdgeNavigation() {
         window.visualViewport?.addEventListener('resize', cancel);
         window.visualViewport?.addEventListener('scroll', cancel);
         document.addEventListener('pointerdown', outside);
-        document.addEventListener('keydown', escape);
+        document.addEventListener('keydown', keydown);
         const observer = new ResizeObserver(schedule);
         observer.observe(document.body);
+        if (button.current) observer.observe(button.current);
         return () => {
             window.removeEventListener('scroll', cancel); window.removeEventListener('resize', cancel);
             window.visualViewport?.removeEventListener('resize', cancel); window.visualViewport?.removeEventListener('scroll', cancel);
-            document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape);
-            observer.disconnect(); cancelAnimationFrame(frame);
-            if (gesture.current) clearTimeout(gesture.current.timer);
+            document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keydown);
+            observer.disconnect(); cancelAnimationFrame(raf); cancelGesture();
         };
-    }, [close]);
+    }, [cancelGesture, close]);
     useEffect(() => {
-        const frame = requestAnimationFrame(() => close());
-        return () => cancelAnimationFrame(frame);
-    }, [location.key, close]);
+        const raf = requestAnimationFrame(() => { cancelGesture(); close(); });
+        return () => cancelAnimationFrame(raf);
+    }, [location.key, cancelGesture, close]);
 
-    function choose(index: number) {
-        close(true);
-        // A fresh Router key also handles selecting the current hash again.
-        navigate(`/planner#${destinations[index][0]}`);
+    const menu = frame ? menuLayout(frame) : null;
+    const anchor = open && menu ? menu.anchor : frame?.position;
+    function choose(index: number) { close(); navigate(`/planner#${destinations[index][0]}`); }
+    function moveToEdge(edge = scroll.atTop ? 'bottom' : 'top') {
+        close();
+        window.scrollTo({ top: edge === 'bottom' ? Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - innerHeight : 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
     }
-    function start(event: PointerEvent<HTMLButtonElement>, drag = false) {
-        if (!event.isPrimary || event.button !== 0 || !position) return;
-        suppressClick.current = false;
-        pressOpen.current = open;
-        const current: Gesture = { id: event.pointerId, start: { x: event.clientX, y: event.clientY }, origin: position, mode: drag ? 'drag' : 'pending', timer: 0, moved: false };
+    function start(event: PointerEvent<HTMLButtonElement>) {
+        if (!event.isPrimary || event.button !== 0 || !frame || !anchor) return;
+        suppressClick.current = false; physicalTap.current = false;
+        const current: Gesture = { id: event.pointerId, start: { x: event.clientX, y: event.clientY }, origin: anchor, mode: 'pending', timer: 0 };
         gesture.current = current;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        if (drag) close();
-        else if (event.pointerType !== 'mouse') current.timer = window.setTimeout(() => {
+        setFrame({ ...frame, position: anchor });
+        close(); event.currentTarget.setPointerCapture(event.pointerId);
+        current.timer = window.setTimeout(() => {
             if (gesture.current !== current || current.mode !== 'pending') return;
-            // Compact lists require a separate tap: sliding cannot safely select
-            // among clipped / scrollable rows. Keep the tap alternative open.
-            current.mode = position.compact ? 'cancelled' : 'select';
+            current.mode = menu?.compact && menu.height < LIST_HEIGHT ? 'menu' : 'select';
             suppressClick.current = true; changeOpen(true);
-        }, 450);
+        }, LONG_PRESS_MS);
+    }
+    function hitItem(x: number, y: number) {
+        const hit = document.elementFromPoint(x, y)?.closest<HTMLButtonElement>('[data-edge-destination]');
+        return hit && root.current?.contains(hit) ? Number(hit.dataset.edgeDestination) : null;
     }
     function move(event: PointerEvent<HTMLButtonElement>) {
         const current = gesture.current;
-        if (!current || current.id !== event.pointerId) return;
+        if (!current || current.id !== event.pointerId || !frame) return;
         const dx = event.clientX - current.start.x, dy = event.clientY - current.start.y;
-        if (Math.hypot(dx, dy) > 10) {
-            current.moved = true;
-            if (current.mode === 'pending') { clearTimeout(current.timer); current.mode = 'cancelled'; suppressClick.current = true; }
+        if (current.mode === 'pending' && Math.hypot(dx, dy) >= DRAG_DISTANCE) {
+            clearTimeout(current.timer); current.mode = 'drag'; suppressClick.current = true; close();
         }
         if (current.mode === 'drag') {
-            suppressClick.current = true;
-            setPosition(clamp({ x: current.origin.x + dx, y: current.origin.y + dy }));
+            setFrame({ ...frame, position: clamp({ x: current.origin.x + dx, y: current.origin.y + dy }, frame.size, frame.bounds) });
         }
-        if (current.mode === 'select') {
-            // Only release over a visible labelled target commits the gesture.
-            const hit = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLButtonElement>('[data-edge-destination]');
-            setSelected(hit ? Number(hit.dataset.edgeDestination) : null);
-        }
+        if (current.mode === 'select') setSelected(hitItem(event.clientX, event.clientY));
+        if (current.mode !== 'pending' && event.cancelable) event.preventDefault();
     }
     function finish(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
         const current = gesture.current;
         if (!current || current.id !== event.pointerId) return;
         clearTimeout(current.timer); gesture.current = null;
-        if (current.mode === 'select') {
-            const hit = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLButtonElement>('[data-edge-destination]');
-            if (!cancelled && hit) choose(Number(hit.dataset.edgeDestination));
-            else close(true);
+        if (cancelled || current.mode === 'cancelled' || current.mode === 'drag') { suppressClick.current = true; close(); return; }
+        if (current.mode === 'pending') physicalTap.current = true;
+        if (current.mode === 'select' || current.mode === 'menu') {
+            suppressClick.current = true; setSelected(null);
+            const index = hitItem(event.clientX, event.clientY);
+            if (current.mode === 'select' && index !== null) choose(index);
+            else {
+                const hit = document.elementFromPoint(event.clientX, event.clientY);
+                if (!root.current?.contains(hit)) close();
+                // Release over the central button leaves the menu open for taps.
+            }
         }
-        if (current.mode === 'drag' || cancelled) { suppressClick.current = true; close(); }
     }
-    const handlers = { onPointerMove: move, onPointerUp: (event: PointerEvent<HTMLButtonElement>) => finish(event), onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => finish(event, true), onLostPointerCapture: (event: PointerEvent<HTMLButtonElement>) => finish(event, true) };
-    const consumeClick = (detail: number) => {
-        const suppressed = suppressClick.current;
-        suppressClick.current = false;
-        return detail !== 0 && suppressed;
-    };
-
-    return <div ref={root} className={`page-edge-navigation ${open ? 'is-open' : ''} ${position?.compact ? 'is-compact' : ''}`} role="navigation" aria-label="ページ移動"
-        style={{ left: position?.x ?? 8, top: position?.y ?? 180, visibility: position ? 'visible' : 'hidden', width: position?.width, height: position?.compact && !open ? 44 : position?.height, zIndex: position?.overlay ? 60 : 40 }}
+    const label = scroll.canScroll ? scroll.atTop ? '↓ ページ下部へ' : '↑ ページ上部へ' : 'ページ移動';
+    const bridge = menu && anchor ? { left: Math.min(0, menu.x - anchor.x), top: Math.min(0, menu.y - anchor.y), width: Math.max(anchor.x + (frame?.size.width ?? 128), menu.x + menu.width) - Math.min(anchor.x, menu.x), height: Math.max(anchor.y + (frame?.size.height ?? 44), menu.y + menu.height) - Math.min(anchor.y, menu.y) } : undefined;
+    return <div ref={root} className={`page-edge-navigation ${open ? 'is-open' : ''}`} role="navigation" aria-label="ページ移動"
+        style={{ left: anchor?.x ?? 8, top: anchor?.y ?? 8, width: frame?.size.width ?? 128, visibility: frame ? 'visible' : 'hidden', zIndex: frame && anchor && (anchor.y < frame.bounds.headerBottom || (open && menu && menu.y < frame.bounds.headerBottom)) ? 60 : 40 }}
+        onContextMenu={event => event.preventDefault()}
         onPointerEnter={event => { if (event.pointerType === 'mouse' && !gesture.current) changeOpen(true); }}
         onPointerLeave={event => { if (event.pointerType === 'mouse' && !gesture.current && !root.current?.contains(document.activeElement)) close(); }}
-        onFocus={event => { if (!gesture.current && !suppressClick.current && !event.currentTarget.contains(event.relatedTarget)) changeOpen(true); }}
+        onFocus={event => { if (!gesture.current && !physicalTap.current && !suppressClick.current && !event.currentTarget.contains(event.relatedTarget)) changeOpen(true); }}
         onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
         <span className="edge-safe-area" aria-hidden="true" />
-        <div className="edge-center">
-            <button type="button" className="edge-drag" aria-label="ナビを移動（矢印キーでも移動できます）" onPointerDown={event => start(event, true)} {...handlers}
-                onKeyDown={event => {
-                    const delta: Record<string, Point> = { ArrowLeft: { x: -20, y: 0 }, ArrowRight: { x: 20, y: 0 }, ArrowUp: { x: 0, y: -20 }, ArrowDown: { x: 0, y: 20 } };
-                    if (position && delta[event.key]) { event.preventDefault(); setPosition(clamp({ x: position.x + delta[event.key].x, y: position.y + delta[event.key].y })); }
-                }}>⠿ 移動</button>
-            {scroll.canScroll && <button type="button" className="edge-scroll" onPointerDown={event => start(event)} {...handlers} onClick={event => {
-                if (consumeClick(event.detail)) return;
-                close();
-                window.scrollTo({ top: scroll.atTop ? Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - innerHeight : 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-            }}>{scroll.atTop ? '↓ ページ下部へ' : '↑ ページ上部へ'}</button>}
-            <button ref={toggle} type="button" aria-expanded={open} aria-controls="edge-shortcuts" className="edge-toggle" onPointerDown={event => start(event)} {...handlers}
-                onClick={event => { if (!consumeClick(event.detail)) { if (event.detail === 0 ? open : pressOpen.current) close(); else changeOpen(true); } }}>ショートカット</button>
-        </div>
-        <div id="edge-shortcuts" className="edge-shortcuts" role="group" aria-label={position?.compact ? 'ショートカット一覧（スクロールできます）' : 'ショートカット一覧'} hidden={!open}>
-            {destinations.map(([id, label], index) => <button key={id} type="button" data-edge-destination={index} className={`edge-destination edge-destination-${index} ${selected === index ? 'is-selected' : ''}`} onClick={() => choose(index)}>{label}</button>)}
+        <span id="edge-instructions" className="sr-only">短押しで上下移動、長押しでメニュー、長押し前に動かすと位置移動。キーボードはTabで項目選択、Escapeで閉鎖、Altと矢印キーで位置移動、HomeとEndで上下移動。読み上げのボタン操作でメニューを開けます。</span>
+        {open && <span className="edge-bridge" aria-hidden="true" style={bridge} />}
+        <button ref={button} type="button" className="edge-scroll" aria-expanded={open} aria-controls="edge-shortcuts" aria-describedby="edge-instructions"
+            onPointerDown={start} onPointerMove={move} onPointerUp={event => finish(event)} onPointerCancel={event => finish(event, true)} onLostPointerCapture={event => finish(event, true)}
+            onKeyDown={event => {
+                if (event.defaultPrevented) return;
+                const delta: Record<string, Point> = { ArrowLeft: { x: -20, y: 0 }, ArrowRight: { x: 20, y: 0 }, ArrowUp: { x: 0, y: -20 }, ArrowDown: { x: 0, y: 20 } };
+                if (event.altKey && frame && delta[event.key]) { event.preventDefault(); setFrame({ ...frame, position: clamp({ x: frame.position.x + delta[event.key].x, y: frame.position.y + delta[event.key].y }, frame.size, frame.bounds) }); }
+                else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); suppressClick.current = false; if (openRef.current) close(); else changeOpen(true); }
+                else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); changeOpen(true); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(`[data-edge-destination="${event.key === 'ArrowDown' ? 0 : 3}"]`)?.focus()); }
+                else if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); moveToEdge(event.key === 'Home' ? 'top' : 'bottom'); }
+            }}
+            onClick={event => {
+                const suppressed = suppressClick.current, tap = physicalTap.current;
+                suppressClick.current = false; physicalTap.current = false;
+                if (suppressed && (event.detail !== 0 || ('pointerType' in event.nativeEvent && event.nativeEvent.pointerType))) { event.preventDefault(); return; }
+                // Scroll only after an actual short pointer sequence. Virtual / AT
+                // activation opens the shortcuts even when click.detail is nonzero.
+                if (tap && scroll.canScroll) moveToEdge();
+                else { changeOpen(true); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>('[data-edge-destination="0"]')?.focus()); }
+
+            }}>{label}</button>
+        <div id="edge-shortcuts" className={`edge-shortcuts ${menu?.compact ? 'is-compact' : ''}`} role="group" aria-label={menu?.compact ? 'ショートカット一覧（スクロールできます）' : 'ショートカット一覧'} hidden={!open}
+            style={menu && anchor ? { left: menu.x - anchor.x, top: menu.y - anchor.y, width: menu.width, height: menu.height } : undefined}>
+            {destinations.map(([id, text], index) => <button key={id} type="button" data-edge-destination={index} className={`edge-destination edge-destination-${index} ${selected === index ? 'is-selected' : ''}`} onClick={() => choose(index)}>{text}</button>)}
         </div>
     </div>;
 }
