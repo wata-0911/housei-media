@@ -29,7 +29,10 @@
     "test:attempt-graduation": "node --import tsx --test tests/attempt-graduation.test.mjs",
     "test:home-planner-browser": "node --import tsx --test tests/home-planner-navigation.browser.mjs",
     "test:grade-import-pure": "node --import tsx --test --test-concurrency=1 tests/grade-import-pure/*.test.mjs",
-    "typecheck:grade-import-pure": "tsc --noEmit -p tests/grade-import-pure/tsconfig.json"
+    "typecheck:grade-import-pure": "tsc --noEmit -p tests/grade-import-pure/tsconfig.json",
+    "test:grade-import-host": "node --import tsx --test --test-concurrency=1 tests/grade-import-host/*.test.mjs",
+    "test:grade-import-host-browser": "node --import tsx --test --test-concurrency=1 tests/grade-import-host/native.browser.mjs",
+    "typecheck:grade-import-host": "tsc --noEmit -p tests/grade-import-host/tsconfig.json"
   },
   "dependencies": {
     "@line/liff": "^2.31.2",
