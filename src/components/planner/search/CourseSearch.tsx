@@ -3,20 +3,21 @@ import ClassificationLabel from '../common/ClassificationLabel';
 import type { createCreditClassifier } from '../../../planner/planning/annualPlan';
 import { useState } from 'react';
 import type { Offering } from '../../../planner/plannerCatalog';
-import { searchOfferings } from '../../../planner/calculations';
-import { matchesPublicCourseSearch } from '../../../planner/planning/publicCourses';
+import { searchOfferings, type SearchMatchMode } from '../../../planner/calculations';
+import { matchesPublicCourseSearch, PUBLIC_COURSE_TITLE } from '../../../planner/planning/publicCourses';
 import { eligibilityYearsLabel, filterOfferingsByYear, showSyntheticPublicCourse, yearEligibility, type AcademicYearLevel } from '../../../planner/planning/yearEligibility';
 import type { PlannerCatalog } from '../../../planner/plannerCatalog';
 
 type Props = { curriculumProgress?: CurriculumProgressResult; classify: ReturnType<typeof createCreditClassifier>; catalog: PlannerCatalog; selectedScopeId: string | null; offerings: Offering[]; addedIds: Set<string>; disabled: boolean; onAdd: (id: string) => void; onAddPublicCourse: () => void };
 export default function CourseSearch({ curriculumProgress, classify, catalog, selectedScopeId, offerings, addedIds, disabled, onAdd, onAddPublicCourse }: Props) {
   const [query, setQuery] = useState('');
+  const [matchMode, setMatchMode] = useState<SearchMatchMode>('partial');
   const [limit, setLimit] = useState(30);
   const [targetYear, setTargetYear] = useState<AcademicYearLevel | null>(null);
   const [includeUnknown, setIncludeUnknown] = useState(false);
-  const queryMatches = searchOfferings(offerings, query);
+  const queryMatches = searchOfferings(offerings, query, matchMode);
   const matches = filterOfferingsByYear(queryMatches, selectedScopeId, targetYear, includeUnknown, catalog);
-  const includesPublicCourse = matchesPublicCourseSearch(query);
+  const includesPublicCourse = matchMode === 'partial' ? matchesPublicCourseSearch(query) : query.normalize('NFKC').trim() === PUBLIC_COURSE_TITLE;
   const showPublicCourse = includesPublicCourse && showSyntheticPublicCourse(targetYear, includeUnknown);
   const eligibleCount = targetYear === null ? 0 : queryMatches.filter(offering => yearEligibility(offering, selectedScopeId, targetYear, catalog) === 'eligible').length;
   const unknownCount = targetYear === null ? 0 : queryMatches.filter(offering => yearEligibility(offering, selectedScopeId, targetYear, catalog) === 'unknown').length;
@@ -25,8 +26,21 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
     <p className="mb-4 text-sm text-gray-600">検索結果は方式・開講期を含め2026年度カタログの情報です。追加時の履修予定年度は未設定で、追加後に編集できます。2027年度以降の開講状況は未確認です。</p>
     <p className="mb-4 text-sm text-gray-600">履修予定年度が未設定でも、各科目の算入条件に応じて予定込み単位に反映されます。ただし、プランナーの年度別49単位上限の参考集計には含まれません。年度別に確認する場合は履修予定年度を設定してください。</p>
     <label htmlFor="course-query" className="block text-sm mb-2">科目名・科目コード・クラスコード・開講区分・期</label>
-    <input id="course-query" type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(30); }}
+    <input id="course-query" aria-describedby="course-search-help" type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(30); }}
       placeholder="例：政治学、前期メディア" className="w-full scroll-mt-24 border border-gray-300 p-3 rounded-sm focus:ring-2 focus:ring-[#002255]" />
+    <fieldset className="mt-3">
+      <legend className="text-sm mb-2">検索方法</legend>
+      <div className="flex flex-wrap gap-2">
+        {([['partial', '部分一致'], ['exact', '完全一致']] as const).map(([mode, label]) => <label key={mode}
+          className={`flex min-h-11 items-center gap-2 border rounded-sm px-3 py-2 cursor-pointer ${matchMode === mode ? 'border-[#002255] bg-blue-50 text-[#002255]' : 'border-gray-300'}`}>
+          <input type="radio" name="course-search-match-mode" value={mode} checked={matchMode === mode}
+            onChange={() => { setMatchMode(mode); setLimit(30); }} />{label}
+        </label>)}
+      </div>
+    </fieldset>
+    <p id="course-search-help" className="mt-2 text-xs text-gray-600">{matchMode === 'partial'
+      ? '空白で区切った語をすべて含む科目を検索します。コード・開講区分・期も対象です。'
+      : '科目名全体が一致する科目を検索します。語の間の空白も比較します。'}全角・半角、英字の大小、前後の空白は区別しません。空欄ではすべて表示します。</p>
     <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,12rem)_1fr] sm:items-end">
       <label className="block text-sm">履修可能学年
         <select value={targetYear ?? ''} onChange={event => { setTargetYear(event.target.value === '' ? null : Number(event.target.value) as AcademicYearLevel); setLimit(30); }} className="mt-1 block w-full border border-gray-300 bg-white p-2">
