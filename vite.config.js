@@ -4,6 +4,7 @@ import { posix } from 'node:path';
 import { attemptWorkbenchEnabled } from './dev/attempts/gate.ts';
 
 export default defineConfig(({ command, mode }) => {
+  const institutional = attemptWorkbenchEnabled(command, mode, process.env.YI_INSTITUTIONAL_READONLY, process.env.NODE_ENV);
   const persistence = attemptWorkbenchEnabled(command, mode, process.env.YI06_PERSISTENCE, process.env.NODE_ENV);
   const enabled = attemptWorkbenchEnabled(command, mode, process.env.YI05_WORKBENCH, process.env.NODE_ENV);
   return {
@@ -15,6 +16,14 @@ export default defineConfig(({ command, mode }) => {
           try { for (let i = 0; i < 3; i++) { const decoded = decodeURIComponent(path); if (decoded === path) break; path = decoded; } }
           catch { res.statusCode = 404; res.end('Not found'); return; }
           path = posix.normalize(path);
+          if (path === '/__dev/institutional' || path === '/__dev/institutional/') {
+            if (!institutional) { res.statusCode = 404; res.end('Not found'); return; }
+            const html = await server.transformIndexHtml('/__dev/institutional', '<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>制度科目 read-only 検索</title></head><body><div id="root"></div><script type="module" src="/dev/institutional/main.tsx"></script></body></html>');
+            res.setHeader('Content-Type', 'text/html'); res.end(html); return;
+          }
+          if (!institutional && /(?:^|\/)dev\/institutional(?:\/|$)/.test(path)) {
+            res.statusCode = 404; res.end('Not found'); return;
+          }
           if (path === '/__dev/persistence' || path === '/__dev/persistence/') {
             if (!persistence) { res.statusCode = 404; res.end('Not found'); return; }
             const html = await server.transformIndexHtml('/__dev/persistence', '<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YI-06 隔離保存</title></head><body><div id="root"></div><script type="module" src="/dev/persistence/main.tsx"></script></body></html>');
