@@ -45,11 +45,15 @@ export default function GraduationProgress({ progress, context, onOpenProfile }:
   const conditions = projectUnresolvedConditions(progress, context);
   return <section aria-labelledby="graduation-progress-heading" className="bg-white border border-gray-200 p-5 sm:p-7">
     <h2 id="graduation-progress-heading" className="text-xl text-[#002255]">卒業要件の部分進捗</h2>
+    <div className="mt-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed">
+      <p className="font-medium">大学の公式卒業判定ではありません。卒業可否を保証しません。</p>
+      <p className="mt-1">対応済み要件の部分的な進捗です。個別項目の「達成」はその項目の評価対象条件についての表示です。すべての表示項目が「達成」でも、未対応・未確認の条件が残る場合があります。</p>
+      <p className="mt-1">最終確認は大学の公式ポータルと、ご自身の適用課程に対応する最新の履修要覧で行い、必要に応じて教務へお問い合わせください。各項目の根拠と、確認が必要な条件もご確認ください。</p>
+    </div>
     <ProfileUnresolvedConditions
       projection={conditions}
       onOpenProfile={onOpenProfile}
     />
-    <p className="mt-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm leading-relaxed">一部要件のみ自動判定しています。卒業可否を保証しません。</p>
     <p className="my-3 text-sm text-gray-600">修得済みだけを達成判定に使います。履修中・計画中は参考値です。全体判定には合成しません。</p>
     {progress.importedContributionCount > 0 && <p className="mb-3 border-l-4 border-emerald-600 bg-emerald-50 p-3 text-sm">成績取込から安全に照合できた修得実績 {progress.importedContributionCount}件を含みます。成績表の科目行ごとの修得単位を一度だけ算入しています。</p>}
     {
@@ -73,6 +77,7 @@ export default function GraduationProgress({ progress, context, onOpenProfile }:
         </article>)}
       </div>
     }
+    <p className="mb-3 text-sm text-gray-600">以下は個別条件の進捗です。「達成」は卒業全体の達成を意味しません。</p>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {evaluated.map(row => <article key={row.requirementId} className="min-w-0 border border-gray-200 p-4">
         <h3 className="break-words font-medium text-[#002255]">{row.label}</h3>
