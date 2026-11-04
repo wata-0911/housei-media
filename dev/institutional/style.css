@@ -1,0 +1,19 @@
+@import '../../src/index.css';
+body { margin: 0; background: #f8fafc; color: #002255; font-family: system-ui, sans-serif; }
+.institutional-search { max-width: 72rem; margin: auto; padding: 1.25rem; }
+.institutional-search h1 { font-size: 1.5rem; font-weight: 700; }
+.institutional-search h2 { font-size: 1.125rem; font-weight: 700; }
+.institutional-search p, .institutional-search fieldset, .institutional-search details { margin-block: .65rem; }
+.institutional-search .controls, .institutional-search .results { display: grid; gap: 1rem; }
+.institutional-search label { display: block; }
+.institutional-search input[type=text], .institutional-search select { display: block; width: 100%; padding: .65rem; border: 1px solid #94a3b8; border-radius: .5rem; background: white; }
+.institutional-search input[type=radio], .institutional-search input[type=checkbox] { margin: .6rem; }
+.institutional-search .results { list-style: none; padding: 0; }
+.institutional-search .results > li { min-width: 0; padding: 1rem; background: white; border: 1px solid #cbd5e1; border-radius: .75rem; overflow-wrap: anywhere; }
+.institutional-search .muted { color: #475569; font-size: .875rem; }
+.institutional-search .notice { background: #fff7ed; border: 1px solid #c2410c; padding: .75rem; border-radius: .5rem; }
+.institutional-search summary { cursor: pointer; padding: .5rem 0; }
+.institutional-search pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
+.institutional-search button { border: 1px solid #002255; border-radius: .5rem; padding: .75rem; background: white; }
+.institutional-search :focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+@media (min-width: 768px) { .institutional-search .controls, .institutional-search .results { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
