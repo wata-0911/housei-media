@@ -1,0 +1,50 @@
+{
+  "green": {
+    "tests": 201,
+    "pass": 201,
+    "fail": 0,
+    "skipped": 0
+  },
+  "attempts-final": {
+    "tests": 333,
+    "pass": 333,
+    "fail": 0,
+    "skipped": 0
+  },
+  "graduation": {
+    "tests": 414,
+    "pass": 414,
+    "fail": 0,
+    "skipped": 0
+  },
+  "migration": {
+    "tests": 133,
+    "pass": 133,
+    "fail": 0,
+    "skipped": 0
+  },
+  "persistence": {
+    "tests": 103,
+    "pass": 103,
+    "fail": 0,
+    "skipped": 0
+  },
+  "workbench": {
+    "tests": 84,
+    "pass": 84,
+    "fail": 0,
+    "skipped": 0
+  },
+  "ui-browser-configured": {
+    "tests": 9,
+    "pass": 9,
+    "fail": 0,
+    "skipped": 0
+  },
+  "persistence-browser-configured": {
+    "tests": 17,
+    "pass": 17,
+    "fail": 0,
+    "skipped": 0
+  }
+}

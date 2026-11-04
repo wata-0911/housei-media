@@ -1,0 +1,20 @@
+{"entry":"validator","mode":"getter","reads":0,"traps":1,"valid":false}
+{"entry":"adapter","mode":"getter","reads":0,"traps":1,"status":"rejected"}
+{"entry":"validator","mode":"invalid-id","reads":0,"traps":1,"valid":false}
+{"entry":"adapter","mode":"invalid-id","reads":0,"traps":1,"status":"rejected"}
+{"entry":"validator","mode":"negative-contribution","reads":0,"traps":1,"valid":false}
+{"entry":"adapter","mode":"negative-contribution","reads":0,"traps":1,"status":"rejected"}
+✔ N2 validator: getter never invokes a late-installed getter (6.437797ms)
+✔ N2 adapter: getter never invokes a late-installed getter or returns changed data (1.900502ms)
+✔ N2 validator: invalid-id never invokes a late-installed getter (1.348972ms)
+✔ N2 adapter: invalid-id never invokes a late-installed getter or returns changed data (1.073736ms)
+✔ N2 validator: negative-contribution never invokes a late-installed getter (1.205493ms)
+✔ N2 adapter: negative-contribution never invokes a late-installed getter or returns changed data (1.335691ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2038.28813

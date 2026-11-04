@@ -1,5 +1,5 @@
 import type { Attempt, AttemptGraph, AttemptId, AttemptOperationId, AttemptOwnedRecord, AttemptValidationContext, OwnedRecordId } from '../types';
-import { sameAttemptData, validateAttemptGraph } from '../validation';
+import { sameAttemptData, snapshotAttemptGraph } from '../validation';
 import { validateAttemptPlanTransition } from '../planTransition';
 import { freeze } from '../migration/contracts';
 
@@ -18,13 +18,14 @@ export type Workspace = { graph: AttemptGraph; receipts: Command[]; usedTodoIds:
 export const newOperationId = (): AttemptOperationId => `hosei:attempt-op:${crypto.randomUUID()}`;
 export const newRecordId = (): OwnedRecordId => `hosei:owned:${crypto.randomUUID()}`;
 export const newAttemptIds = () => ({ id: `hosei:attempt:${crypto.randomUUID()}` as AttemptId, creationOperationId: newOperationId() });
-function requireValid(graph: unknown, context: AttemptValidationContext): asserts graph is AttemptGraph {
-  const checked = validateAttemptGraph(graph, context);
+function requireValid(graph: unknown, context: AttemptValidationContext): AttemptGraph {
+  const checked = snapshotAttemptGraph(graph, context);
   if (!checked.valid) throw new Error(checked.issues.map(i => `${i.code}: ${i.message}`).join('\n'));
+  return checked.graph;
 }
 export function createWorkspace(graph: AttemptGraph, context: AttemptValidationContext): Workspace {
-  requireValid(graph, context);
-  return freeze({ graph: structuredClone(graph), receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
+  graph = requireValid(graph, context);
+  return freeze({ graph, receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
 }
 function keys(value: object, allowed: string[]) {
   if (Object.keys(value).some(k => !allowed.includes(k))) throw new Error('unknown_operation_field');
@@ -45,7 +46,7 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
     if (!sameAttemptData(receipt, command)) throw new Error('operation_replay_conflict');
     return workspace;
   }
-  requireValid(workspace.graph, context);
+  workspace = { ...workspace, graph: requireValid(workspace.graph, context) };
   // All new operation IDs share the UUID collision boundary with existing entities.
   const uuid = command.operationId.split(':').at(-1)!;
   const occupied: string[] = [];
@@ -55,16 +56,23 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
   };
   collect(workspace); collect(context.catalog); collect(context.legacyArchive);
   if (occupied.includes(uuid)) throw new Error('operation_collision');
-  const graph = structuredClone(workspace.graph);
+  // Only these owned containers are mutable. Untouched certified descendants
+  // remain frozen; targeted records are detached before mutation.
+  let graph = { ...workspace.graph, attempts: [...workspace.graph.attempts],
+    ownedRecords: [...workspace.graph.ownedRecords], removals: [...workspace.graph.removals] };
   const findAttempt = (id: AttemptId) => {
     const a = graph.attempts.find(a => a.id === id);
     if (!a) throw new Error('unknown_attempt');
-    return a;
+    const copy = { ...a };
+    graph.attempts[graph.attempts.indexOf(a)] = copy;
+    return copy;
   };
   const findRecord = (id: OwnedRecordId) => {
     const r = graph.ownedRecords.find(r => r.id === id);
     if (!r) throw new Error('unknown_record');
-    return r;
+    const copy = { ...r };
+    graph.ownedRecords[graph.ownedRecords.indexOf(r)] = copy;
+    return copy;
   };
   switch (command.kind) {
     case 'add': {
@@ -142,7 +150,7 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
       graph.ownedRecords = graph.ownedRecords.filter(r => r.id !== command.recordId); break;
     }
   }
-  requireValid(graph, context);
+  graph = requireValid(graph, context);
   if (command.kind === 'remove' || command.kind === 'undo') {
     const result = validateAttemptPlanTransition(workspace.graph, graph, context, {
       kind: command.kind === 'remove' ? 'delete_plan' : 'undo_plan', attemptId: command.attemptId,

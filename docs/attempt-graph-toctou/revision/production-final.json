@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-24",
+  "base": "3eae77665711756e54785022856d5cfae3043f90",
+  "featureBuild": "user-executed build; unchanged product hashes verified",
+  "filesCompared": 12,
+  "byteIdentical": true,
+  "sameFileSet": true,
+  "files": {
+    "assets/PlannerPage-A1y07S3G.js": {
+      "baseSha256": "c8a093baf0b5c1b7cbcd841bc9da8d9764f4e107b75c7e1e8337004e87acc3fd",
+      "featureSha256": "c8a093baf0b5c1b7cbcd841bc9da8d9764f4e107b75c7e1e8337004e87acc3fd",
+      "bytesEqual": true
+    },
+    "assets/index-BFZGgrmL.js": {
+      "baseSha256": "28827902afa8db5c0b7f006174190ccb83c92feb828655cc58ad326cfa63abbb",
+      "featureSha256": "28827902afa8db5c0b7f006174190ccb83c92feb828655cc58ad326cfa63abbb",
+      "bytesEqual": true
+    },
+    "assets/index-C2Qpu_om.css": {
+      "baseSha256": "053e7463c807b9165ed206547d19cfaf59340c67f181010765deb3fee9bcfac8",
+      "featureSha256": "053e7463c807b9165ed206547d19cfaf59340c67f181010765deb3fee9bcfac8",
+      "bytesEqual": true
+    },
+    "hedda.jpeg": {
+      "baseSha256": "f92d1cac3cad5bc2e4560675a67d720fdb3412aeae4e11e355a2d7a54ae157d4",
+      "featureSha256": "f92d1cac3cad5bc2e4560675a67d720fdb3412aeae4e11e355a2d7a54ae157d4",
+      "bytesEqual": true
+    },
+    "icon-128.png": {
+      "baseSha256": "a39c6ebf8e9d01750bcc4e9fdea3ce4755474983c7e42fd7bcbe04ca87e0ea01",
+      "featureSha256": "a39c6ebf8e9d01750bcc4e9fdea3ce4755474983c7e42fd7bcbe04ca87e0ea01",
+      "bytesEqual": true
+    },
+    "index.html": {
+      "baseSha256": "a8e1a8d698c36184d72a622478ac798f2f1672979b3da0054f0f63959dfdd636",
+      "featureSha256": "a8e1a8d698c36184d72a622478ac798f2f1672979b3da0054f0f63959dfdd636",
+      "bytesEqual": true
+    },
+    "member-founder.jpg": {
+      "baseSha256": "f38f3d980231bdc35984c269ad94970eaebdd609e6ff706dd8062e3046248a46",
+      "featureSha256": "f38f3d980231bdc35984c269ad94970eaebdd609e6ff706dd8062e3046248a46",
+      "bytesEqual": true
+    },
+    "member1.jpg": {
+      "baseSha256": "e475207e4fb8a388cf7174cbb7f0e438bc44e446d2f219fc9f1dae4aa134fa77",
+      "featureSha256": "e475207e4fb8a388cf7174cbb7f0e438bc44e446d2f219fc9f1dae4aa134fa77",
+      "bytesEqual": true
+    },
+    "member2.jpg": {
+      "baseSha256": "5038c5f6a19f6a0b7bd06ce3a89872e1467d27c74109b1480f77a629f8fd0385",
+      "featureSha256": "5038c5f6a19f6a0b7bd06ce3a89872e1467d27c74109b1480f77a629f8fd0385",
+      "bytesEqual": true
+    },
+    "member3.jpg": {
+      "baseSha256": "b6ed172788679ac8542a84974e51173d3923f7adf68ffd7365537bdac65deaa0",
+      "featureSha256": "b6ed172788679ac8542a84974e51173d3923f7adf68ffd7365537bdac65deaa0",
+      "bytesEqual": true
+    },
+    "qa.jpeg": {
+      "baseSha256": "d835622886456af254e111db43df977b42f871dd3b0ab1d16d0ab87dcfacd142",
+      "featureSha256": "d835622886456af254e111db43df977b42f871dd3b0ab1d16d0ab87dcfacd142",
+      "bytesEqual": true
+    },
+    "schedule-calendar.png": {
+      "baseSha256": "5c54af2aa0522ac37dfce25fb9dd70eacd4dd01cce9be07e688b9c7c5829699b",
+      "featureSha256": "5c54af2aa0522ac37dfce25fb9dd70eacd4dd01cce9be07e688b9c7c5829699b",
+      "bytesEqual": true
+    }
+  }
+}

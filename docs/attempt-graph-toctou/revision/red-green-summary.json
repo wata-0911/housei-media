@@ -1,0 +1,59 @@
+{
+  "red": {
+    "tests": 2,
+    "pass": 0,
+    "fail": 2,
+    "skipped": 0
+  },
+  "finalSelfReviewGreen": {
+    "tests": 201,
+    "pass": 201,
+    "fail": 0,
+    "skipped": 0
+  },
+  "n2": [
+    {
+      "entry": "validator",
+      "mode": "getter",
+      "reads": 0,
+      "traps": 1,
+      "valid": false
+    },
+    {
+      "entry": "adapter",
+      "mode": "getter",
+      "reads": 0,
+      "traps": 1,
+      "status": "rejected"
+    },
+    {
+      "entry": "validator",
+      "mode": "invalid-id",
+      "reads": 0,
+      "traps": 1,
+      "valid": false
+    },
+    {
+      "entry": "adapter",
+      "mode": "invalid-id",
+      "reads": 0,
+      "traps": 1,
+      "status": "rejected"
+    },
+    {
+      "entry": "validator",
+      "mode": "negative-contribution",
+      "reads": 0,
+      "traps": 1,
+      "valid": false
+    },
+    {
+      "entry": "adapter",
+      "mode": "negative-contribution",
+      "reads": 0,
+      "traps": 1,
+      "status": "rejected"
+    }
+  ],
+  "rawLogs": "retained locally; excluded from commit"
+}

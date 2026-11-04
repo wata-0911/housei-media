@@ -1,0 +1,7 @@
+{
+  "src/planner/attempts/validation.ts": "08096bd28477931b872c0203a6302b1a4b4c988ea65eeb3e544ce97b274b1dff",
+  "src/planner/attempts/workbench/operations.ts": "1164055eb2d525dc3a59db1135335712bc7667246085606185c51001896fb69f",
+  "tests/attempt-graph-snapshot.test.mjs": "a6346e24d66681b8670fa6dcfe06aaabf454222521793b131d7509d74757a20b",
+  "tests/attempt-graph-performance-probe.mjs": "b42b7dd1a6be000c65abdd845ca75f8f82348d28c7da54ba90c85764835c57fb",
+  "tests/attempt-graph-comparison-probe.mjs": "d2fc220a4efd7607b9998678dd1ed257cde014593fb7b2092fc0ccc53446a00d"
+}

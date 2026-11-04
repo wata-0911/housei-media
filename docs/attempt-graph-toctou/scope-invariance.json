@@ -1,0 +1,12 @@
+{
+  "baseDev": "3eae77665711756e54785022856d5cfae3043f90",
+  "existingTrackedFiles": 399,
+  "changedExistingFiles": [
+    "package.json",
+    "src/planner/attempts/graduation/adapter.ts",
+    "src/planner/attempts/validation.ts"
+  ],
+  "unchangedExistingFiles": 396,
+  "allExistingTestsAndFixturesByteIdentical": true,
+  "schema22And23StorageAndLegacyEngineUnchanged": true
+}

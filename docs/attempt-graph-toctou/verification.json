@@ -1,0 +1,430 @@
+{
+  "baseline-planner-restore": {
+    "tests": 1,
+    "suites": 0,
+    "pass": 0,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "clone-guard-focused": {
+    "tests": 213,
+    "suites": 0,
+    "pass": 213,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "final-browser-test-attempt-persistence-browser": {
+    "tests": 17,
+    "suites": 0,
+    "pass": 17,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "final-browser-test-attempt-ui-browser": {
+    "tests": 9,
+    "suites": 0,
+    "pass": 9,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "final-unit-test-planner": {
+    "tests": 4102,
+    "suites": 0,
+    "pass": 4102,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "initial-attempt-graduation": {
+    "tests": 414,
+    "suites": 0,
+    "pass": 413,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "initial-planner": {
+    "tests": 4084,
+    "suites": 0,
+    "pass": 4083,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "n2-green": {
+    "tests": 6,
+    "suites": 0,
+    "pass": 6,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "n2-red": {
+    "tests": 6,
+    "suites": 0,
+    "pass": 0,
+    "fail": 6,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "snapshot-tests": {
+    "tests": 196,
+    "suites": 0,
+    "pass": 196,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-attempt-graduation": {
+    "tests": 414,
+    "suites": 0,
+    "pass": 413,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-attempt-persistence-browser": {
+    "tests": 17,
+    "suites": 0,
+    "pass": 17,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-attempt-persistence": {
+    "tests": 103,
+    "suites": 0,
+    "pass": 103,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-attempt-ui-browser": {
+    "tests": 9,
+    "suites": 0,
+    "pass": 9,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-attempt-ui": {
+    "tests": 84,
+    "suites": 0,
+    "pass": 84,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-attempts": {
+    "tests": 310,
+    "suites": 0,
+    "pass": 310,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-bookmarklet": {
+    "tests": 168,
+    "suites": 0,
+    "pass": 168,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-extension": {
+    "tests": 54,
+    "suites": 0,
+    "pass": 54,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-migration": {
+    "tests": 133,
+    "suites": 0,
+    "pass": 133,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-planner-browser": {
+    "tests": 44,
+    "suites": 0,
+    "pass": 43,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "test-planner": {
+    "tests": 4084,
+    "suites": 0,
+    "pass": 4083,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "unit": [
+    {
+      "name": "test:attempts",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempts"
+      ],
+      "exit": 0,
+      "seconds": 4.88
+    },
+    {
+      "name": "test:migration",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:migration"
+      ],
+      "exit": 0,
+      "seconds": 238.421
+    },
+    {
+      "name": "test:attempt-ui",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-ui"
+      ],
+      "exit": 0,
+      "seconds": 17.924
+    },
+    {
+      "name": "test:attempt-persistence",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence"
+      ],
+      "exit": 0,
+      "seconds": 816.519
+    },
+    {
+      "name": "test:attempt-graduation",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-graduation"
+      ],
+      "exit": 1,
+      "seconds": 145.893
+    },
+    {
+      "name": "test:planner",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:planner"
+      ],
+      "exit": 1,
+      "seconds": 755.217
+    },
+    {
+      "name": "test:extension",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:extension"
+      ],
+      "exit": 0,
+      "seconds": 0.552
+    },
+    {
+      "name": "test:bookmarklet",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:bookmarklet"
+      ],
+      "exit": 0,
+      "seconds": 2.416
+    },
+    {
+      "name": "typecheck",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exit": 0,
+      "seconds": 10.185
+    },
+    {
+      "name": "lint",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "exit": 0,
+      "seconds": 16.492
+    },
+    {
+      "name": "build",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 7.173
+    },
+    {
+      "name": "build-baseline",
+      "checkout": "attempt-graph-toctou-baseline",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 6.261
+    }
+  ],
+  "browser": [
+    {
+      "name": "test:attempt-ui-browser",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-ui-browser"
+      ],
+      "exit": 0,
+      "seconds": 45.746
+    },
+    {
+      "name": "test:attempt-persistence-browser",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence-browser"
+      ],
+      "exit": 0,
+      "seconds": 329.251
+    },
+    {
+      "name": "test:planner-browser",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:planner-browser"
+      ],
+      "exit": 1,
+      "seconds": 476.945
+    }
+  ],
+  "final-unit": [
+    {
+      "name": "test:planner",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:planner"
+      ],
+      "exit": 0,
+      "seconds": 1001.926
+    },
+    {
+      "name": "typecheck",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "exit": 0,
+      "seconds": 10.599
+    },
+    {
+      "name": "lint",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "exit": 0,
+      "seconds": 16.38
+    },
+    {
+      "name": "build",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 7.311
+    }
+  ],
+  "final-browser": [
+    {
+      "name": "test:attempt-ui-browser",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-ui-browser"
+      ],
+      "exit": 0,
+      "seconds": 73.635
+    },
+    {
+      "name": "test:attempt-persistence-browser",
+      "checkout": "attempt-graph-toctou",
+      "command": [
+        "npm",
+        "run",
+        "test:attempt-persistence-browser"
+      ],
+      "exit": 0,
+      "seconds": 606.976
+    }
+  ]
+}
