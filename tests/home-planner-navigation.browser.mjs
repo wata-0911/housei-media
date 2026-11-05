@@ -12,7 +12,7 @@ before(async () => {
   const engine = process.env.PLANNER_BROWSER_ENGINE || 'chromium';
   assert.ok(['chromium', 'webkit'].includes(engine));
   const browserType = (await import(process.env.PLANNER_PLAYWRIGHT_MODULE || 'playwright'))[engine];
-  server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', new URL(origin).port, '--strictPort'], { cwd: new URL('../', import.meta.url), stdio: 'pipe' });
+  server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--outDir', process.env.WORK_C_DIST || 'dist', '--host', '127.0.0.1', '--port', new URL(origin).port, '--strictPort'], { cwd: new URL('../', import.meta.url), stdio: 'pipe' });
   let output = '';
   server.stdout.on('data', chunk => { output += chunk; });
   server.stderr.on('data', chunk => { output += chunk; });

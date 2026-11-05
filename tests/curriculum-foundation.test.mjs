@@ -1,3 +1,6 @@
+import {legacyInputLedger} from './fixtures/work-b-legacy-input-ledger.mjs';
+import {createHash} from 'node:crypto';
+import {legacyCatalogContract,legacyCatalogCaseKey,compareLegacyCatalogEvidence} from './fixtures/work-b-legacy-catalog-contract.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -553,7 +556,8 @@ test('import: direct handoff keeps institutional matching and UI distinguishes a
   assert.match(html, /2026開講: 未特定/);
 });
 
-test('graduation: all eight scopes retain pre-foundation calculations across statuses, recognition and public courses', () => {
+test('graduation: all eight scopes retain pre-foundation calculations across statuses, recognition and public courses', t => {
+  const seen = []; let unchanged = 0;
   const legacy = applyManualMappingOverrides(rawCatalog);
   const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'first_year', curriculumApplicability: 'current_2026', currentStudyYear: 4 };
   for (const program of catalog.programs.filter(program => !program.isCommon)) {
@@ -565,10 +569,23 @@ test('graduation: all eight scopes retain pre-foundation calculations across sta
       const publicCourses = [{ id: 'public-foundation', title: '公開科目', status, plannedYear: 2026, plannedTerm: null, studyYear: 4, finalGrade: null, credits: 2 }];
       const recognized = { ...profile, admissionType: 'other_transfer', recognizedCredits: { ...profile.recognizedCredits, totalCredits: 12, openUniversityCredits: 4 } };
       for (const candidate of [profile, recognized]) for (const thesis of ['undecided', 'selected', 'not_selected']) {
-        assert.deepEqual(calculateGraduationProgress(items, catalog, program.scopeId, publicCourses, thesis, [], [], candidate), calculateGraduationProgress(items, legacy, program.scopeId, publicCourses, thesis, [], [], candidate), `${program.displayName}/${status}/${thesis}`);
+        const current = calculateGraduationProgress(items, catalog, program.scopeId, publicCourses, thesis, [], [], candidate);
+        const previous = calculateGraduationProgress(items, legacy, program.scopeId, publicCourses, thesis, [], [], candidate);
+        const key = legacyCatalogCaseKey(program.scopeId, status, candidate.admissionType, thesis);
+        if (legacyCatalogContract.cases.some(c => c.key === key)) {
+          compareLegacyCatalogEvidence(current, previous, key);
+          seen.push(key);
+        } else {
+          assert.deepEqual(current, previous, `${program.displayName}/${status}/${thesis}`);
+          unchanged++;
+        }
       }
     }
   }
+  assert.equal(unchanged, 270);
+  assert.equal(seen.length, 18);
+  assert.deepEqual(seen.toSorted(), legacyCatalogContract.cases.map(c => c.key).toSorted());
+  t.diagnostic('288 fixed inputs: 270 complete deepEqual; 18 exact independent evidence differences');
 });
 
 test('import: schooling-only evidence cannot select a correspondence opening as a representative', () => {
@@ -834,4 +851,64 @@ test('H02: compatible manual reselection and manual reimport retain recovered in
   assert.equal(reimported.importedCourseAchievements[0].offeringMatch, 'ambiguous');
   assert.deepEqual(reimported.importedCourseUserMeta, recovered.importedCourseUserMeta);
   assert.deepEqual(reimported.importedStudyRecords.map(r => r.sourceCourseId), recovered.importedStudyRecords.map(r => r.sourceCourseId));
+});
+
+// Approved option 2: no change to the pre-foundation input or production loader.
+test('legacy Catalog contract: independent institutional inputs prove fixed 18-case expectations', () => {
+  const scope = '118c5183-6aec-4fa1-905a-265f25d86db1';
+  const expectedKeys = ['planned','in_progress','earned'].flatMap(status => ['first_year','other_transfer'].flatMap(admission => ['undecided','selected','not_selected'].map(thesis => legacyCatalogCaseKey(scope,status,admission,thesis))));
+  assert.deepEqual(legacyCatalogContract.cases.map(c => c.key), expectedKeys);
+  for (const [path, sha] of Object.entries(legacyCatalogContract.inputBindings)) assert.equal(createHash('sha256').update(readFileSync(new URL('../'+path, import.meta.url))).digest('hex'), sha, path);
+  const excluded = new Set(catalog.offerings.filter(o => o.curriculumCourseId === 'curriculum:5e8b0825-7ba9-4a53-847c-7e56283718e5').map(o => o.id));
+  const items = Object.fromEntries(['planned','in_progress','earned'].map(status => [status, catalog.offerings.filter(o => !excluded.has(o.id)).map(o => ({offeringId:o.id,status,plannedYear:2026,plannedTerm:null,studyYear:4,earnedOrder:null}))]));
+  const ledger = legacyInputLedger(catalog, applyManualMappingOverrides(rawCatalog), items);
+  for (const fixed of legacyCatalogContract.cases) for (const side of ['current','legacy']) {
+    for (const key of ['evaluableCount','unknownCount','unknownReasons']) assert.deepEqual(fixed[side][key],ledger[side][key],side+'/'+key);
+    const column = fixed.status === 'in_progress' ? 'inProgress' : fixed.status;
+    if (side === 'current') for (const row of fixed.current.requirements) {
+      const input = ledger.fields.find(f => f.status === fixed.status && f.requirementId === row.requirementId);
+      assert.equal(row[column],input.values[column]);
+      assert.deepEqual([row.earned,row.inProgress,row.planned],['earned','inProgress','planned'].map(k => k===column?input.values[column]:0));
+    }
+  }
+});
+
+test('legacy Catalog contract: mutations reject wrong/missing/extra cells and protected outputs', t => {
+  let rejected = 0;
+  const reject = (current,legacy,key) => {assert.throws(() => compareLegacyCatalogEvidence(current,legacy,key),assert.AssertionError);rejected++;};
+  for (const fixed of legacyCatalogContract.cases) {
+    const pair = () => ['current','legacy'].map(side => ({...structuredClone(fixed[side]),cards:[{requirementId:'protected-card',earned:4}],referenceProgress:[{id:'protected-reference',earned:4}],graduationCheckComplete:false}));
+    const [goodCurrent,goodLegacy] = pair();compareLegacyCatalogEvidence(goodCurrent,goodLegacy,fixed.key);
+    for (const side of [0,1]) for (let i=0;i<3;i++) for (const field of ['earned','inProgress','planned','status','reason','coverageStatus','unknownReasonCategory']) {
+      const p=pair();p[side].requirements[i][field]=999;reject(...p,fixed.key);
+    }
+    for (let i=0;i<3;i++) {
+      const p=pair();p[0].requirements[i].earned=p[1].requirements[i].earned;reject(...p,fixed.key); // missing required difference
+      const q=pair();q[0].requirements[i].earned=q[1].requirements[i].earned=999;reject(...q,fixed.key); // common wrong values
+    }
+    for (const side of [0,1]) for (const mode of ['evaluableCount','unknownCount','reason-text','reason-count','reason-label','reason-order','reason-extra','reason-missing','requirement-order','requirement-extra','requirement-missing','duplicate-id','field-extra','field-absent','card','reference','completion','undefined-extra']) {
+      const p=pair(),o=p[side];
+      if (['evaluableCount','unknownCount'].includes(mode))o[mode]=999;
+      if(mode==='reason-text')o.unknownReasons[0].reason='999';
+      if(mode==='reason-count')o.unknownReasons[0].count=999;
+      if(mode==='reason-label')o.unknownReasons[0].labels.reverse();
+      if(mode==='reason-order')o.unknownReasons.reverse();
+      if(mode==='reason-extra')o.unknownReasons.push({reason:'extra',count:1,labels:['extra']});
+      if(mode==='reason-missing')o.unknownReasons.pop();
+      if(mode==='requirement-order')o.requirements.reverse();
+      if(mode==='requirement-extra')o.requirements.push({...o.requirements[0],requirementId:'extra'});
+      if(mode==='requirement-missing')o.requirements.pop();
+      if(mode==='duplicate-id')o.requirements.push(structuredClone(o.requirements[0]));
+      if(mode==='field-extra')o.requirements[0].extra=999;
+      if(mode==='field-absent')delete o.requirements[0].reason;
+      if(mode==='card')o.cards[0].earned=999;
+      if(mode==='reference')o.referenceProgress[0].earned=999;
+      if(mode==='completion')o.graduationCheckComplete=true;
+      if(mode==='undefined-extra')o.extra=undefined;
+      reject(...p,fixed.key);
+    }
+    reject(...pair(),fixed.key+'-extra-case');
+  }
+  assert.equal(rejected,1530);
+  t.diagnostic('1530 rejected mutations; all 18 approved cases accept the independent fixed expectations');
 });

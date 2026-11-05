@@ -1,0 +1,145 @@
+{
+  "id": "F3",
+  "graph": {
+    "attempts": [
+      {
+        "id": "hosei:attempt:00000000-0000-4000-8000-000000000004",
+        "creationOperationId": "hosei:attempt-op:00000000-0000-4000-8000-000000000003",
+        "originalTitle": "法律学演習",
+        "identity": {
+          "status": "confirmed",
+          "ref": {
+            "institutionalCourseId": "curriculum:7fff7751-af52-4314-bb53-bdc87c5a33b9",
+            "sourceRevisionId": "yi-01:source:shiori-quartz",
+            "evidenceIds": [
+              "p46-法律-選択-r24"
+            ]
+          },
+          "candidateAuditIds": [],
+          "reason": null
+        },
+        "placement": {
+          "status": "unknown",
+          "ref": null,
+          "candidateAuditIds": [],
+          "candidatePlacementIds": [
+            "hosei:cp:71f64496-29f2-4d6a-a040-fa6ef36d870c"
+          ],
+          "reason": "本人が選んだ配置候補。本人適用は未確認"
+        },
+        "applicability": {
+          "status": "unknown",
+          "curriculumVersionId": null,
+          "scopeId": null,
+          "legacyApplicability": "unknown",
+          "originalValue": null,
+          "evidence": null
+        },
+        "legacyRefs": [],
+        "membership": {
+          "kind": "active"
+        },
+        "plan": {
+          "plannedYear": 2035,
+          "plannedTerm": "希望期",
+          "studyYear": null,
+          "status": "earned",
+          "earnedOrder": null,
+          "contribution": {
+            "value": 2,
+            "source": "learner",
+            "note": null
+          }
+        },
+        "method": {
+          "value": "schooling",
+          "source": "learner",
+          "evidence": {
+            "kind": "learner",
+            "note": "本人記録（算入根拠ではない）"
+          }
+        },
+        "actualYear": {
+          "value": 2026,
+          "source": "manual",
+          "evidence": {
+            "kind": "learner",
+            "note": "Same recorded sitting, 2026-07-10"
+          },
+          "reason": null
+        }
+      },
+      {
+        "id": "hosei:attempt:00000000-0000-4000-8000-000000000002",
+        "creationOperationId": "hosei:attempt-op:00000000-0000-4000-8000-000000000001",
+        "originalTitle": "法律学演習",
+        "identity": {
+          "status": "confirmed",
+          "ref": {
+            "institutionalCourseId": "curriculum:7fff7751-af52-4314-bb53-bdc87c5a33b9",
+            "sourceRevisionId": "yi-01:source:shiori-quartz",
+            "evidenceIds": [
+              "p46-法律-選択-r24"
+            ]
+          },
+          "candidateAuditIds": [],
+          "reason": null
+        },
+        "placement": {
+          "status": "unknown",
+          "ref": null,
+          "candidateAuditIds": [],
+          "candidatePlacementIds": [
+            "hosei:cp:71f64496-29f2-4d6a-a040-fa6ef36d870c"
+          ],
+          "reason": "本人が選んだ配置候補。本人適用は未確認"
+        },
+        "applicability": {
+          "status": "unknown",
+          "curriculumVersionId": null,
+          "scopeId": null,
+          "legacyApplicability": "unknown",
+          "originalValue": null,
+          "evidence": null
+        },
+        "legacyRefs": [],
+        "membership": {
+          "kind": "active"
+        },
+        "plan": {
+          "plannedYear": 2035,
+          "plannedTerm": "希望期",
+          "studyYear": null,
+          "status": "earned",
+          "earnedOrder": null,
+          "contribution": {
+            "value": 2,
+            "source": "learner",
+            "note": null
+          }
+        },
+        "method": {
+          "value": "schooling",
+          "source": "learner",
+          "evidence": {
+            "kind": "learner",
+            "note": "本人記録（算入根拠ではない）"
+          }
+        },
+        "actualYear": {
+          "value": 2026,
+          "source": "manual",
+          "evidence": {
+            "kind": "learner",
+            "note": "Same recorded sitting, 2026-07-10"
+          },
+          "reason": null
+        }
+      }
+    ],
+    "ownedRecords": [],
+    "removals": []
+  },
+  "scope": "e31201f3-4f1d-432a-906e-6af94af294c9",
+  "expected": "hold unproven duplicate completion; distinct UUID is not completion evidence"
+}

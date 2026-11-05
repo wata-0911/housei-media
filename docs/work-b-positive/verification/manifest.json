@@ -1,0 +1,32 @@
+{
+  "base": "c71a53ffbe7268e1da4b2e5c5c71c374a78e76cb",
+  "files": {
+    "src/planner/graduation/graduationProgress.ts": "99356d8311c6cf3cfe0ae873ca22c91ddb4a2791649f2e157ec0b5ca8efa4ed4",
+    "src/planner/attempts/graduation/recordedCalculation.ts": "2cbcc9594fb31f1a5ab7ee670a64fead8d2d1b6c6cca183314e51b4945e1468d",
+    "src/data/graduation_rules.json": "a8ef7161a61b90e42d07f8fdf31e30e51cc608fdf5fb2e1a54d6c63b5a2e9a59",
+    "scripts/work-b/extract-rules.mjs": "0061c78cb59b0096704d7d976ce4571a5a76b4fa1b07c072d452103d969702b8",
+    "tests/attempt-positive.test.mjs": "3fc6b7374808d0ada27d349b43ba746f32ab886578c8285cea599c8690a57afe",
+    "tests/attempt-positive-baseline.test.mjs": "f59867836858264de02c4b8fac2a61cd9fe06f16c18e5e9725a985201036dd15",
+    "package.json": "373f1cc43161964a60f58d46c207ae95dc9f3136d57c68cad441bc2dc36c9313"
+  },
+  "positiveTests": {
+    "pass": 62,
+    "fail": 0,
+    "skip": 0
+  },
+  "fixedBaselineCases": 192,
+  "legacyRegression": {
+    "pass": 1527,
+    "fail": 0,
+    "skip": 0
+  },
+  "typecheck": "pass",
+  "lint": "pass",
+  "build": "pass; production consumer not connected",
+  "fullPlannerSuiteRun": false,
+  "releaseReady": false,
+  "personalApplicabilityVerified": false,
+  "workASavingChanged": false,
+  "workCUIChanged": false,
+  "independentAuditStarted": false
+}

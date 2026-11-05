@@ -52,7 +52,8 @@ function menuLayout({ position, size, bounds }: Frame) {
     return { x, y, width, height: Math.min(LIST_HEIGHT, bounds.bottom - y), compact: true, anchor };
 }
 
-export default function PageEdgeNavigation() {
+export default function PageEdgeNavigation({ plannerPath = '/planner', includeMedia = true }: { plannerPath?: string; includeMedia?: boolean }) {
+    const availableDestinations = includeMedia ? destinations : destinations.slice(0, -1);
     const location = useLocation();
     const navigate = useNavigate();
     const root = useRef<HTMLDivElement>(null);
@@ -132,7 +133,7 @@ export default function PageEdgeNavigation() {
 
     const menu = frame ? menuLayout(frame) : null;
     const anchor = open && menu ? menu.anchor : frame?.position;
-    function choose(index: number) { close(); navigate(`/planner#${destinations[index][0]}`); }
+    function choose(index: number) { close(); navigate(`${plannerPath}#${availableDestinations[index][0]}`); }
     function moveToEdge(edge = scroll.atTop ? 'bottom' : 'top') {
         close();
         window.scrollTo({ top: edge === 'bottom' ? Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - innerHeight : 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
@@ -203,7 +204,7 @@ export default function PageEdgeNavigation() {
                 const delta: Record<string, Point> = { ArrowLeft: { x: -20, y: 0 }, ArrowRight: { x: 20, y: 0 }, ArrowUp: { x: 0, y: -20 }, ArrowDown: { x: 0, y: 20 } };
                 if (event.altKey && frame && delta[event.key]) { event.preventDefault(); setFrame({ ...frame, position: clamp({ x: frame.position.x + delta[event.key].x, y: frame.position.y + delta[event.key].y }, frame.size, frame.bounds) }); }
                 else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); suppressClick.current = false; if (openRef.current) close(); else changeOpen(true); }
-                else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); changeOpen(true); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(`[data-edge-destination="${event.key === 'ArrowDown' ? 0 : 3}"]`)?.focus()); }
+                else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); changeOpen(true); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(`[data-edge-destination="${event.key === 'ArrowDown' ? 0 : availableDestinations.length - 1}"]`)?.focus()); }
                 else if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); moveToEdge(event.key === 'Home' ? 'top' : 'bottom'); }
             }}
             onClick={event => {
@@ -218,7 +219,7 @@ export default function PageEdgeNavigation() {
             }}>{label}</button>
         <div id="edge-shortcuts" className={`edge-shortcuts ${menu?.compact ? 'is-compact' : ''}`} role="group" aria-label={menu?.compact ? 'ショートカット一覧（スクロールできます）' : 'ショートカット一覧'} hidden={!open}
             style={menu && anchor ? { left: menu.x - anchor.x, top: menu.y - anchor.y, width: menu.width, height: menu.height } : undefined}>
-            {destinations.map(([id, text], index) => <button key={id} type="button" data-edge-destination={index} className={`edge-destination edge-destination-${index} ${selected === index ? 'is-selected' : ''}`} onClick={() => choose(index)}>{text}</button>)}
+            {availableDestinations.map(([id, text], index) => <button key={id} type="button" data-edge-destination={index} className={`edge-destination edge-destination-${index} ${selected === index ? 'is-selected' : ''}`} onClick={() => choose(index)}>{text}</button>)}
         </div>
     </div>;
 }

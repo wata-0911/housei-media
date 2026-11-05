@@ -1,3 +1,4 @@
+import { assertFiniteNumbers } from './finiteNumbers';
 import { CALLIGRAPHY_CURRICULUM_ID, deriveCalligraphyProgress, isCalligraphyCourse, type CalligraphyProgress } from '../progress/calligraphyProgress';
 import type {
   Mapping,
@@ -31,6 +32,15 @@ import { unresolvedSchoolingImpact, schoolingImpactsRequirement, schoolingCanCha
 import { heldOfficialSchoolingContributions } from './heldOfficialSchooling';
 import { lawExcludedOfficialSchoolingContributions } from './lawExcludedOfficialSchooling';
 import { unresolvedOfficialImpact, officialImpactsCard, officialImpactsRequirement, officialEvaluationCanChange, type UnresolvedOfficialImpact } from './unresolvedOfficialImpact';
+
+/** Shared calculation facts; learner records never become official source rows. */
+export type CourseAllocationInput = Omit<OfficialAllocationInput, 'fact'> & {
+  fact: Pick<OfficialAllocationInput['fact'], 'canonicalName' | 'curriculumCourseId'> & {
+    repeatableEvidence?: Omit<NonNullable<OfficialAllocationInput['fact']['repeatableEvidence']>, 'attempts'> & {
+      attempts: Array<{ academicYear: number } | { attemptId: string }>;
+    };
+  };
+};
 
 export type ProgressStatus = 'satisfied' | 'unsatisfied' | 'unknown';
 
@@ -166,10 +176,21 @@ function targetIsClear(requirement: StructuredRequirement) {
   return true;
 }
 
+/** Exact aliases in shiori p.52–55, restricted to department and field rule. */
+function documentedFieldMatch(mapping: Mapping, requirement: StructuredRequirement): boolean {
+  const aliases: Record<string, Record<string, string>> = {
+    '史学科': { '日本史': '日本史の分野', '東洋史': '東洋史の分野', '西洋史': '西洋史の分野' },
+    '地理学科': { '人文': '人文地理の分野', '自然': '自然地理の分野', '地誌・その他': '地誌・その他の分野' },
+  };
+  return mapping.scopeId === requirement.scopeId && mapping.category === '専門教育'
+    && requirement.target.curriculum_field !== undefined
+    && aliases[mapping.department ?? '']?.[requirement.target.curriculum_field] === mapping.field;
+}
+
 function mappingMatches(mapping: Mapping, requirement: StructuredRequirement) {
   const target = requirement.target;
   return (target.curriculum_category === undefined || mapping.category === target.curriculum_category)
-    && (target.curriculum_field === undefined || mapping.field === target.curriculum_field)
+    && (target.curriculum_field === undefined || mapping.field === target.curriculum_field || documentedFieldMatch(mapping, requirement))
     && (target.requirement_type === undefined || mapping.requirementType === target.requirement_type);
 }
 
@@ -242,11 +263,12 @@ function alignProfessionalAllocationMinimums(rows: RequirementProgress[], catalo
 
 function evaluateStructured(
   requirement: StructuredRequirement,
+  catalog: PlannerCatalog,
   items: PlannerItem[],
   offerings: Map<string, Offering>,
   eligibleMappings: (offering: Offering) => Mapping[],
   impact: UnresolvedEarnedImpact,
-  official: OfficialAllocationInput[],
+  official: CourseAllocationInput[],
   officialImpact: UnresolvedOfficialImpact,
   schoolingImpact: UnresolvedSchoolingImpact,
 ): RequirementProgress {
@@ -268,6 +290,13 @@ function evaluateStructured(
   const officialMatched = official.filter(a => mappingMatches(a.mapping, requirement)
     && (names === null || names.includes(a.fact.canonicalName ?? '') || names.includes(a.fact.repeatableEvidence?.label ?? '')));
   const affected = impactsRequirement(impact, requirement, mappingMatches, targetMappingIds);
+  // The existing official uncertainty matcher uses raw destination field labels.
+  // For course minima use the same exact F4 aliases as the positive matcher;
+  // an unknown official completion must not become a numeric zero.
+  const uncertainOfficialCompletion = unit === 'courses' && officialImpact.candidates.some(candidate =>
+    mappingMatches(candidate.mapping, requirement)
+      && (names === null || names.includes(candidate.canonicalName)));
+
   const officialTargetKnown = requirement.ruleType === 'min_schooling_credits'
     ? !schoolingImpact.globalUnknown && schoolingImpactsRequirement(schoolingImpact, requirement)
     : !officialImpact.globalUnknown && officialImpactsRequirement(officialImpact, requirement);
@@ -308,6 +337,55 @@ function evaluateStructured(
     && [...completedMappings.values()].some(entry => entry.mapping.curriculumCredits === null)) {
     return unknown(requirement, '科目構成単位が不明のため全単位修得条件を判定できません');
   }
+  // F4 counts completed institutional subjects, not annual openings. Credit
+  // progress remains raw; only field course minima use this stricter evidence.
+  const fieldCourseMinimum = unit === 'courses';
+  const countedEntries = new Map<string, CurriculumEntry>();
+  if (fieldCourseMinimum) {
+    const courses = new Map(catalog.curriculum?.courses.map(course => [course.id, course]) ?? []);
+    const relations = new Map(catalog.curriculum?.offeringRelations.map(row => [row.offeringId, row]) ?? []);
+    const policies = new Map<string, string>();
+    const seen = new Set<string>();
+    for (const row of matched.filter(row => ['earned', 'in_progress', 'planned'].includes(row.item.status))) {
+      const course = courses.get(row.offering.curriculumCourseId ?? '');
+      const relation = relations.get(row.offering.id);
+      if (!course || relation?.curriculumCourseId !== course.id
+        || relation.candidateCurriculumCourseIds.length !== 1 || relation.candidateCurriculumCourseIds[0] !== course.id
+        || seen.has(row.offering.id)) {
+        return unknown(requirement, '制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています');
+      }
+      seen.add(row.offering.id);
+      const mappings = eligibleMappings(row.offering).filter(mapping => mapping.scopeId === requirement.scopeId);
+      const keys = new Map(mappings.map(mapping => [curriculumEntryKey(row.offering, mapping), mapping]));
+      if (keys.size !== 1) return unknown(requirement, '科目区分の対応が一意でないため、完成科目数を保留しています');
+      const [key, mapping] = [...keys][0];
+      if (!mappings.every(edge => course.scopeIds.includes(edge.scopeId) && course.mappingIds.includes(edge.mappingId)
+        && edge.curriculumCredits === course.curriculumCredits)
+        || !course.scopeIds.includes(mapping.scopeId) || !course.mappingIds.includes(mapping.mappingId)
+        || mapping.scopeId !== requirement.scopeId || course.curriculumCredits === null || course.curriculumCredits <= 0
+        || mapping.curriculumCredits !== course.curriculumCredits
+        || (policies.has(course.id) && policies.get(course.id) !== key)) {
+        return unknown(requirement, '制度科目の構成単位・scope・mappingが不明のため、完成科目数を保留しています');
+      }
+      // Proven official repeat histories are handled by officialCourses below.
+      // Different opening IDs alone are not proof of independent repeat awards.
+      if (repeatableRule(mapping.department ?? '', row.offering)) {
+        return unknown(requirement, '反復履修の独立性が未確認のため、完成科目数を保留しています');
+      }
+      policies.set(course.id, key);
+      const totals = completedMappings.get(key)!;
+      if ([totals.earned, totals.inProgress, totals.planned].some(n => !Number.isFinite(n) || n < 0)) {
+        return unknown(requirement, '修得単位の集計が不明のため、完成科目数を保留しています');
+      }
+      countedEntries.set(key, { ...totals, curriculumCourseId: course.id,
+        label: course.canonicalName, earnedSchooling: 0 });
+    }
+  }
+  // Reuse professional-card completion, including special completion evidence.
+  // Lifecycle columns are independent; future intent never completes earned.
+  const completedFieldCourses = (status: 'earned' | 'in_progress' | 'planned') => [...countedEntries.values()]
+    .filter(entry => completedCurriculumCredits({ ...entry,
+      earned: entry[status === 'in_progress' ? 'inProgress' : status] }) > 0).length;
   const total = (status: PlannerItem['status']) => {
     if (requirement.conditions?.full_course_credits_required) {
       return [...completedMappings.values()].reduce((sum, entry) => {
@@ -316,10 +394,10 @@ function evaluateStructured(
       }, 0);
     }
     const rows = matched.filter(row => row.item.status === status);
-    if (unit === 'courses') return new Set(rows.map(row => row.offering.id)).size;
+    if (unit === 'courses') return completedFieldCourses(status as 'earned' | 'in_progress' | 'planned');
     return rows.reduce((sum, row) => sum + creditsFor(row.item, row.offering)!, 0);
   };
-  const officialCourses = (a: OfficialAllocationInput) => a.fact.repeatableEvidence
+  const officialCourses = (a: CourseAllocationInput) => a.fact.repeatableEvidence
     ? requirement.ruleType === 'max_credits' ? a.fact.repeatableEvidence.attempts.length
       : Math.min(a.fact.repeatableEvidence.attempts.length, a.fact.repeatableEvidence.limitCourses) : a.completedCredits > 0 ? 1 : 0;
   const officialEarned = officialMatched.reduce((sum, a) => sum + (unit === 'courses' ? officialCourses(a)
@@ -329,8 +407,8 @@ function evaluateStructured(
   const earned = total('earned') + officialEarned;
   const inProgress = total('in_progress');
   const planned = total('planned');
-  const completedCourseCount = [...completedMappings.values()].filter(entry =>
-    entry.earned >= (entry.mapping.curriculumCredits ?? Number.POSITIVE_INFINITY)).length
+  const completedCourseCount = (fieldCourseMinimum ? completedFieldCourses('earned') : [...completedMappings.values()].filter(entry =>
+    entry.earned >= (entry.mapping.curriculumCredits ?? Number.POSITIVE_INFINITY)).length)
     + officialMatched.reduce((sum, a) => sum + officialCourses(a), 0);
   const minimumCourses = requirement.conditions?.min_courses;
   const maximumEnrollments = requirement.conditions?.max_enrollments;
@@ -340,6 +418,12 @@ function evaluateStructured(
   const respectsMaximumEnrollments = maximumEnrollments === undefined || completedCourseCount <= maximumEnrollments;
   const creditStatus = evaluateStatus(requirement.ruleType, earned, requirement.value);
   const satisfied = creditStatus === 'satisfied' && meetsMinimumCourses && respectsMaximumEnrollments;
+  // An unresolved independent Course cannot undo a proven monotone minimum.
+  // It also cannot certify zero or failure while that minimum is not proven.
+  // The later H31/H41 pass still applies global/ownership and non-monotone holds.
+  if (uncertainOfficialCompletion && !satisfied) {
+    return unknown(requirement, '公式実績の科目完成が未確認のため、完成科目数を保留しています');
+  }
   const schoolingHeld = schoolingImpactsRequirement(schoolingImpact, requirement)
     && (schoolingImpact.globalUnknown || !satisfied);
   return {
@@ -372,7 +456,7 @@ const isBasicLecture = (offering: Offering) => offering.name === '基礎特講'
 function groupedCards(
   sources: CalculationItems, offerings: Map<string, Offering>, eligibleMappings: (offering: Offering) => Mapping[],
   impact: UnresolvedEarnedImpact,
-  official: OfficialAllocationInput[],
+  official: CourseAllocationInput[],
 ): ProgressCard[] {
   const items = sources.ordinary, schoolingItems = new Set(sources.schooling);
   type Totals = { earned: number; inProgress: number; planned: number; schooling: number };
@@ -713,7 +797,7 @@ function addCurriculumTotals(totals: Totals, entry: CurriculumEntry) {
 function professionalCards(
   sources: CalculationItems, catalog: PlannerCatalog, scopeId: string, offerings: Map<string, Offering>,
   eligibleMappings: (offering: Offering) => Mapping[], impact: UnresolvedEarnedImpact, publicCourseCredits: number, thesisSelection: ThesisSelection, thesisStatus: ThesisProgress['status'],
-  official: OfficialAllocationInput[],
+  official: CourseAllocationInput[],
   calligraphy: Map<string, CalligraphyProgress>,
 ): ProgressCard[] {
   const items = sources.ordinary, schoolingItems = new Set(sources.schooling);
@@ -916,7 +1000,7 @@ function professionalCards(
       const repeat = repeatables.get(key) ?? { name: proof.label, type, limit: proof.limit, limitCourses: proof.limitCourses,
         earned: 0, inProgress: 0, planned: 0, courses: new Set<string>() };
       repeat.earned += proof.earnedTotal;
-      for (const attempt of proof.attempts) repeat.courses.add(`official:${a.fact.curriculumCourseId}:${attempt.academicYear}`);
+      for (const attempt of proof.attempts) repeat.courses.add(`official:${a.fact.curriculumCourseId}:${'attemptId' in attempt ? attempt.attemptId : attempt.academicYear}`);
       repeatables.set(key, repeat);
       continue;
     }
@@ -1407,7 +1491,7 @@ function literaturePartialExceptionCard(items: PlannerItem[], catalog: PlannerCa
 }
 
 /** Individual rules and grouped cards never compose into a graduation decision. */
-export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, openUniversityCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null, correspondenceProgress: Record<string, CorrespondenceCourseProgress> = {}): GraduationProgress {
+export function calculateGraduationProgress(items: PlannerItem[], catalog: PlannerCatalog, scopeId: string | null, publicCourses: PublicCourse[] = [], thesisSelection: ThesisSelection = 'undecided', importedStudyRecords: ImportedStudyRecord[] = [], importedCourseAchievements: ImportedCourseAchievement[] = [], profile: GraduationProfile = { admissionYear: null, currentStudyYear: null, admissionType: 'unknown', recognizedCredits: { totalCredits: null, schoolingEquivalentCredits: null, openUniversityCredits: null, general: { humanities: { mode: 'unknown', credits: null }, social: { mode: 'unknown', credits: null }, natural: { mode: 'unknown', credits: null } }, foreignLanguage: { mode: 'unknown', credits: null, language: 'unknown', schoolingEquivalentCredits: null }, physicalEducation: { mode: 'unknown', credits: null }, professionalCourses: [] }, curriculumApplicability: 'unknown' }, thesisProgress: ThesisProgress | null = null, correspondenceProgress: Record<string, CorrespondenceCourseProgress> = {}, recordedAllocations: readonly CourseAllocationInput[] = []): GraduationProgress {
   profile = { ...profile, recognizedCredits: effectiveRecognitionForAdmission(profile) };
   if (catalog.metadata.graduationCheckComplete !== false) throw new Error('Incomplete graduation-check metadata is required.');
   if (scopeId === null || !catalog.programs.some(program => !program.isCommon && program.scopeId === scopeId)) {
@@ -1420,6 +1504,26 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   const currentThesis = thesisProgress ?? { selection: thesisSelection, status: 'not_started' as const };
   const currentSelection = thesisPolicyForScope(catalog, scopeId) === 'required' ? 'selected' : currentThesis.selection;
   const official = deriveOfficialGraduationFacts(importedCourseAchievements, importedStudyRecords, catalog, scopeId, profile);
+  const recordedCourseIds = new Set<string>();
+  const permittedRecorded = recordedAllocations.filter(a => {
+    const id = a.fact.curriculumCourseId;
+    if (!id || recordedCourseIds.has(id)) throw new Error('duplicate_recorded_course_allocation');
+    recordedCourseIds.add(id);
+    if ([a.credits, a.completedCredits, a.schoolingCredits ?? 0].some(n => !Number.isFinite(n) || n < 0)) throw new Error('invalid_recorded_allocation_quantity');
+    const mapping = catalog.mappings.find(m => m.mappingId === a.mapping.mappingId);
+    const course = catalog.curriculum?.courses.find(c => c.id === id);
+    const keys: Array<keyof Mapping> = ['scopeId', 'faculty', 'department', 'course', 'category', 'field',
+      'requirementType', 'curriculumCredits', 'eligibleYears', 'schoolingOnly', 'mediaOnly', 'source'];
+    if (!mapping || keys.some(key => JSON.stringify(mapping[key]) !== JSON.stringify(a.mapping[key]))
+      || !course || !course.mappingIds.includes(mapping.mappingId) || course.canonicalName !== a.fact.canonicalName
+      || !(mapping.scopeId === scopeId || catalog.programs.some(p => p.isCommon && p.scopeId === mapping.scopeId))) {
+      throw new Error('invalid_recorded_allocation_mapping');
+    }
+    // An internal calculated fact, never caller authority for completion or repeat evidence.
+    if (a.completedCredits > a.credits || (a.schoolingCredits ?? 0) > a.credits) throw new Error('invalid_recorded_allocation_quantity');
+    return !official.facts.some(f => f.curriculumCourseId === null || f.curriculumCourseId === a.fact.curriculumCourseId);
+  });
+  const allocations: CourseAllocationInput[] = [...official.allocations, ...permittedRecorded];
   const plannerItems = plannerItemsWithoutOfficialEarned(items, catalogOfferings, importedCourseAchievements, catalog);
   const heldFacts = official.facts.filter(f => f.allocation.kind === 'unknown'
     && !officialFactCreditState(f).allZero);
@@ -1458,14 +1562,14 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     if (condition === 'inactive') return [];
     if (condition === 'undecided') return [unknown(requirement, '卒論有無が未定のため、必要単位を判定できません。')];
       const schooling = requirement.ruleType === 'min_schooling_credits';
-      return [evaluateStructured(withoutThesisCondition(requirement), schooling ? calculationItems.schooling : calculationItems.ordinary,
-        offerings, eligibleMappings, schooling ? plannerSchoolingImpact : impact, official.allocations, officialImpact, schoolingImpact)];
+      return [evaluateStructured(withoutThesisCondition(requirement), catalog, schooling ? calculationItems.schooling : calculationItems.ordinary,
+        offerings, eligibleMappings, schooling ? plannerSchoolingImpact : impact, allocations, officialImpact, schoolingImpact)];
     });
   const thesisCards = thesisProgressCard(catalog, scopeId, { ...currentThesis, selection: currentSelection });
   const publicCourse = publicCourseCard(publicCourses, catalog, scopeId);
   const calligraphy = new Map((catalog.curriculum?.courses ?? []).filter(course => isCalligraphyCourse(course))
     .map(course => [course.id, deriveCalligraphyProgress(course, items, catalog, scopeId, correspondenceProgress, importedCourseAchievements, importedStudyRecords, profile)]));
-  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, impact, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, official.allocations, calligraphy);
+  const professional = professionalCards(calculationItems, catalog, scopeId, offerings, eligibleMappings, impact, publicCourse.progress?.countedCredits ?? 0, currentSelection, currentThesis.status, allocations, calligraphy);
   alignProfessionalAllocationMinimums(requirements, catalog, scopeId, professional);
   // Neither H12 evidence nor explicit manual contributions are automatically
   // ordinary credit. Generic law totals must use the same completed-Course and
@@ -1473,7 +1577,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   if (catalog.programs.find(p => p.scopeId === scopeId)?.department === '法律学科'
     && (plannerItems.some(item => item.status === 'earned' && item.courseCreditContribution !== undefined
       && eligibleMappings(offerings.get(item.offeringId)!).some(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育'))
-      || official.allocations.some(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
+      || allocations.some(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
         && a.mapping.curriculumCredits === 4 && a.credits === 2 && a.completedCredits === 0))) {
     const lawOrdinaryCards: Record<string, string> = {
       law_total_with_thesis_min_credits: 'professional-law-total',
@@ -1491,7 +1595,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     }
   }
   const cards = applyRecognition([
-    ...groupedCards(calculationItems, offerings, eligibleMappings, impact, official.allocations),
+    ...groupedCards(calculationItems, offerings, eligibleMappings, impact, allocations),
     ...professional,
     ...thesisCards,
     ...publicCourse.cards,
@@ -1587,7 +1691,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
       row.unknownReasonCategory = classifyUnknownReason(row.reason);
     }
     if (row.id === 'schooling-reference-progress' && row.earned !== null) {
-      row.earned += official.allocations.reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0)
+      row.earned += allocations.reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0)
         + globalSchooling.reduce((sum, contribution) => sum + contribution.schoolingCredits, 0);
     }
     const uncertain = row.id === 'overall-reference-progress' ? officialUnknown : schoolingImpact.globalReferenceUnknown;
@@ -1606,7 +1710,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     if (summary.labels.length < 3 && !summary.labels.includes(row.label)) summary.labels.push(row.label);
     reasons.set(reason, summary);
   }
-  return {
+  const result: GraduationProgress = {
     graduationCheckComplete: false,
     requirements: coveredRequirements,
     cards: coveredCards,
@@ -1622,4 +1726,6 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     referenceProgress: reference,
     historySchoolingDiagnostic: scopeId === HISTORY_SCOPE_ID ? historySchoolingDiagnostic(calculationItems.schooling, offerings) : null,
   };
+  assertFiniteNumbers(result);
+  return result;
 }
