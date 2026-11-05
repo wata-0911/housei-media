@@ -1,0 +1,88 @@
+✔ positive 文学部 / 史学科 T2 (380.483915ms)
+✔ positive 文学部 / 史学科 T2+S2 (233.581686ms)
+✔ positive 文学部 / 史学科 T4 (65.160243ms)
+✔ positive 文学部 / 史学科 duplicate ordinary cannot yield8 (145.540495ms)
+✔ positive 文学部 / 史学科 plans never become earned (113.543394ms)
+✔ positive 経済学部 / 経済学科 T2 (11.872186ms)
+✔ positive 経済学部 / 経済学科 T2+S2 (7.971639ms)
+✔ positive 経済学部 / 経済学科 T4 (8.845164ms)
+✔ positive 経済学部 / 経済学科 duplicate ordinary cannot yield8 (7.536358ms)
+✔ positive 経済学部 / 経済学科 plans never become earned (9.844129ms)
+✔ positive 文学部 / 地理学科 T2 (25.894825ms)
+✔ positive 文学部 / 地理学科 T2+S2 (129.260381ms)
+✔ positive 文学部 / 地理学科 T4 (274.187487ms)
+✔ positive 文学部 / 地理学科 duplicate ordinary cannot yield8 (56.921127ms)
+✔ positive 文学部 / 地理学科 plans never become earned (23.613419ms)
+✔ positive 経済学部 / 商業学科 T2 (91.311471ms)
+✔ positive 経済学部 / 商業学科 T2+S2 (26.312949ms)
+✔ positive 経済学部 / 商業学科 T4 (62.190731ms)
+✔ positive 経済学部 / 商業学科 duplicate ordinary cannot yield8 (20.322221ms)
+✔ positive 経済学部 / 商業学科 plans never become earned (39.629174ms)
+✔ positive 文学部 / 日本文学科 / 言語コース T2 (87.165107ms)
+✔ positive 文学部 / 日本文学科 / 言語コース T2+S2 (11.037153ms)
+✔ positive 文学部 / 日本文学科 / 言語コース T4 (8.023112ms)
+✔ positive 文学部 / 日本文学科 / 言語コース duplicate ordinary cannot yield8 (8.411243ms)
+✔ positive 文学部 / 日本文学科 / 言語コース plans never become earned (58.599992ms)
+✔ positive 文学部 / 日本文学科 / 芸能文化コース T2 (180.551489ms)
+✔ positive 文学部 / 日本文学科 / 芸能文化コース T2+S2 (26.736953ms)
+✔ positive 文学部 / 日本文学科 / 芸能文化コース T4 (37.52047ms)
+✔ positive 文学部 / 日本文学科 / 芸能文化コース duplicate ordinary cannot yield8 (12.716546ms)
+✔ positive 文学部 / 日本文学科 / 芸能文化コース plans never become earned (39.222261ms)
+✔ positive 文学部 / 日本文学科 / 文学コース T2 (30.8958ms)
+✔ positive 文学部 / 日本文学科 / 文学コース T2+S2 (11.256324ms)
+✔ positive 文学部 / 日本文学科 / 文学コース T4 (18.084538ms)
+✔ positive 文学部 / 日本文学科 / 文学コース duplicate ordinary cannot yield8 (17.409081ms)
+✔ positive 文学部 / 日本文学科 / 文学コース plans never become earned (95.589079ms)
+✔ positive 法学部 / 法律学科 T2 (28.52863ms)
+✔ positive 法学部 / 法律学科 T2+S2 (52.307022ms)
+✔ positive 法学部 / 法律学科 T4 (25.132195ms)
+✔ positive 法学部 / 法律学科 duplicate ordinary cannot yield8 (25.010243ms)
+✔ positive 法学部 / 法律学科 plans never become earned (7.819611ms)
+✔ new plan calculation has no annual offerings or relations (0.399471ms)
+✔ official aggregate priority survives schema23 and has no manual increment (7834.69313ms)
+✔ untrusted new source cannot be substituted (967.266562ms)
+✔ documented Law repeat cap uses existing department allocator (24.082243ms)
+✔ ambiguous repeat family held 文学部 / 史学科 (7.787364ms)
+✔ ambiguous repeat family held 経済学部 / 経済学科 (66.986193ms)
+✔ ambiguous repeat family held 文学部 / 地理学科 (29.432054ms)
+✔ ambiguous repeat family held 経済学部 / 商業学科 (16.101564ms)
+✔ ambiguous repeat family held 文学部 / 日本文学科 / 言語コース (45.850152ms)
+✔ ambiguous repeat family held 文学部 / 日本文学科 / 芸能文化コース (193.191387ms)
+✔ ambiguous repeat family held 文学部 / 日本文学科 / 文学コース (250.095809ms)
+✖ ambiguous repeat family held 法学部 / 法律学科 (10.960088ms)
+✔ department positive 文学部 / 史学科 (218.887316ms)
+✔ department positive 経済学部 / 経済学科 (20.64225ms)
+✔ department positive 文学部 / 地理学科 (8.323466ms)
+✔ department positive 経済学部 / 商業学科 (221.618131ms)
+✔ department positive 文学部 / 日本文学科 / 言語コース (7.769156ms)
+✔ department positive 文学部 / 日本文学科 / 芸能文化コース (65.79044ms)
+✔ department positive 文学部 / 日本文学科 / 文学コース (94.330861ms)
+✔ department positive 法学部 / 法律学科 (32.687905ms)
+ℹ tests 60
+ℹ suites 0
+ℹ pass 59
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 38027.662894
+
+✖ failing tests:
+
+test at tests/attempt-positive.test.mjs:58:33
+✖ ambiguous repeat family held 法学部 / 法律学科 (10.960088ms)
+  AssertionError [ERR_ASSERTION]: undefined == true
+      at TestContext.<anonymous> (file:///Users/wata/.codex/.chatgpt-projects/g-p-6aca470346e08191af794c004e88a78c/work-b-positive-20261104/tests/attempt-positive.test.mjs:59:97)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

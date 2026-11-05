@@ -1,0 +1,80 @@
+{
+  "id": "F4",
+  "scope": "118c5183-6aec-4fa1-905a-265f25d86db1",
+  "graph": {
+    "attempts": [
+      {
+        "id": "hosei:attempt:00000000-0000-4000-8000-000000000002",
+        "creationOperationId": "hosei:attempt-op:00000000-0000-4000-8000-000000000001",
+        "originalTitle": "東洋史特講（中国思想史）",
+        "identity": {
+          "status": "confirmed",
+          "ref": {
+            "institutionalCourseId": "curriculum:03b2608a-d66e-474c-a008-9eb4b1a936c1",
+            "sourceRevisionId": "yi-01:source:shiori-quartz",
+            "evidenceIds": [
+              "code-p200-t3-r16",
+              "p52-史学-選択-r15"
+            ]
+          },
+          "candidateAuditIds": [],
+          "reason": null
+        },
+        "placement": {
+          "status": "unknown",
+          "ref": null,
+          "candidateAuditIds": [],
+          "candidatePlacementIds": [
+            "hosei:cp:7ee42db9-1ae7-4bd7-bb16-15a57d252bcc"
+          ],
+          "reason": "本人が選んだ配置候補。本人適用は未確認"
+        },
+        "applicability": {
+          "status": "unknown",
+          "curriculumVersionId": null,
+          "scopeId": null,
+          "legacyApplicability": "unknown",
+          "originalValue": null,
+          "evidence": null
+        },
+        "legacyRefs": [],
+        "membership": {
+          "kind": "active"
+        },
+        "plan": {
+          "plannedYear": 2035,
+          "plannedTerm": "希望期",
+          "studyYear": null,
+          "status": "earned",
+          "earnedOrder": null,
+          "contribution": {
+            "value": 4,
+            "source": "learner",
+            "note": null
+          }
+        },
+        "method": {
+          "value": "correspondence",
+          "source": "learner",
+          "evidence": {
+            "kind": "learner",
+            "note": "本人記録（算入根拠ではない）"
+          }
+        },
+        "actualYear": {
+          "value": null,
+          "source": "unknown",
+          "evidence": null,
+          "reason": null
+        }
+      }
+    ],
+    "ownedRecords": [],
+    "removals": []
+  },
+  "expected": {
+    "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+    "earned": 1,
+    "status": "satisfied"
+  }
+}

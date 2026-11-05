@@ -1,0 +1,150 @@
+[
+  {
+    "id": "RA-F4-01",
+    "scope": "118c5183-6aec-4fa1-905a-265f25d86db1",
+    "state": {
+      "schemaVersion": 22,
+      "selectedScopeId": null,
+      "thesisSelection": "undecided",
+      "thesisProgressByScope": {},
+      "thesisGuidanceByScope": {},
+      "items": [
+        {
+          "offeringId": "4244cbb8-5ddc-40c4-b229-15328f0c5626",
+          "status": "earned",
+          "courseCreditContribution": 2,
+          "plannedYear": 2026,
+          "plannedTerm": null,
+          "studyYear": null,
+          "earnedOrder": null
+        }
+      ],
+      "publicCourses": [],
+      "todos": [],
+      "mediaSchoolingProgress": {},
+      "courseEvaluations": {},
+      "correspondenceProgress": {},
+      "importedStudyRecords": [],
+      "importedCourseAchievements": [],
+      "importedCourseUserMeta": {},
+      "graduationProfile": {
+        "admissionYear": null,
+        "currentStudyYear": null,
+        "admissionType": "unknown",
+        "recognizedCredits": {
+          "totalCredits": null,
+          "schoolingEquivalentCredits": null,
+          "openUniversityCredits": null,
+          "general": {
+            "humanities": {
+              "mode": "unknown",
+              "credits": null
+            },
+            "social": {
+              "mode": "unknown",
+              "credits": null
+            },
+            "natural": {
+              "mode": "unknown",
+              "credits": null
+            }
+          },
+          "foreignLanguage": {
+            "mode": "unknown",
+            "credits": null,
+            "language": "unknown",
+            "schoolingEquivalentCredits": null
+          },
+          "physicalEducation": {
+            "mode": "unknown",
+            "credits": null
+          },
+          "professionalCourses": []
+        },
+        "curriculumApplicability": "current_2026"
+      }
+    },
+    "expected": {
+      "earned": 0,
+      "status": "unsatisfied"
+    }
+  },
+  {
+    "id": "RA-F4-02",
+    "scope": "118c5183-6aec-4fa1-905a-265f25d86db1",
+    "state": {
+      "schemaVersion": 22,
+      "selectedScopeId": null,
+      "thesisSelection": "undecided",
+      "thesisProgressByScope": {},
+      "thesisGuidanceByScope": {},
+      "items": [
+        {
+          "offeringId": "a41b5c04-4723-4dfd-805d-29b271e99afa",
+          "status": "earned",
+          "courseCreditContribution": 2,
+          "plannedYear": 2026,
+          "plannedTerm": null,
+          "studyYear": null,
+          "earnedOrder": null
+        },
+        {
+          "offeringId": "386b3eb5-ff6e-434d-a720-d32505b90bb0",
+          "status": "earned",
+          "courseCreditContribution": 2,
+          "plannedYear": 2026,
+          "plannedTerm": null,
+          "studyYear": null,
+          "earnedOrder": null
+        }
+      ],
+      "publicCourses": [],
+      "todos": [],
+      "mediaSchoolingProgress": {},
+      "courseEvaluations": {},
+      "correspondenceProgress": {},
+      "importedStudyRecords": [],
+      "importedCourseAchievements": [],
+      "importedCourseUserMeta": {},
+      "graduationProfile": {
+        "admissionYear": null,
+        "currentStudyYear": null,
+        "admissionType": "unknown",
+        "recognizedCredits": {
+          "totalCredits": null,
+          "schoolingEquivalentCredits": null,
+          "openUniversityCredits": null,
+          "general": {
+            "humanities": {
+              "mode": "unknown",
+              "credits": null
+            },
+            "social": {
+              "mode": "unknown",
+              "credits": null
+            },
+            "natural": {
+              "mode": "unknown",
+              "credits": null
+            }
+          },
+          "foreignLanguage": {
+            "mode": "unknown",
+            "credits": null,
+            "language": "unknown",
+            "schoolingEquivalentCredits": null
+          },
+          "physicalEducation": {
+            "mode": "unknown",
+            "credits": null
+          },
+          "professionalCourses": []
+        },
+        "curriculumApplicability": "current_2026"
+      }
+    },
+    "expected": {
+      "earned": 1
+    }
+  }
+]

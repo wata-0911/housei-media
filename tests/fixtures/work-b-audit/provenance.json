@@ -1,0 +1,38 @@
+[
+  {
+    "fixture": "F1.json",
+    "originalSha256": "244aaff0d8c8ed66768a9f5f7da8a2a89e1cce1ee133846205388876a994543e",
+    "anonymizedSha256": "9e535d9d98ca32edd48d49f5564c0bd672291d48b65faf92c5d08d0212bbbf45",
+    "changes": "Replace learner operation/Attempt UUIDs consistently; retain public institutional IDs. Omit default source state fields; hydrate with initialState. No numeric or association changes."
+  },
+  {
+    "fixture": "F2.json",
+    "originalSha256": "eb3f373df4317d4db7a8a8c00f4daf7fa5a2d42b8f9727768e1ee590b6f4be44",
+    "anonymizedSha256": "4ff46d7b045d897133c36506caa5a0fa0a1fd7064ee7643acaea38516391600b",
+    "changes": "Replace learner operation/Attempt UUIDs consistently; retain public institutional IDs. Omit default source state fields; hydrate with initialState. No numeric or association changes."
+  },
+  {
+    "fixture": "F3.json",
+    "originalSha256": "2f2a9f11f49577c1eb5d9ade4e86d036cdb465e258ca90ed42e38cb943511c29",
+    "anonymizedSha256": "8159c4376235625c49e7e8070d227a7a06d214cdcebb72bcd77d844acd9bc4d1",
+    "changes": "Replace learner operation/Attempt UUIDs consistently; retain public institutional IDs. Omit default source state fields; hydrate with initialState. No numeric or association changes."
+  },
+  {
+    "fixture": "F4.json",
+    "originalSha256": "af1bea6f8b6eecf5ca2829f6459315cf9f46e1c6753d5f7a05f3318a38917b37",
+    "anonymizedSha256": "1ac4fea73924e530d6953aa871a5d958c808f62901ff3a4ca137550c0f1e1063",
+    "changes": "Replace learner operation/Attempt UUIDs consistently; retain public institutional IDs. Omit default source state fields; hydrate with initialState. No numeric or association changes."
+  },
+  {
+    "fixture": "F5.json",
+    "originalSha256": "00cb010046f150808674f237e89c71c94284078dc5b8cbff24182cb737a87dba",
+    "anonymizedSha256": "d2df5f5edb04998b4f2428cf2e4cb0e01895ac2688a66038637a74df4d17eac9",
+    "changes": "Replace learner operation/Attempt UUIDs consistently; retain public institutional IDs. Omit default source state fields; hydrate with initialState. No numeric or association changes."
+  },
+  {
+    "fixture": "F6.json",
+    "originalSha256": "a13fb8703157575347d26a7c39d56e62b23dfa96271e21a9caf39031e8a0c6c0",
+    "anonymizedSha256": "07d3ce72a1f63372352f9715790449a2a727b055ad473aca687f6c0c139b7116",
+    "changes": "Replace learner operation/Attempt UUIDs consistently; retain public institutional IDs. Omit default source state fields; hydrate with initialState. No numeric or association changes."
+  }
+]

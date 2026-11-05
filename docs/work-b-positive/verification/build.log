@@ -1,0 +1,29 @@
+
+> hosei-app@0.0.0 build
+> npm run check:grade-import && npm run catalog:check && vite build
+
+
+> hosei-app@0.0.0 check:grade-import
+> node scripts/build-grade-import.mjs --check
+
+Verified grade import artifacts; bookmarklet 28106 bytes (28106 characters).
+
+> hosei-app@0.0.0 catalog:check
+> node --import tsx scripts/generate-curriculum-catalog.mts --check
+
+Curriculum catalog: 321 courses / 686 annual offerings
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 796 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                          1.45 kB │ gzip:   0.93 kB
+dist/assets/index-BOUVdvyr.css          42.08 kB │ gzip:   8.61 kB
+dist/assets/index-B1Cm_qfz.js          591.63 kB │ gzip: 184.87 kB
+dist/assets/PlannerPage-Du3iIjzr.js  1,513.40 kB │ gzip: 321.84 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 45.95s

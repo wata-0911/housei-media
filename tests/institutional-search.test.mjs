@@ -365,3 +365,18 @@ test('search: production application does not import new adapter even transitive
   assert.ok(graph.size > 10);
   assert.ok([...graph].every(path => !/(?:institutional\/(?:currentSearch|search)\.ts$|attempts\/persistence\/)/.test(path)));
 });
+
+test('search: isolated ABC entry connects shared search and formal session to the audited B engine, without prototype hosts', () => {
+  const graph = [...runtimeGraph('dev/ac/main.tsx')];
+  for (const suffix of ['/pages/InstitutionalPlannerPage.tsx', '/institutional/search.ts', '/production/acController.ts', '/production/session.ts', '/attempts/graduation/recordedCalculation.ts']) assert.ok(graph.some(path => path.endsWith(suffix)), suffix);
+  for (const path of graph) assert.doesNotMatch(path, /\/dev\/(?:attempts|persistence)\//, path);
+  const graduationModules = graph.filter(path => path.includes('/attempts/graduation/')).map(path => path.slice(path.indexOf('/src/') + 1)).sort();
+  assert.deepEqual(graduationModules, [
+    'src/planner/attempts/graduation/adapter.ts',
+    'src/planner/attempts/graduation/impact.ts',
+    'src/planner/attempts/graduation/recordedCalculation.ts',
+  ]);
+  for (const path of ['src/pages/InstitutionalPlannerPage.tsx', 'src/planner/attempts/production/acController.ts'])
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /calculateGraduationProgress|adaptAttemptGraduation|finiteNonnegativeSum/, path);
+  for (const path of ['src/pages/InstitutionalPlannerPage.tsx', 'src/components/planner/institutional/AttemptPlanForm.tsx', 'src/planner/attempts/production/acController.ts']) assert.doesNotMatch(readFileSync(path,'utf8'), /randomUUID|newOperationId|newRecordId|newAttemptIds|applyCommand\(/, path);
+});

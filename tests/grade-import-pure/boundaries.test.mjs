@@ -47,6 +47,19 @@ function closure(nodes, start) {
   while (stack.length) { const p = stack.pop(); if (seen.has(p)) continue; seen.add(p); stack.push(...(nodes.get(p) || [])); }
   return seen;
 }
+// Audited B/D already use the bounded graph parser. This grants no access to pure.
+const recordedParserConsumers = new Set([
+  'src/planner/attempts/graduation/recordedCalculation.ts',
+  'src/planner/attempts/production/session.ts',
+]);
+function assertDirectConsumers(nodes) {
+  for (const path of recordedParserConsumers) assert.ok(nodes.has(path), path);
+  for (const [from, edges] of nodes) {
+    if (from.startsWith(pure) || from === 'src/planner/attempts/gradeImportHost/codec.ts' || from === 'src/planner/attempts/gradeImportHost/codecV2.ts') continue;
+    assert.deepEqual(edges.filter(p => p.startsWith(pure)), [], from);
+    assert.deepEqual(edges.filter(p => p === parser), recordedParserConsumers.has(from) ? [parser] : [], from);
+  }
+}
 test('production entry・PlannerPage・既存保存経路からpure/parserへのimport到達なし', () => {
   const nodes = graph();
   const starts = ['src/main.tsx', 'src/pages/PlannerPage.tsx', ...[...nodes.keys()].filter(p => /\/persistence\/|\/backup\//.test(p))];
@@ -55,7 +68,20 @@ test('production entry・PlannerPage・既存保存経路からpure/parserへの
     assert.deepEqual([...closure(nodes, start)].filter(p => p.startsWith(pure) || p === parser), [], start);
   }
   // This rejects future direct consumers even if they are not reachable from main yet.
-  for (const [from, edges] of nodes) if (!from.startsWith(pure) && from !== 'src/planner/attempts/gradeImportHost/codec.ts' && from !== 'src/planner/attempts/gradeImportHost/codecV2.ts') assert.deepEqual(edges.filter(p => p.startsWith(pure) || p === parser), [], from);
+  assertDirectConsumers(nodes);
+});
+test('B/D parser-only admission rejects pure edges, missing parser and any extra consumer', () => {
+  const nodes = graph(); assertDirectConsumers(nodes);
+  for (const from of recordedParserConsumers) {
+    for (const target of [pure + 'adoption.ts', pure + 'preview.ts']) {
+      const changed = new Map(nodes); changed.set(from, [...nodes.get(from), target]);
+      assert.throws(() => assertDirectConsumers(changed));
+    }
+    const missing = new Map(nodes); missing.set(from, nodes.get(from).filter(p => p !== parser));
+    assert.throws(() => assertDirectConsumers(missing));
+  }
+  const extra = new Map(nodes); extra.set('src/unapproved-consumer.ts', [parser]);
+  assert.throws(() => assertDirectConsumers(extra));
 });
 test('pureの直接依存は正規parser/DTO/digestとpure内部のみ。writer/authority/Workerへ到達しない', () => {
   const nodes = graph(), allowed = new Set([parser, 'src/planner/gradeImport/gradeImportContract.ts', 'src/planner/digest.ts']);

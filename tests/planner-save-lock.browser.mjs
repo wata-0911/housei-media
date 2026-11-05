@@ -20,7 +20,7 @@ const origin = `http://127.0.0.1:${port}`;
 let browser, server;
 before(async () => {
   const { chromium } = await import(process.env.PLANNER_PLAYWRIGHT_MODULE || 'playwright');
-  server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: root, stdio: 'pipe' });
+  server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--outDir', process.env.WORK_C_DIST || 'dist', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: root, stdio: 'pipe' });
   let output = ''; server.stdout.on('data', chunk => { output += chunk; }); server.stderr.on('data', chunk => { output += chunk; });
   let ready = false;
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -38,6 +38,7 @@ async function open(t, department = '日本文学科', rawOverride = undefined, 
   const raw = rawOverride === undefined ? JSON.stringify(state) : rawOverride;
   const context = await browser.newContext({ acceptDownloads: true });
   t.after(() => context.close());
+  await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   await context.addInitScript(({ raw, recovery, key, backupKey }) => {
     if (!localStorage.getItem('fixture-loaded')) {
       if (raw !== null) localStorage.setItem(key, raw);
@@ -51,12 +52,19 @@ async function open(t, department = '日本文学科', rawOverride = undefined, 
 }
 async function persisted(page) { return page.evaluate(key => localStorage.getItem(key), STORAGE_KEY); }
 async function hold(context) {
+  const editor = context.pages().at(-1);
   const holder = await context.newPage(); await holder.goto(origin);
   await holder.evaluate(key => {
     window.testLock = navigator.locks.request(`${key}:write`, () => new Promise(resolve => { window.releaseTestLock = resolve; window.testLockHeld = true; }));
   }, STORAGE_KEY);
   await holder.waitForFunction(() => window.testLockHeld);
-  return () => holder.evaluate(() => window.releaseTestLock());
+  // Operate the editor in the foreground while the second tab holds the lock.
+  await editor?.bringToFront();
+  return async () => {
+    await holder.bringToFront();
+    await holder.evaluate(() => window.releaseTestLock());
+    await editor?.bringToFront();
+  };
 }
 async function allDisabled(guidance, expected) {
   const controls = guidance.locator('select,input'); assert.ok(await controls.count() >= 2);
@@ -305,16 +313,18 @@ test('imported component year and term are drafts, preserve failed text and keep
   assert.deepEqual(restored.importedCourseAchievements, imported.importedCourseAchievements);
 });
 
-test('restore invalidates an unsaved media draft even when the stored value is identical', async t => {
+test('restore invalidates an unsaved media draft via the annual backup route even when the stored value is identical', async t => {
   const { page, total, state } = await mediaEditor(t);
   await total.fill('201'); await total.press('Enter');
   await page.getByRole('alert').filter({ hasText: '全回数は1〜200' }).waitFor();
   assert.equal(await total.inputValue(), '201');
+  await page.getByRole('tab', { name: '年間履修計画', exact: true }).click();
   const panel = page.getByRole('region', { name: 'プランナー全データのバックアップ・復元' });
   const backup = await createPlannerBackup(JSON.stringify(state), catalog);
   await panel.locator('input[type=file]').setInputFiles({ name: 'same-state.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
   await panel.getByRole('checkbox').check(); await panel.getByRole('button', { name: '確認したバックアップで全件置換する', exact: true }).click();
   await panel.getByText('全データを置き換えて保存しました。再読み込み後も保持されます。', { exact: true }).waitFor();
+  await page.getByRole('tab', { name: 'メディア', exact: true }).click();
   assert.equal(await total.inputValue(), '14');
   assert.equal(await page.getByRole('alert').filter({ hasText: '全回数は1〜200' }).count(), 0);
 });
@@ -322,6 +332,8 @@ test('restore invalidates an unsaved media draft even when the stored value is i
 test('public course title and planned year retain failed drafts and confirm whole values after a held lock', async t => {
   const fixture = textFixture();
   const { page, context, raw } = await open(t, '日本文学科', JSON.stringify(fixture.state)); await recordWrites(page);
+  let release;
+  try {
   const group = page.getByRole('region', { name: '公開科目', exact: true });
   await group.getByRole('button', { name: '開く', exact: true }).click();
   const title = group.locator('input:not([aria-label]):visible');
@@ -333,11 +345,17 @@ test('public course title and planned year retain failed drafts and confirm whol
   await page.evaluate(() => { window.draftFail = false; }); await title.press('Enter');
   await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).publicCourses[0].title === '連続入力できる公開科目名', STORAGE_KEY);
   const year = group.locator('input[aria-label="計画年度"]:visible'); const before = await persisted(page);
-  const release = await hold(context); await year.fill(''); await year.pressSequentially('2027');
+  release = await hold(context); await year.fill(''); await year.pressSequentially('2027');
   assert.equal(await persisted(page), before); assert.equal(await year.isDisabled(), false);
   await year.press('Enter'); await page.getByText('保存処理を待っています。完了後に編集できます。', { exact: true }).waitFor();
   assert.equal(await year.inputValue(), '2027'); assert.equal(await year.isDisabled(), true);
   await release(); await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).publicCourses[0].plannedYear === 2027, STORAGE_KEY);
+  } catch (error) {
+    console.log('PUBLIC_YEAR_DIAGNOSTIC', await page.evaluate(() => ({active: document.activeElement?.outerHTML, year: document.querySelector('input[aria-label="計画年度"]')?.outerHTML, alerts: [...document.querySelectorAll('[role=alert]')].map(e=>e.textContent), pending: document.body.innerText.includes('保存処理を待っています。')})));
+    await page.screenshot({path:'../evidence/public-year-failure.png'});
+    throw error;
+  } finally { if (release) await release().catch(()=>{}); }
+
 });
 
 test('media total presets replace the draft without a preceding blur save, including the same stored preset', async t => {

@@ -1,0 +1,233 @@
+{
+  "id": "F1",
+  "graph": {
+    "attempts": [
+      {
+        "id": "hosei:attempt:00000000-0000-4000-8000-000000000003",
+        "creationOperationId": "hosei:attempt-op:00000000-0000-4000-8000-000000000004",
+        "originalTitle": "論理学",
+        "identity": {
+          "status": "confirmed",
+          "ref": {
+            "institutionalCourseId": "curriculum:2eb51a3d-dec5-4360-ab6e-cd8027ea8f98",
+            "sourceRevisionId": "yi-01:source:shiori-quartz",
+            "evidenceIds": [
+              "code-p199-t4-r06",
+              "p44-common-一般教育-r06"
+            ]
+          },
+          "candidateAuditIds": [],
+          "reason": null
+        },
+        "placement": {
+          "status": "unknown",
+          "ref": null,
+          "candidateAuditIds": [],
+          "candidatePlacementIds": [
+            "hosei:cp:4c8cb049-8561-4e51-9bd7-b61aefb4afcd"
+          ],
+          "reason": "本人が選んだ配置候補。本人適用は未確認"
+        },
+        "applicability": {
+          "status": "unknown",
+          "curriculumVersionId": null,
+          "scopeId": null,
+          "legacyApplicability": "unknown",
+          "originalValue": null,
+          "evidence": null
+        },
+        "legacyRefs": [],
+        "membership": {
+          "kind": "active"
+        },
+        "plan": {
+          "plannedYear": 2035,
+          "plannedTerm": "希望期",
+          "studyYear": null,
+          "status": "earned",
+          "earnedOrder": null,
+          "contribution": {
+            "value": 4,
+            "source": "learner",
+            "note": null
+          }
+        },
+        "method": {
+          "value": "correspondence",
+          "source": "official_detail",
+          "evidence": {
+            "kind": "official_detail",
+            "studyRecordId": "shared-audit-detail"
+          }
+        },
+        "actualYear": {
+          "value": 2026,
+          "source": "source",
+          "evidence": {
+            "kind": "official_detail",
+            "studyRecordId": "shared-audit-detail"
+          },
+          "reason": null
+        }
+      },
+      {
+        "id": "hosei:attempt:00000000-0000-4000-8000-000000000002",
+        "creationOperationId": "hosei:attempt-op:00000000-0000-4000-8000-000000000001",
+        "originalTitle": "人文地理学",
+        "identity": {
+          "status": "confirmed",
+          "ref": {
+            "institutionalCourseId": "curriculum:43715a92-16b8-4b64-a709-738f5c7d5b95",
+            "sourceRevisionId": "yi-01:source:shiori-quartz",
+            "evidenceIds": [
+              "code-p199-t4-r10",
+              "p44-common-一般教育-r10"
+            ]
+          },
+          "candidateAuditIds": [],
+          "reason": null
+        },
+        "placement": {
+          "status": "unknown",
+          "ref": null,
+          "candidateAuditIds": [],
+          "candidatePlacementIds": [
+            "hosei:cp:ccde96a3-8428-44c3-b8e6-26ec692a6205"
+          ],
+          "reason": "本人が選んだ配置候補。本人適用は未確認"
+        },
+        "applicability": {
+          "status": "unknown",
+          "curriculumVersionId": null,
+          "scopeId": null,
+          "legacyApplicability": "unknown",
+          "originalValue": null,
+          "evidence": null
+        },
+        "legacyRefs": [],
+        "membership": {
+          "kind": "active"
+        },
+        "plan": {
+          "plannedYear": 2035,
+          "plannedTerm": "希望期",
+          "studyYear": null,
+          "status": "earned",
+          "earnedOrder": null,
+          "contribution": {
+            "value": 4,
+            "source": "learner",
+            "note": null
+          }
+        },
+        "method": {
+          "value": "correspondence",
+          "source": "official_detail",
+          "evidence": {
+            "kind": "official_detail",
+            "studyRecordId": "shared-audit-detail"
+          }
+        },
+        "actualYear": {
+          "value": 2026,
+          "source": "source",
+          "evidence": {
+            "kind": "official_detail",
+            "studyRecordId": "shared-audit-detail"
+          },
+          "reason": null
+        }
+      }
+    ],
+    "ownedRecords": [],
+    "removals": []
+  },
+  "scope": "118c5183-6aec-4fa1-905a-265f25d86db1",
+  "expected": "learner increment 0, held ownership conflict",
+  "sourceOverrides": {
+    "importedCourseAchievements": [
+      {
+        "id": "audit-curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+        "fingerprint": "audit-curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+        "source": "hosei_import",
+        "rawName": "文学",
+        "categoryRaw": null,
+        "capturedAt": "2026-10-09T00:00:00Z",
+        "earnedCreditsTotal": 4,
+        "schoolingCreditsTotal": 0,
+        "compositionCredits": 4,
+        "recognizedExemption": null,
+        "additionalEnrollment": null,
+        "academicYear": 2026,
+        "yearSource": "source",
+        "curriculumCourseId": "curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+        "curriculumMatch": "exact_unique",
+        "candidateCurriculumCourseIds": [
+          "curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae"
+        ],
+        "offeringMatch": "unmatched",
+        "courseId": null,
+        "selectedOfferingId": null,
+        "selectionSource": "none",
+        "match": "unmatched",
+        "candidateOfferingIds": []
+      }
+    ],
+    "importedStudyRecords": [
+      {
+        "id": "shared-audit-detail",
+        "fingerprint": "literal-detail-fingerprint",
+        "source": "hosei_import",
+        "rawName": "文学",
+        "offeringId": null,
+        "match": "unmatched",
+        "method": "correspondence",
+        "academicYear": 2026,
+        "yearSource": "manual",
+        "rawYear": "25",
+        "term": null,
+        "rawTerm": "元期",
+        "date": "2026-07-10",
+        "credits": 4,
+        "grade": "原評価",
+        "sourceCourseId": "audit-curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae"
+      }
+    ],
+    "graduationProfile": {
+      "admissionYear": null,
+      "currentStudyYear": null,
+      "admissionType": "unknown",
+      "recognizedCredits": {
+        "totalCredits": null,
+        "schoolingEquivalentCredits": null,
+        "openUniversityCredits": null,
+        "general": {
+          "humanities": {
+            "mode": "unknown",
+            "credits": null
+          },
+          "social": {
+            "mode": "unknown",
+            "credits": null
+          },
+          "natural": {
+            "mode": "unknown",
+            "credits": null
+          }
+        },
+        "foreignLanguage": {
+          "mode": "unknown",
+          "credits": null,
+          "language": "unknown",
+          "schoolingEquivalentCredits": null
+        },
+        "physicalEducation": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "professionalCourses": []
+      },
+      "curriculumApplicability": "current_2026"
+    }
+  }
+}

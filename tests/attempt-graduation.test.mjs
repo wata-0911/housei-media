@@ -1,3 +1,4 @@
+import { compareFieldCorrected } from './fixtures/work-b-field-baseline.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -253,11 +254,11 @@ test('baseline is pinned to pristine dev; all output fields, not total-only hash
 });
 for (const c of legacyCases()) test(`pinned v22 full output + unedited projection + adapter boundary: ${c.name}`, async () => {
   const expected = baseline.cases.find(b => b.name === c.name); assert.ok(expected);
-  assert.deepEqual(snapshotValue(calculateState(c.state,c.scopeId)),expected.output);
+  compareFieldCorrected(snapshotValue(calculateState(c.state,c.scopeId)),expected.output, c.name);
   assert.deepEqual(snapshotValue(calculateCompletion(c.state,c.scopeId)),expected.completionOutput);
   const x = await preview(c.state); assert.equal(x.result.status,'ready',JSON.stringify(x.result.diagnostics));
   const p = projectLegacyState(x.source,x.table,x.result.target);
-  assert.deepEqual(snapshotValue(calculateState(p.state,c.scopeId,p.catalog)),expected.output);
+  compareFieldCorrected(snapshotValue(calculateState(p.state,c.scopeId,p.catalog)),expected.output, c.name);
   assert.deepEqual(snapshotValue(calculateCompletion(p.state,c.scopeId,p.catalog)),expected.completionOutput);
   const result = adapt(x.result.target.graph,x.source,c.scopeId);
   assert.deepEqual(result.retained, x.result.target.retained);

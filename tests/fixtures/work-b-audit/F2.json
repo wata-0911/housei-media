@@ -1,0 +1,169 @@
+{
+  "id": "F2",
+  "graph": {
+    "attempts": [
+      {
+        "id": "hosei:attempt:00000000-0000-4000-8000-000000000002",
+        "creationOperationId": "hosei:attempt-op:00000000-0000-4000-8000-000000000001",
+        "originalTitle": "文学",
+        "identity": {
+          "status": "confirmed",
+          "ref": {
+            "institutionalCourseId": "curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+            "sourceRevisionId": "yi-01:source:shiori-quartz",
+            "evidenceIds": [
+              "code-p199-t4-r01",
+              "p44-common-一般教育-r01"
+            ]
+          },
+          "candidateAuditIds": [],
+          "reason": null
+        },
+        "placement": {
+          "status": "unknown",
+          "ref": null,
+          "candidateAuditIds": [],
+          "candidatePlacementIds": [
+            "hosei:cp:45d463a0-22e1-4935-95d2-d2bfb2e3b26d"
+          ],
+          "reason": "本人が選んだ配置候補。本人適用は未確認"
+        },
+        "applicability": {
+          "status": "unknown",
+          "curriculumVersionId": null,
+          "scopeId": null,
+          "legacyApplicability": "unknown",
+          "originalValue": null,
+          "evidence": null
+        },
+        "legacyRefs": [],
+        "membership": {
+          "kind": "active"
+        },
+        "plan": {
+          "plannedYear": 2035,
+          "plannedTerm": "希望期",
+          "studyYear": null,
+          "status": "earned",
+          "earnedOrder": null,
+          "contribution": {
+            "value": 4,
+            "source": "learner",
+            "note": null
+          },
+          "importedSourceCourseId": "audit-curriculum:2eb51a3d-dec5-4360-ab6e-cd8027ea8f98"
+        },
+        "method": {
+          "value": "correspondence",
+          "source": "learner",
+          "evidence": {
+            "kind": "learner",
+            "note": "本人記録（算入根拠ではない）"
+          }
+        },
+        "actualYear": {
+          "value": null,
+          "source": "unknown",
+          "evidence": null,
+          "reason": null
+        }
+      }
+    ],
+    "ownedRecords": [],
+    "removals": []
+  },
+  "scope": "118c5183-6aec-4fa1-905a-265f25d86db1",
+  "expected": "increment 0 and visible association-conflict diagnostic",
+  "sourceOverrides": {
+    "importedCourseAchievements": [
+      {
+        "id": "audit-curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+        "fingerprint": "audit-curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+        "source": "hosei_import",
+        "rawName": "文学",
+        "categoryRaw": null,
+        "capturedAt": "2026-10-09T00:00:00Z",
+        "earnedCreditsTotal": 4,
+        "schoolingCreditsTotal": 0,
+        "compositionCredits": 4,
+        "recognizedExemption": null,
+        "additionalEnrollment": null,
+        "academicYear": 2026,
+        "yearSource": "source",
+        "curriculumCourseId": "curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+        "curriculumMatch": "exact_unique",
+        "candidateCurriculumCourseIds": [
+          "curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae"
+        ],
+        "offeringMatch": "unmatched",
+        "courseId": null,
+        "selectedOfferingId": null,
+        "selectionSource": "none",
+        "match": "unmatched",
+        "candidateOfferingIds": []
+      },
+      {
+        "id": "audit-curriculum:2eb51a3d-dec5-4360-ab6e-cd8027ea8f98",
+        "fingerprint": "audit-curriculum:2eb51a3d-dec5-4360-ab6e-cd8027ea8f98",
+        "source": "hosei_import",
+        "rawName": "論理学",
+        "categoryRaw": null,
+        "capturedAt": "2026-10-09T00:00:00Z",
+        "earnedCreditsTotal": 4,
+        "schoolingCreditsTotal": 0,
+        "compositionCredits": 4,
+        "recognizedExemption": null,
+        "additionalEnrollment": null,
+        "academicYear": 2026,
+        "yearSource": "source",
+        "curriculumCourseId": "curriculum:2eb51a3d-dec5-4360-ab6e-cd8027ea8f98",
+        "curriculumMatch": "exact_unique",
+        "candidateCurriculumCourseIds": [
+          "curriculum:2eb51a3d-dec5-4360-ab6e-cd8027ea8f98"
+        ],
+        "offeringMatch": "unmatched",
+        "courseId": null,
+        "selectedOfferingId": null,
+        "selectionSource": "none",
+        "match": "unmatched",
+        "candidateOfferingIds": []
+      }
+    ],
+    "graduationProfile": {
+      "admissionYear": null,
+      "currentStudyYear": null,
+      "admissionType": "unknown",
+      "recognizedCredits": {
+        "totalCredits": null,
+        "schoolingEquivalentCredits": null,
+        "openUniversityCredits": null,
+        "general": {
+          "humanities": {
+            "mode": "unknown",
+            "credits": null
+          },
+          "social": {
+            "mode": "unknown",
+            "credits": null
+          },
+          "natural": {
+            "mode": "unknown",
+            "credits": null
+          }
+        },
+        "foreignLanguage": {
+          "mode": "unknown",
+          "credits": null,
+          "language": "unknown",
+          "schoolingEquivalentCredits": null
+        },
+        "physicalEducation": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "professionalCourses": []
+      },
+      "curriculumApplicability": "current_2026"
+    }
+  }
+}

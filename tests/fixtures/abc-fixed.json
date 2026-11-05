@@ -1,0 +1,40 @@
+{
+  "scopeId": "e31201f3-4f1d-432a-906e-6af94af294c9",
+  "placementId": "hosei:cp:45d463a0-22e1-4935-95d2-d2bfb2e3b26d",
+  "title": "文学",
+  "curriculumCourseId": "curriculum:2b4e0433-8cd4-4e7d-950a-31006bb8fcae",
+  "plannedYear": 2033,
+  "expected": {
+    "T4": {
+      "generalEarned": 4,
+      "completedCredits": 4,
+      "schoolingCredits": 0
+    },
+    "T2S2": {
+      "generalEarned": 4,
+      "completedCredits": 4,
+      "schoolingCredits": 2
+    },
+    "null": {
+      "hold": "explicit_quantity_and_compatible_method_required"
+    },
+    "T0": {
+      "hold": "unsupported_course_component_structure",
+      "storedValue": 0
+    },
+    "official4": {
+      "generalEarned": 4,
+      "learnerIncrement": 0
+    },
+    "official0": {
+      "generalEarned": 0,
+      "learnerIncrement": 0
+    },
+    "officialNull": {
+      "generalEarned": 0,
+      "generalStatus": "unknown",
+      "learnerIncrement": 0,
+      "interpretation": "known subtotal 0; requirement unknown; official quantity and overall reference remain null"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { validateAttemptGraph } from '../src/planner/attempts/validation.ts';
 import { validateAttemptPlanTransition } from '../src/planner/attempts/planTransition.ts';
 import { attemptFixture, deletedFixture, unresolved, legacyRef, uuid, attemptId, operationId, recordId } from './fixtures/attempt-fixture.mjs';
@@ -260,11 +260,10 @@ test('attempt: schema validates malformed primitives without throwing or strippi
   for (const value of [null, 1, 'x', [], {}, { attempts: [null], ownedRecords: [], removals: [] }]) assert.equal(check(value, context).valid, false);
   const cycle = {}; cycle.self = cycle; rejects(cycle, context, 'non_json_value');
 });
-test('attempt: no production runtime imports the new independent module', () => {
-  const walk = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]);
-  const root = new URL('../src/', import.meta.url).pathname;
-  const outside = walk(root).filter(p => /\.(ts|tsx)$/.test(p) && !p.includes('/planner/attempts/'));
-  for (const path of outside) assert.doesNotMatch(readFileSync(path, 'utf8'), /(?:from\s*|import\s*\()['"][^'"]*attempts\//, path);
+test('attempt: normal App runtime excludes the isolated session UI and independent modules', async () => {
+  const { build } = await import('esbuild');
+  const result = await build({ entryPoints: ['src/App.tsx'], bundle: true, packages: 'external', metafile: true, write: false, jsx: 'automatic', loader: { '.css': 'empty' } });
+  for (const path of Object.keys(result.metafile.inputs)) assert.doesNotMatch(path, /planner\/attempts\/|InstitutionalPlannerPage|dev\/ac\//, path);
 });
 
 test('attempt: confirmed Placement rejects a competing audit identity', () => {

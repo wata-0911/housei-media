@@ -1,0 +1,28 @@
+.institutional-planner { max-width: 76rem; margin: auto; padding: 2rem 1rem; color: #172b4d; overflow-wrap: anywhere; }
+.institutional-planner h1 { font-size: 1.8rem; font-weight: 700; }
+.institutional-planner h2 { font-size: 1.35rem; font-weight: 700; margin-block: 1rem; }
+.institutional-planner h3 { font-size: 1.1rem; font-weight: 700; }
+.institutional-planner p { margin-block: .65rem; }
+.institutional-planner section, .institutional-planner form { margin-block: 1.5rem; }
+.institutional-planner label { display: block; margin-block: .5rem; }
+.institutional-planner input:not([type=radio]):not([type=checkbox]), .institutional-planner select { width: 100%; min-width: 0; max-width: 100%; padding: .65rem; border: 1px solid #64748b; border-radius: .4rem; background: white; }
+.institutional-planner fieldset { min-width: 0; border: 1px solid #cbd5e1; padding: .75rem; }
+.institutional-planner button, .institutional-planner summary { min-height: 44px; padding: .6rem; cursor: pointer; }
+.institutional-planner button { border: 1px solid #334155; border-radius: .4rem; margin: .3rem; background: #fff; color: #172b4d; }
+.institutional-planner button:disabled { opacity: .55; cursor: default; }
+.institutional-planner :focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.institutional-planner .notice { background: #fff7ed; border-left: 3px solid #9a3412; padding: .7rem; }
+.institutional-planner .muted { color: #475569; font-size: .875rem; }
+.institutional-planner .course-results, .institutional-planner .attempt-list { list-style: none; display: grid; gap: 1rem; padding: 0; }
+.institutional-planner li { min-width: 0; border: 1px solid #cbd5e1; padding: 1rem; border-radius: .75rem; background: white; }
+.institutional-planner a { text-decoration: underline; }
+@media(min-width: 768px) { .institutional-planner .course-results { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+.institutional-planner .attempt-record { border: 1px solid #cbd5e1; border-radius: .5rem; padding: 1rem; margin-block: 1rem; }
+.institutional-planner pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+
+.institutional-planner .recorded-table { overflow-x: auto; max-width: 100%; margin-block: 1rem; }
+.institutional-planner table { width: 100%; min-width: 52rem; border-collapse: collapse; font-size: .875rem; }
+.institutional-planner caption { text-align: left; font-weight: 700; margin-bottom: .5rem; }
+.institutional-planner th, .institutional-planner td { text-align: left; vertical-align: top; border: 1px solid #cbd5e1; padding: .6rem; }
+.institutional-planner th[scope=row] { min-width: 14rem; max-width: 28rem; font-weight: 500; }

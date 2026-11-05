@@ -18,5 +18,5 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "dev/attempts", "dev/persistence", "dev/institutional"]
+  "include": ["src", "dev/attempts", "dev/persistence", "dev/institutional", "dev/ac"]
 }
