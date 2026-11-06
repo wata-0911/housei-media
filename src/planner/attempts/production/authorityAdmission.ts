@@ -1,11 +1,12 @@
 import type { PersistenceHandle } from '../persistence/controller';
-import type { SourceArchive } from '../migration/contracts';
+import type { DecodeResult, SourceArchive } from '../migration/contracts';
 import { STORAGE_KEY, BACKUP_KEY } from '../../backup/storagePrimitives';
 
 export type LegacySnapshot = Readonly<{ primaryRaw: string | null; recoveryRaw: string | null }>;
 export type AuthorityAdmission = Readonly<{
   case: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J';
   canView: boolean; canCreate: boolean; canMigrate: boolean; canEdit: boolean;
+  legacyProblem: 'corrupt' | 'unsupported' | 'held' | null;
   code: string; message: string;
 }>;
 export const emptyLegacySnapshot = (): LegacySnapshot => ({ primaryRaw: null, recoveryRaw: null });
@@ -17,8 +18,9 @@ export function sameLegacySnapshot(a: LegacySnapshot, b: LegacySnapshot) {
   return a.primaryRaw === b.primaryRaw && a.recoveryRaw === b.recoveryRaw;
 }
 function result(c: AuthorityAdmission['case'], code: string, message: string, canView: boolean,
-  permission?: 'canCreate' | 'canMigrate' | 'canEdit'): AuthorityAdmission {
+  permission?: 'canCreate' | 'canMigrate' | 'canEdit', legacyProblem: AuthorityAdmission['legacyProblem'] = null): AuthorityAdmission {
   return Object.freeze({ case: c, code, message, canView, canCreate: false, canMigrate: false, canEdit: false,
+    legacyProblem,
     ...(permission ? { [permission]: true } : {}) });
 }
 export function unavailableAdmission(error: unknown): AuthorityAdmission {
@@ -36,23 +38,30 @@ export function sameLegacySource(a: SourceArchive, b: SourceArchive) {
  * decode MUST be the strict v22 decoder, never legacy loadState's repaired view.
  * This description grants no capability; the session retains and rechecks bytes. */
 export async function inspectAuthorityAdmission(legacy: LegacySnapshot, handle: PersistenceHandle | null,
-  decode: (raw: string) => Promise<SourceArchive | null>): Promise<AuthorityAdmission> {
+  decode: (raw: string) => Promise<DecodeResult>): Promise<AuthorityAdmission> {
   if (legacy.primaryRaw === null && legacy.recoveryRaw === null) {
     if (!handle) return result('A', 'empty', '旧・新の保存はありません。確認後に新規計画を開始できます。', false, 'canCreate');
     return result(handle.state.schemaVersion === 23 ? 'C' : 'D', 'verified_authority',
       '既存のAttempt正本を再読込・照合しました。', true, 'canEdit');
   }
   if (legacy.primaryRaw === null) return result('G', 'recovery_without_primary',
-    '旧recoveryのみ残っています。原文を保護し、復旧元を確認するまで書込みを停止します。', !!handle);
+    '旧recoveryのみ残っています。原文を保護し、復旧元を確認するまで書込みを停止します。', !!handle, undefined, 'held');
   // load already replayed the entire explicit correction chain. The exact
   // pre-correction original can legitimately remain held by today's decoder.
   if (handle?.state.schemaVersion === 23 && handle.state.corrections[0]?.originalRaw === legacy.primaryRaw) {
     return result('E', 'verified_corrected_migration_source',
       '旧原文と明示訂正の移行履歴を再読込・照合しました。新正本を編集し、訂正前の原文も保持します。', true, 'canEdit');
   }
-  const source = await decode(legacy.primaryRaw);
-  if (!source) return result('G', 'legacy_held',
-    '旧データが未対応・破損または確認待ちです。原文を保護し、書込みを停止しています。', !!handle);
+  const decoded = await decode(legacy.primaryRaw);
+  if (decoded.status !== 'decoded') {
+    const code = decoded.diagnostics[0]?.code ?? decoded.status;
+    const problem = decoded.status === 'held' ? 'held' : code === 'source_json' ? 'corrupt' : 'unsupported';
+    const message = problem === 'corrupt' ? '旧データのJSONを読み取れません。'
+      : problem === 'unsupported' ? '旧データは未対応の形式・版または未知の項目を含みます。'
+      : '旧データの整合性・移行条件を確認できません。';
+    return result('G', `legacy_${code}`, `${message}原文を保護し、書込みを停止しています。`, !!handle, undefined, problem);
+  }
+  const source = decoded.source;
   if (!handle) return result('B', 'explicit_migration_required',
     '旧schema22があります。空の新規計画は作成できません。原文を保護し、明示移行してください。', true, 'canMigrate');
   if (handle.source.kind === 'new-plan') return result('F', 'separate_plans',

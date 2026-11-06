@@ -61,8 +61,8 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
   const environment = () => environmentTask ??= (options.migrationEnvironment
     ? options.migrationEnvironment() : import('./migrationEnvironment').then(m => m.loadProductionMigrationEnvironment()));
   const decodeLegacy = async (raw: string) => {
-    const env = await environment(), decoded = await decodeMigrationSource(raw, env, env.origin);
-    return decoded.status === 'decoded' ? decoded.source : null;
+    const env = await environment();
+    return decodeMigrationSource(raw, env, env.origin);
   };
   const allocator = new SessionIdentityAllocator();
   let handle: PersistenceHandle | null = null, workspace: Workspace | null = null;
@@ -161,8 +161,9 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
       parse(raw); // representation preflight only; preserve original bytes for #196.
       const preview = await api.prepareMigration(await api.inspectLegacy(raw));
       if (legacyExpected?.primaryRaw !== null && legacyExpected?.primaryRaw !== undefined) {
-        const source = await decodeLegacy(legacyExpected.primaryRaw);
-        if (!source || preview.handle.source.kind === 'new-plan' || !sameLegacySource(source, preview.handle.source)) throw new Error('migration_source_conflict');
+        const decoded = await decodeLegacy(legacyExpected.primaryRaw);
+        if (decoded.status !== 'decoded' || preview.handle.source.kind === 'new-plan'
+          || !sameLegacySource(decoded.source, preview.handle.source)) throw new Error('migration_source_conflict');
       }
       requireLegacyUnchanged();
       return proposal(preview);

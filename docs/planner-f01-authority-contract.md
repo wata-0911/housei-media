@@ -28,6 +28,7 @@ F04は互換機能を同じ正本へ移すか、移行後の旧互換操作を�
 厳密な旧22 decoderと、checkpoint・source・catalog・全操作履歴をreplayしたhandleを使用する。
 `loadState` の修復表示や、rawのschema番号だけを根拠に許可しない。
 返り値は説明用であり、書込みcapabilityではない。実権限・expected原文はsession内に保持する。
+旧データの失敗は`legacyProblem`でJSON破損・未対応形式/版・整合性確認待ちを区別し、strict decoderの診断codeも保持する。
 
 | ケース | 新側の動作 |
 | --- | --- |

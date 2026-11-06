@@ -83,6 +83,9 @@ for (const [label, primary, recovery] of [
 ]) test(`G ${label}: no create/migrate/normalization, exact primary and recovery protection`, async () => {
   const {api,store,legacy} = setup(primary,recovery); await api.load();
   assert.equal(api.admission().case, 'G'); await assert.rejects(api.prepareSave(), /blocked/);
+  assert.equal(api.admission().legacyProblem,label==='broken'||label==='empty text'?'corrupt':label==='recovery only'?'held':'unsupported');
+  if(label==='broken'||label==='empty text')assert.equal(api.admission().code,'legacy_source_json');
+  if(label==='future'||label==='old curriculum/unsupported')assert.equal(api.admission().code,'legacy_unsupported_state_version');
   await assert.rejects(api.prepareMigration(raw22()), /blocked/); assert.equal(store.writes, 0);
   const protection = JSON.parse(await protectLegacyPlannerRaw({getItem:k=>k.endsWith(':recovery')?legacy.recoveryRaw:legacy.primaryRaw}));
   assert.equal(protection.primaryRaw,primary); assert.equal(protection.recoveryRaw,recovery);
