@@ -149,14 +149,14 @@ test('grade import preview and undo stop accepting changes while the shared save
   grade.courses[0].reports = Array.from({ length: 4 }, () => ({ raw: '', status: 'none', date: null }));
   grade.courses[0].schoolings = Array.from({ length: 2 }, () => ({ rawYear: '', rawTerm: '', rawDate: '', rawCredits: '', rawGrade: '', year: null, term: null, date: null, credits: null, grade: null }));
   const importPanel = page.locator('#grade-import-panel');
-  await importPanel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(grade));
+  await importPanel.getByRole('textbox', { name: '成績JSONをここに貼り付け', exact: true }).fill(JSON.stringify(grade));
   await importPanel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
   await importPanel.locator('fieldset').waitFor();
   await importPanel.getByRole('button', { name: '確認した履修実績を保存・履修計画に仮登録', exact: true }).click();
   const undo = page.getByRole('button', { name: '取り込みを元に戻す', exact: true });
   await undo.waitFor();
   grade.courses[0].rawName = '別の未照合の監査科目';
-  await importPanel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(grade));
+  await importPanel.getByRole('textbox', { name: '成績JSONをここに貼り付け', exact: true }).fill(JSON.stringify(grade));
   await importPanel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
   await importPanel.locator('fieldset').waitFor();
   const release = await hold(context);
@@ -386,7 +386,7 @@ test('grade identity P1: preview holds a different exam year and preserves store
   const incoming = structuredClone(data);
   incoming.courses[0].creditExam.rawDate = '2021/07/01'; incoming.courses[0].creditExam.date = '2021-07-01';
   incoming.courses[0].earnedCredits = numeric(2);
-  await panel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(incoming));
+  await panel.getByRole('textbox', { name: '成績JSONをここに貼り付け', exact: true }).fill(JSON.stringify(incoming));
   await panel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
   await panel.getByRole('alert').filter({ hasText: '取り込みを保留' }).waitFor();
   assert.equal(await panel.getByRole('checkbox', { name: '論理学を取り込む', exact: true }).isDisabled(), true);
@@ -395,7 +395,7 @@ test('grade identity P1: preview holds a different exam year and preserves store
   assert.equal(await page.evaluate(() => window.draftWrites.length), 0);
   // A new unrelated row can be applied in the same preview; the held row stays intact.
   incoming.courses.push({ ...structuredClone(data.courses[0]), rawName: '合成の別科目' });
-  await panel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(incoming));
+  await panel.getByRole('textbox', { name: '成績JSONをここに貼り付け', exact: true }).fill(JSON.stringify(incoming));
   await panel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
   await panel.getByRole('button', { name: '確認した履修実績を保存・履修計画に仮登録', exact: true }).click();
   await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).importedCourseAchievements.length === 2, STORAGE_KEY);
@@ -425,7 +425,7 @@ test('grade components P2: manual year survives grade refresh without duplicates
   await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).importedStudyRecords[0].academicYear === 2019, STORAGE_KEY);
   const panel = page.locator('#grade-import-panel');
   const refresh = async () => {
-    await panel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(data));
+    await panel.getByRole('textbox', { name: '成績JSONをここに貼り付け', exact: true }).fill(JSON.stringify(data));
     await panel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
     await panel.getByRole('button', { name: '確認した履修実績を保存・履修計画に仮登録', exact: true }).click();
   };
@@ -467,7 +467,7 @@ test('grade partial P2: unchecked changed detail holds storage; full refresh the
   await page.locator('details').evaluateAll(rows => { for (const row of rows) row.open = true; });
   const panel = page.locator('#grade-import-panel');
   const read = async () => {
-    await panel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(data));
+    await panel.getByRole('textbox', { name: '成績JSONをここに貼り付け', exact: true }).fill(JSON.stringify(data));
     await panel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
   };
   const apply = panel.getByRole('button', { name: '確認した履修実績を保存・履修計画に仮登録', exact: true });
