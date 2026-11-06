@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 22,
+  "selectedScopeId": null,
+  "thesisSelection": "undecided",
+  "thesisProgressByScope": {},
+  "thesisGuidanceByScope": {},
+  "items": [],
+  "publicCourses": [],
+  "todos": [],
+  "mediaSchoolingProgress": {},
+  "courseEvaluations": {},
+  "correspondenceProgress": {},
+  "importedStudyRecords": [
+    {
+      "id": "c772ac02-e89b-40ec-a46b-be13a8031d72",
+      "fingerprint": "[\"健康・スポーツ科学概論\",\"schooling\",\"2024\",\"メ\",null,2,\"A\",null,null]:0",
+      "source": "hosei_import",
+      "rawName": "健康・スポーツ科学概論",
+      "offeringId": null,
+      "match": "unmatched",
+      "method": "schooling",
+      "academicYear": 2024,
+      "yearSource": "source",
+      "rawYear": "2024",
+      "term": "メ",
+      "rawTerm": "メ",
+      "date": null,
+      "examDate": null,
+      "credits": 2,
+      "grade": "A",
+      "sourceCourseId": "e2cf60bb-87bb-442c-a0dc-297f73f6645c",
+      "earnedCreditsTotal": -0,
+      "schoolingCreditsTotal": 0,
+      "compositionCredits": 2,
+      "recognizedExemption": null,
+      "additionalEnrollment": null,
+      "capturedAt": "2026-11-06T00:00:00.000Z"
+    }
+  ],
+  "importedCourseAchievements": [
+    {
+      "id": "e2cf60bb-87bb-442c-a0dc-297f73f6645c",
+      "fingerprint": "[\"source-v2\",\"健康・スポーツ科学概論\",null,[[\"2024\",\"メ\",\"\",\"2\",\"A\"],[\"\",\"\",\"\",\"\",\"\"]],[[\"\",\"none\",null],[\"\",\"none\",null],[\"\",\"none\",null],[\"\",\"none\",null]],[\"\",\"\",\"\",false],0]",
+      "source": "hosei_import",
+      "rawName": "健康・スポーツ科学概論",
+      "categoryRaw": null,
+      "capturedAt": "2026-11-06T00:00:00.000Z",
+      "earnedCreditsTotal": -0,
+      "schoolingCreditsTotal": 0,
+      "compositionCredits": 2,
+      "recognizedExemption": null,
+      "additionalEnrollment": null,
+      "academicYear": 2024,
+      "yearSource": "source",
+      "curriculumCourseId": "curriculum:ce2a9005-8cc3-4b83-9214-f1922d3f52bd",
+      "curriculumMatch": "exact_unique",
+      "candidateCurriculumCourseIds": [
+        "curriculum:ce2a9005-8cc3-4b83-9214-f1922d3f52bd"
+      ],
+      "offeringMatch": "unmatched",
+      "courseId": null,
+      "selectedOfferingId": null,
+      "selectionSource": "none",
+      "match": "ambiguous",
+      "candidateOfferingIds": [
+        "01a5787a-56d5-4e81-aa09-c6333c937561"
+      ]
+    }
+  ],
+  "importedCourseUserMeta": {},
+  "graduationProfile": {
+    "admissionYear": null,
+    "currentStudyYear": null,
+    "admissionType": "unknown",
+    "recognizedCredits": {
+      "totalCredits": null,
+      "schoolingEquivalentCredits": null,
+      "openUniversityCredits": null,
+      "general": {
+        "humanities": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "social": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "natural": {
+          "mode": "unknown",
+          "credits": null
+        }
+      },
+      "foreignLanguage": {
+        "mode": "unknown",
+        "credits": null,
+        "language": "unknown",
+        "schoolingEquivalentCredits": null
+      },
+      "physicalEducation": {
+        "mode": "unknown",
+        "credits": null
+      },
+      "professionalCourses": []
+    },
+    "curriculumApplicability": "current_2026"
+  }
+}

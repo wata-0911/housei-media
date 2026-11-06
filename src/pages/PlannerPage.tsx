@@ -25,6 +25,8 @@ import ImportedAchievements from '../components/planner/gradeImport/ImportedAchi
 import AnnualCreditLimitNotice from '../components/planner/planning/AnnualCreditLimitNotice';
 import { applyImport, importedEarnedCreditsTotal, type ImportedCourseAchievement, type ImportedStudyRecord, type ImportPreviewUnit } from '../planner/gradeImport/gradeImportApply';
 import { deriveImportedAchievements, managedImportedMedia } from '../planner/gradeImport/importedAchievementCalculations';
+import { canConfirmMedia, importedCoursesAfterPatch, mediaConfirmationPatch, type MediaConfirmation } from '../planner/gradeImport/mediaConfirmation';
+import { officialMediaAchievements } from '../planner/gradeImport/officialMediaAchievements';
 import { deriveCurriculumCourseView } from '../planner/progress/curriculumCourseView';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../planner/planning/plannerItemState';
 import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from '../planner/gradeImport/directGradeHandoff';
@@ -105,9 +107,28 @@ export default function PlannerPage() {
   const thesisGuidance = guidanceForScope(state, state.selectedScopeId);
   const graduationProgress = calculateGraduationProgress(state.items, catalog, state.selectedScopeId, state.publicCourses, thesisProgress.selection, state.importedStudyRecords, state.importedCourseAchievements, state.graduationProfile, thesisProgress, state.correspondenceProgress);
   const importedDerived = deriveImportedAchievements(state.importedStudyRecords, offeringsById, state.items, state.importedCourseAchievements, catalog, state.selectedScopeId);
+  const officialMedia = officialMediaAchievements(state.importedCourseAchievements, state.importedStudyRecords, catalog);
+  const officialMediaIds = new Set(officialMedia.map(row => row.sourceCourseId));
+  // Keep inferred history separate from source-confirmed media. Only an existing
+  // source row can accept a manual offering choice; older selected IDs were manual.
+  const sourceById = new Map(state.importedCourseAchievements.map(row => [row.id, row]));
+  const canConfirmSource = (id: string) => state.importedCourseAchievements.filter(row => row.id === id).length === 1
+    && canConfirmMedia(sourceById.get(id));
   const curriculumProgress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId, state.importedStudyRecords, state.correspondenceProgress, state.graduationProfile);
   const curriculumCourseView = deriveCurriculumCourseView(state, catalog);
   const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
+  // The legacy fallback normally runs only when the entire source table is empty.
+  // In a mixed save, derive the orphan details separately for read-only display.
+  const orphanDetails = sourceById.size ? state.importedStudyRecords.filter(record =>
+    record.sourceCourseId && !sourceById.has(record.sourceCourseId)) : [];
+  const orphanDerived = orphanDetails.length
+    ? deriveImportedAchievements(orphanDetails, offeringsById, state.items, [], catalog, state.selectedScopeId)
+    : null;
+  const legacyMedia = [...importedDerived.media, ...(orphanDerived?.media ?? [])]
+    .filter(history => !officialMediaIds.has(history.sourceCourseId))
+    .map(history => ({ ...history, canConfirmOffering: canConfirmSource(history.sourceCourseId) }));
+  const pendingMedia = [...importedDerived.mediaPending, ...managedMedia.pending, ...(orphanDerived?.mediaPending ?? [])]
+    .map(row => ({ ...row, canConfirmOffering: canConfirmSource(row.sourceCourseId) }));
   const exportPresentation = plannerExportPresentation(state, catalog);
   const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById, state.importedCourseAchievements);
   const profileNeedsAttention = state.selectedScopeId === null || missingGraduationProfilePrerequisites(state.graduationProfile).length > 0;
@@ -259,7 +280,29 @@ export default function PlannerPage() {
     return false;
   }
   function changeImportedAchievement(id: string, patch: Partial<ImportedStudyRecord>) { return commit({ ...state, importedStudyRecords: state.importedStudyRecords.map(record => record.id === id ? { ...record, ...patch } : record) }, '取り込んだ履修実績を保存しました。'); }
-  function changeImportedCourseAchievement(id: string, patch: Partial<ImportedCourseAchievement>) { commit({ ...state, importedCourseAchievements: state.importedCourseAchievements.map(record => record.id === id ? { ...record, ...patch } : record) }, '成績表の科目行の照合先を保存しました。'); }
+  function changeImportedCourseAchievement(id: string, patch: Partial<ImportedCourseAchievement>) {
+    const rows = importedCoursesAfterPatch(state.importedCourseAchievements, id, patch);
+    if (!rows) return;
+    commit({ ...state, importedCourseAchievements: rows }, '成績表の科目行の照合先を保存しました。');
+  }
+
+  function resolveImportedMedia(request: MediaConfirmation) {
+    if (loaded.error || writePending.current) return;
+    const patch = mediaConfirmationPatch(request, loaded.raw, state.importedCourseAchievements, pendingMedia, legacyMedia);
+    if (!patch) return;
+    // A storage event may still be queued. The existing locked CAS also checks
+    // the original bytes if another writer wins after this preflight.
+    try {
+      if (window.localStorage.getItem(STORAGE_KEY) !== loaded.raw) {
+        setSaveError('別の画面で保存データが変更されました。再読み込みして照合先を確認してください。');
+        return;
+      }
+    } catch {
+      setSaveError('保存原文を確認できません。保存設定を確認して再操作してください。');
+      return;
+    }
+    changeImportedCourseAchievement(request.sourceCourseId, patch);
+  }
   function changeImportedUserMeta(id: string, patch: Partial<ImportedCourseUserMeta>) {
     const current = state.importedCourseUserMeta[id] ?? { lifecycleStatus: null, plannedYear: null, plannedTerm: null, studyYear: null };
     return commit({ ...state, importedCourseUserMeta: { ...state.importedCourseUserMeta, [id]: { ...current, ...patch } } }, '成績表の公式情報とは別に、履修管理情報を保存しました。');
@@ -353,7 +396,7 @@ export default function PlannerPage() {
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance key={importEpoch} disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab" tabIndex={-1} className="scroll-mt-40 md:scroll-mt-24">
-        <MediaSchoolingProgress key={importEpoch} items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} importedAchievements={importedDerived.media} importedManaged={managedMedia.media} importedPending={[...importedDerived.mediaPending, ...managedMedia.pending]} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={(sourceCourseId, offeringId) => { const offering = offeringsById.get(offeringId); if (offering) changeImportedCourseAchievement(sourceCourseId, { selectedOfferingId: offeringId, selectionSource: 'manual', courseId: offering.courseId, match: offering.courseId && offering.resolutionStatus === 'matched' ? 'exact_unique' : 'ambiguous' }); }} />
+        <MediaSchoolingProgress key={importEpoch} items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} officialAchievements={officialMedia} importedAchievements={legacyMedia} importedManaged={managedMedia.media} importedPending={pendingMedia} savedRaw={loaded.raw} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={resolveImportedMedia} />
       </div>}
       {activeTab === 'profile' && <div ref={profilePanelRef} id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" tabIndex={-1} className="scroll-mt-24">
         <PlannerProfileTab

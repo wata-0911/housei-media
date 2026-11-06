@@ -1,3 +1,5 @@
+import type { MediaConfirmation } from '../../../planner/gradeImport/mediaConfirmation';
+import type { OfficialMediaAchievement } from '../../../planner/gradeImport/officialMediaAchievements';
 import FuturePlanNotice from '../planning/FuturePlanNotice';
 import CommittedInput from '../common/CommittedInput';
 import { planningTermLabel } from '../../../planner/planning/futurePlanning';
@@ -11,15 +13,95 @@ type Props = {
   items: PlannerItem[];
   offerings: Map<string, Offering>;
   progress: Record<string, MediaCourseProgress>;
-  importedAchievements: ImportedMediaAchievement[];
+  officialAchievements?: OfficialMediaAchievement[];
+  importedAchievements: (ImportedMediaAchievement & { canConfirmOffering?: boolean })[];
   importedManaged: ImportedManagedMedia[];
-  importedPending: ImportedMediaPending[];
-  onResolveImportedMedia: (sourceCourseId: string, offeringId: string) => void;
+  importedPending: (ImportedMediaPending & { canConfirmOffering: boolean })[];
+  savedRaw: string | null;
+  onResolveImportedMedia: (request: MediaConfirmation) => void;
   disabled: boolean;
   onChange: (offeringId: string, progress: MediaCourseProgress) => void | boolean | Promise<void | boolean>;
 };
 
 const statusLabels: Record<PlannerItem['status'], string> = { planned: '計画中', in_progress: '履修中', waiting: '結果待ち', earned: '修得済み', failed: '不合格', dropped: '取りやめ' };
+
+function OfficialMediaHistory({ achievements }: { achievements: OfficialMediaAchievement[] }) {
+  const identities = { curriculum_only: '保存済みカリキュラム照合あり / 制度科目・本人適用は要確認 / 卒業算入は別途判定', ambiguous: '制度科目は複数候補・要確認 / 卒業算入は保留', unmatched: '制度科目は未照合 / 卒業算入は保留', unverified: '制度科目の照合根拠は未確認 / 卒業算入は保留', conflict: '制度科目の照合情報に矛盾・要確認 / 卒業算入は保留' };
+  return <section className="border border-emerald-200 bg-emerald-50 p-4" aria-label="成績表由来のメディア記録">
+    <h3 className="font-medium text-[#002255]">成績表由来のメディア記録 — {achievements.length}件</h3>
+    <p className="mt-1 text-xs text-gray-600">期欄の原表記から表示しています。科目行の修得単位はメディア分の単位数や卒業算入単位ではありません。進捗・修得状態は変更しません。</p>
+    <ul className="mt-3 space-y-2 text-sm">{achievements.map(row => <li key={row.sourceCourseId} data-official-media-id={row.sourceCourseId} className="min-w-0 break-words border border-emerald-100 bg-white p-3">
+      <p className="font-medium">{row.rawName}</p>
+      <p className="mt-1">メディア（成績表由来） / 科目行の修得単位: {row.earnedCreditsTotal === null ? '不明' : `${row.earnedCreditsTotal}単位`}</p>
+      <p className="mt-1 text-xs">{identities[row.identity]}</p>
+      {row.records.map(record => <p key={record.id} className="mt-1 text-xs text-gray-600">原年度: {record.rawYear || '未記録'} / 原期: {record.rawTerm} / 原評価: {record.grade || '未記録'}</p>)}
+    </li>)}</ul>
+  </section>;
+}
+
+function CompatibilityMediaHistory({ importedAchievements, savedRaw, disabled, onResolveImportedMedia }:
+  Pick<Props, 'importedAchievements' | 'savedRaw' | 'disabled' | 'onResolveImportedMedia'>) {
+  return <section aria-label="照合先に基づくメディア履歴" className="border border-emerald-200 bg-emerald-50 p-4">
+    <h3 className="font-medium text-[#002255]">照合先に基づくメディア履歴</h3>
+    <p className="mt-1 text-xs text-gray-600">方式未確認（成績表）。照合先がメディアのため表示しています。</p>
+    <ul className="mt-3 space-y-2 text-sm">{importedAchievements.map(history => (
+      <li key={history.sourceCourseId} className="min-w-0 break-words border border-emerald-100 bg-white p-3">
+        <p className="font-medium">{history.rawName}</p>
+        <p className="mt-1 text-gray-700">
+          {history.academicYear === null ? '年度未設定' : `${history.academicYear}年度`} / {history.term ?? (history.offering.period ? `照合先の期: ${history.offering.period}` : '期未設定')} / 科目行の修得 {history.earnedCreditsTotal}単位
+          {history.schoolingCreditsTotal === null ? '' : `（S ${history.schoolingCreditsTotal}単位）`}
+        </p>
+        <p className="mt-1 text-xs text-gray-600">成績表の評価: {history.records.filter(record => record.grade).map(record => `${record.method === 'schooling' ? 'S' : '通信'} ${record.grade}`).join(' / ') || '未設定'}</p>
+        {history.canConfirmOffering && <form key={history.offering.id} className="mt-2" onSubmit={event => {
+          event.preventDefault();
+          const selected = new FormData(event.currentTarget).get('offeringId');
+          if (selected === history.offering.id) onResolveImportedMedia({ sourceCourseId: history.sourceCourseId, offeringId: selected, reviewedRaw: savedRaw });
+        }}>
+          <label className="block">
+            照合先の候補
+            <select name="offeringId" aria-label={`${history.rawName}の照合先を確認`} disabled={disabled}
+              required defaultValue={history.offering.id} className="mt-1 block max-w-full border p-1">
+              <option value="">未確認のまま</option>
+              <option value={history.offering.id}>{history.offering.name}（{history.offering.deliveryCategory ?? 'メディア'}）</option>
+            </select>
+          </label>
+          <button type="submit" disabled={disabled} className="planner-button mt-2 border px-3 py-1">この照合先で手動照合</button>
+        </form>}
+      </li>
+    ))}</ul>
+  </section>;
+}
+
+function PendingMediaRow({ row, savedRaw, disabled, onResolveImportedMedia }:
+  Pick<Props, 'savedRaw' | 'disabled' | 'onResolveImportedMedia'> & { row: Props['importedPending'][number] }) {
+  const [choice, setChoice] = useState<{ id: string; raw: string | null } | null>(null);
+  if (!row.canConfirmOffering) return <div className="mt-3 text-sm">
+    <p>{row.rawName}</p>
+    <p>参照のみ。確定できる公式原行がありません。</p>
+    <ul className="list-inside list-disc">{row.candidates.map(candidate =>
+      <li key={candidate.id}>{candidate.name}（{candidate.deliveryCategory ?? candidate.period ?? '期未設定'}）</li>)}</ul>
+  </div>;
+  const selected = choice && choice.raw === savedRaw ? choice.id : '';
+  const canSubmit = row.candidates.some(candidate => candidate.id === selected);
+  return <form className="mt-3 space-y-2 text-sm" onKeyDown={event => {
+    if (event.key === 'Escape') setChoice(null);
+  }} onSubmit={event => {
+    event.preventDefault();
+    if (!disabled && canSubmit && choice) onResolveImportedMedia({ sourceCourseId: row.sourceCourseId, offeringId: selected, reviewedRaw: choice.raw });
+  }}>
+    <label className="block">{row.rawName}
+      <select value={selected} disabled={disabled} className="mt-1 block max-w-full border p-1"
+        onChange={event => setChoice({ id: event.target.value, raw: savedRaw })}>
+        <option value="">メディアなら選択</option>
+        {row.candidates.map(candidate => <option key={candidate.id} value={candidate.id}>
+          {candidate.name}（{candidate.deliveryCategory ?? candidate.period ?? '期未設定'}）
+        </option>)}
+      </select>
+    </label>
+    <button type="submit" disabled={disabled || !canSubmit} className="planner-button border px-3 py-1">この照合先で確定</button>
+    <button type="button" disabled={disabled || !selected} onClick={() => setChoice(null)} className="planner-button ml-2 border px-3 py-1">キャンセル</button>
+  </form>;
+}
 
 function CourseCard({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: MediaCourseProgress; disabled: boolean; onChange: Props['onChange'] }) {
   const [lessonsExpanded, setLessonsExpanded] = useState(false);
@@ -93,13 +175,14 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
   </article>;
 }
 
-export default function MediaSchoolingProgress({ items, offerings, progress, importedAchievements, importedManaged, importedPending, disabled, onChange, onResolveImportedMedia }: Props) {
+export default function MediaSchoolingProgress({ items, offerings, progress, officialAchievements = [], importedAchievements, importedManaged, importedPending, savedRaw, disabled, onChange, onResolveImportedMedia }: Props) {
   const mediaItems = mediaPlanItems(items, offerings);
   const plannerOfferingIds = new Set(mediaItems.map(item => item.offeringId));
   const uniqueImportedManaged = importedManaged.filter(achievement => !plannerOfferingIds.has(achievement.offering.id));
   const importedShareItems: ImportedMediaShareItem[] = uniqueImportedManaged.map(achievement => ({ offering: achievement.offering, name: achievement.rawName }));
   const [isSharing, setIsSharing] = useState(false);
   const shareGroups = mediaShareViewModel(items, offerings, progress, importedShareItems);
-  if (mediaItems.length === 0 && importedManaged.length === 0 && importedAchievements.length === 0 && importedPending.length === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
-  return <section aria-labelledby="media-heading" className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">{mediaItems.length + uniqueImportedManaged.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div>{shareGroups.length > 0 && <button type="button" onClick={() => setIsSharing(true)} className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">全科目を共有</button>}</div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={onChange} />)}{uniqueImportedManaged.length > 0 && <section className="space-y-3"><div className="border border-blue-200 bg-blue-50 p-4"><h3 className="font-medium text-[#002255]">成績表から取り込んだ履修中のメディア</h3><p className="mt-1 text-xs text-gray-600">成績表の元データは変更せず、ユーザー管理の履修状態に紐づけて進捗を記録します。</p></div>{uniqueImportedManaged.map(achievement => <CourseCard key={`imported:${achievement.sourceCourseId}`} item={{ offeringId: achievement.offering.id, status: achievement.meta.lifecycleStatus!, plannedYear: achievement.meta.plannedYear, plannedTerm: achievement.meta.plannedTerm, studyYear: achievement.meta.studyYear, earnedOrder: null }} offering={{ ...achievement.offering, name: achievement.rawName }} saved={progressFor(achievement.offering.id, progress)} disabled={disabled} onChange={onChange} />)}</section>}{importedPending.length > 0 && <section className="border border-amber-200 bg-amber-50 p-4"><h3 className="font-medium text-[#002255]">判定できない取込スクーリング実績</h3><p className="mt-1 text-xs text-gray-600">通常スクーリングとの区別に十分な根拠がないため自動登録していません。メディアだった場合だけ照合先を選んでください。</p>{importedPending.map(row => <label key={row.sourceCourseId} className="mt-3 block text-sm">{row.rawName}<select disabled={disabled} defaultValue="" onChange={event => { if (event.target.value) onResolveImportedMedia(row.sourceCourseId, event.target.value); }} className="ml-2 max-w-full border p-1"><option value="">メディアなら選択</option>{row.candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}（{candidate.deliveryCategory ?? candidate.period ?? '期未設定'}）</option>)}</select></label>)}</section>}{importedAchievements.length > 0 && <section className="border border-emerald-200 bg-emerald-50 p-4"><h3 className="font-medium text-[#002255]">成績表から取り込んだメディア実績</h3><p className="mt-1 text-xs text-gray-600">過去実績です。動画・テスト・評価予定の進捗は作成しません。</p><ul className="mt-3 space-y-2 text-sm">{importedAchievements.map(achievement => <li key={achievement.sourceCourseId} className="border border-emerald-100 bg-white p-3"><p className="font-medium">{achievement.rawName}</p><p className="mt-1 text-gray-700">{achievement.academicYear === null ? '年度未設定' : `${achievement.academicYear}年度`} / {achievement.term ?? achievement.offering.period ?? '期未設定'} / 修得 {achievement.earnedCreditsTotal}単位{achievement.schoolingCreditsTotal === null ? '' : `（S ${achievement.schoolingCreditsTotal}単位）`}</p><p className="mt-1 text-xs text-gray-600">成績表の評価: {achievement.records.filter(record => record.grade).map(record => `${record.method === 'schooling' ? 'S' : '通信'} ${record.grade}`).join(' / ') || '未設定'}</p></li>)}</ul></section>}{isSharing && <MediaProgressShareModal groups={shareGroups} onClose={() => setIsSharing(false)} />}</section>;
+  if (officialAchievements.length === 0 && mediaItems.length === 0 && importedManaged.length === 0 && importedAchievements.length === 0 && importedPending.length === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
+  return <section aria-labelledby="media-heading" className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">進捗管理 {mediaItems.length + uniqueImportedManaged.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div>{shareGroups.length > 0 && <button type="button" onClick={() => setIsSharing(true)} className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">全科目を共有</button>}</div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={onChange} />)}{uniqueImportedManaged.length > 0 && <section className="space-y-3"><div className="border border-blue-200 bg-blue-50 p-4"><h3 className="font-medium text-[#002255]">成績表から取り込んだ履修中のメディア</h3><p className="mt-1 text-xs text-gray-600">成績表の元データは変更せず、ユーザー管理の履修状態に紐づけて進捗を記録します。</p></div>{uniqueImportedManaged.map(achievement => <CourseCard key={`imported:${achievement.sourceCourseId}`} item={{ offeringId: achievement.offering.id, status: achievement.meta.lifecycleStatus!, plannedYear: achievement.meta.plannedYear, plannedTerm: achievement.meta.plannedTerm, studyYear: achievement.meta.studyYear, earnedOrder: null }} offering={{ ...achievement.offering, name: achievement.rawName }} saved={progressFor(achievement.offering.id, progress)} disabled={disabled} onChange={onChange} />)}</section>}{importedPending.length > 0 && <section className="border border-amber-200 bg-amber-50 p-4"><h3 className="font-medium text-[#002255]">判定できない取込スクーリング実績</h3><p className="mt-1 text-xs text-gray-600">方式または進捗管理用の照合先が未確定です。メディアの進捗を記録する場合は、照合先を確認して選んでください。成績表由来の方式表示とは別の操作です。</p>{importedPending.map(row => <PendingMediaRow key={JSON.stringify([row.sourceCourseId, ...row.candidates.map(candidate => candidate.id)])}
+      row={row} savedRaw={savedRaw} disabled={disabled} onResolveImportedMedia={onResolveImportedMedia} />)}</section>}{officialAchievements.length > 0 && <OfficialMediaHistory achievements={officialAchievements} />}{importedAchievements.length > 0 && <CompatibilityMediaHistory importedAchievements={importedAchievements} savedRaw={savedRaw} disabled={disabled} onResolveImportedMedia={onResolveImportedMedia} />}{isSharing && <MediaProgressShareModal groups={shareGroups} onClose={() => setIsSharing(false)} />}</section>;
 }

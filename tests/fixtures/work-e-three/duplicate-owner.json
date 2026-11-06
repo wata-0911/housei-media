@@ -1,0 +1,161 @@
+ 
+{
+  "schemaVersion": 22,
+  "selectedScopeId": null,
+  "thesisSelection": "undecided",
+  "thesisProgressByScope": {},
+  "thesisGuidanceByScope": {},
+  "items": [],
+  "publicCourses": [],
+  "todos": [],
+  "mediaSchoolingProgress": {},
+  "courseEvaluations": {},
+  "correspondenceProgress": {},
+  "importedStudyRecords": [
+    {
+      "id": "abcd0123-0000-4000-8000-000000000002",
+      "fingerprint": "[\"自然地理学（地形）\",\"schooling\",\"2026\",\"夏\",null,2,\"B\",null,null]:0",
+      "source": "hosei_import",
+      "rawName": "自然地理学（地形）",
+      "offeringId": null,
+      "match": "unmatched",
+      "method": "schooling",
+      "academicYear": 2026,
+      "yearSource": "source",
+      "rawYear": "2026",
+      "term": "夏",
+      "rawTerm": "夏",
+      "date": null,
+      "examDate": null,
+      "credits": 2,
+      "grade": "B",
+      "sourceCourseId": "abcd0123-0000-4000-8000-000000000001",
+      "earnedCreditsTotal": 2,
+      "schoolingCreditsTotal": 2,
+      "compositionCredits": 4,
+      "recognizedExemption": null,
+      "additionalEnrollment": null,
+      "capturedAt": "2026-01-02T03:04:05.000Z"
+    },
+    {
+      "id": "5ddf52be-927b-4079-9275-ca461611f80a",
+      "fingerprint": "[\"現代ファイナンスA(前期メディア)\",\"schooling\",\"2026\",null,null,2,\"A\",null,null]:0",
+      "source": "hosei_import",
+      "rawName": "現代ファイナンスA(前期メディア)",
+      "offeringId": "09bd0d7e-56a7-4d86-a968-de88cff2879e",
+      "match": "exact_unique",
+      "method": "schooling",
+      "academicYear": 2026,
+      "yearSource": "source",
+      "rawYear": "2026",
+      "term": null,
+      "rawTerm": null,
+      "date": null,
+      "examDate": null,
+      "credits": 2,
+      "grade": "A",
+      "sourceCourseId": "abcd0123-0000-4000-8000-000000000001",
+      "earnedCreditsTotal": 2,
+      "schoolingCreditsTotal": 2,
+      "compositionCredits": 2,
+      "recognizedExemption": null,
+      "additionalEnrollment": null,
+      "capturedAt": "2026-01-02T03:04:05.000Z"
+    }
+  ],
+  "importedCourseAchievements": [
+    {
+      "id": "abcd0123-0000-4000-8000-000000000001",
+      "fingerprint": "[\"source-v2\",\"自然地理学（地形）\",null,[[\"2026\",\"夏\",\"\",\"2\",\"B\"],[\"\",\"\",\"\",\"\",\"\"]],[[\"\",\"none\",null],[\"\",\"none\",null],[\"\",\"none\",null],[\"\",\"none\",null]],[\"\",\"\",\"\",false],0]",
+      "source": "hosei_import",
+      "rawName": "自然地理学（地形）",
+      "categoryRaw": null,
+      "capturedAt": "2026-01-02T03:04:05.000Z",
+      "earnedCreditsTotal": 2,
+      "schoolingCreditsTotal": 2,
+      "compositionCredits": 4,
+      "recognizedExemption": null,
+      "additionalEnrollment": null,
+      "academicYear": 2026,
+      "yearSource": "source",
+      "curriculumCourseId": "curriculum:f3c79529-7d19-4aa3-ba9c-55591bdd3d33",
+      "curriculumMatch": "exact_unique",
+      "candidateCurriculumCourseIds": [
+        "curriculum:f3c79529-7d19-4aa3-ba9c-55591bdd3d33"
+      ],
+      "offeringMatch": "unmatched",
+      "courseId": "e707f655-eeb5-4dc3-91d9-31cc83fe5a2f",
+      "selectedOfferingId": null,
+      "selectionSource": "none",
+      "match": "exact_unique",
+      "candidateOfferingIds": [
+        "12376b3f-8078-45ca-952e-349d07252006"
+      ]
+    },
+    {
+      "id": "abcd0123-0000-4000-8000-000000000001",
+      "fingerprint": "[\"source-v2\",\"現代ファイナンスA(前期メディア)\",null,[[\"2026\",\"\",\"\",\"2\",\"A\"],[\"\",\"\",\"\",\"\",\"\"]],[[\"\",\"none\",null],[\"\",\"none\",null],[\"\",\"none\",null],[\"\",\"none\",null]],[\"\",\"\",\"\",false],0]",
+      "source": "hosei_import",
+      "rawName": "現代ファイナンスA(前期メディア)",
+      "categoryRaw": null,
+      "capturedAt": "2026-01-02T03:04:05.000Z",
+      "earnedCreditsTotal": 2,
+      "schoolingCreditsTotal": 2,
+      "compositionCredits": 2,
+      "recognizedExemption": null,
+      "additionalEnrollment": null,
+      "academicYear": 2026,
+      "yearSource": "source",
+      "curriculumCourseId": "curriculum:9f93a3ba-ed50-4883-a039-1c6037e9ef67",
+      "curriculumMatch": "exact_unique",
+      "candidateCurriculumCourseIds": [
+        "curriculum:9f93a3ba-ed50-4883-a039-1c6037e9ef67"
+      ],
+      "offeringMatch": "exact_unique",
+      "courseId": "4f2e27a8-2008-48f7-99d4-0de6a8765e33",
+      "selectedOfferingId": "09bd0d7e-56a7-4d86-a968-de88cff2879e",
+      "selectionSource": "auto",
+      "match": "exact_unique",
+      "candidateOfferingIds": [
+        "09bd0d7e-56a7-4d86-a968-de88cff2879e"
+      ]
+    }
+  ],
+  "importedCourseUserMeta": {},
+  "graduationProfile": {
+    "admissionYear": null,
+    "currentStudyYear": null,
+    "admissionType": "unknown",
+    "recognizedCredits": {
+      "totalCredits": null,
+      "schoolingEquivalentCredits": null,
+      "openUniversityCredits": null,
+      "general": {
+        "humanities": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "social": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "natural": {
+          "mode": "unknown",
+          "credits": null
+        }
+      },
+      "foreignLanguage": {
+        "mode": "unknown",
+        "credits": null,
+        "language": "unknown",
+        "schoolingEquivalentCredits": null
+      },
+      "physicalEducation": {
+        "mode": "unknown",
+        "credits": null
+      },
+      "professionalCourses": []
+    },
+    "curriculumApplicability": "current_2026"
+  }
+}
