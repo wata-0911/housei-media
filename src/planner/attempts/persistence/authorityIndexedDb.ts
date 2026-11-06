@@ -1,6 +1,8 @@
 import { emptyAuthority, type AtomicAttemptStore, type AuthorityRecord } from './contracts';
 import { requireAttemptAuthority } from './authorityFormat';
 import { sameAttemptData } from '../validation';
+import { isAuthorityJsonTree } from './authorityData';
+import { freeze } from '../migration/contracts';
 
 const DATABASE = 'hosei-yi06-isolated-v1';
 const STORE = 'authority';
@@ -37,7 +39,7 @@ export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemp
       const original = await readOriginal();
       // stored undefined has an explicit tag below; nested undefined, Map,
       // Date, non-finite numbers, extended arrays, etc. have no lossless JSON.
-      if (original.exists && original.value !== undefined && !sameAttemptData(original.value, original.value))
+      if (original.exists && original.value !== undefined && !isAuthorityJsonTree(original.value))
         throw new Error('protection_unrepresentable: original remains in IndexedDB');
       return JSON.stringify({ format: 'hosei-authority-record-protection', protectionVersion: 1,
         database: DATABASE, store: STORE, key: 'current', ...original,
@@ -51,7 +53,15 @@ export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemp
       return original.value;
     },
     async commit(expected, next, beforePut: () => void = () => {}) {
+      // Inspect originals before clone can erase unknown properties or aliases.
       requireAttemptAuthority(expected); requireAttemptAuthority(next);
+      const expectedSnapshot = freeze(structuredClone(expected));
+      const nextSnapshot = freeze(structuredClone(next));
+      requireAttemptAuthority(expectedSnapshot); requireAttemptAuthority(nextSnapshot);
+      if (nextSnapshot.revision !== expectedSnapshot.revision + 1 || nextSnapshot.raw === null
+        || expectedSnapshot.committed.some(digest => !nextSnapshot.committed.includes(digest))
+        || expectedSnapshot.issuedIds.some(id => !nextSnapshot.issuedIds.includes(id)))
+        throw new Error('authority_history_regression');
       return new Promise<void>((resolve, reject) => {
         const req = factory.open(DATABASE, 1);
         let failure: Error | null = null, upgraded = false, stopped = false;
@@ -69,13 +79,18 @@ export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemp
               // supplies the specific format diagnosis without any write.
               failure = new Error('stale_commit'); tx.abort(); return;
             }
-            if (!sameAttemptData(current, expected)) {
+            if (!sameAttemptData(current, expectedSnapshot)) {
               failure = new Error('stale_commit'); tx.abort(); return;
             }
             try {
               // Synchronous host check inside BOTH transaction kinds. Nothing
               // asynchronous may run between this check and scheduling put.
-              beforePut(); bucket.put(next, 'current');
+              // Caller-owned objects may change while open/transaction waits.
+              // They can only cancel this call, never change its CAS or put.
+              requireAttemptAuthority(expected); requireAttemptAuthority(next);
+              if (!sameAttemptData(expected, expectedSnapshot) || !sameAttemptData(next, nextSnapshot))
+                throw new Error('authority_input_changed');
+              beforePut(); bucket.put(nextSnapshot, 'current');
             }
             catch (error) { failure = error instanceof Error ? error : new Error(String(error)); tx.abort(); }
           };

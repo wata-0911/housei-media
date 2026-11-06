@@ -166,8 +166,48 @@ This check also applies to adopted migration/correction archives.
 
 Destination read/format/replay failures revoke proposals and editing authority.
 Input syntax errors consume the input generation without pretending the host is
-corrupt. File selection increments its generation before `File.text()`. New
+corrupt. File selection increments its generation before reading bytes. New
 selection, input cancellation, confirmation cancellation, reload and unmount
 invalidate pending reads. `invalidatePreviews()` revokes session confirmations;
 only a matching final selection may create the next preview. A confirmed write
 already in progress still resolves through its transaction/readback contract.
+
+## F01-R2: verified knowledge and byte archives
+
+Write authority and verified host knowledge have independent lifetimes. A full
+readback must match the written four-field record and pass checkpoint/replay;
+that verified snapshot becomes known history before subsequent legacy reads or
+admission checks. Full verified loads likewise remember history before policy
+checks. Failed raw reads and failed replay never add knowledge. Losing edit
+permission or reloading does not clear knowledge. Missing known reservations
+stop load/restore/normal backup without repair; an intact current remains usable
+through explicit reload. A failed save still displays failure.
+
+The native adapter rejects non-JSON object graphs including sibling aliases,
+not just cycles. Both expected and next must have valid, unique UUID-tail
+reservations. Revisions advance by one, host checkpoint/ID histories cannot
+shrink, and next cannot clear raw. Both parameters are validated before cloning
+and bound to frozen private snapshots before any asynchronous work. A later
+caller mutation detected before the host's beforePut check cancels the write;
+CAS/put only use private snapshots. The trusted synchronous beforePut remains
+immediately adjacent to put. Diagnostic export refuses shared object/array
+references because ordinary JSON cannot preserve them.
+
+Selected migration files are limited to16 MiB using File.size BEFORE reading.
+The returned ArrayBuffer size is checked again. UTF-8 is decoded with fatal
+errors and checked by byte-for-byte re-encoding. A leading UTF-8 BOM is rejected
+explicitly; it is never stripped. Interior U+FEFF and a genuinely encoded
+U+FFFD remain ordinary original text. Unsupported/malformed files stay untouched
+on the user's filesystem and produce no preview or put. Selection epochs cover
+byte acquisition and decoding, including replacement/cancellation/unmount.
+
+Attempt backup envelopes have a separate64 MiB UTF-8 preflight. Decimal tokens
+must preserve their normalized value before the historical backup parser/digest
+runs. Strings such as source.raw are skipped as quoted tokens. Legacy migration
+keeps its16 MiB policy and final authority records keep their32 MiB limit.
+These are resource limits, not a new portable format or permission to repair an
+unknown record. Unseen past host history, non-cooperating writers after the last
+synchronous check, ABA and physical power-loss recovery still need F04 acceptance.
+
+The future Attempt-restore file UI must apply the same strict byte boundary with
+its64 MiB policy. F01-R2 does not add that UI or connect the normal Planner.

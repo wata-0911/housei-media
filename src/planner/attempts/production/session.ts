@@ -14,7 +14,7 @@ import { admissionProblem } from './admission';
 import { emptyLegacySnapshot, inspectAuthorityAdmission, readLegacySnapshot, sameLegacySnapshot,
   sameLegacySource, unavailableAdmission, type AuthorityAdmission, type LegacySnapshot } from './authorityAdmission';
 import { decodeMigrationSource, type prepareMigrationEnvironment } from '../migration/source';
-import { inspectMigrationInput } from './migrationInput';
+import { inspectMigrationInput, inspectAttemptBackupInput } from './migrationInput';
 import { requireAttemptAuthority } from '../persistence/authorityFormat';
 import type { Attempt, AttemptId, AttemptOperationId, AttemptOwnedRecord, OwnedRecordId } from '../types';
 import type { AtomicAttemptStore, AuthorityRecord } from '../persistence/contracts';
@@ -74,6 +74,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
   let handle: PersistenceHandle | null = null, workspace: Workspace | null = null;
   let commands: Command[] = [], generation = 0, pending = false, reloadRequired = false;
   let admission: AuthorityAdmission | null = null, legacyExpected: LegacySnapshot | null = null;
+  let knownRecord: AuthorityRecord | null = null;
   let observedRecord: AuthorityRecord | null = null, lastRead: AuthorityRecord | null = null, readFence: AuthorityRecord | null = null;
   let saving: { written: AuthorityRecord | null; readback: AuthorityRecord | null; readingBack: boolean } | null = null;
   const proposals = new WeakMap<object, { generation: number; preview: PersistencePreview }>();
@@ -86,15 +87,15 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
         // Explicit reload may adopt a newer plan/checkpoint, but cannot erase
         // host history this session already witnessed. Keep this across load()
         // failures too; a missing rollback tombstone is not repaired by reload.
-        if (observedRecord && (current.revision < observedRecord.revision
-          || observedRecord.committed.some(digest => !current.committed.includes(digest))
-          || observedRecord.issuedIds.some(id => !current.issuedIds.includes(id))
-          || (current.revision === observedRecord.revision && !sameAttemptData(current, observedRecord))))
-          throw new Error('stale_authority_history_requires_review');
+        const missing = knownRecord?.issuedIds.filter(id => !current.issuedIds.includes(id)) ?? [];
+        if (knownRecord && (current.revision < knownRecord.revision
+          || knownRecord.committed.some(digest => !current.committed.includes(digest))
+          || missing.length
+          || (current.revision === knownRecord.revision && !sameAttemptData(current, knownRecord))))
+          throw new Error(`stale_authority_history_requires_review: missing_known_reservations=${missing.length}`);
         if (readFence && !sameAttemptData(current, readFence)) throw new Error('stale_authority_requires_reload');
       } catch (error) { revoke(error); throw error; }
       lastRead = structuredClone(current);
-      allocator.restrict(current.issuedIds);
       if (saving?.readingBack) {
         if (saving.readback) throw new Error('save_readback_conflict');
         // This exact snapshot is returned to the pinned verifier. No extra
@@ -119,6 +120,12 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       attempt.written = written;
     },
   }, locks, environment);
+  function rememberVerified(record: AuthorityRecord) {
+    // Knowledge survives failures of permissions/admission. Call only AFTER a
+    // complete witness/replay, never from raw reads or optimistic writes.
+    allocator.restrict(record.issuedIds);
+    knownRecord = structuredClone(record);
+  }
   function revoke(error: unknown) {
     reloadRequired = true; generation++; admission = unavailableAdmission(error);
   }
@@ -131,7 +138,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
     // Fully witness/replay the destination, even for a known rollback checkpoint.
     // Every later controller read remains fenced to this same four-field record.
     try {
-      const h = await api.load(); if (h) requireSupportedHistory(h); return h;
+      const h = await api.load(); rememberVerified(lastRead!); if (h) requireSupportedHistory(h); return h;
     } catch (error) { revoke(error); throw error; }
   }
   function requireLegacyUnchanged() {
@@ -143,6 +150,8 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
     try {
       const legacy = Object.freeze({ ...readLegacy() });
       const h = await api.load();
+      rememberVerified(lastRead!);
+      if (h) requireSupportedHistory(h);
       const status = await inspectAuthorityAdmission(legacy, h, decodeLegacy);
       if (!sameLegacySnapshot(legacy, readLegacy())) throw new Error('legacy_changed_requires_reload');
       legacyExpected = legacy; admission = status; observedRecord = structuredClone(lastRead!);
@@ -219,7 +228,6 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       handle = null; workspace = null; commands = [];
       try {
         const h = await observe();
-        if (h) requireSupportedHistory(h);
         return adopt(h);
       } catch (error) { admission = unavailableAdmission(error); throw error; }
     }); },
@@ -253,6 +261,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
     async prepareRestore(raw: string) { return exclusive(async () => {
       if (reloadRequired) throw new Error('session_requires_reload');
       const stamp = ++generation;
+      inspectAttemptBackupInput(raw);
       if (!admission) await observe();
       requireLegacyUnchanged();
       if (!admission?.canCreate && !admission?.canEdit && !admission?.canMigrate) throw new Error('authority_restore_blocked');
@@ -311,6 +320,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
         if (!reloaded || !attempt.written || !attempt.readback
           || !sameAttemptData(attempt.readback, attempt.written)
           || !sameAttemptData(reloaded.state, committed.state)) throw new Error('save_readback_conflict');
+        rememberVerified(attempt.readback);
         requireSupportedHistory(reloaded);
         requireLegacyUnchanged();
         admission = await inspectAuthorityAdmission(legacyExpected!, reloaded, decodeLegacy);

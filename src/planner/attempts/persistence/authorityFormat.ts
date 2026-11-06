@@ -1,5 +1,6 @@
 import { exactKeys, STATE_FORMAT, type AuthorityRecord } from './contracts';
-import { sameAttemptData } from '../validation';
+import { isAuthorityJsonTree } from './authorityData';
+import { validateReservations } from './identity';
 
 /** Cheap infrastructure format guard, not checkpoint or replay authentication.
  * G03 stores a string at the same key; never treat it (or stored null/undefined)
@@ -8,13 +9,15 @@ export function requireAttemptAuthority(value: unknown): asserts value is Author
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('unsupported_authority_record');
   // Reject non-data properties, sparse/extended arrays and non-plain objects
   // before cloning or JSON serialization can hide any of their information.
-  if (!sameAttemptData(value, value)) throw new Error('authority_corrupt');
+  if (!isAuthorityJsonTree(value)) throw new Error('authority_corrupt');
   exactKeys(value, ['raw', 'revision', 'committed', 'issuedIds'], 'authority');
   const v = value as AuthorityRecord;
   if (!Number.isSafeInteger(v.revision) || v.revision < 0 || !Array.isArray(v.committed) || !Array.isArray(v.issuedIds)
     || v.committed.some(s => typeof s !== 'string' || !/^[a-f0-9]{64}$/.test(s))
     || v.issuedIds.some(s => typeof s !== 'string')
     || new Set(v.committed).size !== v.committed.length || new Set(v.issuedIds).size !== v.issuedIds.length) throw new Error('authority_corrupt');
+  try { validateReservations(v.issuedIds); }
+  catch { throw new Error('authority_reservation_invalid'); }
   if (v.raw === null) {
     if (v.revision !== 0 || v.committed.length || v.issuedIds.length) throw new Error('authority_corrupt');
     return;

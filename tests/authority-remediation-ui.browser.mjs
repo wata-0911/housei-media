@@ -11,7 +11,7 @@ async function setup(t){
  const context=await browser.newContext({acceptDownloads:true});t.after(async()=>{await context.close();await browser.close();await server.close();});
  const p=await context.newPage();p.setDefaultTimeout(90000);p.on('dialog',d=>d.accept());
  await p.addInitScript(()=>{window.puts=0;const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...a){window.puts++;return put.apply(this,a);};
-  const text=File.prototype.text;File.prototype.text=function(){if(this.name.startsWith('slow'))return new Promise((ok,fail)=>{window.releaseFile=()=>this.name.includes('fail')?fail(Error('obsolete read failure')):text.call(this).then(ok,fail);});return text.call(this);};});
+  const bytes=File.prototype.arrayBuffer;File.prototype.arrayBuffer=function(){if(this.name.startsWith('slow'))return new Promise((ok,fail)=>{window.releaseFile=()=>this.name.includes('fail')?fail(Error('obsolete read failure')):bytes.call(this).then(ok,fail);});return bytes.call(this);};});
  await p.goto(server.origin+'/__dev/ac');await p.getByTestId('save-status').filter({hasText:'新規計画を開始できます'}).waitFor();return p;
 }
 const picker=p=>p.getByLabel('旧schema22原文から明示移行');

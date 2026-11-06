@@ -7,6 +7,7 @@ import { AttemptPlanForm, type PlanDraft } from '../components/planner/instituti
 import { loadCurrentCurriculumSearchAdapter } from '../planner/institutional/currentSearch';
 import type { InstitutionalSearchRow } from '../planner/institutional/search';
 import { admissionProblem, createAcController } from '../planner/attempts/production/acController';
+import { readMigrationFile } from '../planner/attempts/production/migrationFile';
 import { protectLegacyPlannerRaw } from '../planner/attempts/production/session';
 import type { Attempt, AttemptGraph } from '../planner/attempts/types';
 import '../components/planner/institutional/institutionalSearch.css';
@@ -120,7 +121,7 @@ export default function InstitutionalPlannerPage() {
         const stamp = ++fileGeneration.current;
         controller.invalidateSelection(); setProtectionError('');
         const file = e.target.files?.[0]; e.target.value = '';
-        if (file) void file.text().then(raw => {
+        if (file) void readMigrationFile(file).then(raw => {
           if (stamp === fileGeneration.current) return controller.prepareMigration(raw);
         }).catch(error => { if (stamp === fileGeneration.current) setProtectionError(String(error)); });
       }} /></label>
