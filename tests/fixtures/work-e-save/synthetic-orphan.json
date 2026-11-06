@@ -1,0 +1,78 @@
+ {
+  "schemaVersion": 22,
+  "selectedScopeId": null,
+  "thesisSelection": "undecided",
+  "thesisProgressByScope": {},
+  "thesisGuidanceByScope": {},
+  "items": [],
+  "publicCourses": [],
+  "todos": [],
+  "mediaSchoolingProgress": {},
+  "courseEvaluations": {},
+  "correspondenceProgress": {},
+  "importedStudyRecords": [
+    {
+      "id": "abcd0123-0000-4000-8000-000000000003",
+      "fingerprint": "[\"社会学（秋期スクーリング）\",\"schooling\",\"2026\",\"夏\",null,2,\"B\",null,null]:0",
+      "source": "hosei_import",
+      "rawName": "社会学（秋期スクーリング）",
+      "offeringId": "ddf72fdc-c16a-4fc3-99ba-f52d4c5e1f7f",
+      "match": "exact_unique",
+      "method": "schooling",
+      "academicYear": 2026,
+      "yearSource": "source",
+      "rawYear": "2026",
+      "term": "夏",
+      "rawTerm": "夏",
+      "date": null,
+      "examDate": null,
+      "credits": 2,
+      "grade": "B",
+      "sourceCourseId": "abcd0123-0000-4000-8000-000000000004",
+      "earnedCreditsTotal": 2,
+      "schoolingCreditsTotal": 2,
+      "compositionCredits": 4,
+      "recognizedExemption": null,
+      "additionalEnrollment": null,
+      "capturedAt": "2026-01-02T03:04:05.000Z"
+    }
+  ],
+  "importedCourseAchievements": [],
+  "importedCourseUserMeta": {},
+  "graduationProfile": {
+    "admissionYear": null,
+    "currentStudyYear": null,
+    "admissionType": "unknown",
+    "recognizedCredits": {
+      "totalCredits": null,
+      "schoolingEquivalentCredits": null,
+      "openUniversityCredits": null,
+      "general": {
+        "humanities": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "social": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "natural": {
+          "mode": "unknown",
+          "credits": null
+        }
+      },
+      "foreignLanguage": {
+        "mode": "unknown",
+        "credits": null,
+        "language": "unknown",
+        "schoolingEquivalentCredits": null
+      },
+      "physicalEducation": {
+        "mode": "unknown",
+        "credits": null
+      },
+      "professionalCourses": []
+    },
+    "curriculumApplicability": "current_2026"
+  }
+}
