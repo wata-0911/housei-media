@@ -58,7 +58,12 @@ export function createIndexedDbAttemptStore(factory: IDBFactory): AtomicAttemptS
               if (key.result === undefined && !upgraded) throw new Error('authority_record_missing');
               current = key.result === undefined ? emptyAuthority() : get.result;
               requireAttemptAuthority(current);
-            } catch (error) { failure = error instanceof Error ? error : new Error(String(error)); tx.abort(); return; }
+            } catch {
+              // Foreign/missing current cannot match a verified Attempt
+              // expectation. Keep the existing CAS error contract; read()
+              // supplies the specific format diagnosis without any write.
+              failure = new Error('stale_commit'); tx.abort(); return;
+            }
             if (current.raw !== expected.raw || current.revision !== expected.revision
               || JSON.stringify(current.committed) !== JSON.stringify(expected.committed)
               || JSON.stringify(current.issuedIds) !== JSON.stringify(expected.issuedIds)) {

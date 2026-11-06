@@ -55,7 +55,7 @@ test(`H native ${label}: read/commit refuse and protection preserves original`,a
   const load=await error(()=>api.load()),commit=await error(()=>store.commit(m.emptyAuthority(),next));
   return {load,commit,puts,protection:JSON.parse(await api.protectCurrent()),case:api.admission().case};
  },validRecord);
- assert.notEqual(r.load,'SUCCESS');assert.notEqual(r.commit,'SUCCESS');assert.equal(r.puts,0);assert.equal(r.case,'H');assert.equal(r.protection.keyExists,!missing);
+ assert.notEqual(r.load,'SUCCESS');assert.equal(r.commit,'stale_commit');assert.equal(r.puts,0);assert.equal(r.case,'H');assert.equal(r.protection.keyExists,!missing);
  if(value===undefined)assert.equal(r.protection.valueType,'undefined');else if(!missing)assert.deepEqual(r.protection.value,value);
 });
 test('G03 actual initialized host blocks ABC in both directions; no namespace changes',async t=>{
@@ -66,7 +66,7 @@ test('G03 actual initialized host blocks ABC in both directions; no namespace ch
   const load=await error(()=>api.load()),commit=await error(()=>store.commit(m.emptyAuthority(),next));
   const protection=JSON.parse(await api.protectCurrent());return {load,commit,before,after:await native.read(),protection};
  },validRecord);
- assert.notEqual(r.load,'SUCCESS');assert.notEqual(r.commit,'SUCCESS');assert.deepEqual(r.before,r.after);assert.equal(r.protection.value,r.before.value);
+ assert.notEqual(r.load,'SUCCESS');assert.equal(r.commit,'stale_commit');assert.deepEqual(r.before,r.after);assert.equal(r.protection.value,r.before.value);
  const second=await fresh(t);await seed(second.page,validRecord);
  const inverse=await second.page.evaluate(async()=>{
   const native=m.createNativeHostStore(indexedDB),before=await store.read();
