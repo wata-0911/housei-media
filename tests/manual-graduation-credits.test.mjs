@@ -59,15 +59,17 @@ test('P1 pre-fix reproduction: 債権総論 T2 is incomplete and earns no comple
   { contribution: 2, earned: 2, completion: 'incomplete', elective: 0, courses: 0, structured: 0, professional: 0, overall: 0 });
 });
 
-for (const mode of ['T4', 'T2+S2', 'T2+T2', 'excess', 'legacy-default']) test(`P1 safe completion ${mode} counts exactly one Course`, () => {
+for (const mode of ['T4', 'T2+S2', 'T2+T2', 'excess', 'legacy-default']) test(`P1 completion boundary ${mode} retains raw quantities`, () => {
   const x = fixture();
   const items = [item(x.offering, mode === 'T4' || mode === 'excess' ? 4 : mode === 'legacy-default' ? undefined : 2)];
   if (mode === 'legacy-default') delete items[0].courseCreditContribution;
   if (mode.includes('+') || mode === 'excess') items.push(item(x.addAttempt('second', mode === 'T2+S2' ? 'schooling' : 'correspondence')));
   const p = x.run(items), c = deriveCurriculumCourseProgress(items, x.f).courses[0];
-  assert.equal(c.completion, 'complete');
+  const held = ['T2+S2', 'T2+T2'].includes(mode);
+  assert.equal(c.completion, held ? 'unknown' : 'complete');
   assert.deepEqual([card(p, 'professional-law-required-elective').earned, lawCount(p), lawRule(x, p).earned,
-    card(p, 'professional-law-total').earned, overall(p)], [4, 1, 4, 4, 4]);
+    card(p, 'professional-law-total').earned, overall(p)], held ? [0, 0, 0, 0, 0] : [4, 1, 4, 4, 4]);
+  if (held) assert.ok(c.warnings.some(w => /保留/.test(w)));
 });
 
 test('P1 Course identity wins over shared names and mapping edges', () => {
@@ -79,12 +81,12 @@ test('P1 Course identity wins over shared names and mapping edges', () => {
   assert.deepEqual([card(p, 'professional-law-required-elective').earned, lawCount(p), lawRule(x, p).earned, overall(p)], [0, 0, 0, 0]);
 });
 
-test('P1 equivalent mapping edges and separate annual openings complete one institutional Course', () => {
+test('P1 equivalent mapping edges preserve held mixed evidence and count a valid T4 once', () => {
   const x = fixture(), alias = { ...x.mapping, mappingId: 'equivalent-map' };
   x.f.mappings.push(alias); x.course.mappingIds.push(alias.mappingId);
   const second = x.addAttempt('S', 'schooling', 2, x.course.id, [alias.mappingId]);
   const p = x.run([item(x.offering), item(second)]);
-  assert.deepEqual([card(p, 'professional-law-required-elective').earned, lawCount(p), lawRule(x, p).earned, overall(p)], [4, 1, 4, 4]);
+  assert.deepEqual([card(p, 'professional-law-required-elective').earned, lawCount(p), lawRule(x, p).earned, overall(p)], [0, 0, 0, 0]);
   x.offering.mappingIds.push(alias.mappingId);
   assert.equal(lawRule(x, x.run([item(x.offering, 4)])).earned, 4, 'equivalent edges do not double-count an attempt');
 });

@@ -144,7 +144,8 @@
       }
     },
     "expected": {
-      "earned": 1
+      "earned": 0,
+      "status": "unknown"
     }
   }
 ]

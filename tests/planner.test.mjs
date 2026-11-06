@@ -598,7 +598,7 @@ test('partial graduation progress uses earned only and includes common plus sele
   const scope = catalog.programs.find(program => !program.isCommon).scopeId;
   const common = catalog.programs.find(program => program.isCommon).scopeId;
   const baseMapping = catalog.mappings[0];
-  const baseOffering = catalog.offerings[0];
+  const baseOffering = { ...catalog.offerings[0], method: 'correspondence' };
   const requirements = [
     { id: 'common-rule', ruleId: 'common-rule', scopeId: common, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '一般教育' }, value: 4, unit: 'credits', conditions: null },
     { id: 'selected-rule', ruleId: 'selected-rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 4, unit: 'credits', conditions: null },
@@ -606,8 +606,8 @@ test('partial graduation progress uses earned only and includes common plus sele
   const fixture = {
     ...catalog,
     mappings: [
-      { ...baseMapping, mappingId: 'common-map', scopeId: common, category: '一般教育', field: '人文', requirementType: null },
-      { ...baseMapping, mappingId: 'selected-map', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+      { ...baseMapping, mappingId: 'common-map', scopeId: common, category: '一般教育', field: '人文', requirementType: null, curriculumCredits: 4 },
+      { ...baseMapping, mappingId: 'selected-map', scopeId: scope, category: '専門教育', field: null, requirementType: null, curriculumCredits: 4 },
     ],
     offerings: [
       { ...baseOffering, id: 'earned-common', credits: 4, resolutionStatus: 'matched', mappingIds: ['common-map'] },
@@ -658,7 +658,7 @@ test('structured course-count conditions require completed curriculum courses an
     offerings: [
       { ...catalog.offerings[0], id: 'first-part', curriculumCourseId: 'first-course', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
       { ...catalog.offerings[0], id: 'first-rest', curriculumCourseId: 'first-course', credits: 2, resolutionStatus: 'matched', mappingIds: ['first-course'] },
-      { ...catalog.offerings[0], id: 'second', curriculumCourseId: 'second-course', credits: 4, resolutionStatus: 'matched', mappingIds: ['second-course'] },
+      { ...catalog.offerings[0], id: 'second', method: 'correspondence', curriculumCourseId: 'second-course', credits: 4, resolutionStatus: 'matched', mappingIds: ['second-course'] },
     ],
     requirements: [
       { id: 'eight-credits-two-courses', ruleId: 'eight-credits-two-courses', scopeId: scope, sourcePage: 47, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育', requirement_type: '選択必修' }, value: 8, unit: 'credits', conditions: { full_course_credits_required: true, min_courses: 2 } },
@@ -668,8 +668,8 @@ test('structured course-count conditions require completed curriculum courses an
   const evaluate = items => calculateGraduationProgress(items, fixture, scope).requirements;
   assert.deepEqual(evaluate([item('first-part', 'earned'), item('second', 'earned')]).map(row => row.status), ['unsatisfied', 'unknown']);
   const completed = evaluate([item('first-part', 'earned'), item('first-rest', 'earned'), item('second', 'earned')]);
-  assert.equal(completed[0].status, 'satisfied');
-  assert.equal(completed[0].earned, 8);
+  assert.equal(completed[0].status, 'unknown');
+  assert.equal(completed[0].earned, 4);
   assert.equal(completed[1].earned, null);
   assert.match(completed[1].reason, /条件または例外|必要値/);
 });
@@ -680,11 +680,11 @@ test('one offering with duplicate matching mappings is counted once and outside-
   const fixture = {
     ...catalog,
     mappings: [
-      { ...base, mappingId: 'map-a', scopeId: scope, category: '専門教育', field: null, requirementType: null },
-      { ...base, mappingId: 'map-b', scopeId: scope, category: '専門教育', field: null, requirementType: null },
+      { ...base, mappingId: 'map-a', scopeId: scope, category: '専門教育', field: null, requirementType: null, curriculumCredits: 4 },
+      { ...base, mappingId: 'map-b', scopeId: scope, category: '専門教育', field: null, requirementType: null, curriculumCredits: 4 },
     ],
     offerings: [
-      { ...catalog.offerings[0], id: 'duplicate-edge', credits: 4, resolutionStatus: 'matched', mappingIds: ['map-a', 'map-b'] },
+      { ...catalog.offerings[0], id: 'duplicate-edge', method: 'correspondence', credits: 4, resolutionStatus: 'matched', mappingIds: ['map-a', 'map-b'] },
       { ...catalog.offerings[0], id: 'teacher', credits: 4, resolutionStatus: 'outside_mapping_scope', mappingIds: [] },
     ],
     requirements: [{ id: 'rule', ruleId: 'rule', scopeId: scope, sourcePage: 1, status: 'structured', ruleType: 'min_credits', target: { curriculum_category: '専門教育' }, value: 8, unit: 'credits', conditions: null }],
@@ -755,9 +755,9 @@ test('grouped requirements use earned credits, one language, and one mapped offe
   const maps = [
     ['human', '一般教育', '人文'], ['other', '一般教育', 'その他'],
     ['physical', '保健体育', null], ['english', '外国語', '英語'],
-    ['english-duplicate', '外国語', '英語'], ['german', '外国語', '独語'],
-  ].map(([mappingId, category, field]) => ({ ...base, mappingId, scopeId: common, category, field }));
-  const offering = (id, name, credits, method, mappingIds) => ({ ...catalog.offerings[0], id, name, credits, method, mappingIds, resolutionStatus: 'matched' });
+    ['english-duplicate', '外国語', '英語'], ['english-schooling', '外国語', '英語'], ['german', '外国語', '独語'],
+  ].map(([mappingId, category, field]) => ({ ...base, mappingId, scopeId: common, category, field, curriculumCredits: mappingId==='human'?4:mappingId==='other'?28:mappingId==='english-schooling'?1:2 }));
+  const offering = (id, name, credits, method, mappingIds) => ({ ...catalog.offerings[0], id, curriculumCourseId: `fixture:${id}`, name, credits, method, mappingIds, resolutionStatus: 'matched' });
   const fixture = {
     ...catalog, mappings: maps, offerings: [
       offering('literature', '文学', 4, 'correspondence', ['human']),
@@ -765,8 +765,8 @@ test('grouped requirements use earned credits, one language, and one mapped offe
       offering('health', '健康・スポーツ科学概論', 2, 'correspondence', ['physical']),
       offering('sport', 'スポーツ総合演習（春期）', 2, 'schooling', ['physical']),
       offering('english2', '英語2', 2, 'correspondence', ['english', 'english-duplicate']),
-      offering('englishS1', '英語S［1］', 1, 'schooling', ['english']),
-      offering('englishS2', '英語S［2］', 1, 'schooling', ['english']),
+      offering('englishS1', '英語S［1］', 1, 'schooling', ['english-schooling']),
+      offering('englishS2', '英語S［2］', 1, 'schooling', ['english-schooling']),
       offering('german2', '独語2', 2, 'correspondence', ['german']),
       offering('germanS', '独語S', 2, 'schooling', ['german']),
     ]
@@ -779,10 +779,9 @@ test('grouped requirements use earned credits, one language, and one mapped offe
   assert.ok(empty.cards.every(row => row.ruleType !== 'max_credits'));
   for (const [status, key] of [['planned', 'planned'], ['in_progress', 'inProgress'], ['earned', 'earned']]) {
     const general = card([item('literature', status)], 'general');
-    // The fixture mapping is a 2-credit curriculum row. A 4-credit offering
-    // may not inflate graduation credit beyond its official composition value.
-    assert.equal(general[key], status === 'earned' ? 2 : 4);
-    assert.equal(general.details[0][key], status === 'earned' ? 2 : 4);
+    // Use a valid four-credit correspondence subject for the positive grouping case.
+    assert.equal(general[key], 4);
+    assert.equal(general.details[0][key], 4);
     assert.equal(general.status, 'unsatisfied');
     const foreign = card([item('english2', status)], 'foreign');
     assert.equal(foreign[key], 2);
@@ -2243,9 +2242,9 @@ test('professional progress completes curriculum mappings before counting credit
     mappingId: 'buddhism', label: 'buddhism-summer', earned: 2, target: 4,
   }]);
   const completed = card([item('buddhism-summer', 'earned'), item('buddhism-winter', 'earned')], 'professional-geography-elective');
-  assert.equal(completed.earned, 4);
+  assert.equal(completed.earned, 0);
   assert.equal(completed.details, undefined);
-  assert.deepEqual(completed.partialCourses, []);
+  assert.equal(completed.partialCourses[0].earned, 4);
   const referenceOnly = card([item('buddhism-summer', 'planned'), item('buddhism-winter', 'in_progress')], 'professional-geography-elective');
   assert.equal(referenceOnly.earned, 0);
   assert.deepEqual(referenceOnly.partialCourses, []);
@@ -2259,7 +2258,7 @@ test('professional progress completes curriculum mappings before counting credit
     item('human-summer', 'earned'), item('human-winter', 'earned'),
     item('natural-summer', 'earned'), item('natural-winter', 'earned'),
   ], 'professional-geography-required-elective');
-  assert.equal(geographyRequired.details[0].earned, 4);
+  assert.equal(geographyRequired.details[0].earned, 0);
   assert.equal(geographyRequired.details[0].unit, 'credits');
   assert.equal(geographyRequired.status, 'unsatisfied');
 });
@@ -2299,8 +2298,8 @@ test('professional mapping aggregation counts duplicate edges once and safely ho
   ]);
   const lawCard = items => calculateGraduationProgress(items, law.catalog, law.scope).cards.find(row => row.requirementId === 'professional-law-required-elective');
   const partial = lawCard([item('law-a-1', 'earned'), item('law-a-2', 'earned'), item('law-b', 'earned')]);
-  assert.equal(partial.details[0].earned, 2);
-  assert.equal(partial.earned, 8);
+  assert.equal(partial.details[0].earned, 1);
+  assert.equal(partial.earned, 4);
   assert.equal(partial.status, 'unsatisfied');
   const held = lawCard([item('law-a-1', 'earned'), item('unknown', 'earned')]);
   assert.equal(held.status, 'unknown');
@@ -2311,7 +2310,7 @@ test('professional mapping aggregation counts duplicate edges once and safely ho
   ]);
   const duplicateCard = calculateGraduationProgress(duplicate.catalog.offerings.map(o => item(o.id, 'earned')), duplicate.catalog, duplicate.scope)
     .cards.find(row => row.requirementId === 'professional-geography-elective');
-  assert.equal(duplicateCard.earned, 4);
+  assert.equal(duplicateCard.earned, 0);
 });
 
 test('geography field course minimums and official repeatable professional limits apply', () => {
@@ -3548,7 +3547,7 @@ test('official-audit: Japanese literature and geography professional 82 totals f
     const mapping = fixture.catalog.mappings[0]; const offering = fixture.catalog.offerings[0];
     const common = [
       ['common-human', '一般教育', '人文', 12, 'correspondence'], ['common-social', '一般教育', '社会', 12, 'correspondence'], ['common-natural', '一般教育', '自然', 12, 'correspondence'],
-      ['common-foreign', '外国語', '英語', 4, 'schooling'], ['common-physical', '保健体育', null, 2, 'schooling'],
+      ...Array.from({length:4},(_,i)=>[`common-foreign${i}`, '外国語', '英語', 1, 'schooling']), ['common-physical', '保健体育', null, 2, 'schooling'],
     ];
     fixture.catalog.mappings.push(...common.map(([mappingId, category, field, credits]) => ({ ...mapping, mappingId, scopeId: commonScope, category, field, requirementType: null, curriculumCredits: credits })));
     fixture.catalog.offerings.push(...common.map(([id, category, field, credits, method]) => ({ ...offering, id, name: id === 'common-physical' ? '健康・スポーツ科学概論' : id, credits, method, mappingIds: [id], resolutionStatus: 'matched' })));
@@ -3557,7 +3556,7 @@ test('official-audit: Japanese literature and geography professional 82 totals f
     return fixture;
   };
   const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'first_year', curriculumApplicability: 'current_2026' };
-  const commonItems = ['common-human', 'common-social', 'common-natural', 'common-foreign', 'common-physical'].map(id => item(id, 'earned'));
+  const commonItems = ['common-human', 'common-social', 'common-natural', 'common-foreign0', 'common-foreign1', 'common-foreign2', 'common-foreign3', 'common-physical'].map(id => item(id, 'earned'));
   const japanese = withCommon42(professionalFixture('日本文学科', [['required', '必修', null, 20], ['required-elective', '選択必修', null, 30], ['elective', '選択', null, 24]], [['required', 20, ['required']], ['required-elective', 30, ['required-elective']], ['elective', 24, ['elective']]]));
   const japaneseProgress = calculateGraduationProgress([...commonItems, item('required', 'earned'), item('required-elective', 'earned'), item('elective', 'earned')], japanese.catalog, japanese.scope, [], 'selected', [], [], profile, { selection: 'selected', status: 'earned' });
   assert.equal(japaneseProgress.cards.find(card => card.requirementId === 'professional-japanese-total').earned, 82);

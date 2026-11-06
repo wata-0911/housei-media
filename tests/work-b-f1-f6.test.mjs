@@ -16,7 +16,7 @@ for(const p of programs){
     // Generate valid independent IDs via existing constructor; preserve the audited identity/placement.
     const placement=source.context.catalog.placements.find(p=>p.id===a.placement.candidatePlacementIds[0]||p.id===a.placement.ref?.placementId);
     return newAttempt(source.context.catalog,placement,n,'earned','correspondence');});delete x.raw;
-  const r=await run(x,p.scopeId);assert.equal(r.courses.length,0);assert.ok(r.holds.length);
+  const r=await run(x,p.scopeId);assert.ok(r.courses.every(c=>c.completedCredits===0));assert.ok(r.holds.length);
  });
 }
 for(const n of [0,1,3,4,5,6])test(`F3 independence boundary ${n}`,async()=>{

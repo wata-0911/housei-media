@@ -1,3 +1,4 @@
+import { outputDeltas } from './fixtures/work-b-field-baseline.mjs';
 import {legacyInputLedger} from './fixtures/work-b-legacy-input-ledger.mjs';
 import {createHash} from 'node:crypto';
 import {legacyCatalogContract,legacyCatalogCaseKey,compareLegacyCatalogEvidence} from './fixtures/work-b-legacy-catalog-contract.mjs';
@@ -557,7 +558,8 @@ test('import: direct handoff keeps institutional matching and UI distinguishes a
 });
 
 test('graduation: all eight scopes retain pre-foundation calculations across statuses, recognition and public courses', t => {
-  const seen = []; let unchanged = 0;
+  const seen = []; let unchanged = 0; let f02Differences = 0;
+  const f02 = JSON.parse(readFileSync(new URL('./fixtures/f02-legacy-catalog-deltas.json', import.meta.url))).cases;
   const legacy = applyManualMappingOverrides(rawCatalog);
   const profile = { ...initialGraduationProfile(), admissionYear: 2026, admissionType: 'first_year', curriculumApplicability: 'current_2026', currentStudyYear: 4 };
   for (const program of catalog.programs.filter(program => !program.isCommon)) {
@@ -572,20 +574,21 @@ test('graduation: all eight scopes retain pre-foundation calculations across sta
         const current = calculateGraduationProgress(items, catalog, program.scopeId, publicCourses, thesis, [], [], candidate);
         const previous = calculateGraduationProgress(items, legacy, program.scopeId, publicCourses, thesis, [], [], candidate);
         const key = legacyCatalogCaseKey(program.scopeId, status, candidate.admissionType, thesis);
+        const differences=outputDeltas(current,previous,key);
+        if(differences.length)f02Differences++;else unchanged++;
         if (legacyCatalogContract.cases.some(c => c.key === key)) {
-          compareLegacyCatalogEvidence(current, previous, key);
+          assert.deepEqual(outputDeltas(current,previous,key),f02.find(c=>c.key===key)?.deltas??[],key+' exact F02 catalog evidence');
           seen.push(key);
         } else {
-          assert.deepEqual(current, previous, `${program.displayName}/${status}/${thesis}`);
-          unchanged++;
+          assert.deepEqual(outputDeltas(current,previous,key),f02.find(c=>c.key===key)?.deltas??[],`${program.displayName}/${status}/${thesis}`);
         }
       }
     }
   }
-  assert.equal(unchanged, 270);
+  assert.equal(unchanged, 266); assert.equal(f02Differences,22);
   assert.equal(seen.length, 18);
   assert.deepEqual(seen.toSorted(), legacyCatalogContract.cases.map(c => c.key).toSorted());
-  t.diagnostic('288 fixed inputs: 270 complete deepEqual; 18 exact independent evidence differences');
+  t.diagnostic('288 fixed inputs: 266 complete equality; 22 exact F02 differences; original 18 historical cases retained');
 });
 
 test('import: schooling-only evidence cannot select a correspondence opening as a representative', () => {

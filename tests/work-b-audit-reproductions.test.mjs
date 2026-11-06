@@ -16,5 +16,5 @@ for(const id of Object.keys(samples))test(`audit ${id}`,async()=>{
  if(id==='F3') assert.ok(r.holds.some(h=>h.reason==='repeatable_independence_unverified'));
  if(id==='F4') {const row=r.progress.requirements.find(x=>x.requirementId===samples[id].expected.requirementId);assert.equal(row.earned,1);assert.equal(row.status,'satisfied');}
  if(id==='F5') {assert.ok(r.holds.length);assert.ok(r.courses.every(c=>Number.isFinite(c.recordedEarned??0)));}
- if(id==='F6') {assert.ok(r.holds.some(h=>h.reason==='unsupported_course_component_structure'));assert.equal(r.courses.length,0);}
+ if(id==='F6') {assert.ok(r.holds.some(h=>h.reason==='unsupported_course_component_structure'));assert.ok(r.courses.every(c=>c.completedCredits===0));}
 });

@@ -13,10 +13,10 @@ const placement = master.placements.find(p => p.scopeId === common && p.composit
 const graph = attempts => JSON.stringify({ attempts, ownedRecords: [], removals: [] });
 const attempt = (method, credits, status = 'earned', p = placement) => newAttempt(master, p, credits, status, method);
 for (const program of programs) {
-  for (const [name, parts, expected] of [['T2',[['correspondence',2]],0],['T2+S2',[['correspondence',2],['schooling',2]],4],['T4',[['correspondence',4]],4]]) {
+  for (const [name, parts, expected] of [['T2',[['correspondence',2]],0],['T2+S2',[['correspondence',2],['schooling',2]],0],['T4',[['correspondence',4]],4]]) {
     test(`positive ${program.displayName} ${name}`, async () => {
       const r = await calculateRecordedCredits(graph(parts.map(([m,c])=>attempt(m,c))),source,program.scopeId);
-      assert.equal(r.status,'calculated'); assert.deepEqual(r.holds,[]);
+      assert.equal(r.status,'calculated'); assert.deepEqual(r.holds.map(h=>h.reason),name==='T4'?[]:Array(parts.length).fill(name==='T2'?'course_components_incomplete':'mixed_completion_evidence_required'));
       assert.equal(r.courses[0].completedCredits,expected);
       assert.equal(r.progress.cards.find(c=>c.requirementId==='group-general').earned,expected);
       assert.equal(r.courses[0].schoolingCredits,name==='T2+S2'?2:0);

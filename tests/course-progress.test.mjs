@@ -613,9 +613,9 @@ test('contribution summaries: source-linked metadata cannot override official4 o
   }
 });
 
-test('2+2: schooling earned2 plus correspondence explicit2 completes4 without excess', () => {
+test('2+2: schooling earned2 plus correspondence explicit2 retains4 but holds unproven completion', () => {
   const f = fixture(); const p = progress(f, [item(f.offerings[0], 'earned'), { ...item(f.offerings[2], 'earned'), courseCreditContribution: 2 }]);
-  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion, p.projectedCompletion, p.earnedExcessCredits, p.projectedExcessCredits], [4, 4, 'complete', 'complete', 0, 0]);
+  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion, p.projectedCompletion, p.earnedExcessCredits, p.projectedExcessCredits], [4, 4, 'unknown', 'unknown', 0, 0]);
   assert.deepEqual(p.attempts.map(attempt => attempt.earnedContribution), [2, 2]);
 });
 test('2+2: correspondence explicit4 alone completes4; explicit independent6 retains excess2', () => {
@@ -632,11 +632,11 @@ for (const status of ['planned', 'in_progress', 'waiting']) test(`2+2: ${status}
     const rows = officialSource ? [official(f)] : [];
     const items = officialSource ? [correspondence] : [item(f.offerings[0], 'earned'), correspondence];
     const p = progress(f, items, rows);
-    assert.deepEqual([p.earnedCredits, p.projectedCredits, p.projectedCompletion, p.projectedExcessCredits], [2, 4, 'complete', 0]);
+    assert.deepEqual([p.earnedCredits, p.projectedCredits, p.projectedCompletion, p.projectedExcessCredits], [2, 4, officialSource ? 'complete' : 'unknown', 0]);
     const changed = updatePlannerItem(items, correspondence.offeringId, { status: 'earned' });
     assert.equal(changed.at(-1).courseCreditContribution, 2);
     const earned = progress(f, changed, rows);
-    assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.earnedExcessCredits], [4, 4, 'complete', 0]);
+    assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.earnedExcessCredits], [4, 4, officialSource ? 'complete' : 'unknown', 0]);
   }
 });
 for (const status of ['failed', 'dropped']) test(`2+2: ${status} explicit contribution remains0`, () => {
@@ -742,7 +742,7 @@ test('2+2 UI: only exact four-credit correspondence exposes a manual 2/4 selecto
   const linkedHtml = render(f, [linked], [row]);
   assert.doesNotMatch(linkedHtml, /<select /); assert.match(linkedHtml, /修得単位は公式集計を優先/);
 });
-test('2+2 UI: actual Economics schooling2 and correspondence explicit2 display completed4 with no excess', () => {
+test('2+2 UI: actual Economics mixed records display quantity4 with completion held', () => {
   const course = catalog.curriculum.courses.find(course => course.canonicalName === '経済学' && course.curriculumCredits === 4
     && catalog.offerings.some(offering => offering.curriculumCourseId === course.id && offering.method === 'schooling' && offering.credits === 2)
     && catalog.offerings.some(offering => offering.curriculumCourseId === course.id && offering.method === 'correspondence' && offering.credits === 4));
@@ -753,6 +753,7 @@ test('2+2 UI: actual Economics schooling2 and correspondence explicit2 display c
   assert.equal(result.courses[0].earnedCredits, 4); assert.equal(result.courses[0].earnedExcessCredits, 0);
   const html = renderToStaticMarkup(createElement(CourseProgress, { progress: result, catalog, onChange: () => {} }));
   assert.match(html, /修得済み 4 \/ 4/); assert.match(html, /予定込み 4 \/ 4/); assert.doesNotMatch(html, /超過候補/);
+  assert.match(html, /判定保留/); assert.match(html, /S2の成績が受験票発送予定日までに確定/);
 });
 
 test('course progress A: official exact earned2 with unknown opening plus planned2 gives earned2/projected4', () => {
@@ -778,9 +779,9 @@ test('CourseProgress retains separate earned attempts after planned2 becomes ear
     assert.equal(run(changed).graduationCheckComplete, false);
   }
 });
-test('course progress B: two different earned2 offerings complete a four-credit course', () => {
+test('course progress B: two different earned S2 offerings retain4 while independence is unproven', () => {
   const f = fixture(); const items = f.offerings.slice(0, 2).map(o => item(o, 'earned')); const p = progress(f, items);
-  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion, p.attempts.length], [4, 4, 'complete', 2]);
+  assert.deepEqual([p.earnedCredits, p.projectedCredits, p.completion, p.attempts.length], [4, 4, 'unknown', 2]);
   assert.equal(validateState({ ...initialState(), items }, f), true);
 });
 test('course progress C: correspondence earned4 completes a four-credit course', () => {

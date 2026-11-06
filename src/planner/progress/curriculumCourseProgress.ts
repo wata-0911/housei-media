@@ -1,3 +1,4 @@
+import { ordinaryCourseCompletion, ordinaryCompletionReason } from './ordinaryCourseCompletion';
 import type { ImportedCourseAchievement, ImportedStudyRecord } from '../gradeImport/gradeImportApply';
 import { deriveCalligraphyProgress, isCalligraphyCourse } from './calligraphyProgress';
 import type { CorrespondenceCourseProgress, GraduationProfile, CurriculumCourse, Offering, PlannerCatalog, PlannerItem } from '../plannerCatalog';
@@ -176,7 +177,17 @@ export function deriveCurriculumCourseProgress(
     const target = course.curriculumCredits;
     const completion = (credits: number, unknown: boolean): CourseCompletion => repeatable ? 'repeatable'
       : target === null || target <= 0 ? 'unknown' : credits >= target ? 'complete' : unknown ? 'unknown' : 'incomplete';
-    const earnedCompletion = completion(earnedCredits, unknownEarned);
+    const learnerCompletion = (projected: boolean) => ordinaryCourseCompletion(target, attempts
+      .filter(a => !a.officialEarnedPreferred && (projected ? ['earned', 'planned', 'in_progress', 'waiting'].includes(a.item.status) : a.item.status === 'earned'))
+      .map(a => ({ credits: plannerItemCreditContribution(a.item, a.offering), method: a.offering.method })));
+    const learnerEarned = learnerCompletion(false), learnerProjected = learnerCompletion(true);
+    const checkedCompletion = (credits: number, unknown: boolean, evidence: ReturnType<typeof ordinaryCourseCompletion>): CourseCompletion => {
+      // Official aggregates and repeat/special models keep their separate authority.
+      if (repeatable || group.official.length) return completion(credits, unknown);
+      return unknown || evidence.held ? 'unknown' : evidence.completedCredits > 0 ? 'complete' : 'incomplete';
+    };
+    const earnedCompletion = checkedCompletion(earnedCredits, unknownEarned, learnerEarned);
+    if (!repeatable && !group.official.length && learnerEarned.reason) warnings.push(ordinaryCompletionReason(learnerEarned.reason));
     if (unknownEarned || unknownProjected) warnings.push('修得単位または予定単位に不明な値があります。表示は確認できた単位のみです。');
     if (earnedCompletion === 'complete') warnings.push(COMPLETED_COURSE_ADVISORY);
     const excess = (credits: number) => repeatable || target === null ? 0 : Math.max(0, credits - target);
@@ -186,7 +197,7 @@ export function deriveCurriculumCourseProgress(
     if (group.official.length > 0 && attempts.some(attempt => attempt.item.status === 'earned' && !attempt.officialEarnedPreferred)) warnings.push('成績表とは別に修得済みとして記録された履修があります。卒業要件への正式反映には成績表の再取込を推奨します。');
     result.push({ curriculumCourseId: id, canonicalName: course.canonicalName, curriculumCredits: target,
       earnedCredits, projectedCredits, remainingCredits: target === null || unknownEarned ? null : Math.max(0, target - earnedCredits),
-      completion: earnedCompletion, projectedCompletion: completion(projectedCredits, unknownProjected || unknownEarned),
+      completion: earnedCompletion, projectedCompletion: checkedCompletion(projectedCredits, unknownProjected || unknownEarned, learnerProjected),
       earnedExcessCredits: excess(earnedCredits), projectedExcessCredits: excess(projectedCredits), repeatable,
       attempts, officialAchievements: group.official, warnings });
   }
