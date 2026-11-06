@@ -55,7 +55,13 @@ export function createAcController(session: Session = createBrowserPlannerAttemp
       if (!state.ready || state.graph || state.proposal) throw Error('空の計画でのみ明示移行できます。');
       publish({ proposal: await session.prepareMigration(raw), notice: '移行前の原文と保存内容を確認してください（まだ保存されていません）' });
     }),
-    cancel() { if (!state.busy) publish({ proposal: null, notice: state.dirty ? '未保存の下書きがあります' : '保存確認を取り消しました' }); },
+    invalidateSelection() {
+      session.invalidatePreviews(); publish({ proposal: null, calculation: null });
+    },
+    cancel() { if (!state.busy) {
+      session.invalidatePreviews();
+      publish({ proposal: null, notice: state.dirty ? '未保存の下書きがあります' : '保存確認を取り消しました' });
+    } },
     save: (proposal: Proposal, confirmed: boolean) => run(async () => {
       if (!state.ready || state.proposal !== proposal || !confirmed) throw Error('有効な保存確認が必要です。');
       publish({ proposal: null, ready: false, calculation: null, notice: '保存中…' });

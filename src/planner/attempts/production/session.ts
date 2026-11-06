@@ -14,6 +14,7 @@ import { admissionProblem } from './admission';
 import { emptyLegacySnapshot, inspectAuthorityAdmission, readLegacySnapshot, sameLegacySnapshot,
   sameLegacySource, unavailableAdmission, type AuthorityAdmission, type LegacySnapshot } from './authorityAdmission';
 import { decodeMigrationSource, type prepareMigrationEnvironment } from '../migration/source';
+import { inspectMigrationInput } from './migrationInput';
 import { requireAttemptAuthority } from '../persistence/authorityFormat';
 import type { Attempt, AttemptId, AttemptOperationId, AttemptOwnedRecord, OwnedRecordId } from '../types';
 import type { AtomicAttemptStore, AuthorityRecord } from '../persistence/contracts';
@@ -51,7 +52,7 @@ type SessionOptions = {
   migrationEnvironment?: () => Promise<MigrationEnvironment>;
   protectAuthority?: () => Promise<string>;
 };
-export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: PlannerWriteLocks | undefined, options: SessionOptions = {}) {
+export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit(expected: AuthorityRecord, next: AuthorityRecord, beforePut?: () => void): Promise<void> }, locks: PlannerWriteLocks | undefined, options: SessionOptions = {}) {
   const readLegacy = options.readLegacy ?? (() => {
     if (typeof window !== 'undefined') return readLegacySnapshot(window.localStorage);
     if (typeof indexedDB !== 'undefined') throw new Error('legacy_reader_required');
@@ -62,18 +63,29 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
     ? options.migrationEnvironment() : import('./migrationEnvironment').then(m => m.loadProductionMigrationEnvironment()));
   const decodeLegacy = async (raw: string) => {
     const env = await environment();
+    try { inspectMigrationInput(raw); }
+    catch (error) {
+      if (!(error instanceof SyntaxError)) return { status: 'held' as const, raw,
+        diagnostics: [{code: 'source_precision_or_resource', path: '', message: String(error)}] };
+    }
     return decodeMigrationSource(raw, env, env.origin);
   };
   const allocator = new SessionIdentityAllocator();
   let handle: PersistenceHandle | null = null, workspace: Workspace | null = null;
   let commands: Command[] = [], generation = 0, pending = false, reloadRequired = false;
   let admission: AuthorityAdmission | null = null, legacyExpected: LegacySnapshot | null = null;
+  let observedRecord: AuthorityRecord | null = null, lastRead: AuthorityRecord | null = null, readFence: AuthorityRecord | null = null;
   let saving: { written: AuthorityRecord | null; readback: AuthorityRecord | null; readingBack: boolean } | null = null;
   const proposals = new WeakMap<object, { generation: number; preview: PersistencePreview }>();
   const api = createAttemptPersistence({
     async read() {
-      const current = structuredClone(await store.read());
-      requireAttemptAuthority(current);
+      let current: AuthorityRecord;
+      try {
+        const original = await store.read(); requireAttemptAuthority(original);
+        current = structuredClone(original);
+        if (readFence && !sameAttemptData(current, readFence)) throw new Error('stale_authority_requires_reload');
+      } catch (error) { revoke(error); throw error; }
+      lastRead = structuredClone(current);
       allocator.restrict(current.issuedIds);
       if (saving?.readingBack) {
         if (saving.readback) throw new Error('save_readback_conflict');
@@ -95,10 +107,25 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
       if (new TextEncoder().encode(JSON.stringify(restricted)).byteLength > 32 * 1024 * 1024)
         throw new Error('capacity_limit: host reservation envelope exceeds 33554432 bytes');
       const written = structuredClone(restricted);
-      await store.commit(expected, restricted);
+      await store.commit(expected, restricted, requireLegacyUnchanged);
       attempt.written = written;
     },
   }, locks, environment);
+  function revoke(error: unknown) {
+    reloadRequired = true; generation++; admission = unavailableAdmission(error);
+  }
+  async function boundToObserved<T>(run: () => Promise<T>): Promise<T> {
+    if (!observedRecord) throw new Error('session_requires_reload');
+    readFence = structuredClone(observedRecord);
+    try { return await run(); } finally { readFence = null; }
+  }
+  async function verifyDestination() {
+    // Fully witness/replay the destination, even for a known rollback checkpoint.
+    // Every later controller read remains fenced to this same four-field record.
+    try {
+      const h = await api.load(); if (h) requireSupportedHistory(h); return h;
+    } catch (error) { revoke(error); throw error; }
+  }
   function requireLegacyUnchanged() {
     try {
       if (!legacyExpected || !sameLegacySnapshot(legacyExpected, readLegacy())) throw new Error('legacy_changed_requires_reload');
@@ -110,7 +137,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
       const h = await api.load();
       const status = await inspectAuthorityAdmission(legacy, h, decodeLegacy);
       if (!sameLegacySnapshot(legacy, readLegacy())) throw new Error('legacy_changed_requires_reload');
-      legacyExpected = legacy; admission = status;
+      legacyExpected = legacy; admission = status; observedRecord = structuredClone(lastRead!);
       return h;
     } catch (error) { reloadRequired = true; admission = unavailableAdmission(error); throw error; }
   }
@@ -133,6 +160,10 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
   }
   function adopt(h: PersistenceHandle | null) { reloadRequired = false; handle = h; workspace = h?.workspace ?? null; commands = []; generation++; return workspace?.graph ?? null; }
   function requireSupportedHistory(h: PersistenceHandle) {
+    if (h.source.kind !== 'new-plan') inspectMigrationInput(h.source.raw);
+    if (h.state.schemaVersion === 23) for (const correction of h.state.corrections) {
+      inspectMigrationInput(correction.originalRaw); inspectMigrationInput(correction.proposedRaw);
+    }
     // Rule1 reservations alone do not prove ordered nested-ID issuance, even
     // when a UUID happens to occur elsewhere in the host's reservation set.
     const payloads = [...h.workspace.graph.ownedRecords.filter(r=>r.kind==='media').map(r=>r.payload),
@@ -145,7 +176,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
     requireSupportedHistory(preview.handle);
     if (preview.action === 'migration' && preview.previousRaw !== null) throw new Error('existing_attempt_plan_requires_reload');
     const value = Object.freeze({ action: preview.action, bytes: preview.bytes, graph: preview.handle.workspace.graph,
-      protectionRaw: JSON.stringify({ previousRaw: preview.previousRaw, sourceRaw: preview.sourceRaw, legacy: legacyExpected,
+      protectionRaw: JSON.stringify({ previousAuthority: observedRecord, previousRaw: preview.previousRaw, sourceRaw: preview.sourceRaw, legacy: legacyExpected,
         ...(preview.recovery ? { backupRaw: preview.recovery.raw } : {}) }), generation,
       adoptionSha256: preview.recovery?.portable ? preview.recovery.rawSha256 : null,
       schemaVersion: preview.handle.state.schemaVersion, officialRows: preview.handle.state.retained.importedCourseAchievements.length });
@@ -154,20 +185,25 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
   return {
     async prepareMigration(raw: string) { return exclusive(async () => {
       if (reloadRequired) throw new Error('session_requires_reload');
-      generation++; // A newly selected file invalidates any older confirmation.
+      const stamp = ++generation; // Selection invalidates every older confirmation.
       if (!admission) await observe();
       requireLegacyUnchanged();
       if (!admission?.canMigrate && !admission?.canCreate) throw new Error('authority_migration_blocked');
-      parse(raw); // representation preflight only; preserve original bytes for #196.
-      const preview = await api.prepareMigration(await api.inspectLegacy(raw));
-      if (legacyExpected?.primaryRaw !== null && legacyExpected?.primaryRaw !== undefined) {
-        const decoded = await decodeLegacy(legacyExpected.primaryRaw);
-        if (decoded.status !== 'decoded' || preview.handle.source.kind === 'new-plan'
-          || !sameLegacySource(decoded.source, preview.handle.source)) throw new Error('migration_source_conflict');
-      }
-      requireLegacyUnchanged();
-      return proposal(preview);
+      inspectMigrationInput(raw); // Independent file policy; original bytes survive.
+      return boundToObserved(async () => {
+        await verifyDestination();
+        const preview = await api.prepareMigration(await api.inspectLegacy(raw));
+        if (legacyExpected?.primaryRaw !== null && legacyExpected?.primaryRaw !== undefined) {
+          const decoded = await decodeLegacy(legacyExpected.primaryRaw);
+          if (decoded.status !== 'decoded' || preview.handle.source.kind === 'new-plan'
+            || !sameLegacySource(decoded.source, preview.handle.source)) throw new Error('migration_source_conflict');
+        }
+        requireLegacyUnchanged();
+        if (stamp !== generation) throw new Error('stale_preview');
+        return proposal(preview);
+      });
     }); },
+    invalidatePreviews() { generation++; },
     async load() { return exclusive(async () => {
       // Accepted load linearizes here, before the first store read. Revocation
       // survives every failure; no old preview can restore operation authority.
@@ -190,12 +226,17 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
       if (!handle || reloadRequired || commands.length) throw new Error('saved_snapshot_required');
       requireLegacyUnchanged();
       return withPlannerWriteLock(async () => {
-        const saved = await api.load();
-        if (!saved || !sameAttemptData(saved.state, handle!.state)) {
-          reloadRequired = true; generation++; throw new Error('stale_backup_requires_reload');
-        }
-        const raw = await api.createBackup(saved); requireLegacyUnchanged(); return raw;
+        return boundToObserved(async () => {
+          const saved = await verifyDestination();
+          if (!saved) throw new Error('stale_backup_requires_reload');
+          const raw = await api.createBackup(saved);
+          // Detect a non-cooperating writer between the export's internal read
+          // and its asynchronous digest/replay work. Never issue a stale file.
+          await verifyDestination(); requireLegacyUnchanged(); return raw;
+        });
       }, locks, true).catch(error => {
+        if (error instanceof Error && error.message === 'stale_authority_requires_reload')
+          error = new Error('stale_backup_requires_reload');
         reloadRequired = true; admission = unavailableAdmission(error); throw error;
       });
     }); },
@@ -203,30 +244,38 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
      * adoption is separate from ordinary save confirmation. Never restores LS. */
     async prepareRestore(raw: string) { return exclusive(async () => {
       if (reloadRequired) throw new Error('session_requires_reload');
-      generation++;
+      const stamp = ++generation;
       if (!admission) await observe();
       requireLegacyUnchanged();
       if (!admission?.canCreate && !admission?.canEdit && !admission?.canMigrate) throw new Error('authority_restore_blocked');
-      const preview = await api.inspectBackup(raw);
-      const incoming = await inspectAuthorityAdmission(legacyExpected!, preview.handle, decodeLegacy);
-      requireLegacyUnchanged();
-      if (!incoming.canEdit) throw new Error('restore_source_conflict');
-      return proposal(preview);
+      return boundToObserved(async () => {
+        await verifyDestination();
+        const preview = await api.inspectBackup(raw);
+        const incoming = await inspectAuthorityAdmission(legacyExpected!, preview.handle, decodeLegacy);
+        requireLegacyUnchanged();
+        if (!incoming.canEdit) throw new Error('restore_source_conflict');
+        if (stamp !== generation) throw new Error('stale_preview');
+        return proposal(preview);
+      });
     }); },
     async prepareSave() { return exclusive(async () => {
+      const stamp = ++generation;
       if (reloadRequired) throw new Error('session_requires_reload');
       if (!admission) {
         if (await observe()) throw new Error('existing_attempt_plan_requires_reload');
       }
       requireLegacyUnchanged();
       if (handle ? !admission?.canEdit : !admission?.canCreate) throw new Error('authority_save_blocked');
-      let preview: PersistencePreview;
-      if (handle) preview = await api.prepareEdits(handle, commands);
-      else {
-        preview = await api.prepareNewPlan();
-        if (preview.previousRaw !== null) throw new Error('existing_attempt_plan_requires_reload');
-      }
-      return proposal(preview);
+      return boundToObserved(async () => {
+        let preview: PersistencePreview;
+        if (handle) preview = await api.prepareEdits(handle, commands);
+        else {
+          preview = await api.prepareNewPlan();
+          if (preview.previousRaw !== null) throw new Error('existing_attempt_plan_requires_reload');
+        }
+        if (stamp !== generation) throw new Error('stale_preview');
+        return proposal(preview);
+      });
     }); },
     async save(proposal: object, confirmed: boolean, adoptedBackupSha256?: string) { return exclusive(async () => {
       const p = proposals.get(proposal);
@@ -256,6 +305,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
         admission = await inspectAuthorityAdmission(legacyExpected!, reloaded, decodeLegacy);
         requireLegacyUnchanged();
         if (!admission.canEdit) throw new Error('save_authority_conflict');
+        observedRecord = structuredClone(attempt.readback);
         return adopt(reloaded);
       }
       catch (error) { reloadRequired = true; admission = unavailableAdmission(error); throw error; }

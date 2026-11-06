@@ -1,11 +1,12 @@
 import { emptyAuthority, type AtomicAttemptStore, type AuthorityRecord } from './contracts';
 import { requireAttemptAuthority } from './authorityFormat';
+import { sameAttemptData } from '../validation';
 
 const DATABASE = 'hosei-yi06-isolated-v1';
 const STORE = 'authority';
 // Fixed isolated database. Reads never initialize it; first commit creates the
 // store AND current record in the same versionchange transaction.
-export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemptStore & { protectOriginal(): Promise<string> } {
+export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemptStore & { protectOriginal(): Promise<string>; commit(expected: AuthorityRecord, next: AuthorityRecord, beforePut?: () => void): Promise<void> } {
     async function readOriginal(): Promise<{ exists: false } | { exists: true; value: unknown; keyExists: boolean }> {
       if (!factory.databases) throw new Error('database_inventory_unavailable');
       const existing = (await factory.databases()).find(db => db.name === DATABASE);
@@ -34,6 +35,10 @@ export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemp
       // Preserve foreign string bytes too. This is diagnostic protection, never
       // an Attempt backup and never permission to import/reset the host registry.
       const original = await readOriginal();
+      // stored undefined has an explicit tag below; nested undefined, Map,
+      // Date, non-finite numbers, extended arrays, etc. have no lossless JSON.
+      if (original.exists && original.value !== undefined && !sameAttemptData(original.value, original.value))
+        throw new Error('protection_unrepresentable: original remains in IndexedDB');
       return JSON.stringify({ format: 'hosei-authority-record-protection', protectionVersion: 1,
         database: DATABASE, store: STORE, key: 'current', ...original,
         ...(original.exists && original.value === undefined ? { valueType: 'undefined' } : {}) });
@@ -45,7 +50,7 @@ export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemp
       requireAttemptAuthority(original.value);
       return original.value;
     },
-    async commit(expected, next) {
+    async commit(expected, next, beforePut: () => void = () => {}) {
       requireAttemptAuthority(expected); requireAttemptAuthority(next);
       return new Promise<void>((resolve, reject) => {
         const req = factory.open(DATABASE, 1);
@@ -64,12 +69,14 @@ export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemp
               // supplies the specific format diagnosis without any write.
               failure = new Error('stale_commit'); tx.abort(); return;
             }
-            if (current.raw !== expected.raw || current.revision !== expected.revision
-              || JSON.stringify(current.committed) !== JSON.stringify(expected.committed)
-              || JSON.stringify(current.issuedIds) !== JSON.stringify(expected.issuedIds)) {
+            if (!sameAttemptData(current, expected)) {
               failure = new Error('stale_commit'); tx.abort(); return;
             }
-            try { bucket.put(next, 'current'); }
+            try {
+              // Synchronous host check inside BOTH transaction kinds. Nothing
+              // asynchronous may run between this check and scheduling put.
+              beforePut(); bucket.put(next, 'current');
+            }
             catch (error) { failure = error instanceof Error ? error : new Error(String(error)); tx.abort(); }
           };
           tx.onerror = () => { failure ??= tx.error; };

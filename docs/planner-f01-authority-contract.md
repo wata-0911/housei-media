@@ -122,3 +122,48 @@ ABC側はformat guardを追加し、既存DBのキー欠落・保存済みnull/u
 - Astra: F01限定差分の独立監査。通常公開は別工程でK1〜K7・必須操作・iPhone Safari等を統合監査。
 
 F01のテスト成功を独立監査PASS・通常Planner公開可能・上位Issueの完了とは扱わない。
+
+## F01-R1: audited boundary corrections
+
+The production session retains the exact `raw/revision/committed/issuedIds`
+record returned to the historical verifier at successful load/readback. Restore
+first witnesses/replays that destination, then fences every inspection read to
+the same record. A previously opened session must reload after another save;
+a known checkpoint does not bypass destination verification. After that reload,
+explicit rollback still preserves all host reservations. Protection previews
+include `previousAuthority` as well as previous/source/backup raw strings.
+Backup creation fences all reads under the common writer lock and revalidates
+at the end; changed revisions or rollback tombstones stop export.
+
+The new native adapter rejects non-plain data, sparse arrays, array extensions
+and unknown authority fields before cloning/comparison. CAS compares the whole
+validated structure. The session supplies a synchronous third `commit` argument
+which this adapter invokes immediately before `put`, inside both versionchange
+and existing readwrite transactions. Host adapters must preserve this callback
+when wrapping the native store. Legacy-primary/recovery mismatch aborts the
+transaction and awaits its terminal event. This closes the observable pre-put
+window; it does **not** make localStorage and IndexedDB one atomic transaction.
+Non-cooperating legacy tabs, ABA and writes after the last check remain F04's
+legacy-write-control responsibility. No normal-route coexistence is approved.
+
+Unknown structured-clone values are left in IndexedDB. Diagnostic JSON is emitted
+only for lossless plain JSON data (and the existing top-level undefined tag).
+Map/Date/non-finite numbers/nested undefined/cycles/extended arrays return
+`protection_unrepresentable`; this is not a portable arbitrary-value backup.
+
+Local primary accepts bare local-v22 only, including the correction-chain path.
+Backup-v1/v2 envelopes are selected files. Migration input uses its own 16 MiB
+UTF-8 limit, depth64, 1,000,000 values and 100,000 values per container; primitive
+edits keep their 1 Mi code-unit limit. The historical decoder, original raw,
+final32 MiB record limit and byte-pinned code are unchanged. Decimal tokens must
+round-trip as normalized decimal values: `4`, `4.0`, `4e0` are compatible;
+`4.0000000000000001` is held instead of being silently identified with4.
+This check also applies to adopted migration/correction archives.
+
+Destination read/format/replay failures revoke proposals and editing authority.
+Input syntax errors consume the input generation without pretending the host is
+corrupt. File selection increments its generation before `File.text()`. New
+selection, input cancellation, confirmation cancellation, reload and unmount
+invalidate pending reads. `invalidatePreviews()` revokes session confirmations;
+only a matching final selection may create the next preview. A confirmed write
+already in progress still resolves through its transaction/readback contract.

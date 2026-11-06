@@ -1,3 +1,4 @@
+import { inspectMigrationInput } from './migrationInput';
 import type { PersistenceHandle } from '../persistence/controller';
 import type { DecodeResult, SourceArchive } from '../migration/contracts';
 import { STORAGE_KEY, BACKUP_KEY } from '../../backup/storagePrimitives';
@@ -46,6 +47,17 @@ export async function inspectAuthorityAdmission(legacy: LegacySnapshot, handle: 
   }
   if (legacy.primaryRaw === null) return result('G', 'recovery_without_primary',
     '旧recoveryのみ残っています。原文を保護し、復旧元を確認するまで書込みを停止します。', !!handle, undefined, 'held');
+  // The local primary is a bare state, never a selected backup envelope.
+  // Apply this before the correction-chain exception too.
+  try {
+    const value = inspectMigrationInput(legacy.primaryRaw) as { format?: unknown } | null;
+    if (value && typeof value === 'object' && Object.hasOwn(value, 'format'))
+      return result('G', 'legacy_primary_format', '旧primaryは裸のschema22ではありません。原文を保護し、書込みを停止します。', !!handle, undefined, 'unsupported');
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) return result('G', String(error),
+      '旧原文の数値・容量を安全に照合できません。原文を保護し、書込みを停止します。', !!handle, undefined, 'held');
+    // Keep the strict decoder's source_json diagnostic for invalid JSON.
+  }
   // load already replayed the entire explicit correction chain. The exact
   // pre-correction original can legitimately remain held by today's decoder.
   if (handle?.state.schemaVersion === 23 && handle.state.corrections[0]?.originalRaw === legacy.primaryRaw) {
@@ -62,6 +74,12 @@ export async function inspectAuthorityAdmission(legacy: LegacySnapshot, handle: 
     return result('G', `legacy_${code}`, `${message}原文を保護し、書込みを停止しています。`, !!handle, undefined, problem);
   }
   const source = decoded.source;
+  if (source.kind !== 'local-v22') return result('G', 'legacy_primary_format', '旧primaryの形式を確認してください。', !!handle, undefined, 'unsupported');
+  if (handle?.source.kind !== 'new-plan' && handle?.source) {
+    try { inspectMigrationInput(handle.source.raw); } catch {
+      return result('E', 'migration_source_precision', '移行元原文の精度を確認できません。原文を保持し、編集を停止します。', true);
+    }
+  }
   if (!handle) return result('B', 'explicit_migration_required',
     '旧schema22があります。空の新規計画は作成できません。原文を保護し、明示移行してください。', true, 'canMigrate');
   if (handle.source.kind === 'new-plan') return result('F', 'separate_plans',

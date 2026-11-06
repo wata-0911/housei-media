@@ -104,3 +104,13 @@ jobs:
       - name: Grade import full-history backup and isolated restore (Chromium)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:grade-import-backup-browser && PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" G03_REQUIRE_CLEAN_EXPORTER=1 npm run test:grade-import-backup-revision-browser
+
+      - name: F01 authority and ABC isolated browser regressions
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/home-planner-browser/node_modules/playwright/index.mjs
+        run: |
+          npm run build:ac-integration
+          npm run test:authority-admission-browser
+          npm run test:ac-integration-browser
+          npm run test:abc-integration-browser
