@@ -267,7 +267,10 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       });
     }); },
     async prepareSave() { return exclusive(async () => {
-      const stamp = ++generation;
+      // Sibling previews of the same unchanged draft remain valid until a save
+      // attempt consumes them all. Destination failures still revoke generation
+      // in read(); selecting a migration/restore file has its own generation.
+      const stamp = generation;
       if (reloadRequired) throw new Error('session_requires_reload');
       if (!admission) {
         if (await observe()) throw new Error('existing_attempt_plan_requires_reload');
