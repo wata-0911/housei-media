@@ -66,6 +66,8 @@ F04公開受入では旧タブを閉じる導線・互換編集の制御・実�
 ## 後続が使うインターフェース
 
 `createBrowserPlannerAttemptSession()` が実際のlocalStorage readerとIndexedDBを結ぶ。
+F01のDB adapterは`persistence/authorityIndexedDb.ts`。監査でbyte固定された既存`indexedDb.ts`は原版のまま保持する。
+新しい画面は旧adapterや低層controllerを直接使わず、guard付きsessionを経由する。同じDB/store/keyを使用し、別の正本やnamespaceは作らない。
 `createPlannerAttemptSession(store, locks, options)` もブラウザでは実originを読む。
 空legacy defaultは旧storageを持たない合成memory host専用。
 localStorageへアクセスできないworkerは明示readerがなければ拒否する。

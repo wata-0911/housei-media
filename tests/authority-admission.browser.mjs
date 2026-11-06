@@ -14,12 +14,12 @@ before(async()=>{
   export {createGradeImportHost} from './src/planner/attempts/gradeImportHost/controller';
   export {createNativeHostStore} from './src/planner/attempts/gradeImportHost/nativeStore';
   export {emptyAuthority} from './src/planner/attempts/persistence/contracts';
-  import {createIndexedDbAttemptStore} from './src/planner/attempts/persistence/indexedDb';
+  import {createAuthorityIndexedDbStore} from './src/planner/attempts/persistence/authorityIndexedDb';
   import {createPlannerAttemptSession} from './src/planner/attempts/production/session';
   import {readLegacySnapshot} from './src/planner/attempts/production/authorityAdmission';
   import {prepareMigrationEnvironment} from './src/planner/attempts/migration/source';
   let env;
-  export function setup(){const store=createIndexedDbAttemptStore(indexedDB);
+  export function setup(){const store=createAuthorityIndexedDbStore(indexedDB);
    const api=createPlannerAttemptSession(store,navigator.locks,{readLegacy:()=>readLegacySnapshot(localStorage),
     migrationEnvironment:()=>env??=prepareMigrationEnvironment(${JSON.stringify(files)}),protectAuthority:()=>store.protectOriginal()});return {store,api};}
  `},bundle:true,write:false,platform:'browser',format:'esm',logLevel:'silent'});bundle=output.outputFiles[0].text;

@@ -2,7 +2,7 @@ import { calculateRecordedCredits } from '../graduation/recordedCalculation';
 import { backupRawDigest } from '../../backup/plannerBackupCompatibility';
 import { STORAGE_KEY, BACKUP_KEY } from '../../backup/storagePrimitives';
 import { createAttemptPersistence, type PersistenceHandle, type PersistencePreview } from '../persistence/controller';
-import { createIndexedDbAttemptStore } from '../persistence/indexedDb';
+import { createAuthorityIndexedDbStore } from '../persistence/authorityIndexedDb';
 import { SessionIdentityAllocator } from '../persistence/sessionIds';
 import { referencedUuids, unionReservations } from '../persistence/identity';
 import { sameAttemptData } from '../validation';
@@ -350,7 +350,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore, locks: Pl
   };
 }
 export const createBrowserPlannerAttemptSession = () => {
-  const store = createIndexedDbAttemptStore(indexedDB);
+  const store = createAuthorityIndexedDbStore(indexedDB);
   return createPlannerAttemptSession(store, navigator.locks, {
     readLegacy: () => readLegacySnapshot(localStorage), protectAuthority: () => store.protectOriginal(),
   });
