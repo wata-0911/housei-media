@@ -1,5 +1,5 @@
 {
-  "basis": "F02 pp.10-11,31-32; exact current vs legacy catalog differences; original contract retained",
+  "basis": "Exact regression comparison only. Current law amounts independently derived by F02-R1 p47 ledger; obsolete catalog side is not institutional approval. Original18 absolute contracts restored.",
   "cases": [
     {
       "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"planned\",\"first_year\",\"undecided\"]",
@@ -5618,23 +5618,116 @@
       ]
     },
     {
+      "key": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+      "deltas": [
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+          "path": "/cards/professional-law-elective/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+          "path": "/cards/professional-law-elective/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+          "path": "/cards/professional-law-elective/note",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": "純粋な選択 96単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+          "new": "純粋な選択 94単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+          "path": "/cards/professional-law-total/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+          "path": "/cards/professional-law-total/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+          "path": "/referenceProgress/0/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 204,
+          "new": 202
+        }
+      ]
+    },
+    {
       "key": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
       "deltas": [
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+          "path": "/cards/professional-law-elective/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+          "path": "/cards/professional-law-elective/note",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": "純粋な選択 96単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+          "new": "純粋な選択 94単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 3,
+          "new": 5
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 6,
+          "new": 10
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+          "path": "/cards/professional-law-total/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
           "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 172,
-          "new": 180
+          "old": 162,
+          "new": 160
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
           "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 108,
-          "new": 116
+          "old": 130,
+          "new": 128
         }
       ]
     },
@@ -5643,19 +5736,112 @@
       "deltas": [
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/note",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": "純粋な選択 96単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+          "new": "純粋な選択 94単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 3,
+          "new": 5
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 6,
+          "new": 10
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+          "path": "/cards/professional-law-total/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
           "path": "/requirements/5e64c026-b4b7-4546-a1fc-5e9340e3b976/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 172,
-          "new": 180
+          "old": 162,
+          "new": 160
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
           "path": "/requirements/ef19cce0-2441-42dc-aedd-9c8e91c2bd9e/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 108,
-          "new": 116
+          "old": 130,
+          "new": 128
+        }
+      ]
+    },
+    {
+      "key": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+      "deltas": [
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+          "path": "/cards/professional-law-elective/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+          "path": "/cards/professional-law-elective/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+          "path": "/cards/professional-law-elective/note",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": "純粋な選択 96単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+          "new": "純粋な選択 94単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+          "path": "/cards/professional-law-total/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+          "path": "/cards/professional-law-total/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+          "path": "/referenceProgress/0/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 212,
+          "new": 210
         }
       ]
     },
@@ -5664,19 +5850,59 @@
       "deltas": [
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+          "path": "/cards/professional-law-elective/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+          "path": "/cards/professional-law-elective/note",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": "純粋な選択 96単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+          "new": "純粋な選択 94単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 3,
+          "new": 5
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 6,
+          "new": 10
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+          "path": "/cards/professional-law-total/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
           "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 172,
-          "new": 180
+          "old": 162,
+          "new": 160
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
           "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 108,
-          "new": 116
+          "old": 130,
+          "new": 128
         }
       ]
     },
@@ -5685,19 +5911,59 @@
       "deltas": [
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 130,
+          "new": 128
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/note",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": "純粋な選択 96単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+          "new": "純粋な選択 94単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 3,
+          "new": 5
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 6,
+          "new": 10
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+          "path": "/cards/professional-law-total/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 162,
+          "new": 160
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
           "path": "/requirements/5e64c026-b4b7-4546-a1fc-5e9340e3b976/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 172,
-          "new": 180
+          "old": 162,
+          "new": 160
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
           "path": "/requirements/ef19cce0-2441-42dc-aedd-9c8e91c2bd9e/earned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 108,
-          "new": 116
+          "old": 130,
+          "new": 128
         }
       ]
     }

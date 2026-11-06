@@ -1,3 +1,4 @@
+import { allocateLawPartialCredits, lawPartialSchoolingCredits } from './lawPartialCredits';
 import { ordinaryCourseCompletion, ordinaryCompletionReason, type OrdinaryComponent } from '../progress/ordinaryCourseCompletion';
 import { assertFiniteNumbers } from './finiteNumbers';
 import { CALLIGRAPHY_CURRICULUM_ID, deriveCalligraphyProgress, isCalligraphyCourse, type CalligraphyProgress } from '../progress/calligraphyProgress';
@@ -17,6 +18,7 @@ import type {
 import { effectiveRecognitionForAdmission, graduationProfileValidationError, hasCreditBearingRecognition, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from './graduationProfile';
 import { createMappingResolver, requirementsForScope } from '../plannerHelpers';
 import { HISTORY_SCOPE_ID, historySeminarField, isHistoricalSources, isHistorySeminar, validHistorySeminarOrders } from './historySeminar';
+import { officialRepeatableRule } from './officialRepeatableEvidence';
 import { repeatableRule } from './repeatableRules';
 import { specialLectureProgress, type SpecialLectureProgress } from './specialLectureProgress';
 import { allocateGeographyTransfers, geographyTransferKind, type GeographyTransferKind } from './geographyTransferRules';
@@ -38,6 +40,7 @@ import { unresolvedOfficialImpact, officialImpactsCard, officialImpactsRequireme
 export type CourseAllocationInput = Omit<OfficialAllocationInput, 'fact'> & {
   completionHoldReason?: string;
   learnerRecord?: true;
+  lawPartialSchoolingCredits?: number;
   fact: Pick<OfficialAllocationInput['fact'], 'canonicalName' | 'curriculumCourseId'> & {
     repeatableEvidence?: Omit<NonNullable<OfficialAllocationInput['fact']['repeatableEvidence']>, 'attempts'> & {
       attempts: Array<{ academicYear: number } | { attemptId: string }>;
@@ -766,6 +769,7 @@ type CurriculumEntry = {
   calligraphyCompletedCredits?: number;
   learnerComponents?: OrdinaryComponent[];
   completedCredits?: number;
+  lawPartialSchoolingCredits?: number;
 };
 
 /** A completion belongs to one institutional Course and allocation policy.
@@ -902,11 +906,12 @@ function professionalCards(
       if (item.status === 'earned') incompleteMetadata.add(mapping.mappingId);
       continue;
     }
-    const rule = repeatableRule(program.department!, offering);
+    const institutionalCourse = catalog.curriculum?.courses.find(c => c.id === offering.curriculumCourseId);
+    const rule = institutionalCourse ? officialRepeatableRule(program.department!, institutionalCourse) : repeatableRule(program.department!, offering);
     if (rule) {
       const [, name, limit, limitCourses] = rule;
       const repeat = repeatables.get(`${type}:${name}`) ?? { name, type, limit, limitCourses, earned: 0, inProgress: 0, planned: 0, courses: new Set<string>() };
-      if (item.status === 'earned') { repeat.earned += offering.credits; repeat.courses.add(offering.id); }
+      if (item.status === 'earned') { repeat.earned += plannerItemCreditContribution(item, offering) === 2 ? 2 : 0; repeat.courses.add(offering.id); }
       else if (item.status === 'in_progress') repeat.inProgress += offering.credits;
       else if (item.status === 'planned') repeat.planned += offering.credits;
       repeatables.set(`${type}:${name}`, repeat);
@@ -1032,6 +1037,8 @@ function professionalCards(
         calligraphyPartialProgress: { credits: a.credits, evidence: 'official' as const } } : {}),
       mapping: a.mapping, curriculumCourseId: a.fact.curriculumCourseId, completionId: a.fact.curriculumCourseId!, label: a.fact.canonicalName!,
       earned: a.credits, inProgress: 0, planned: 0, earnedSchooling: a.schoolingCredits ?? 0, completedCredits: a.completedCredits,
+      lawPartialSchoolingCredits: a.learnerRecord ? a.lawPartialSchoolingCredits ?? 0
+        : a.credits === 2 && a.schoolingCredits === 2 ? lawPartialSchoolingCredits(a.mapping, [{ credits: 2, method: 'schooling' }]) : 0,
     });
   }
   for (const entry of entries.values()) {
@@ -1206,10 +1213,12 @@ function professionalCards(
     // p.47 b: after the eight completed required-elective courses / 32 credits,
     // a 2-credit schooling completion of a 4-credit required-elective or elective
     // course can count toward graduation. Do not generalize this to other partials.
-    const permittedPartial = qualifies ? [...entries.values()]
-      .filter(entry => ['選択必修', '選択'].includes(entry.mapping.requirementType ?? '')
-        && entry.mapping.curriculumCredits === 4 && entry.earned === 2 && entry.earnedSchooling === 2)
-      .reduce((sum, entry) => sum + entry.earned, 0) : 0;
+    const partialAllocation = allocateLawPartialCredits([...entries.values()].map(entry => ({
+      id: entry.completionId ?? entry.mapping.mappingId, mapping: entry.mapping,
+      completedCredits: completedCurriculumCredits(entry),
+      partialSchoolingCredits: entry.lawPartialSchoolingCredits ?? lawPartialSchoolingCredits(entry.mapping, entry.learnerComponents ?? []),
+    })));
+    const permittedPartial = [...partialAllocation.values()].reduce((sum, credits) => sum + credits, 0);
     const thesisCredits = thesisSelection === 'selected' ? thesisCreditsForDepartment(program.department) ?? 0 : 0;
     const thesisTotals = { earned: thesisStatus === 'earned' ? thesisCredits : 0, inProgress: thesisStatus === 'in_progress' ? thesisCredits : 0, planned: thesisStatus === 'planned' ? thesisCredits : 0 };
     const overflowElective = withOverflow(normal('選択'), requiredElective, threshold);
@@ -1568,7 +1577,16 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     existingCourseIds.add(key);
     return [{ offeringId: offering.id, status: 'earned' as const, plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null }];
   });
-  const calculationItems: CalculationItems = { ordinary: [...plannerItems, ...recognizedItems], schooling: plannerItems };
+  // p.55 field-study stages consume regular S1 awards, never fractional or
+  // zero learner rows. Preserve the records; filter only calculation inputs.
+  const invalidFieldStudy = new Set(plannerItems.filter(item => {
+    const offering = catalogOfferings.get(item.offeringId);
+    return item.status === 'earned' && offering && geographyTransferKind(offering,
+      id => catalog.courses.find(c => c.id === id)?.canonicalName ?? null) === 'fieldStudy'
+      && plannerItemCreditContribution(item, offering) !== 1;
+  }));
+  const regularPlannerItems = plannerItems.filter(item => !invalidFieldStudy.has(item));
+  const calculationItems: CalculationItems = { ordinary: [...regularPlannerItems, ...recognizedItems], schooling: regularPlannerItems };
   const offerings = catalogOfferings;
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));
@@ -1592,9 +1610,15 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     }
   }
   const excludedOrdinary = new Set<PlannerItem>();
-  const completionHolds: Array<{ mapping: Mapping; canonicalName: string; reason: string }> = [];
+  const completionHolds: Array<{ mapping: Mapping; canonicalName: string; reason: string }> = [...invalidFieldStudy].flatMap(item => {
+    const offering = offerings.get(item.offeringId)!;
+    return plannerItemCreditContribution(item, offering) === 0 ? [] : eligibleMappings(offering).map(mapping => ({
+      mapping, canonicalName: '現地研究', reason: 'unsupported_course_component_structure',
+    }));
+  });
   for (const group of ordinaryGroups.values()) {
     const evidence = ordinaryCourseCompletion(group.mapping.curriculumCredits, group.components);
+    if (evidence.completedCredits > 0) group.items.forEach((item,i) => { if (!evidence.countedIndexes.includes(i)) excludedOrdinary.add(item); });
     if (evidence.completedCredits === 0 && evidence.reason !== 'explicit_quantity_and_compatible_method_required'
       && new Set(group.items.map(i => i.offeringId)).size === group.items.length) group.items.forEach(item => excludedOrdinary.add(item));
     if (evidence.held && evidence.reason !== 'explicit_quantity_and_compatible_method_required') completionHolds.push({ mapping: group.mapping, canonicalName: group.canonicalName, reason: evidence.reason! });
@@ -1624,11 +1648,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   // Neither H12 evidence nor explicit manual contributions are automatically
   // ordinary credit. Generic law totals must use the same completed-Course and
   // 8-Course/32-credit allocation (including its schooling-only destination).
-  if (catalog.programs.find(p => p.scopeId === scopeId)?.department === '法律学科'
-    && (plannerItems.some(item => item.status === 'earned' && item.courseCreditContribution !== undefined
-      && eligibleMappings(offerings.get(item.offeringId)!).some(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育'))
-      || allocations.some(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
-        && a.mapping.curriculumCredits === 4 && a.credits === 2 && a.completedCredits === 0))) {
+  if (catalog.programs.find(p => p.scopeId === scopeId)?.department === '法律学科') {
     const lawOrdinaryCards: Record<string, string> = {
       law_total_with_thesis_min_credits: 'professional-law-total',
       law_total_without_thesis_min_credits: 'professional-law-total',
@@ -1674,7 +1694,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     }
     for (const row of cards) {
       const prefix = ({ '法律学科': 'law-', '日本文学科': '', '史学科': 'history-', '地理学科': 'geography-', '経済学科': 'economics-', '商業学科': 'commerce-' } as Record<string, string>)[mapping.department ?? ''];
-      const type = ({ '必修': 'required', '選択必修': 'required-elective', '選択': 'elective' } as Record<string, string>)[mapping.requirementType ?? ''];
+      const type = ({ '必修': 'required', 'スクーリング必修': 'schooling-required', '選択必修': 'required-elective', '選択': 'elective' } as Record<string, string>)[mapping.requirementType ?? ''];
       const professionalIds = new Set([`professional-${prefix}${type}`,
         `professional-${mapping.department === '日本文学科' ? 'japanese-' : prefix}total`,
         ...(mapping.requirementType === '選択必修' && ['法律学科', '日本文学科', '地理学科'].includes(mapping.department ?? '') ? [`professional-${prefix}elective`] : [])]);

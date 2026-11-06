@@ -20,7 +20,7 @@ test('strict 192/168 exact F02 deltas with immutable historical F4/P2 manifests'
  assert.deepEqual(Object.fromEntries(Object.entries(approvedDeltas).map(([k,v])=>[k,v.length])),{'192-f4':50,'168-f4':16,'168-p2':6});
  for(const [cases,base,current,compare]of [[c192,b192,snapshots192,compareFieldCorrected],[c168,b168,snapshots168,compare168]]){
   let count=0;for(const c of cases){compare(current.get(c.name),expected(base,c.name),c.name);count+=outputDeltas(current.get(c.name),expected(base,c.name),c.name).length;}
-  assert.equal(count,cases.length===192?860:24);
+  assert.equal(count,cases.length===192?895:24);
  }
  for(const c of c192)compareCompletion(snapshotValue(calculateCompletion(c.state,c.scopeId)),b192.cases.find(b=>b.name===c.name).completionOutput,c.name);
 });

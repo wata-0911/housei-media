@@ -15,10 +15,10 @@ const a=(p,n=p.compositionCredits,method='correspondence')=>newAttempt(m,p,n,'ea
 const cases=[];async function check(name,f){await test(name,f);}
 const law=programs.find(p=>p.department==='法律学科'),lp=find(law.scopeId,'法律学演習');
 for(const n of [1,4,5])await check(`official-repeat-${n}-plus-personal`,async()=>{const state=importRepeated(repeatedPayload('法律学演習',n));const d=await decode(state);assert.equal(d.status,'decoded');const as=Array.from({length:6},()=>a(lp,2,'schooling'));const r=await calc(g(as),d.source,law.scopeId);cases.push({name:`official-repeat-${n}`,sourceState:state,raw:g(as),actual:r});assert.equal(r.courses[0].increment,0);assert.equal(r.courses[0].authority,'official');assert.equal(r.progress.cards.find(x=>x.requirementId==='professional-law-total').earned,Math.min(n*2,8));});
-for(const prog of programs)await check(`total-lecture-held/${prog.displayName}`,async()=>{const ps=m.placements.filter(p=>p.scopeId===prog.scopeId&&p.auditRecord.canonicalName==='総合特講');assert.equal(ps.length,1);const r=await calc(g([a(ps[0],2,'schooling')]),s,prog.scopeId);cases.push({name:`total-lecture/${prog.displayName}`,actual:r});assert.ok(r.courses.every(c=>c.completedCredits===0));assert.ok(r.holds.length);});
+for(const prog of programs)await check(`total-lecture-held/${prog.displayName}`,async()=>{const ps=m.placements.filter(p=>p.scopeId===prog.scopeId&&p.auditRecord.canonicalName==='総合特講');assert.equal(ps.length,1);const r=await calc(g([a(ps[0],2,'schooling')]),s,prog.scopeId);cases.push({name:`total-lecture/${prog.displayName}`,actual:r});assert.equal(r.courses.length,0);assert.equal(r.informational.length,1);assert.equal(r.holds.length,1);});
 for(const [dept,name,credits]of [['史学科','歴史資料学1〜6',2],['史学科','史学演習1',2],['地理学科','現地研究',1],['地理学科','人文地理学演習',2],['日本文学科','書道実技',2]]){
  const prog=programs.find(p=>p.department===dept),ps=m.placements.filter(p=>p.scopeId===prog.scopeId&&(p.officialName===name||p.auditRecord.canonicalName===name));
- for(const p of ps){const r=await calc(g([a(p,credits,'schooling')]),s,prog.scopeId);cases.push({name:`special/${dept}/${name}`,placement:p,actual:r});await check(`special-held/${dept}/${name}`,()=>{assert.ok(r.courses.every(c=>c.completedCredits===0));assert.ok(r.holds.length);});}
+ for(const p of ps){const r=await calc(g([a(p,credits,'schooling')]),s,prog.scopeId);cases.push({name:`special/${dept}/${name}`,placement:p,actual:r});await check(`special-held/${dept}/${name}`,()=>{assert.equal(r.courses.length,0);assert.equal(r.informational.length,1);assert.equal(r.holds.length,1);});}
 }
 const geo=programs.find(p=>p.department==='地理学科');
 const geoNames=['歴史地理学','人文地理学（農業）','人文地理学（都市）','自然地理学（地形）','自然地理学（生物・土壌）','自然地理学（気候・気象）','地誌学概論','日本地誌（1）（自然編）','日本地誌（2）（人文編）','世界地誌（1）（アジア）'];
@@ -60,7 +60,7 @@ for(const amount of [4,0,null])await check('F2 explicit foreign official link wi
 });
 for(const n of [0,1,2,3,4,5,6])for(const year of [2035,2036])await check('F3 learner same/different-year repeat '+n+'/'+year,async()=>{
  const as=Array.from({length:n},(_,i)=>{const at=a(lp,2,'schooling');at.plan.plannedYear=i%2?year:2035;return at;});const r=await newCalc(as);
- if(n>1){assert.equal(r.courses.length,0);assert.equal(new Set(r.holds.filter(h=>h.reason==='repeatable_independence_unverified').map(h=>h.attemptId)).size,n);}
+ if(n>1){assert.equal(r.courses.length,1);assert.deepEqual([r.courses[0].recordedEarned,r.courses[0].completedCredits,r.courses[0].increment],[n*2,2,2]);assert.equal(new Set(r.holds.filter(h=>h.reason==='repeatable_independence_unverified').map(h=>h.attemptId)).size,n-1);}
  else assert.equal(r.courses[0]?.increment??0,n*2);
 });
 // Geography's raw partial S2 field progress is not Course completion/graduation credit.
@@ -77,11 +77,11 @@ await check('R5 geography S2 raw field progress2, incomplete Course, professiona
  assert.equal(opening.credits,2);assert.equal(scenario.catalog.curriculum.courses.find(c=>c.id===opening.curriculumCourseId).curriculumCredits,4);
  for(const id of ['professional-geography-required-elective','professional-geography-total'])assert.equal(legacy.cards.find(c=>c.requirementId===id).earned,0);
  const placement=m.placements.find(p=>p.scopeId===scenario.scopeId&&p.auditRecord.oldCurriculumCourseId===opening.curriculumCourseId);
- const r=await newCalc([a(placement,2,'schooling')],scenario.scopeId);assert.ok(r.courses.every(c=>c.completedCredits===0));assert.ok(r.holds.length);
+ const r=await newCalc([a(placement,2,'schooling')],scenario.scopeId);assert.equal(placement.identityDecision.status,'ambiguous');assert.equal(r.courses.length,0);assert.equal(r.informational.length,1);assert.equal(r.informational[0].contribution,2);assert.equal(r.holds.length,1);assert.equal(r.holds[0].reason,'unique_safe_placement_required');
  assert.equal(r.progress.cards.find(c=>c.requirementId==='professional-geography-total').earned,0);
 });
 for(const program of programs)for(const parts of [['schooling'],['correspondence','schooling','schooling']])await check('F6 S-only/excess '+program.displayName+'/'+parts,async()=>{
- const r=await newCalc(parts.map(method=>a(p,2,method)),program.scopeId);assert.ok(r.courses.every(c=>c.completedCredits===0));assert.ok(r.holds.length);
+ const r=await newCalc(parts.map(method=>a(p,2,method)),program.scopeId);assert.equal(r.courses.length,1);assert.deepEqual([r.courses[0].recordedEarned,r.courses[0].completedCredits,r.courses[0].increment],[parts.length*2,0,0]);assert.equal(r.informational.length,parts.length);assert.equal(r.holds.length,parts.length);
 });
 await check('planned/in_progress are unknown columns and never earned',async()=>{
  const as=[a(p),a(p,2,'schooling')];as[0].plan.status='planned';as[1].plan.status='in_progress';const r=await newCalc(as);

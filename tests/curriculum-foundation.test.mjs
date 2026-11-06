@@ -577,6 +577,7 @@ test('graduation: all eight scopes retain pre-foundation calculations across sta
         const differences=outputDeltas(current,previous,key);
         if(differences.length)f02Differences++;else unchanged++;
         if (legacyCatalogContract.cases.some(c => c.key === key)) {
+          compareLegacyCatalogEvidence(current,previous,key);
           assert.deepEqual(outputDeltas(current,previous,key),f02.find(c=>c.key===key)?.deltas??[],key+' exact F02 catalog evidence');
           seen.push(key);
         } else {
@@ -585,10 +586,10 @@ test('graduation: all eight scopes retain pre-foundation calculations across sta
       }
     }
   }
-  assert.equal(unchanged, 266); assert.equal(f02Differences,22);
+  assert.equal(unchanged, 264); assert.equal(f02Differences,24);
   assert.equal(seen.length, 18);
   assert.deepEqual(seen.toSorted(), legacyCatalogContract.cases.map(c => c.key).toSorted());
-  t.diagnostic('288 fixed inputs: 266 complete equality; 22 exact F02 differences; original 18 historical cases retained');
+  t.diagnostic('288 fixed inputs: 264 complete equality; 24 exact differences; original18 absolute current/legacy contracts restored');
 });
 
 test('import: schooling-only evidence cannot select a correspondence opening as a representative', () => {

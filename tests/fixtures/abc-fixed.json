@@ -11,15 +11,16 @@
       "schoolingCredits": 0
     },
     "T2S2": {
-      "generalEarned": 4,
-      "completedCredits": 4,
-      "schoolingCredits": 2
+      "generalEarned": 0,
+      "completedCredits": 0,
+      "schoolingCredits": 2,
+      "hold": "mixed_completion_evidence_required"
     },
     "null": {
       "hold": "explicit_quantity_and_compatible_method_required"
     },
     "T0": {
-      "hold": "unsupported_course_component_structure",
+      "hold": "course_components_incomplete",
       "storedValue": 0
     },
     "official4": {

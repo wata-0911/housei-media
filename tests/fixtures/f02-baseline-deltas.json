@@ -1,5 +1,4 @@
 {
-  "basis": "2026 学習のしおり pp.10-11,30-32; exact historical outputs retained; F02 correction only",
   "168": [
     {
       "case": "文学部 / 史学科/C",
@@ -233,6 +232,22 @@
       "newPresent": true,
       "old": 0,
       "new": 2
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
     },
     {
       "case": "文学部 / 史学科/dense-earned",
@@ -1345,6 +1360,22 @@
     },
     {
       "case": "経済学部 / 経済学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "経済学部 / 経済学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
+    },
+    {
+      "case": "経済学部 / 経済学科/dense-earned",
       "path": "/cards/group-general/details/0/earned",
       "oldPresent": true,
       "newPresent": true,
@@ -1771,6 +1802,22 @@
       "newPresent": true,
       "old": 10,
       "new": 8
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
     },
     {
       "case": "文学部 / 地理学科/dense-earned",
@@ -2628,6 +2675,22 @@
     },
     {
       "case": "経済学部 / 商業学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-earned",
       "path": "/cards/group-general/details/1/earned",
       "oldPresent": true,
       "newPresent": true,
@@ -2893,6 +2956,22 @@
     },
     {
       "case": "経済学部 / 商業学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 14,
+      "new": 12
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 12,
+      "new": 10
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-mixed",
       "path": "/requirements/1695cfc8-53b7-4d28-8c0a-570bf6cea995/earned",
       "oldPresent": true,
       "newPresent": true,
@@ -2978,6 +3057,22 @@
       "newPresent": true,
       "old": 20,
       "new": 10
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
     },
     {
       "case": "文学部 / 日本文学科 / 言語コース/dense-earned",
@@ -3518,6 +3613,22 @@
     },
     {
       "case": "文学部 / 日本文学科 / 言語コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 9,
+      "new": 7
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 7,
+      "new": 5
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-mixed",
       "path": "/cards/professional-japanese-total/coverageStatus",
       "oldPresent": true,
       "newPresent": true,
@@ -4018,6 +4129,22 @@
       "newPresent": true,
       "old": "旧新課程の同種科目同定が必要。",
       "new": "条件付き算入許可を表すrule_typeが未定義。"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
     },
     {
       "case": "文学部 / 日本文学科 / 芸能文化コース/dense-earned",
@@ -4555,6 +4682,22 @@
       "newPresent": true,
       "old": "旧新課程の同種科目同定が必要。",
       "new": "科目構成単位に対応する正規の修得方式・数量を確認できないため完成を保留しています。"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 9,
+      "new": 7
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 7,
+      "new": 5
     },
     {
       "case": "文学部 / 日本文学科 / 芸能文化コース/dense-mixed",
@@ -5118,6 +5261,22 @@
       "newPresent": true,
       "old": "旧新課程の同種科目同定が必要。",
       "new": "条件付き算入許可を表すrule_typeが未定義。"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
     },
     {
       "case": "文学部 / 日本文学科 / 文学コース/dense-earned",
@@ -5737,6 +5896,22 @@
     },
     {
       "case": "文学部 / 日本文学科 / 文学コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 9,
+      "new": 7
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 7,
+      "new": 5
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-mixed",
       "path": "/cards/professional-japanese-total/coverageStatus",
       "oldPresent": true,
       "newPresent": true,
@@ -6268,6 +6443,22 @@
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 33,
+      "new": 31
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 29,
+      "new": 27
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
       "path": "/cards/group-general/details/0/earned",
       "oldPresent": true,
       "newPresent": true,
@@ -6288,7 +6479,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 118,
-      "new": 98
+      "new": 96
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
@@ -6296,7 +6487,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": "純粋な選択 80単位 + 選択必修超過 32単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
-      "new": "純粋な選択 76単位 + 選択必修超過 16単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+      "new": "純粋な選択 74単位 + 選択必修超過 16単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
@@ -6309,6 +6500,22 @@
         "earned": 6,
         "target": 4
       }
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 3,
+      "new": 5
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 6,
+      "new": 10
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
@@ -6380,7 +6587,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 150,
-      "new": 130
+      "new": 128
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
@@ -6460,7 +6667,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 150,
-      "new": 130
+      "new": 128
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
@@ -6468,7 +6675,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 118,
-      "new": 98
+      "new": 96
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
@@ -6628,6 +6835,54 @@
       "new": "条件付き算入許可を表すrule_typeが未定義。"
     },
     {
+      "case": "法学部 / 法律学科/dense-in_progress",
+      "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 0,
+      "new": 2
+    },
+    {
+      "case": "法学部 / 法律学科/dense-in_progress",
+      "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 0,
+      "new": 2
+    },
+    {
+      "case": "法学部 / 法律学科/dense-planned",
+      "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 0,
+      "new": 2
+    },
+    {
+      "case": "法学部 / 法律学科/dense-planned",
+      "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 0,
+      "new": 2
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 10,
+      "new": 8
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 8,
+      "new": 6
+    },
+    {
       "case": "法学部 / 法律学科/dense-mixed",
       "path": "/cards/group-general/details/0/earned",
       "oldPresent": true,
@@ -6718,6 +6973,30 @@
       "newPresent": true,
       "old": null,
       "new": "S2の成績が受験票発送予定日までに確定したことと、T2の受験資格を確認できないため完成を保留しています。"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/counted",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 2,
+      "new": 4
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 1,
+      "new": 2
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 2,
+      "new": 4
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -7327,6 +7606,7 @@
       "new": "条件付き算入許可を表すrule_typeが未定義。"
     }
   ],
+  "basis": "2026 学習のしおり pp.10-11,30-32; exact historical outputs retained; F02 correction only",
   "completion": [
     {
       "case": "文学部 / 史学科/C",

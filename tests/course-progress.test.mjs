@@ -636,7 +636,7 @@ for (const status of ['planned', 'in_progress', 'waiting']) test(`2+2: ${status}
     const changed = updatePlannerItem(items, correspondence.offeringId, { status: 'earned' });
     assert.equal(changed.at(-1).courseCreditContribution, 2);
     const earned = progress(f, changed, rows);
-    assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.earnedExcessCredits], [4, 4, officialSource ? 'complete' : 'unknown', 0]);
+    assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.earnedExcessCredits], [4, 4, officialSource ? 'incomplete' : 'unknown', 0]);
   }
 });
 for (const status of ['failed', 'dropped']) test(`2+2: ${status} explicit contribution remains0`, () => {
@@ -768,7 +768,8 @@ test('CourseProgress retains separate earned attempts after planned2 becomes ear
   assert.deepEqual([planned.earnedCredits, planned.projectedCredits], [2, 4]);
   const changed = updatePlannerItem(items, items[0].offeringId, { status: 'earned' });
   const earned = progress(f, changed, [row]);
-  assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.projectedCompletion], [4, 4, 'complete', 'complete']);
+  assert.deepEqual([earned.earnedCredits, earned.projectedCredits, earned.completion, earned.projectedCompletion], [4, 4, 'incomplete', 'incomplete']);
+  assert.equal(earned.remainingCredits,2); // Official2 cannot be completed by an unlinked learner S2.
   assert.equal(earned.attempts[0].earnedContribution, 2);
   assert.equal(earned.attempts[0].officialEarnedPreferred, false);
   assert.ok(earned.warnings.some(warning => warning.includes('成績表の再取込')));
@@ -892,7 +893,7 @@ test('same-name History CurriculumCourses retain their official identities and i
 
 test('Law conditional partial2 graduation count remains separate from incomplete2/4 Course progress', () => {
   const law = catalog.programs.find(program => program.department === '法律学科');
-  const mappings = catalog.mappings.slice(0, 9).map((mapping, index) => ({ ...mapping, scopeId: law.scopeId,
+  const mappings = catalog.mappings.slice(0, 9).map((mapping, index) => ({ ...mapping, scopeId: law.scopeId, department: law.department,
     category: '専門教育', field: null, requirementType: index === 8 ? '選択' : '選択必修', curriculumCredits: 4 }));
   const courses = mappings.map((mapping, index) => ({ id: `curriculum:${mapping.mappingId}`, canonicalName: `法律進捗${index}`,
     curriculumCredits: 4, mappingIds: [mapping.mappingId], scopeIds: [law.scopeId] }));

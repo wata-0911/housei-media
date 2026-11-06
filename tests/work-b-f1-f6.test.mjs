@@ -16,7 +16,7 @@ for(const p of programs){
     // Generate valid independent IDs via existing constructor; preserve the audited identity/placement.
     const placement=source.context.catalog.placements.find(p=>p.id===a.placement.candidatePlacementIds[0]||p.id===a.placement.ref?.placementId);
     return newAttempt(source.context.catalog,placement,n,'earned','correspondence');});delete x.raw;
-  const r=await run(x,p.scopeId);assert.ok(r.courses.every(c=>c.completedCredits===0));assert.ok(r.holds.length);
+  const r=await run(x,p.scopeId);assert.equal(r.courses.length,1);assert.deepEqual([r.courses[0].recordedEarned,r.courses[0].completedCredits,r.courses[0].increment],[4,0,0]);assert.equal(r.informational.length,amounts.length);assert.equal(r.holds.length,amounts.length);assert.ok(r.holds.every(h=>h.reason==='unsupported_course_component_structure'));
  });
 }
 for(const n of [0,1,3,4,5,6])test(`F3 independence boundary ${n}`,async()=>{
@@ -24,7 +24,7 @@ for(const n of [0,1,3,4,5,6])test(`F3 independence boundary ${n}`,async()=>{
  const p=source.context.catalog.placements.find(p=>p.id===ids[0]);
  x.graph.attempts=Array.from({length:n},()=>newAttempt(source.context.catalog,p,2,'earned','schooling'));delete x.raw;
  const r=await run(x);assert.equal(r.status,'calculated');
- if(n>1){assert.equal(r.courses.length,0);assert.equal(r.holds.length,n);}else assert.equal(r.courses[0]?.increment??0,n*2);
+ if(n>1){assert.equal(r.courses.length,1);assert.deepEqual([r.courses[0].recordedEarned,r.courses[0].completedCredits,r.courses[0].increment],[n*2,2,2]);assert.equal(r.holds.length,n-1);}else assert.equal(r.courses[0]?.increment??0,n*2);
 });
 for(const raw of ['{"attempts":[],"attempts":[],"ownedRecords":[],"removals":[]}', '{"x":'+ '['.repeat(65)+'0'+']'.repeat(65)+'}'])test('bounded JSON rejects duplicate/depth '+raw.length,async()=>{
  await assert.rejects(calc(raw,source,programs[0].scopeId));

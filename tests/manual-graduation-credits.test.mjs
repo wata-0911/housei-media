@@ -10,7 +10,7 @@ import { createPlannerBackup, parsePlannerBackup } from '../src/planner/backup/p
 // Synthetic quantities/identities, but real department requirements and engine.
 function fixture(program = catalog.programs.find(p => p.department === '法律学科')) {
   const scope = program.scopeId;
-  const mapping = { ...catalog.mappings[0], mappingId: 'manual-map', scopeId: scope, category: '専門教育',
+  const mapping = { ...catalog.mappings[0], mappingId: 'manual-map', scopeId: scope, department: program.department, category: '専門教育',
     field: null, requirementType: '選択必修', curriculumCredits: 4, schoolingOnly: false, mediaOnly: false };
   const course = { id: 'manual-course', canonicalName: '債権総論', curriculumCredits: 4, mappingIds: [mapping.mappingId], scopeIds: [scope] };
   const offering = { ...catalog.offerings[0], id: 'manual-T', name: course.canonicalName, courseId: 'manual-legacy',
