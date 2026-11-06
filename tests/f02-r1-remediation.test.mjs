@@ -69,6 +69,10 @@ for(const p of programs)for(const name of ['文学',professionalNames[p.departme
  assert.equal(r.referenceProgress[0].earned,b.referenceProgress[0].earned);assert.equal(r.referenceProgress[0].earned,4);assert.equal(JSON.stringify(extra),before);
 });
 const foreignIds=['056ffe8f-4c4b-4cc8-825d-7919f470b7b6','066427dc-1df4-47bd-a6b1-538ab161e869','0c8b780c-2748-4c5c-96c0-43caa9102892','0f434746-a27e-4dfe-9707-95044945ef04'];
+test('F02-R1 schema22 explicit null contribution is rejected, not a saveable A counterexample',()=>{
+ const s=stateFor([item('35fb5bad-ec27-4c60-a16e-2271168170bb',4),item('a2caa2ab-135f-4ad8-8998-75e8fd88ca59',null)]),raw=JSON.stringify(s);
+ assert.equal(validateState(s,catalog),false);const loaded=loadState({getItem:k=>k===STORAGE_KEY?raw:null},catalog);assert.notEqual(loaded.error,null);assert.equal(JSON.stringify(s),raw);
+});
 test('F02-R1 B schema22 persisted fractional English is raw2, completion0, graduation0',()=>{
  const s=saved22(stateFor(foreignIds.map(id=>item(id,.5)))),before=JSON.stringify(s),r=calculateState(s,law),c=calculateCompletion(s,law);
  assert.equal(s.items.length,4);assert.equal(c.courses.length,1);assert.equal(c.courses[0].earnedCredits,2);assert.notEqual(c.courses[0].completion,'complete');

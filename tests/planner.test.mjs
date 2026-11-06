@@ -2075,7 +2075,7 @@ function professionalFixture(department, mappingRows, offeringRows) {
         const [mappingId, requirementType, field = null, curriculumCredits] = row;
         const inferredCredits = Math.max(...offeringRows.filter(([, , mappingIds]) => mappingIds.includes(mappingId)).map(([, credits]) => credits));
         return {
-          ...baseMap, mappingId, scopeId: program.scopeId, category: '専門教育', requirementType, field,
+          ...baseMap, mappingId, scopeId: program.scopeId, department: program.department, category: '専門教育', requirementType, field,
           curriculumCredits: row.length > 3 ? curriculumCredits : inferredCredits,
         };
       }),
@@ -2195,9 +2195,11 @@ test('economics and commerce complete their independent required-elective and 82
     ]);
     const card = (items, suffix) => calculateGraduationProgress(items, fixture.catalog, fixture.scope).cards
       .find(row => row.requirementId === `professional-${prefix}-${suffix}`);
-    assert.equal(card([item('required-short', 'earned')], 'required-elective').status, 'unsatisfied');
+    const short = card([item('required-short', 'earned')], 'required-elective');
+    assert.deepEqual([short.earned, short.status], [0, 'unknown']);assert.match(short.reason,/保留/);
     assert.equal(card([item('required-full', 'earned')], 'required-elective').status, 'satisfied');
-    assert.equal(card([item('required-full', 'earned'), item('professional-81', 'earned')], 'total').status, 'unsatisfied');
+    const unfinished = card([item('required-full', 'earned'), item('professional-81', 'earned')], 'total');
+    assert.deepEqual([unfinished.earned, unfinished.status], [threshold, 'unknown']);assert.match(unfinished.reason,/保留/);
     assert.equal(card([item('required-full', 'earned'), item('professional-82', 'earned')], 'total').status, 'satisfied');
   }
 });
@@ -2260,7 +2262,7 @@ test('professional progress completes curriculum mappings before counting credit
   ], 'professional-geography-required-elective');
   assert.equal(geographyRequired.details[0].earned, 0);
   assert.equal(geographyRequired.details[0].unit, 'credits');
-  assert.equal(geographyRequired.status, 'unsatisfied');
+  assert.deepEqual([geographyRequired.earned,geographyRequired.status],[0,'unknown']);assert.match(geographyRequired.reason,/保留/);
 });
 
 test('professional cards count only earned, in-progress, and planned statuses', () => {
@@ -2300,7 +2302,7 @@ test('professional mapping aggregation counts duplicate edges once and safely ho
   const partial = lawCard([item('law-a-1', 'earned'), item('law-a-2', 'earned'), item('law-b', 'earned')]);
   assert.equal(partial.details[0].earned, 1);
   assert.equal(partial.earned, 4);
-  assert.equal(partial.status, 'unsatisfied');
+  assert.equal(partial.status, 'unknown');assert.match(partial.reason,/保留/);
   const held = lawCard([item('law-a-1', 'earned'), item('unknown', 'earned')]);
   assert.equal(held.status, 'unknown');
   assert.match(held.reason, /構成単位が未設定/);
@@ -2318,8 +2320,9 @@ test('geography field course minimums and official repeatable professional limit
     ['human', '選択必修', '人文地理の分野', 8], ['natural', '選択必修', '自然地理の分野', 8],
     ['regional', '選択必修', '地誌・その他の分野', 20],
   ], [
-    ['human-1', 4, ['human']], ['human-2', 4, ['human']], ['natural-1', 4, ['natural']], ['natural-2', 4, ['natural']],
-    ['regional', 20, ['regional']],
+    // Abstract8-credit mappings exercise the independent two-Course minimum.
+    // Give each synthetic Course its exact8 award; two partial4 rows are not proof.
+    ['human-1', 8, ['human']], ['natural-1', 8, ['natural']], ['regional', 20, ['regional']],
   ]);
   const geoCard = calculateGraduationProgress(geography.catalog.offerings.map(o => item(o.id, 'earned')), geography.catalog, geography.scope)
     .cards.find(row => row.requirementId === 'professional-geography-required-elective');

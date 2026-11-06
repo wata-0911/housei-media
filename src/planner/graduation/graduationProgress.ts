@@ -270,6 +270,7 @@ function alignProfessionalAllocationMinimums(rows: RequirementProgress[], catalo
 /** Dedicated transfer/repeat models keep their existing completion rules. */
 function hasDedicatedCompletionRule(offering: Offering, mapping: Mapping, catalog: PlannerCatalog): boolean {
   const name = catalog.curriculum?.courses.find(c => c.id === offering.curriculumCourseId)?.canonicalName ?? offering.name;
+  if (mapping.category === '一般教育' && isBasicLecture(offering)) return true;
   if (mapping.department === '地理学科' && mapping.curriculumCredits === 4
     && !geographyTransferKind(offering, id => catalog.courses.find(c => c.id === id)?.canonicalName ?? null)) return false;
   return specialOfficialCourse(name, mapping.department, mapping);
@@ -907,11 +908,12 @@ function professionalCards(
       continue;
     }
     const institutionalCourse = catalog.curriculum?.courses.find(c => c.id === offering.curriculumCourseId);
-    const rule = institutionalCourse ? officialRepeatableRule(program.department!, institutionalCourse) : repeatableRule(program.department!, offering);
+    const politics = program.department === '法律学科' && institutionalCourse?.id === 'curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce';
+    const rule = politics ? officialRepeatableRule(program.department!, institutionalCourse!) : repeatableRule(program.department!, offering);
     if (rule) {
       const [, name, limit, limitCourses] = rule;
       const repeat = repeatables.get(`${type}:${name}`) ?? { name, type, limit, limitCourses, earned: 0, inProgress: 0, planned: 0, courses: new Set<string>() };
-      if (item.status === 'earned') { repeat.earned += plannerItemCreditContribution(item, offering) === 2 ? 2 : 0; repeat.courses.add(offering.id); }
+      if (item.status === 'earned') { repeat.earned += politics ? plannerItemCreditContribution(item, offering) === 2 ? 2 : 0 : offering.credits; repeat.courses.add(offering.id); }
       else if (item.status === 'in_progress') repeat.inProgress += offering.credits;
       else if (item.status === 'planned') repeat.planned += offering.credits;
       repeatables.set(`${type}:${name}`, repeat);
