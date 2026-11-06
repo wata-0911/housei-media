@@ -1,17 +1,17 @@
 import { emptyAuthority, type AtomicAttemptStore, type AuthorityRecord } from './contracts';
+import { requireAttemptAuthority } from './authorityFormat';
 
 const DATABASE = 'hosei-yi06-isolated-v1';
 const STORE = 'authority';
 // Fixed isolated database. Reads never initialize it; first commit creates the
 // store AND current record in the same versionchange transaction.
-export function createIndexedDbAttemptStore(factory: IDBFactory): AtomicAttemptStore {
-  return {
-    async read() {
+export function createIndexedDbAttemptStore(factory: IDBFactory): AtomicAttemptStore & { protectOriginal(): Promise<string> } {
+    async function readOriginal(): Promise<{ exists: false } | { exists: true; value: unknown; keyExists: boolean }> {
       if (!factory.databases) throw new Error('database_inventory_unavailable');
       const existing = (await factory.databases()).find(db => db.name === DATABASE);
-      if (!existing) return emptyAuthority();
+      if (!existing) return { exists: false };
       if (existing.version !== 1) throw new Error('unsupported_authority_version');
-      return new Promise<AuthorityRecord>((resolve, reject) => {
+      return new Promise((resolve, reject) => {
         const req = factory.open(DATABASE, 1);
         let stopped = false;
         req.onupgradeneeded = () => { req.transaction!.abort(); };
@@ -21,23 +21,44 @@ export function createIndexedDbAttemptStore(factory: IDBFactory): AtomicAttemptS
           const db = req.result; db.onversionchange = () => db.close();
           if (stopped) { db.close(); return; }
           try {
-            const tx = db.transaction(STORE, 'readonly'), get = tx.objectStore(STORE).get('current');
-            let value: AuthorityRecord;
-            get.onsuccess = () => { value = get.result ?? emptyAuthority(); };
-            tx.oncomplete = () => { db.close(); resolve(value); };
+            const tx = db.transaction(STORE, 'readonly'), bucket = tx.objectStore(STORE);
+            const get = bucket.get('current'), key = bucket.getKey('current');
+            tx.oncomplete = () => { db.close(); resolve({ exists: true, value: get.result, keyExists: key.result !== undefined }); };
             tx.onabort = () => { db.close(); reject(tx.error ?? new Error('read_aborted')); };
           } catch (error) { db.close(); reject(error); }
         };
       });
+    }
+  return {
+    async protectOriginal() {
+      // Preserve foreign string bytes too. This is diagnostic protection, never
+      // an Attempt backup and never permission to import/reset the host registry.
+      const original = await readOriginal();
+      return JSON.stringify({ format: 'hosei-authority-record-protection', protectionVersion: 1,
+        database: DATABASE, store: STORE, key: 'current', ...original,
+        ...(original.exists && original.value === undefined ? { valueType: 'undefined' } : {}) });
+    },
+    async read() {
+      const original = await readOriginal();
+      if (!original.exists) return emptyAuthority();
+      if (!original.keyExists) throw new Error('authority_record_missing');
+      requireAttemptAuthority(original.value);
+      return original.value;
     },
     async commit(expected, next) {
+      requireAttemptAuthority(expected); requireAttemptAuthority(next);
       return new Promise<void>((resolve, reject) => {
         const req = factory.open(DATABASE, 1);
         let failure: Error | null = null, upgraded = false, stopped = false;
         function write(tx: IDBTransaction, bucket: IDBObjectStore, close: () => void) {
-          const get = bucket.get('current');
-          get.onsuccess = () => {
-            const current: AuthorityRecord = get.result ?? emptyAuthority();
+          const get = bucket.get('current'), key = bucket.getKey('current');
+          key.onsuccess = () => {
+            let current: AuthorityRecord;
+            try {
+              if (key.result === undefined && !upgraded) throw new Error('authority_record_missing');
+              current = key.result === undefined ? emptyAuthority() : get.result;
+              requireAttemptAuthority(current);
+            } catch (error) { failure = error instanceof Error ? error : new Error(String(error)); tx.abort(); return; }
             if (current.raw !== expected.raw || current.revision !== expected.revision
               || JSON.stringify(current.committed) !== JSON.stringify(expected.committed)
               || JSON.stringify(current.issuedIds) !== JSON.stringify(expected.issuedIds)) {

@@ -98,14 +98,14 @@ export default function InstitutionalPlannerPage() {
     <p role="status" data-testid="save-status">{state.notice}</p>
     {(state.error || protectionError) && <p role="alert">{state.error || protectionError}。保存内容を消去する自動修復は行いません。</p>}
     <fieldset disabled={state.busy} aria-label="保存操作"><legend>保存・保護</legend>
-      <button disabled={!state.ready || !!state.proposal} onClick={() => void controller.prepare()}>{state.graph ? '保存内容を準備' : '新規計画の保存を準備'}</button>
+      <button disabled={!state.ready || !!state.proposal || !(state.graph ? state.admission?.canEdit : state.admission?.canCreate)} onClick={() => void controller.prepare()}>{state.graph ? '保存内容を準備' : '新規計画の保存を準備'}</button>
       <button onClick={() => {
         if ((state.dirty || state.proposal) && !window.confirm('未保存の下書きを破棄し、保存内容を再読込します。続けますか？')) return;
         setSelection(null); setEditing(null); void controller.load();
       }}>保存内容を再読込</button>
       <button onClick={() => void protect(controller.protectCurrent, 'planner-current-raw.json')}>保存原文を保護</button>
       <button onClick={() => void protect(() => protectLegacyPlannerRaw(localStorage), 'planner-legacy-raw.json')}>旧計画・公式成績の原文を保護</button>
-      <label>旧schema22原文から明示移行<input type="file" accept=".json" disabled={locked || !!state.graph} onChange={e => {
+      <label>旧schema22原文から明示移行<input type="file" accept=".json" disabled={locked || !!state.graph || !(state.admission?.canMigrate || state.admission?.canCreate)} onChange={e => {
         const file = e.target.files?.[0]; e.target.value = '';
         if (file) void file.text().then(raw => controller.prepareMigration(raw)).catch(error => setProtectionError(String(error)));
       }} /></label>
@@ -120,7 +120,7 @@ export default function InstitutionalPlannerPage() {
         save={async draft => controller.add(selection.placement.id, input(draft))} close={() => setSelection(null)} />
     </div>}
     <section aria-labelledby="planned-heading"><h2 id="planned-heading" tabIndex={-1}>履修計画</h2>
-      {!state.graph && <p>新規計画を確認して保存してから、制度科目を追加できます。</p>}
+      {!state.graph && <p>{state.admission?.canCreate ? '新規計画を確認して保存してから、制度科目を追加できます。' : '旧データの保護・確認が必要です。空の新規計画を最新の計画として表示しません。'}</p>}
       {state.graph?.attempts.map(a => <article data-attempt-id={a.id} key={a.id} className="attempt-record">
         <h3>{a.originalTitle}</h3><p>科目対応: {a.identity.status} / 本人適用: {a.applicability.status} / 卒業算入: 下の条件付き計算で確認（本人適用は未確認）</p>
         <p>予定年度: {a.plan?.plannedYear ?? '未設定'} / 状態: {a.plan?.status ?? '未設定'} / {a.membership.kind === 'active' ? '計画内' : '計画から除外（記録保持）'}</p>
@@ -137,6 +137,7 @@ export default function InstitutionalPlannerPage() {
       <p>通信の必要リポート数のみ編集できます。既存のリポート・成績・メディア進捗は保持し、assessmentの新規IDは発行しません。</p>
     </section>
     <RecordedGraduationView state={state} calculate={controller.calculate} />
-    <Link to="/planner" onClick={e => { if (state.dirty && !window.confirm('未保存の下書きがあります。旧Plannerへ移動しますか？')) e.preventDefault(); }}>旧Planner・公式成績取込・バックアップ</Link>
+    <p>旧Plannerは旧schema22を保存します。新Attemptの取込・バックアップ先には使えません。旧側を変更した場合、新側では原文の再照合が必要です。</p>
+    <Link to="/planner" onClick={e => { if (state.dirty && !window.confirm('未保存の下書きがあります。旧Plannerへ移動しますか？')) e.preventDefault(); }}>旧schema22 Planner（別保存）</Link>
   </article>;
 }

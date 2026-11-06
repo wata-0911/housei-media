@@ -16,15 +16,16 @@ for(const width of [1280,390])test(`A+C native browser ${width}: CRUD, failure, 
  function phase(name){const value={width,name,elapsedMs:Date.now()-start};phases.push(value);console.log(JSON.stringify(value));}
  try{
  await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
- await context.addInitScript(({legacyRaw,recoveryRaw})=>{
-  if(!localStorage.getItem('ac-fixture')){localStorage.setItem('hosei-planner:v1',legacyRaw);localStorage.setItem('hosei-planner:v1:recovery',recoveryRaw);localStorage.setItem('ac-fixture','yes');}
+ // New-plan CRUD must start with genuinely empty legacy storage. F01 forbids
+ // the previous fixture's old22 + empty-new initialization (covered below).
+ await context.addInitScript(()=>{
   window.moves=[];const scroll=Element.prototype.scrollIntoView;Element.prototype.scrollIntoView=function(o){window.moves.push(this.id);return scroll.call(this,o);};
   const put=IDBObjectStore.prototype.put,transaction=IDBDatabase.prototype.transaction,complete=Object.getOwnPropertyDescriptor(IDBTransaction.prototype,'oncomplete').set;
   window.fault='';IDBObjectStore.prototype.put=function(...args){if(window.fault==='quota'){window.fault='';throw new DOMException('synthetic quota','QuotaExceededError');}return put.apply(this,args);};
   IDBDatabase.prototype.transaction=function(...args){if(window.fault==='read'&&args[1]==='readonly')throw Error('synthetic_read_failed');const tx=transaction.apply(this,args);
    if(args[1]==='readwrite')Object.defineProperty(tx,'oncomplete',{configurable:true,set(fn){complete.call(tx,function(e){if(window.fault==='unknown'){window.fault='';this.onabort?.(e);}else {if(window.fault==='postread')window.fault='read';fn.call(this,e);}});}});
    return tx;};
- },{legacyRaw,recoveryRaw});
+ });
  page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
  page.setDefaultTimeout(120000);
  const status=p=>p.getByTestId('save-status');
@@ -34,7 +35,7 @@ for(const width of [1280,390])test(`A+C native browser ${width}: CRUD, failure, 
  async function save(p=page){await prepare(p);await confirm(p);}
  async function reload(p=page){await p.bringToFront();await p.getByRole('button',{name:'保存内容を再読込',exact:true}).click();await status(p).filter({hasText:'再読込・照合'}).waitFor();}
  async function add(p=page,year='2033',double=false){await p.bringToFront();await p.locator('#course-query').fill(title);await p.getByRole('button',{name:'この配置を選ぶ',exact:true}).first().click();const f=p.getByRole('form',{name:'履修記録の入力',exact:true});await f.getByLabel('予定年度（空欄は未設定）').fill(year);await f.getByLabel('履修方法',{exact:true}).selectOption('correspondence');if(double)await f.evaluate(f=>{f.requestSubmit();f.requestSubmit();});else await f.getByRole('button',{name:'下書きへ追加',exact:true}).click();await f.waitFor({state:'detached'});}
- async function unchangedLegacy(p=page){assert.deepEqual(await p.evaluate(()=>[localStorage.getItem('hosei-planner:v1'),localStorage.getItem('hosei-planner:v1:recovery')]),[legacyRaw,recoveryRaw]);}
+ async function unchangedLegacy(p=page){assert.deepEqual(await p.evaluate(()=>[localStorage.getItem('hosei-planner:v1'),localStorage.getItem('hosei-planner:v1:recovery')]),[null,null]);}
  await open();phase('loaded');await save();phase('schema24-created');assert.equal(checkState(await authority(page)).graph.attempts.length,0);
  await add(page,'2033',true);assert.equal(await page.locator('[data-attempt-id]').count(),1);assert.match(await status(page).textContent(),/未保存/);await save();const first=checkState(await authority(page));assert.equal(first.graph.attempts.length,1);await page.reload();await status(page).filter({hasText:'再読込・照合'}).waitFor();
  const card=page.locator('[data-attempt-id]').first();const id=await card.getAttribute('data-attempt-id');
@@ -73,6 +74,10 @@ test('A+C native schema22 explicit migration → schema23 reload/edit/remove/Und
  const page=await context.newPage();page.setDefaultTimeout(120000);page.on('dialog',d=>d.accept());
  await page.goto(origin+'/__dev/ac');await page.getByTestId('save-status').filter({hasText:'新規計画を開始できます'}).waitFor();
  await page.evaluate(({legacyRaw,recoveryRaw})=>{localStorage.setItem('hosei-planner:v1',legacyRaw);localStorage.setItem('hosei-planner:v1:recovery',recoveryRaw);},{legacyRaw,recoveryRaw});
+ await page.getByRole('button',{name:'保存内容を再読込',exact:true}).click();
+ await page.getByTestId('save-status').filter({hasText:'旧schema22があります'}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'新規計画の保存を準備',exact:true}).isDisabled(),true);
+ assert.deepEqual(await page.evaluate(async()=>await indexedDB.databases()),[]);
  async function confirm(){const dl=page.waitForEvent('download');await page.getByRole('button',{name:'変更前の原文を保護'}).click();await dl;await page.getByLabel('保護ファイルと保存内容を確認しました').check();await page.getByRole('button',{name:'確認して保存'}).click();await page.getByTestId('save-status').filter({hasText:'保存済み'}).waitFor();}
  async function save(){await page.getByRole('button',{name:'保存内容を準備',exact:true}).click();await confirm();}
  await page.getByLabel('旧schema22原文から明示移行').setInputFiles({name:'legacy-v22.json',mimeType:'application/json',buffer:Buffer.from(legacyRaw)});await page.getByRole('group',{name:'保存確認',exact:true}).waitFor();await confirm();
@@ -81,8 +86,8 @@ test('A+C native schema22 explicit migration → schema23 reload/edit/remove/Und
  const id=await card.getAttribute('data-attempt-id');await card.getByRole('button',{name:'履修記録を編集',exact:true}).click();const form=card.getByRole('form',{name:'履修記録の入力'});await form.getByLabel('予定年度（空欄は未設定）').fill('2038');await form.getByRole('button',{name:'変更を下書きに反映'}).click();await save();const edited=JSON.parse((await authority(page)).raw);
  const editedAttempt=edited.graph.attempts.find(a=>a.id===id),originalAttempt=original.graph.attempts.find(a=>a.id===id);
  assert.equal(editedAttempt.plan.plannedYear,2038);assert.deepEqual(editedAttempt.identity,originalAttempt.identity);assert.deepEqual(editedAttempt.placement,originalAttempt.placement);assert.equal(editedAttempt.method.value,originalAttempt.method.value);
- await page.reload();await page.getByTestId('save-status').filter({hasText:'再読込・照合'}).waitFor();
- await page.locator(`[data-attempt-id="${id}"]`).getByRole('button',{name:'計画から削除'}).click();await save();await page.reload();await page.getByTestId('save-status').filter({hasText:'再読込・照合'}).waitFor();await page.locator(`[data-attempt-id="${id}"]`).getByRole('button',{name:'この履修回をUndo'}).click();await save();
+ await page.reload();await page.getByTestId('save-status').filter({hasText:'旧schema22と移行履歴を照合しました'}).waitFor();
+ await page.locator(`[data-attempt-id="${id}"]`).getByRole('button',{name:'計画から削除'}).click();await save();await page.reload();await page.getByTestId('save-status').filter({hasText:'旧schema22と移行履歴を照合しました'}).waitFor();await page.locator(`[data-attempt-id="${id}"]`).getByRole('button',{name:'この履修回をUndo'}).click();await save();
  const restored=JSON.parse((await authority(page)).raw);assert.equal(restored.source.raw,legacyRaw);assert.deepEqual(restored.retained,original.retained);assert.deepEqual(restored.graph,edited.graph);assert.deepEqual(restored.source,original.source);assert.deepEqual(await page.evaluate(()=>[localStorage.getItem('hosei-planner:v1'),localStorage.getItem('hosei-planner:v1:recovery')]),[legacyRaw,recoveryRaw]);
  await writeFile(new URL('schema23-migration.json',evidence),JSON.stringify({schema:restored.schemaVersion,rawExact:true,retainedExact:true,undoExact:true,sourceExact:true,attempts:restored.graph.attempts.length},null,2));
  }finally{await context.close();await browser.close();await server.close();}
