@@ -83,6 +83,14 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       try {
         const original = await store.read(); requireAttemptAuthority(original);
         current = structuredClone(original);
+        // Explicit reload may adopt a newer plan/checkpoint, but cannot erase
+        // host history this session already witnessed. Keep this across load()
+        // failures too; a missing rollback tombstone is not repaired by reload.
+        if (observedRecord && (current.revision < observedRecord.revision
+          || observedRecord.committed.some(digest => !current.committed.includes(digest))
+          || observedRecord.issuedIds.some(id => !current.issuedIds.includes(id))
+          || (current.revision === observedRecord.revision && !sameAttemptData(current, observedRecord))))
+          throw new Error('stale_authority_history_requires_review');
         if (readFence && !sameAttemptData(current, readFence)) throw new Error('stale_authority_requires_reload');
       } catch (error) { revoke(error); throw error; }
       lastRead = structuredClone(current);
@@ -235,7 +243,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
           await verifyDestination(); requireLegacyUnchanged(); return raw;
         });
       }, locks, true).catch(error => {
-        if (error instanceof Error && error.message === 'stale_authority_requires_reload')
+        if (error instanceof Error && /^stale_authority_/.test(error.message))
           error = new Error('stale_backup_requires_reload');
         reloadRequired = true; admission = unavailableAdmission(error); throw error;
       });

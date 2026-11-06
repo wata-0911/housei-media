@@ -43,7 +43,7 @@ test('R7 primary backup envelope refused, same state/catalog file remains valid'
  const y=setup(raw);await y.api.load();const p=await y.api.prepareMigration(backup);await y.api.save(p,true);assert.equal(y.api.admission().case,'E');assert.equal(JSON.parse(y.get().raw).source.raw,backup);
 });
 test('R8 removed rollback reservation refuses backup',async()=>{
- const x=await started(),backup=await x.api.createBackup();x.api.add(placement,input);await save(x.api);const ids=x.get().issuedIds;await x.api.save(await x.api.prepareRestore(backup),true);const v=x.get();const removed=ids.find(id=>!JSON.parse(v.raw).history.issuedIds.includes(id));assert.ok(removed);v.issuedIds=v.issuedIds.filter(id=>id!==removed);v.revision++;x.set(v);const before=x.get();await assert.rejects(x.api.createBackup());assert.deepEqual(x.get(),before);
+ const x=await started(),backup=await x.api.createBackup();x.api.add(placement,input);await save(x.api);const ids=x.get().issuedIds;await x.api.save(await x.api.prepareRestore(backup),true);const v=x.get();const removed=ids.find(id=>!JSON.parse(v.raw).history.issuedIds.includes(id));assert.ok(removed);v.issuedIds=v.issuedIds.filter(id=>id!==removed);v.revision++;x.set(v);const before=x.get();await assert.rejects(x.api.createBackup());assert.deepEqual(x.get(),before);await assert.rejects(x.api.load(),/history_requires_review/);await assert.rejects(x.api.createBackup());assert.deepEqual(x.get(),before);
 });
 test('R8 update between backup reads is rejected',async()=>{
  const x=await started();let n=0;x.store.hook=()=>{if(++n===2){const v=x.get();v.revision++;x.set(v);}};await assert.rejects(x.api.createBackup());assert.equal(x.writes(),1);

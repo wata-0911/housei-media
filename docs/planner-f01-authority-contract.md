@@ -134,6 +134,10 @@ explicit rollback still preserves all host reservations. Protection previews
 include `previousAuthority` as well as previous/source/backup raw strings.
 Backup creation fences all reads under the common writer lock and revalidates
 at the end; changed revisions or rollback tombstones stop export.
+Reload also rejects decreasing revision, missing observed checkpoints or missing
+observed reservations; same-revision changes cannot replace the observed record.
+This is session continuity protection, not authentication of an unseen host's
+entire past history. No lost reservations are silently reconstructed.
 
 The new native adapter rejects non-plain data, sparse arrays, array extensions
 and unknown authority fields before cloning/comparison. CAS compares the whole
