@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {serveAc} from './ac-static-server.mjs';
 import {initialState,catalog,officialRow} from './fixtures/yi07-graduation.mjs';
 import {isMediaSchooling} from '../src/planner/progress/mediaSchooling.ts';
+import {englishState} from './fixtures/f02-r4-scenarios.mjs';
 import fixed from './fixtures/abc-fixed.json' with{type:'json'};
 const {chromium}=await import(process.env.PLANNER_PLAYWRIGHT_MODULE||'playwright');
 const out=process.env.ABC_EVIDENCE||new URL('../../evidence/abc-browser/',import.meta.url).pathname;await mkdir(out,{recursive:true});
@@ -74,6 +75,18 @@ async function startR3(p,schema,state=initialState()){
  if(schema===23){const raw=JSON.stringify(state);await p.getByLabel('旧schema22原文から明示移行').setInputFiles({name:'r3-real22.json',mimeType:'application/json',buffer:Buffer.from(raw)});await p.getByRole('group',{name:'保存確認',exact:true}).waitFor();await confirm(p);}else await save(p);
  await reload(p);
 }
+for(const official of [false,true])test(`ABC F02-R4 D official${official}: another language recognition preserves English after protection save reload`,{timeout:900000},async()=>{
+ const stages=[];
+ for(const schooling of [undefined,null]){
+  const h=await setup(390),p=h.page;try{
+   const state=englishState(schooling,official),raw=JSON.stringify(state);await p.evaluate(raw=>localStorage.setItem('hosei-planner:v1',raw),raw);
+   await startR3(p,23,state);await save(p);await reload(p);const before=await authority(p),stored=JSON.parse(before.raw);assert.equal(stored.schemaVersion,23);assert.equal(stored.source.raw,raw);assert.deepEqual(stored.retained.graduationProfile,state.graduationProfile);await calculate(p);
+   const foreign=p.getByTestId('recorded-calculation').locator('[data-requirement-id="group-foreign"]');assert.equal(await foreign.locator('td').nth(1).getAttribute('data-value'),'4');assert.equal(await foreign.locator('td').nth(0).textContent(),'条件上達成');assert.equal(await p.locator('[data-held-attempt-id]').count(),0);assert.deepEqual(await authority(p),before);assert.equal(await p.evaluate(()=>localStorage.getItem('hosei-planner:v1')),raw);assert.deepEqual(h.errors,[]);
+   stages.push({schooling:schooling===undefined?'not entered':null,raw,authority:before,text:await p.getByTestId('recorded-calculation').textContent(),errors:h.errors});await p.screenshot({path:join(out,`f02-r4-D-${official}-${schooling===undefined?'baseline':'unknown'}.png`),fullPage:true});
+  }finally{await h.close();}
+ }
+ await writeFile(join(out,`f02-r4-D-${official}.json`),JSON.stringify({stages},null,2));
+});
 for(const schema of [23,24])test(`ABC F02-R3 A schema${schema}: invalid media never supplies foreign S; genuine S1x2 does`,{timeout:900000},async()=>{
  const h=await setup(390),p=h.page,stages=[];try{
   await startR3(p,schema);await add(p,'correspondence','2','英語2');await add(p,'correspondence','2','英語3');

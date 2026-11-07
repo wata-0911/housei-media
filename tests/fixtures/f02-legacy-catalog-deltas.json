@@ -5650,7 +5650,7 @@
           "oldPresent": true,
           "newPresent": true,
           "old": 138,
-          "new": 132
+          "new": 90
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
@@ -5703,7 +5703,7 @@
           "oldPresent": true,
           "newPresent": true,
           "old": 138,
-          "new": 132
+          "new": 90
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
@@ -5756,7 +5756,7 @@
           "oldPresent": true,
           "newPresent": true,
           "old": 138,
-          "new": 132
+          "new": 90
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
@@ -5817,7 +5817,7 @@
           "oldPresent": true,
           "newPresent": true,
           "old": 138,
-          "new": 132
+          "new": 90
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
@@ -5870,7 +5870,7 @@
           "oldPresent": true,
           "newPresent": true,
           "old": 138,
-          "new": 132
+          "new": 90
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
@@ -5923,7 +5923,7 @@
           "oldPresent": true,
           "newPresent": true,
           "old": 138,
-          "new": 132
+          "new": 90
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",

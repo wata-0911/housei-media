@@ -97,12 +97,22 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     if (specialOfficialCourse(course.canonicalName, mapping.department, mapping) && !repeat) { block('special_course_rule_not_connected'); continue; }
     if (holds.some(h => group.attempts.some(a => a.id === h.attemptId))) continue;
     const evidence = group.attempts.map(a => legacyRecordedEvidence(a, source, p));
-    const consumedSourceRows = new Set<string>();
-    const repeatedSourceClaim = evidence.map(e => {
-      if (!e) return false;
-      if (consumedSourceRows.has(e.sourceRowKey)) return true;
-      consumedSourceRows.add(e.sourceRowKey); return false;
+    // Resolve a source-slot collision before consuming its single award. An
+    // explicit0/null/fraction cannot take the evidence away from a proper S1
+    // just by being first. A lone edited0 still uses its explicit0 below.
+    const sourceClaims = new Map<string, number[]>();
+    evidence.forEach((e,i) => {
+      if (e) sourceClaims.set(e.sourceRowKey, [...(sourceClaims.get(e.sourceRowKey) ?? []), i]);
     });
+    const repeatedSourceClaim = evidence.map(() => false);
+    for (const indexes of sourceClaims.values()) {
+      const winner = indexes.find(i => {
+        const a = group.attempts[i];
+        const n = Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : evidence[i]!.omittedCredits;
+        return n === (['schooling', 'media'].includes(a.method.value) ? p.compositionCredits === 1 ? 1 : 2 : p.compositionCredits);
+      }) ?? indexes[0];
+      indexes.forEach(i => { repeatedSourceClaim[i] = i !== winner; });
+    }
     const components = group.attempts.map((a,i) => ({
       credits: Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : repeatedSourceClaim[i] ? null : evidence[i]?.omittedCredits ?? null,
       // p.45: native foreign S belongs to the S1 placement. A free method

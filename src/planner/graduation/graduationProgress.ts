@@ -835,7 +835,7 @@ function professionalCards(
   const ambiguous = new Set<string>();
   const incompleteMetadata = new Set<string>();
   const legacyRepeatable = new Set<string>();
-  const politicsEarnedSessions = new Set<string>();
+  const politicsEarnedSessions = new Set<string | null>();
   const repeatables = new Map<string, { name: string; type: string; limit: number; limitCourses: number; earned: number; inProgress: number; planned: number; courses: Set<string> }>();
   const entries = new Map<string, CurriculumEntry>();
   const addTo = (name: string, item: PlannerItem, offering: Offering) => addOfferingTotals(bucket(name), item, offering);
@@ -921,7 +921,7 @@ function professionalCards(
         // once. Missing original session evidence establishes at most one.
         const key = session ?? `unverified:${institutionalCourse!.id}`;
         if (politics) {
-          if (plannerItemCreditContribution(item, offering) === 2 && !politicsEarnedSessions.has(key)) { repeat.earned += 2; politicsEarnedSessions.add(key); }
+          if (plannerItemCreditContribution(item, offering) === 2) politicsEarnedSessions.add(session);
         } else repeat.earned += offering.credits;
         repeat.courses.add(key);
       }
@@ -1033,6 +1033,15 @@ function professionalCards(
     }
   }
 
+  for (const repeat of repeatables.values()) {
+    if (catalog.curriculum && program.department === '法律学科' && repeat.name === '政治学') {
+      // Normalize annual registrations before adding independently proven
+      // official/recorded allocations. Never cap those by annual metadata.
+      const known = [...politicsEarnedSessions].filter(key => key !== null);
+      repeat.earned = (known.length || (politicsEarnedSessions.size ? 1 : 0)) * 2;
+      if (repeat.courses.size > 1) repeat.courses.delete('unverified:curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce');
+    }
+  }
   for (const a of official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育')) {
     const proof = a.fact.repeatableEvidence;
     if (proof) {
@@ -1254,23 +1263,31 @@ function professionalCards(
         make('professional-law-total', '専門教育：合計', total, totalTarget, totalTarget !== null && total.earned >= totalTarget, undefined, '選択必修・選択の卒業算入見込み合計です。', baseReason)]),
       (() => {
         const schooling = emptyTotals();
-        const politicsSessions = new Set<string>();
+        const politicsSessions = new Set<string | null>();
         for (const item of sources.schooling) {
           if (item.status !== 'earned') continue;
           const offering = offerings.get(item.offeringId);
           if (!offering || offering.method !== 'schooling' || offering.credits === null || offering.resolutionStatus !== 'matched') continue;
           const maps = eligibleMappings(offering).filter(mapping => mapping.scopeId === scopeId && mapping.category === '専門教育');
           if (!maps.length) continue;
-          const canonical = offering.courseId ? catalog.courses.find(course => course.id === offering.courseId)?.canonicalName : offering.name;
-          // Public courses and every exact official ＊ row are excluded.  No fuzzy name matching.
+          // The 2026 identity binds the opening to the law table row (p.46).
+          // A decorated opening title is not an institutional course name.
+          const institutional = catalog.curriculum?.courses.find(course => course.id === offering.curriculumCourseId
+            && maps.some(mapping => mapping.source.page === 46 && course.mappingIds.includes(mapping.mappingId)));
+          // Preserve the pre-foundation catalog's comparison-only path. Current
+          // institutional catalogs never fall back to an annual display name.
+          const canonical = catalog.curriculum ? institutional?.canonicalName
+            : offering.courseId ? catalog.courses.find(course => course.id === offering.courseId)?.canonicalName : offering.name;
+          // Public courses and the thirteen exact official starred rows only.
           if (!canonical || LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(canonical) || maps.some(mapping => mapping.requirementType === '公開科目')) continue;
           if (offering.curriculumCourseId === 'curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce') {
-            const key = recordedOpeningSessionKey(offering, catalog.academicYear) ?? 'unverified';
-            if (politicsSessions.has(key) || politicsSessions.size >= 2) continue;
-            politicsSessions.add(key);
+            politicsSessions.add(recordedOpeningSessionKey(offering, catalog.academicYear));
+            continue;
           }
           schooling.earned += offering.credits;
         }
+        const knownPolitics = [...politicsSessions].filter(key => key !== null);
+        schooling.earned += Math.min(2, knownPolitics.length || (politicsSessions.size ? 1 : 0)) * 2;
         schooling.earned += official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'
           && !LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(a.fact.canonicalName ?? '')).reduce((sum, a) => sum + (a.schoolingCredits ?? 0), 0);
         return make('professional-law-schooling', '専門教育：スクーリング', schooling, 8, schooling.earned >= 8, undefined,
@@ -1365,13 +1382,25 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
   });
   next = replace(next, 'group-foreign', card => {
     const row = profile.recognizedCredits.foreignLanguage ?? { mode: 'unknown' as const, credits: null, language: 'unknown' as const, schoolingEquivalentCredits: null };
+    // groupedCards already evaluates English/German/French independently. A
+    // recognized language is another candidate, never a replacement for a
+    // language that independently supplies4/S2. Do not add their quantities or
+    // synthesize a completion from potentially overlapping source ownership.
+    const selectCandidate = (candidate: ProgressCard): ProgressCard => {
+      const language = ({ english: '英語', german: '独語', french: '仏語', unknown: '言語未確認' } as const)[row.language];
+      if (card.status === 'satisfied') return { ...card,
+        note: `${card.note ?? ''} ${language}の認定候補: ${candidate.reason ?? '公式認定の内訳を確認済みです。'}` };
+      if (card.status === 'unknown' && candidate.status === 'unsatisfied') return { ...card,
+        earned: Math.max(card.earned ?? 0, candidate.earned ?? 0) };
+      return candidate;
+    };
     if (row.mode === 'exempt') return { ...card, earned: 0, status: 'satisfied', note: `${card.note ?? ''} 免除済み（修得単位には算入しません）。` };
-    if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && (row.schoolingEquivalentCredits ?? 0) >= 2) return { ...card, earned: 4, status: 'satisfied', note: `${card.note ?? ''} 公式認定の内訳を反映しています。` };
+    if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && (row.schoolingEquivalentCredits ?? 0) >= 2) return selectCandidate({ ...card, earned: 4, status: 'satisfied', reason: null, note: `${card.note ?? ''} 公式認定の内訳を反映しています。` });
     if (row.mode === 'unknown' && profile.admissionType !== 'unknown' && profile.admissionType !== 'first_year' && card.status !== 'satisfied' && card.earned === 0 && card.inProgress === 0 && card.planned === 0) return { ...card, status: 'unknown', earned: null, reason: '認定情報未入力です。0単位認定とは扱いません。', note: `${card.note ?? ''} 外国語の認定結果を確認してください。` };
-    if (row.mode === 'recognized' && row.credits === 4 && row.language === 'unknown') return { ...card, status: 'unknown', earned: null, reason: '同一言語要件未確認です。公式認定結果の言語を確認してください。' };
+    if (row.mode === 'recognized' && row.credits === 4 && row.language === 'unknown') return selectCandidate({ ...card, status: 'unknown', earned: null, reason: '同一言語要件未確認です。公式認定結果の言語を確認してください。' });
     // H38: retain the capped ordinary recognition; missing schooling still holds completion.
-    if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && row.schoolingEquivalentCredits === null) return { ...card, status: 'unknown', earned: 4, reason: 'スクーリング相当認定単位が未確認です。0単位とは扱いません。' };
-    if (row.mode === 'recognized' && row.credits === 4 && (row.schoolingEquivalentCredits ?? 0) < 2) return { ...card, status: 'unsatisfied', earned: 4, reason: 'スクーリング相当認定単位が2単位未満です。' };
+    if (row.mode === 'recognized' && row.credits === 4 && row.language !== 'unknown' && row.schoolingEquivalentCredits === null) return selectCandidate({ ...card, status: 'unknown', earned: 4, reason: 'スクーリング相当認定単位が未確認です。0単位とは扱いません。' });
+    if (row.mode === 'recognized' && row.credits === 4 && (row.schoolingEquivalentCredits ?? 0) < 2) return selectCandidate({ ...card, status: 'unsatisfied', earned: 4, reason: 'スクーリング相当認定単位が2単位未満です。' });
     return card;
   });
   next = replace(next, 'group-physical', card => {
