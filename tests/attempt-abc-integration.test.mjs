@@ -24,8 +24,8 @@ test('ABC fixed T4: primitive learner quantity → formal save → reload → au
 });
 test('ABC contribution null stays held, explicit 0 stays 0, edit/remove/Undo preserve source and restore exact calculation',async()=>{
  const {s,a}=await start();s.recordContribution(a.id,'{"value":null}');await save(s);await s.load();const held=await s.calculate(scope);assert.ok(held.holds.some(h=>h.reason==='explicit_quantity_and_compatible_method_required'));assert.equal(s.graph().attempts[0].plan.contribution.value,null);
- s.recordContribution(a.id,'{"value":0}');await save(s);await s.load();const zero=await s.calculate(scope);assert.equal(s.graph().attempts[0].plan.contribution.value,0);assert.equal(zero.informational[0].contribution,0);assert.equal(general(zero).earned,0);assert.ok(zero.holds.some(h=>h.reason==='unsupported_course_component_structure'));
- // T0 is stored as an explicit zero. The audited engine holds that unsupported T4 structure.
+ s.recordContribution(a.id,'{"value":0}');await save(s);await s.load();const zero=await s.calculate(scope);assert.equal(s.graph().attempts[0].plan.contribution.value,0);assert.equal(zero.informational[0].contribution,0);assert.equal(general(zero).earned,0);assert.ok(zero.holds.some(h=>h.reason==='course_components_incomplete'));
+ // T0 is stored as an explicit zero. The engine reports known zero as incomplete, independently of unknown/null.
  s.recordContribution(a.id,'{"value":4}');await save(s);await s.load();const original=await s.calculate(scope),src=s.source();s.remove(a.id);await save(s);await s.load();assert.equal(general(await s.calculate(scope)).earned,0);s.undo(a.id);await save(s);await s.load();assert.deepEqual(await s.calculate(scope),original);assert.deepEqual(s.source(),src);
 });
 test('ABC rejects contribution abuse before UUID issuance, no source/graph/authority/reservation changes',async()=>{
@@ -51,7 +51,7 @@ for(const parts of [[['correspondence',2],['schooling',2]],[['correspondence',4]
  const store=memory(),s=createPlannerAttemptSession(store,locks);await s.load();await save(s);
  for(const [method,value]of parts){const graph=s.add(placement.id,JSON.stringify({plannedYear:2033,method,status:'earned'}));s.recordContribution(graph.attempts.at(-1).id,JSON.stringify({value}));}
  await save(s);await s.load();const before=store.snapshot();
- for(const p of rules.programs.filter(p=>!p.isCommon)){const r=await s.calculate(p.scopeId);assert.equal(r.status,'calculated');if(parts[0][1]===2&&parts[1][0]==='correspondence'){assert.equal(r.courses.length,0);assert.ok(r.holds.every(h=>h.reason==='unsupported_course_component_structure'));}else{assert.equal(general(r).earned,4);assert.equal(r.courses[0].completedCredits,4);assert.equal(r.courses[0].schoolingCredits,parts[1][0]==='schooling'?2:0);}assert.equal(r.graduationCheckComplete,false);assert.equal(r.personalApplicability.status,'unverified');}assert.deepEqual(store.snapshot(),before);
+ for(const p of rules.programs.filter(p=>!p.isCommon)){const r=await s.calculate(p.scopeId);assert.equal(r.status,'calculated');if(parts[0][1]===2){assert.equal(general(r).earned,0);assert.equal(r.courses[0].completedCredits,0);assert.equal(r.courses.length,1);assert.equal(r.informational.length,2);assert.equal(r.courses[0].recordedEarned,4);assert.equal(r.courses[0].increment,0);assert.equal(r.holds.length,2);assert.ok(r.holds.every(h=>h.reason===(parts[1][0]==='schooling'?'mixed_completion_evidence_required':'unsupported_course_component_structure')));}else{assert.equal(general(r).earned,4);assert.equal(r.courses[0].completedCredits,4);assert.equal(r.courses[0].schoolingCredits,parts[1][0]==='schooling'?2:0);}assert.equal(r.graduationCheckComplete,false);assert.equal(r.personalApplicability.status,'unverified');}assert.deepEqual(store.snapshot(),before);
 });
 
 // ABC-AUDIT-01: only the learner quantity may change on an existing contribution.

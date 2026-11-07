@@ -9,6 +9,6 @@ for(const c of cases)test(c.id+' fixed independent input/expectation',()=>{
  const completion=calculateCompletion(c.state,c.scope);
  assert.equal(completion.courses.filter(x=>x.completion==='complete').length,c.expected.earned);
  const card=r.cards.find(x=>x.requirementId==='professional-history-elective');
- assert.equal(card.earned,c.id==='RA-F4-01'?0:4);
+ assert.equal(card.earned,c.expected.earned*4);
  assert.equal(card.details.find(x=>x.label.startsWith('東洋史')).earned,c.expected.earned);
 });

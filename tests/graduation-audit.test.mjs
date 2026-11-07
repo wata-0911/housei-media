@@ -1793,8 +1793,8 @@ test('H36 official-only O4/S2 keeps known quantities with undecided target/evalu
   for (const r of dependent) assert.equal(r.status, 'unknown');
 });
 
-test('H36 Planner-only completed correspondence2 + schooling2 retains O4/S2', () => {
-  const x = h36PlannerFixture(); h36Assert(h36Progress(x, { items: x.items, rows: [] }), 4, 2);
+test('H36 Planner-only unproven mixed completion retains O0/S2', () => {
+  const x = h36PlannerFixture(); h36Assert(h36Progress(x, { items: x.items, rows: [] }), 0, 2);
 });
 
 test('H36 official priority suppresses same-Course Planner quantities once', () => {
@@ -1980,9 +1980,9 @@ function h31Fixture(department = '法律学科') {
   Object.assign(x, add('professional', '専門教育', null, department === '史学科' ? '必修' : '選択必修', 4, 'correspondence', '監査科目', x.scope));
   Object.assign(x.row, { curriculumCourseId: x.course.id, candidateCurriculumCourseIds: [x.course.id], courseId: x.offering.courseId });
   const general = [add('general1', '一般教育', '人文', '選択必修'), add('general2', '一般教育', '人文', '選択必修')];
-  const foreign = add('foreign', '外国語', '英語', '選択必修', 4, 'schooling');
+  const foreign = Array.from({length:4}, (_,i) => add(`foreign${i}`, '外国語', '英語', '選択必修', 1, 'schooling'));
   const physical = add('physical', '保健体育', null, '選択必修', 2, 'correspondence', '健康・スポーツ科学概論');
-  x.items = [x.offering, ...general.map(g => g.offering), foreign.offering, physical.offering].map(o => item(o, 'earned'));
+  x.items = [x.offering, ...general.map(g => g.offering), ...foreign.map(g => g.offering), physical.offering].map(o => item(o, 'earned'));
   x.candidate = { ...x.offering, id: uuid(), courseId: null, curriculumCourseId: null,
     name: '表示名から候補を推測しない', resolutionStatus: 'manual_review', mappingIds: [], credits: 90 };
   replaceOffering(x.candidate);
@@ -4187,7 +4187,7 @@ for (const recognizedS of [null, 0, 2]) for (const learnerStatus of ['earned', '
     const x = h20Profile(h14Fixture(), recognizedS); x.b.offering.method = 'schooling';
     x.items = [item(x.b.offering, learnerStatus)];
     const p = x.progress();
-    assert.equal(professional(p).earned, learnerStatus === 'earned' ? 8 : 4);
+    assert.equal(professional(p).earned, 4, 'a single learner S4 is not a regular four-credit Course; synthetic recognition remains separate');
     assert.equal(h31Card(p, 'professional-law-schooling').earned, 2 + (learnerStatus === 'earned' ? 4 : 0));
     assert.equal(h42S(p).earned, 2 + (learnerStatus === 'earned' ? 4 : 0) + (recognizedS ?? 0));
     assert.equal(h42S(p).recognizedCredits, recognizedS);
