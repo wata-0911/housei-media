@@ -5646,6 +5646,14 @@
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+          "path": "/cards/professional-law-schooling/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 138,
+          "new": 132
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
           "path": "/cards/professional-law-total/earned",
           "oldPresent": true,
           "newPresent": true,
@@ -5691,19 +5699,11 @@
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "path": "/cards/professional-law-schooling/normalEarned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 3,
-          "new": 5
-        },
-        {
-          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
-          "oldPresent": true,
-          "newPresent": true,
-          "old": 6,
-          "new": 10
+          "old": 138,
+          "new": 132
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
@@ -5752,19 +5752,11 @@
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "path": "/cards/professional-law-schooling/normalEarned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 3,
-          "new": 5
-        },
-        {
-          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
-          "oldPresent": true,
-          "newPresent": true,
-          "old": 6,
-          "new": 10
+          "old": 138,
+          "new": 132
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
@@ -5821,6 +5813,14 @@
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+          "path": "/cards/professional-law-schooling/normalEarned",
+          "oldPresent": true,
+          "newPresent": true,
+          "old": 138,
+          "new": 132
+        },
+        {
+          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
           "path": "/cards/professional-law-total/earned",
           "oldPresent": true,
           "newPresent": true,
@@ -5866,19 +5866,11 @@
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "path": "/cards/professional-law-schooling/normalEarned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 3,
-          "new": 5
-        },
-        {
-          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
-          "oldPresent": true,
-          "newPresent": true,
-          "old": 6,
-          "new": 10
+          "old": 138,
+          "new": 132
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
@@ -5927,19 +5919,11 @@
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+          "path": "/cards/professional-law-schooling/normalEarned",
           "oldPresent": true,
           "newPresent": true,
-          "old": 3,
-          "new": 5
-        },
-        {
-          "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
-          "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
-          "oldPresent": true,
-          "newPresent": true,
-          "old": 6,
-          "new": 10
+          "old": 138,
+          "new": 132
         },
         {
           "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",

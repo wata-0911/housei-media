@@ -256,7 +256,171 @@
   "otherManifestSetsUnchanged": [
     "168",
     "completion",
-    "basis"
+    "basis description"
   ],
-  "prior40CellReview": "Historical R1 review retained; original politics raw rows/quantity remain 5/10 and 2/4. Current effective sessions/candidates are 3/6 and 1/2; two mixed effective-count cells superseded by original-slot evidence. No blanket approval of 2199 cells."
+  "prior40CellReview": "Historical R1 review retained; original politics raw rows/quantity remain 5/10 and 2/4. Current effective sessions/candidates are 3/6 and 1/2; two mixed effective-count cells superseded by original-slot evidence. No blanket approval of 2199 cells.",
+  "catalogComparisonChanges": [
+    {
+      "previous": null,
+      "next": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 138,
+        "new": 132
+      }
+    },
+    {
+      "previous": null,
+      "next": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 138,
+        "new": 132
+      }
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 3,
+        "new": 5
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 6,
+        "new": 10
+      },
+      "next": null
+    },
+    {
+      "previous": null,
+      "next": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 138,
+        "new": 132
+      }
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 3,
+        "new": 5
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 6,
+        "new": 10
+      },
+      "next": null
+    },
+    {
+      "previous": null,
+      "next": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 138,
+        "new": 132
+      }
+    },
+    {
+      "previous": null,
+      "next": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 138,
+        "new": 132
+      }
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 3,
+        "new": 5
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 6,
+        "new": 10
+      },
+      "next": null
+    },
+    {
+      "previous": null,
+      "next": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 138,
+        "new": 132
+      }
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 3,
+        "new": 5
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 6,
+        "new": 10
+      },
+      "next": null
+    }
+  ],
+  "catalogComparisonBasis": "Current exact politics identity merges summer/winter normal and teacher sessions. Six S-reference deltas are 138 to132 because politicsS10 becomes4. Eight candidate count/quantity cells return to the old-side values3/6 and cease to be deltas. Raw current input rows/quantity remain5/10. The other S subtotal is unchanged; this is not approval of every pre-existing component.",
+  "catalogComparisonCells": {
+    "before": 724,
+    "after": 722,
+    "addedSchoolingCells": 6,
+    "removedEqualToOldSideCells": 8,
+    "original18AbsoluteContractUnchanged": true
+  }
 }
