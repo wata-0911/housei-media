@@ -3,9 +3,10 @@ import type { OrdinaryComponent } from '../progress/ordinaryCourseCompletion';
 
 /** 2026 shiori p.47 b. A regular S2 record, never a sum of fractional rows. */
 export function lawPartialSchoolingCredits(mapping: Mapping, components: OrdinaryComponent[]): number {
+  const substantive = components.filter(c => c.credits !== 0);
   return mapping.department === '法律学科' && mapping.category === '専門教育'
     && ['選択必修', '選択'].includes(mapping.requirementType ?? '') && mapping.curriculumCredits === 4
-    && components.length === 1 && components[0].credits === 2 && ['schooling', 'media'].includes(components[0].method) ? 2 : 0;
+    && substantive.length === 1 && substantive[0].credits === 2 && ['schooling', 'media'].includes(substantive[0].method) ? 2 : 0;
 }
 
 type LawCourse = { id: string; mapping: Mapping; completedCredits: number; partialSchoolingCredits: number };

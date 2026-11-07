@@ -1,3 +1,4 @@
+import { legacyRecordedEvidence } from './legacyRecordedEvidence';
 import { allocateLawPartialCredits, lawPartialSchoolingCredits } from '../../graduation/lawPartialCredits';
 import { ordinaryCourseCompletion } from '../../progress/ordinaryCourseCompletion';
 import { finiteNonnegativeSum } from '../../graduation/finiteNumbers';
@@ -95,13 +96,19 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     const repeat = officialRepeatableRule(rules.programs.find(p => p.scopeId === scopeId)!.department, course);
     if (specialOfficialCourse(course.canonicalName, mapping.department, mapping) && !repeat) { block('special_course_rule_not_connected'); continue; }
     if (holds.some(h => group.attempts.some(a => a.id === h.attemptId))) continue;
-    const valid = group.attempts.every(a => typeof a.plan!.contribution?.value === 'number'
-      && Number.isFinite(a.plan!.contribution.value) && a.plan!.contribution.value >= 0 && a.method.value !== 'unknown'
-      && (!p.methodConstraint.requiredMethod || p.methodConstraint.requiredMethod === a.method.value));
-    const components = group.attempts.map(a => ({ credits: a.plan!.contribution?.value ?? null,
-      method: p.methodConstraint.requiredMethod && p.methodConstraint.requiredMethod !== a.method.value ? 'unknown' : a.method.value }));
+    const evidence = group.attempts.map(a => legacyRecordedEvidence(a, source, p));
+    const components = group.attempts.map((a,i) => ({
+      credits: Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : evidence[i]?.omittedCredits ?? null,
+      method: p.methodConstraint.requiredMethod && p.methodConstraint.requiredMethod !== a.method.value
+        && !(p.methodConstraint.requiredMethod === 'schooling' && evidence[i]?.mediaAsSchooling)
+        ? 'unknown' : a.method.value,
+    }));
+    const quantitiesKnown = components.every(c => c.credits !== null && Number.isFinite(c.credits) && c.credits >= 0);
+    const valid = quantitiesKnown && components.every(c => c.method !== 'unknown');
     const regularCompletion = ordinaryCourseCompletion(p.compositionCredits, components);
-    if (!valid && regularCompletion.completedCredits === 0) {
+    const knownSchooling = components.some(c => ['schooling', 'media'].includes(c.method)
+      && c.credits === (p.compositionCredits === 1 ? 1 : 2));
+    if (!valid && regularCompletion.completedCredits === 0 && !knownSchooling) {
       block('explicit_quantity_and_compatible_method_required');
       // Known safe placement, unknown quantity: preserve known subtotal0 with an
       // explicit unknown reason. Absence and an explicit recorded0 remain different.
@@ -110,22 +117,32 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
         fact: { canonicalName: course.canonicalName, curriculumCourseId: course.id } });
       continue;
     }
-    const total = finiteNonnegativeSum(group.attempts.map(a => a.plan!.contribution?.value ?? 0));
-    const schooling = finiteNonnegativeSum(group.attempts.map(a => a.method.value === 'correspondence' ? 0 : a.plan!.contribution?.value ?? 0));
-    if (total === null || schooling === null) { block('aggregate_quantity_non_finite'); continue; }
+    const total = finiteNonnegativeSum(components.map(c => c.credits ?? 0));
+    if (total === null) { block('aggregate_quantity_non_finite'); continue; }
     const target = p.compositionCredits;
     if (target === null || target <= 0) { block('composition_unknown'); continue; }
     // p.45 explicitly permits repeated foreign-language S1 (up to four);
     // this is not the ordinary S2+S2 completion rule.
+    const isSchooling = (i: number) => ['schooling', 'media'].includes(components[i].method);
     const foreignSchooling = mapping.category === '外国語' && target === 1
-      && group.attempts.some(a => a.method.value === 'schooling' && a.plan!.contribution?.value === 1);
-    const repeatBase = group.attempts.findIndex(a => a.plan!.contribution?.value === 2 && a.method.value === 'schooling');
-    if (repeat && repeatBase < 0) { block('repeatable_component_requires_schooling2'); continue; }
+      && components.some((c,i) => isSchooling(i) && c.credits === 1);
+    const repeatCandidates = components.flatMap((c,i) => c.credits === 2 && isSchooling(i) ? [i] : []);
+    const provenRepeats = new Map<string, number>();
+    for (const i of repeatCandidates) {
+      const key = evidence[i]?.repeatKey;
+      if (course.id === 'curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce' && mapping.department === '法律学科'
+        && key && !provenRepeats.has(key)) provenRepeats.set(key,i);
+    }
+    // Distinct original openings may establish two old registrations. Native
+    // IDs alone never establish independent repeat awards. Cap at the rule.
+    const repeatIndexes = provenRepeats.size ? [...provenRepeats].sort(([a],[b]) => a.localeCompare(b)).slice(0,repeat?.[3] ?? 1).map(([,i]) => i)
+      : repeatCandidates.slice(0,1);
+    if (repeat && !repeatIndexes.length) { block('repeatable_component_requires_schooling2'); continue; }
     if (repeat) group.attempts.forEach((a,i) => {
-      if (i !== repeatBase) holds.push({ attemptId: a.id, reason: a.plan!.contribution?.value === 2 && a.method.value === 'schooling'
+      if (!repeatIndexes.includes(i)) holds.push({ attemptId: a.id, reason: repeatCandidates.includes(i)
         ? 'repeatable_independence_unverified' : 'repeatable_component_requires_schooling2' });
     });
-    const foreignIndexes = group.attempts.flatMap((a,i) => a.method.value === 'schooling' && a.plan!.contribution?.value === 1 ? [i] : []).slice(0,4);
+    const foreignIndexes = components.flatMap((c,i) => isSchooling(i) && c.credits === 1 ? [i] : []).slice(0,4);
     const completion = foreignSchooling ? { completedCredits: foreignIndexes.length, reason: foreignIndexes.length < group.attempts.length ? 'additional_course_components_not_counted' : null, held: false, countedIndexes: foreignIndexes } : regularCompletion;
     const reason = !repeat ? completion.reason : null;
     if (reason) {
@@ -134,18 +151,20 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     }
     const completed = repeat || completion.completedCredits > 0;
     // Independent, correctly sized S records survive a held whole-Course claim.
-    const sCredits = repeat ? 2 : foreignSchooling ? completion.completedCredits : completion.held && reason !== 'mixed_completion_evidence_required' ? 0 : finiteNonnegativeSum(group.attempts
-      .filter(a => a.method.value !== 'correspondence' && (!p.methodConstraint.requiredMethod || p.methodConstraint.requiredMethod === a.method.value) && a.plan!.contribution?.value === (target === 1 ? 1 : 2))
-      .map(a => a.plan!.contribution?.value ?? 0))!;
-    const countedSchooling = target === 2 ? Math.min(2,sCredits) : target === 4 && group.attempts.filter(a => a.method.value !== 'correspondence' && (!p.methodConstraint.requiredMethod || p.methodConstraint.requiredMethod === a.method.value) && a.plan!.contribution?.value === 2).length > 1 ? 0 : sCredits;
-    const partialSchooling = lawPartialSchoolingCredits(mapping, group.attempts.map(a => ({ credits: a.plan!.contribution?.value ?? null, method: a.method.value })));
-    const credits = repeat ? 2 : foreignSchooling ? completion.completedCredits : completed ? target : total;
+    const properSchooling = components.filter((c,i) => isSchooling(i) && c.credits === (target === 1 ? 1 : 2));
+    const countedSchooling = repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits
+      : target === 4 ? (properSchooling.length === 1 ? 2 : 0) : Math.min(target, properSchooling.length * (target === 1 ? 1 : 2));
+    const partialSchooling = lawPartialSchoolingCredits(mapping, components);
+    const credits = repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits : completed ? target : total;
     allocations.push({ mapping, credits, learnerRecord: true, lawPartialSchoolingCredits: partialSchooling, ...(completion.held && !repeat ? { completionHoldReason: reason! } : {}), completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling,
       fact: { canonicalName: course.canonicalName, curriculumCourseId: course.id,
-        ...(repeat ? { repeatableEvidence: { label: repeat[1], attempts: [{ attemptId: group.attempts[repeatBase].id }],
-          earnedTotal: 2, countedCredits: credits, excessCredits: 0, limit: repeat[2], limitCourses: repeat[3] } } : {}) } });
-    courses.push({ id, authority: 'learner_record' as const, increment: completed ? credits : 0, recordedEarned: valid ? total : null,
-      completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling, repeatable: Boolean(repeat) || foreignSchooling });
+        ...(repeat ? { repeatableEvidence: { label: repeat[1], attempts: repeatIndexes.map(i => ({ attemptId: group.attempts[i].id })),
+          earnedTotal: credits, countedCredits: credits, excessCredits: 0, limit: repeat[2], limitCourses: repeat[3] } } : {}) } });
+    courses.push({ id, authority: 'learner_record' as const, increment: completed ? credits : 0, recordedEarned: quantitiesKnown ? total : null,
+      completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling, repeatable: Boolean(repeat) || foreignSchooling,
+      quantityInterpretations: group.attempts.map((a,i) => ({ attemptId: a.id, value: components[i].credits,
+        basis: Object.hasOwn(a.plan!, 'contribution') ? 'explicit_learner' : evidence[i]?.omittedCredits !== null && evidence[i]?.omittedCredits !== undefined ? 'decoded_legacy_opening' : 'unknown',
+        legacyOfferingId: evidence[i]?.offeringId ?? null })) });
   }
   const retained = source.kind === 'new-plan' ? undefined : source.state;
   const progress = calculateGraduationProgress([], rules, scopeId, retained?.publicCourses, retained?.thesisSelection,

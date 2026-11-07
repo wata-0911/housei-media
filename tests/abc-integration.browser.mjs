@@ -51,3 +51,20 @@ test('ABC F02-R1 B: fractional S1 stays0; four proper awards keep4 after fifth',
   assert.deepEqual(JSON.parse(before.raw).graph.attempts.map(a=>a.plan.contribution.value),[.5,.5,1,1,1,1,1]);assert.deepEqual(h.errors,[]);await writeFile(join(out,'f02-r1-B.json'),JSON.stringify({authority:before,text:await p.getByTestId('recorded-calculation').textContent(),errors:h.errors},null,2));
  }finally{await h.close();}
 });
+for(const schema of [23,24])test(`ABC F02-R2 schema${schema}: unknown method cannot satisfy foreign S after save/reload`,{timeout:600000},async()=>{
+ const h=await setup(390),p=h.page;try{
+  if(schema===23){const state=initialState(),raw=JSON.stringify(state);await p.getByLabel('旧schema22原文から明示移行').setInputFiles({name:'empty22.json',mimeType:'application/json',buffer:Buffer.from(raw)});await p.getByRole('group',{name:'保存確認',exact:true}).waitFor();await confirm(p);}else await save(p);
+  await add(p,'correspondence','2','英語2');await add(p,'correspondence','2','英語3');await add(p,'unknown','2','英語2');await save(p);await reload(p);const before=await authority(p);await calculate(p);
+  const foreign=p.getByTestId('recorded-calculation').locator('[data-requirement-id="group-foreign"]');assert.equal(await foreign.locator('td').nth(1).getAttribute('data-value'),'4');assert.notEqual(await foreign.locator('td').nth(0).textContent(),'条件上達成');assert.equal(await p.locator('[data-recorded-course-id]').count(),2);for(const row of await p.locator('[data-recorded-course-id]').all())assert.match(await row.textContent(),/スクーリング 0/);assert.equal(await p.locator('[data-held-attempt-id]').count(),1);
+  const stored=JSON.parse(before.raw);assert.equal(stored.schemaVersion,schema);assert.deepEqual(stored.graph.attempts.map(a=>[a.method.value,a.plan.contribution.value]),[['correspondence',2],['correspondence',2],['unknown',2]]);assert.deepEqual(await authority(p),before);assert.deepEqual(h.errors,[]);
+  await writeFile(join(out,`f02-r2-unknown-${schema}.json`),JSON.stringify({authority:before,text:await p.getByTestId('recorded-calculation').textContent(),errors:h.errors},null,2));
+ }finally{await h.close();}
+});
+for(const [label,items,total]of [['omitted-T4-S0',[['35fb5bad-ec27-4c60-a16e-2271168170bb',undefined],['a2caa2ab-135f-4ad8-8998-75e8fd88ca59',0]],4],['omitted-politics-media-summer',[['5c3198fc-10c5-4806-bb2f-bd477670fbf3',undefined],['e0c4749c-d0ac-40af-8bd0-2952f7da9a88',undefined]],4]])test(`ABC F02-R2 formal22→23 ${label} preserves interpreted${total}`,{timeout:600000},async()=>{
+ const h=await setup(1280),p=h.page;try{
+  const state=initialState();Object.assign(state.graduationProfile,{admissionYear:2026,admissionType:'first_year',curriculumApplicability:'current_2026'});state.items=items.map(([offeringId,n])=>({offeringId,status:'earned',plannedYear:null,plannedTerm:null,studyYear:null,earnedOrder:null,...(n===undefined?{}:{courseCreditContribution:n})}));const raw=JSON.stringify(state);
+  await p.getByLabel('旧schema22原文から明示移行').setInputFiles({name:`${label}.json`,mimeType:'application/json',buffer:Buffer.from(raw)});await p.getByRole('group',{name:'保存確認',exact:true}).waitFor();await confirm(p);await reload(p);const before=await authority(p);await calculate(p);
+  const totalCard=p.getByTestId('recorded-calculation').locator('[data-requirement-id="professional-law-total"]');assert.equal(await totalCard.locator('td').nth(1).getAttribute('data-value'),String(total));const stored=JSON.parse(before.raw);assert.equal(stored.schemaVersion,23);assert.equal(stored.source.raw,raw);assert.deepEqual(stored.graph.attempts.map(a=>Object.hasOwn(a.plan,'contribution')),items.map(([,n])=>n!==undefined));assert.deepEqual(await authority(p),before);assert.deepEqual(h.errors,[]);
+  await writeFile(join(out,`f02-r2-migration-${label}.json`),JSON.stringify({raw,authority:before,text:await p.getByTestId('recorded-calculation').textContent(),errors:h.errors},null,2));
+ }finally{await h.close();}
+});

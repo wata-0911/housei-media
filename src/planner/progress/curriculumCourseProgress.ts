@@ -184,7 +184,21 @@ export function deriveCurriculumCourseProgress(
     const checkedCompletion = (credits: number, unknown: boolean, evidence: ReturnType<typeof ordinaryCourseCompletion>, projected = false): CourseCompletion => {
       // Official aggregates and repeat/special models keep their separate authority.
       if (repeatable) return completion(credits, unknown);
-      if (group.official.length) return completion(projected && attempts.some(a => ['planned', 'in_progress', 'waiting'].includes(a.item.status)) ? credits : officialEarned, unknown);
+      if (group.official.length) {
+        const current = completion(officialEarned, unknown);
+        if (!projected || current === 'complete' || unknown) return current;
+        // A future row cannot turn unverified earned T2+S2 into a regular award.
+        // Check future regular structure separately from both official ownership
+        // and manual earned rows; zero intent preserves the current decision.
+        const futureParts = attempts.filter(a => ['planned', 'in_progress', 'waiting'].includes(a.item.status))
+          .map(a => ({ credits: plannerItemCreditContribution(a.item, a.offering), method: a.offering.method }));
+        const future = ordinaryCourseCompletion(target, futureParts);
+        // Retain the existing prospective official2 + regular planned2 model.
+        // Unlinked earned quantities are never used as this official base.
+        const officialPartialPlan = target === 4 && officialEarned === 2
+          && futureParts.some(c => c.credits === 2 && ['correspondence', 'schooling', 'media'].includes(c.method));
+        return future.completedCredits > 0 || officialPartialPlan ? 'complete' : current;
+      }
       return unknown || evidence.held ? 'unknown' : evidence.completedCredits > 0 ? 'complete' : 'incomplete';
     };
     const earnedCompletion = checkedCompletion(earnedCredits, unknownEarned, learnerEarned);

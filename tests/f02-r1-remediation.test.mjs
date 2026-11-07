@@ -1,3 +1,4 @@
+import {assertLawDenseRequirements} from './fixtures/f02-law-requirements.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog,programs,initialState,calculateState,calculateCompletion,newAttempt,officialRow} from './fixtures/yi07-graduation.mjs';
@@ -111,6 +112,7 @@ for(const [kind,s]of sources)for(const [count,method,parts,expected]of [[7,'scho
  attempts.push(...parts.map(n=>newAttempt(s.context.catalog,place(s,'保険法・海商法',law),n,'earned',method)));
  const r=await calculateRecordedCredits(JSON.stringify({attempts,ownedRecords:[],removals:[]}),s,law);assert.equal(r.status,'calculated');assert.equal(r.courses.length,count+1);
  const partial=r.courses.find(c=>c.id===place(s,'保険法・海商法',law).institutionalCourseId);assert.equal(partial.completedCredits,0);assert.equal(partial.increment,expected);
+ assert.equal(r.informational.length,count+parts.length);assert.deepEqual(r.informational.map(a=>[a.method,a.contribution]),attempts.map(a=>[a.method.value,a.plan.contribution.value]));assert.equal(r.holds.length,parts.length);assert.deepEqual(new Set(r.holds.map(h=>h.attemptId)),new Set(attempts.slice(count).map(a=>a.id)));
  assert.equal(card(r.progress,'professional-law-total').earned,count*4+expected);assert.equal(card(r.progress,'professional-law-elective').earned,Math.max(0,count*4-32)+expected);
 });
 const politicsId='curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce';
@@ -156,6 +158,6 @@ for(const c of legacyCases().filter(c=>c.name.includes('/dense-')))test(`F02-R1 
  if(c.scopeId===law) {
   const a=lawLedger(c.state,catalog,law);assert.equal(card(r,'professional-law-total').normalEarned??card(r,'professional-law-total').earned,a.total);
   assert.equal(card(r,'professional-law-elective').normalEarned??card(r,'professional-law-elective').earned,a.elective);
-  for(const row of r.requirements.filter(row=>['専門教育','専門教育：選択'].includes(row.label)&&row.ruleType==='min_credits'&&row.status!=='unknown'))assert.equal(row.earned,row.label==='専門教育'?a.total:a.elective);
+  assertLawDenseRequirements(r,a.total,a.elective);
  }
 });
