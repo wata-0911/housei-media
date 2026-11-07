@@ -24,12 +24,17 @@ for(const [count,instrumented] of [...sizes.map(n=>[n,true]),...(process.env.F01
  const setup=await page.evaluate(async n=>{
   window.m=await import('/bundle.mjs');window.api=m.make();window.puts=0;window.received=[];window.phase='setup';const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...a){puts++;return put.apply(this,a);};
   await api.load();await api.save(await api.prepareSave(),true);const initial=await m.store.read(),body=JSON.parse(await api.createBackup());delete body.sha256;
-  for(let i=1;body.reservedIds.length<n;i++)body.reservedIds.push(i.toString(16).padStart(8,'0')+'-aaab-4aaa-8aab-000000000000');
-  const input=JSON.stringify({...body,sha256:await m.backupDigest(body)}),proposal=await api.prepareRestore(input);puts=0;await api.save(proposal,true,proposal.adoptionSha256);const sourcePut=puts;
+  const burn=n===100001;
+  for(let i=1;body.reservedIds.length<n-(burn?2:0);i++)body.reservedIds.push(i.toString(16).padStart(8,'0')+'-aaab-4aaa-8aab-000000000000');
+  const input=JSON.stringify({...body,sha256:await m.backupDigest(body)});
+  if(burn){const random=crypto.randomUUID,ids=['b4719cef-4e35-452f-8393-d8ba59a3bdb7','87e38c41-ba8a-45ba-9384-5e8a2c39a97b'];try{crypto.randomUUID=()=>ids.shift();api.add('hosei:cp:b99c65d5-5917-422d-bda4-75a4f99ad8b7',JSON.stringify({plannedYear:2038,method:'correspondence',status:'planned'}));}finally{crypto.randomUUID=random;}await api.load();}
+  const proposal=await api.prepareRestore(input);puts=0;await api.save(proposal,true,proposal.adoptionSha256);const sourcePut=puts;
   window.raw=await api.createBackup();window.before=await m.store.read();window.api=m.make();await api.load();puts=0;
-  return{sourcePut,count:before.issuedIds.length,rawUnchanged:before.raw===initial.raw,dbCount:(await indexedDB.databases()).length,backupBytes:new Blob([raw]).size};
+  const recordSha=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(before))))].map(x=>x.toString(16).padStart(2,'0')).join('');
+  return{sourcePut,count:before.issuedIds.length,rawUnchanged:before.raw===initial.raw,dbCount:(await indexedDB.databases()).length,backupBytes:new Blob([raw]).size,burn,recordSha};
  },count);
  assert.equal(setup.count,count);assert.equal(setup.sourcePut,1);assert.ok(setup.rawUnchanged);assert.equal(setup.dbCount,1);
+ if(count===100001)assert.equal(setup.recordSha,'5a2b41e284b682fb31de284b0c55c69d3e166b72bca9b56513e1d32c243a9a43','exact sixth-audit record reproduced through public save/burn/discard/restore');
  const loadBefore=os.loadavg(),input=[],pending=[];let done=false;
  const send=async trigger=>{const start=Date.now();await client.send('Input.dispatchMouseEvent',{type:'mousePressed',x:80,y:45,button:'left',clickCount:1});await client.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:80,y:45,button:'left',clickCount:1});input.push({trigger,wallMs:Date.now()-start});};
  page.on('console',msg=>{if(msg.text()==='r6-membership-start')pending.push(send('membership'));});
