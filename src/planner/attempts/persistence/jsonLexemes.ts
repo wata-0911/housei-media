@@ -1,5 +1,6 @@
 // Resource and decimal policy only. This never grants authority or replaces
 // the historical schema/checkpoint/replay validators. Never rewrite raw.
+import { ReservationBudget } from './reservationBudget';
 export const AUTHORITY_RAW_BYTES = 32 * 1024 * 1024;
 export const NUMBER_TOKEN_CHARS = 256;
 const digit = (c: string) => c >= '0' && c <= '9';
@@ -18,10 +19,11 @@ function decimal(token: string): string {
 
 /** Iterative lexical/structural inspection BEFORE parsing numeric values.
  * Quoted values (including source.raw) are skipped, never rescanned as JSON.
- * Native JSON.parse is used only to decode an isolated quoted OBJECT KEY;
- * that operation cannot convert a numeric value. Total key data is raw-bounded.
+ * Native JSON.parse decodes isolated strings only (keys, format and eligible
+ * UUIDs); that cannot convert a numeric value. All string data is raw-bounded.
  */
-export function inspectJsonLexemes(raw: string, maxBytes: number, kind: string): void {
+export function inspectJsonLexemes(raw: string, maxBytes: number, kind: string,
+  reservationEnvelope?: { format: string; versions: readonly number[] }): void {
   const fail = (suffix: string): never => { throw new Error(`${kind}_${suffix}`); };
   const syntax = (): never => { throw new SyntaxError(`${kind}_json_syntax`); };
   if (typeof raw !== 'string' || raw.length > maxBytes) fail('input_limit');
@@ -35,8 +37,10 @@ export function inspectJsonLexemes(raw: string, maxBytes: number, kind: string):
     else bytes += 3;
     if (bytes > maxBytes) fail('input_limit');
   }
-  type Frame = { object: boolean; phase: 'keyOrEnd' | 'key' | 'colon' | 'valueOrEnd' | 'value' | 'comma'; keys: Set<string>; children: number };
+  type Frame = { object: boolean; root: boolean; key?: string; reservations?: ReservationBudget;
+    phase: 'keyOrEnd' | 'key' | 'colon' | 'valueOrEnd' | 'value' | 'comma'; keys: Set<string>; children: number };
   const stack: Frame[] = [];
+  let envelopeFormat: unknown, envelopeVersion: unknown, reservationList = false;
   let i = 0, values = 0;
   function white() { while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t' || raw[i] === '\r' || raw[i] === '\n')) i++; }
   function stringToken(): string {
@@ -54,7 +58,7 @@ export function inspectJsonLexemes(raw: string, maxBytes: number, kind: string):
     }
     return syntax();
   }
-  function numberToken() {
+  function numberToken(): number {
     const start = i;
     const consume = () => { i++; if (i - start > NUMBER_TOKEN_CHARS) fail('number_limit'); };
     if (raw[i] === '-') consume();
@@ -69,19 +73,30 @@ export function inspectJsonLexemes(raw: string, maxBytes: number, kind: string):
     }
     const token = raw.slice(start, i);
     // Number conversion is bounded; no arbitrary-size integer/exponent work.
+    const number = Number(token);
     try {
-      const number = Number(token);
       if (!Number.isFinite(number) || Object.is(number, -0)
         || (Number.isInteger(number) && !Number.isSafeInteger(number))
         || decimal(token) !== decimal(String(number))) fail('number_precision');
     } catch { fail('number_precision'); }
+    return number;
   }
   function value() {
     white(); if (++values > 1_000_000 || stack.length > 64) fail('resource_limit');
-    const c = raw[i];
-    if (c === '{' || c === '[') { i++; stack.push({ object: c === '{', phase: c === '{' ? 'keyOrEnd' : 'valueOrEnd', keys: new Set(), children: 0 }); }
-    else if (c === '"') stringToken();
-    else if (c === '-' || digit(c)) numberToken();
+    const c = raw[i], parent = stack[stack.length - 1];
+    const rootKey = parent?.root && parent.object ? parent.key : undefined;
+    if (reservationEnvelope && rootKey === 'reservedIds') {
+      if (c !== '[') fail('reservation_shape');
+      i++; reservationList = true;
+      stack.push({ object: false, root: false, phase: 'valueOrEnd', keys: new Set(), children: 0, reservations: new ReservationBudget(kind) });
+    }
+    else if (parent?.reservations) {
+      if (c !== '"') fail('reservation_shape');
+      parent.reservations.add(JSON.parse(stringToken()) as string);
+    }
+    else if (c === '{' || c === '[') { i++; stack.push({ object: c === '{', root: !parent, phase: c === '{' ? 'keyOrEnd' : 'valueOrEnd', keys: new Set(), children: 0 }); }
+    else if (c === '"') { const token = stringToken(); if (rootKey === 'format') envelopeFormat = JSON.parse(token); }
+    else if (c === '-' || digit(c)) { const number = numberToken(); if (rootKey === 'backupVersion') envelopeVersion = number; }
     else if (raw.startsWith('true', i)) i += 4;
     else if (raw.startsWith('false', i)) i += 5;
     else if (raw.startsWith('null', i)) i += 4;
@@ -95,12 +110,12 @@ export function inspectJsonLexemes(raw: string, maxBytes: number, kind: string):
       if (raw[i] !== '"') syntax();
       const key = JSON.parse(stringToken()) as string;
       if (f.keys.has(key)) throw new Error('duplicate_json_key');
-      f.keys.add(key); if (f.keys.size > 100_000) fail('resource_limit');
+      f.keys.add(key); f.key = key; if (f.keys.size > 100_000) fail('resource_limit');
       f.phase = 'colon';
     } else if (f.phase === 'colon') {
       if (raw[i++] !== ':') syntax(); f.phase = 'value';
     } else if (f.phase === 'value' || f.phase === 'valueOrEnd') {
-      if (++f.children > 100_000) fail('resource_limit'); f.phase = 'comma'; value();
+      if (++f.children > 100_000 && !f.reservations) fail('resource_limit'); f.phase = 'comma'; value();
     } else {
       if (raw[i] === close) { i++; stack.pop(); }
       else if (raw[i++] === ',') f.phase = f.object ? 'key' : 'value';
@@ -108,6 +123,8 @@ export function inspectJsonLexemes(raw: string, maxBytes: number, kind: string):
     }
   }
   white(); if (i !== raw.length) syntax();
+  if (reservationList && (envelopeFormat !== reservationEnvelope!.format
+    || !reservationEnvelope!.versions.includes(envelopeVersion as number))) fail('reservation_envelope');
 }
 
 export const inspectAuthorityInput = (raw: string) => inspectJsonLexemes(raw, AUTHORITY_RAW_BYTES, 'authority');

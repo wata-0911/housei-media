@@ -3,6 +3,7 @@ import { requireAttemptAuthority } from './authorityFormat';
 import { sameAttemptData } from '../validation';
 import { isAuthorityJsonTree } from './authorityData';
 import { freeze } from '../migration/contracts';
+import { missingHistory } from './reservationBudget';
 
 const DATABASE = 'hosei-yi06-isolated-v1';
 const STORE = 'authority';
@@ -59,8 +60,8 @@ export function createAuthorityIndexedDbStore(factory: IDBFactory): AtomicAttemp
       const nextSnapshot = freeze(structuredClone(next));
       requireAttemptAuthority(expectedSnapshot); requireAttemptAuthority(nextSnapshot);
       if (nextSnapshot.revision !== expectedSnapshot.revision + 1 || nextSnapshot.raw === null
-        || expectedSnapshot.committed.some(digest => !nextSnapshot.committed.includes(digest))
-        || expectedSnapshot.issuedIds.some(id => !nextSnapshot.issuedIds.includes(id)))
+        || missingHistory(expectedSnapshot.committed, nextSnapshot.committed).length
+        || missingHistory(expectedSnapshot.issuedIds, nextSnapshot.issuedIds).length)
         throw new Error('authority_history_regression');
       return new Promise<void>((resolve, reject) => {
         const req = factory.open(DATABASE, 1);

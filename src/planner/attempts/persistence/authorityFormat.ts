@@ -2,6 +2,7 @@ import { exactKeys, STATE_FORMAT, type AuthorityRecord } from './contracts';
 import { isAuthorityJsonTree } from './authorityData';
 import { validateReservations } from './identity';
 import { inspectAuthorityInput } from './jsonLexemes';
+import { requireReservationBudget } from './reservationBudget';
 
 /** Cheap infrastructure format guard, not checkpoint or replay authentication.
  * G03 stores a string at the same key; never treat it (or stored null/undefined)
@@ -19,6 +20,7 @@ export function requireAttemptAuthority(value: unknown): asserts value is Author
     || new Set(v.committed).size !== v.committed.length || new Set(v.issuedIds).size !== v.issuedIds.length) throw new Error('authority_corrupt');
   try { validateReservations(v.issuedIds); }
   catch { throw new Error('authority_reservation_invalid'); }
+  requireReservationBudget(v.issuedIds, 'authority');
   if (v.raw === null) {
     if (v.revision !== 0 || v.committed.length || v.issuedIds.length) throw new Error('authority_corrupt');
     return;

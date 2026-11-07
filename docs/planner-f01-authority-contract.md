@@ -256,8 +256,8 @@ Valid decimal equivalents4/4.0/4e0/40e-1 and0/null remain supported. Quoted stri
 including source.raw and categoryRaw, are not rescanned as numeric JSON values.
 
 The new lexical front end is iterative and does not replace the frozen parser or
-validator. Object-key strings alone use native JSON string decoding for duplicate
-key comparison; no numeric value is parsed by that operation. Byte caps remain
+validator. Object keys, format tags and eligible reservation strings use native
+JSON string decoding; no numeric value is parsed by that operation. Byte caps remain
 16 MiB legacy migration,32 MiB authority raw (inside the existing32 MiB final
 record envelope),64 MiB Attempt backup. The scanner budgets depth64,1,000,000
 values and100,000 children per container before whole JSON.parse. Numeric tokens
@@ -287,3 +287,52 @@ This changes diagnostic visibility only. Existing180-second reload waits in the
 Japanese/16 MiB browser cases remain an unresolved flaky candidate; retries do
 not establish a product fix. Main-route migration, old-writer/ABA control, future
 browser/resource behavior and physical durability still require F04 acceptance.
+
+## F01-R5: a restorable backup and permanent reservation budget
+
+A normal backup is returned only after inspectAttemptBackupInput and the SAME
+pinned inspectBackup/full replay succeed against a private empty read-only
+recipient. That check performs no IDB open/put, legacy mutation, adoption or
+permission change. The final destination/legacy checks still run after it. The
+immutable before-put candidate also generates and inspects a portable backup;
+a newly saved canonical authority therefore cannot cross a backup-only budget
+silently. Unknown failures revoke operation rights and never return success.
+
+The selected design is a format/path-limited budget, rather than capping new
+reservations at100,000 and stranding previously writable100,001-ID authorities.
+Only root reservedIds in Attempt backup v2/v3 can use a larger container budget.
+The scanner binds format/version regardless of property order, accepts only a
+dense array of valid reservation UUID strings, and detects duplicate UUID tails
+across namespaces. This list and the authority envelope's issuedIds each have a
+finite1,000,000-ID /32MiB canonical serialized ASCII-list budget. The byte budget
+includes brackets, commas and quotes; it fits every formerly writable32MiB
+record's reservation list. No ID is truncated, sorted, renamed or deduplicated
+to fit. Complete replay and required catalog/source/history reservations remain
+mandatory. The format/path exception is not authority or issuer authentication.
+
+Unknown arrays/objects (including nested reservedIds), depth64, total1,000,000
+values INCLUDING reservation entries, number precision, and separate16MiB legacy,
+32MiB record/raw and64MiB backup policies keep their prior meaning. A file under
+its byte cap is not automatically valid. A future candidate that cannot satisfy
+all restore budgets is held before put. A previously stored anomaly is preserved
+and diagnostic protection remains available; no repair is attempted.
+
+Normal output includes all host reservations, including discarded-draft burns.
+Roundtrip acceptance compares the ordered ID array and original source/state by
+SHA through actual public session saves and distinct empty browser origins.
+Order tampering without a new digest is rejected. A digest plus explicit adoption
+still does not authenticate an external writer or unknown prior order. The pinned
+union retains the host's existing prefix and adds restrictions; its semantics
+are unchanged. The ordinary backup/restore UI is not connected by this work;
+public-session API experiments and the existing migration UI regressions are
+reported separately.
+
+Session known-history and native expected/next subset checks now use Sets with
+identical exact-string membership and required-order results. Their membership
+lookups grow linearly. Frozen controller/identity checks, including same-host
+portable inspection's includes search, remain byte-identical and can still have
+quadratic comparison work. They are measured separately, not claimed repaired.
+No latency ceiling is inferred from loaded-machine timings. R4 raw-number and
+prototype-first protections, CAS/Web Locks, readback/history, portable consent
+and source protection remain required. The180-second display-wait flaky cause
+is still unconfirmed.

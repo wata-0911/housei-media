@@ -17,9 +17,10 @@ import { decodeMigrationSource, type prepareMigrationEnvironment } from '../migr
 import { inspectMigrationInput, inspectAttemptBackupInput } from './migrationInput';
 import { requireAttemptAuthority } from '../persistence/authorityFormat';
 import { isAuthorityJsonTree } from '../persistence/authorityData';
+import { missingHistory } from '../persistence/reservationBudget';
 import { freeze } from '../migration/contracts';
 import type { Attempt, AttemptId, AttemptOperationId, AttemptOwnedRecord, OwnedRecordId } from '../types';
-import type { AtomicAttemptStore, AuthorityRecord } from '../persistence/contracts';
+import { emptyAuthority, type AtomicAttemptStore, type AuthorityRecord } from '../persistence/contracts';
 import type { PlannerWriteLocks } from '../../backup/storage';
 import { withPlannerWriteLock } from '../../backup/storagePrimitives';
 import type { Command, Workspace } from '../workbench/operations';
@@ -89,9 +90,9 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
         // Explicit reload may adopt a newer plan/checkpoint, but cannot erase
         // host history this session already witnessed. Keep this across load()
         // failures too; a missing rollback tombstone is not repaired by reload.
-        const missing = knownRecord?.issuedIds.filter(id => !current.issuedIds.includes(id)) ?? [];
+        const missing = knownRecord ? missingHistory(knownRecord.issuedIds, current.issuedIds) : [];
         if (knownRecord && (current.revision < knownRecord.revision
-          || knownRecord.committed.some(digest => !current.committed.includes(digest))
+          || missingHistory(knownRecord.committed, current.committed).length
           || missing.length
           || (current.revision === knownRecord.revision && !sameAttemptData(current, knownRecord))))
           throw new Error(`stale_authority_history_requires_review: missing_known_reservations=${missing.length}`);
@@ -128,6 +129,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
         const loaded = await verifier.load();
         if (!loaded || !sameAttemptData(loaded.state, JSON.parse(written.raw!)))
           throw new Error('candidate_roundtrip_mismatch');
+        await inspectPortableBackup(await verifier.createBackup(loaded));
       } catch (error) {
         throw new Error('authority_unreadable_before_put: ' + String(error));
       }
@@ -138,6 +140,15 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       attempt.written = written;
     },
   }, locks, environment);
+  async function inspectPortableBackup(raw: string): Promise<void> {
+    inspectAttemptBackupInput(raw);
+    // Same pinned restore validation and complete replay, over a private empty
+    // read-only destination. No DB, adoption or consent is consumed here.
+    const verifier = createAttemptPersistence({ read: async () => emptyAuthority(),
+      commit: async () => { throw new Error('backup_verifier_readonly'); } }, undefined, environment);
+    const preview = await verifier.inspectBackup(raw);
+    requireSupportedHistory(preview.handle);
+  }
   function rememberVerified(record: AuthorityRecord) {
     // Knowledge survives failures of permissions/admission. Call only AFTER a
     // complete witness/replay, never from raw reads or optimistic writes.
@@ -264,6 +275,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
           const saved = await verifyDestination();
           if (!saved) throw new Error('stale_backup_requires_reload');
           const raw = await api.createBackup(saved);
+          await inspectPortableBackup(raw);
           // Detect a non-cooperating writer between the export's internal read
           // and its asynchronous digest/replay work. Never issue a stale file.
           await verifyDestination(); requireLegacyUnchanged(); return raw;
