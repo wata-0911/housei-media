@@ -64,7 +64,8 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     const digest = await backupDigest(state);
     if (!authority.committed.includes(digest)) throw new Error('unverified_assignment_history: このブラウザの確定保存履歴がありません。原文を保護してください。');
     const replay = await validateState(state);
-    if (replay.state.history.issuedIds.some(id => !authority.issuedIds.includes(id))) throw new Error('issuance_history_missing');
+    const issuedIndex = new Set(authority.issuedIds);
+    if (replay.state.history.issuedIds.some(id => !issuedIndex.has(id))) throw new Error('issuance_history_missing');
     return replay;
   }
   async function validateState(state: unknown) {
@@ -223,8 +224,14 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     requireReservations(reserved, required);
     unionReservations(reserved, r.requiredReservations);
     await checkReplacement(r.state, r.source, reserved, expected);
-    const recovery: Recovery = { raw, rawSha256: await backupRawDigest(raw), reservedIds: reserved,
-      portable: !expected.committed.includes(await backupDigest(r.state)) || reserved.some(id => !expected.issuedIds.includes(id)) };
+    const rawSha256 = await backupRawDigest(raw);
+    // Index only for membership; the authoritative reservation order is unchanged.
+    let portable = !expected.committed.includes(await backupDigest(r.state));
+    if (!portable) {
+      const issuedIndex = new Set(expected.issuedIds);
+      portable = reserved.some(id => !issuedIndex.has(id));
+    }
+    const recovery: Recovery = { raw, rawSha256, reservedIds: reserved, portable };
     const handle = await makeHandle(r.workspace, { ...replayOrigin(r), expected, fresh: false, recovery });
     return preview(handle, 'restore');
   }

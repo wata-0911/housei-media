@@ -95,7 +95,8 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
       if (!ticket) throw new Error('unknown_removal');
       // Ticket positions are relative to their deletion-time active list. Only
       // reversing the proven deletion history makes those positions composable.
-      const history = workspace.receipts.filter(r => r.kind === 'remove' && graph.removals.some(t => t.operationId === r.operationId));
+      const removalIndex = new Set(graph.removals.map(t => t.operationId));
+      const history = workspace.receipts.filter(r => r.kind === 'remove' && removalIndex.has(r.operationId));
       if (history.length !== graph.removals.length || history.some((r, i) => r.kind !== 'remove'
         || r.operationId !== graph.removals[i].operationId || r.attemptId !== graph.removals[i].attemptSnapshot.id)) {
         throw new Error('undo_history_unproven: 削除順を操作履歴で確認できないため、Undoを停止しました。');

@@ -7,7 +7,7 @@ import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {build} from 'esbuild';
-test('A14/A23: historical host/pure/persistence/backup files retain fixed dev bytes',()=>{
+test('A14/A23: historical dependencies retain pinned bytes (R6 membership-only persistence revision)',()=>{
  const pinned=JSON.parse(readFileSync(new URL('./historical-dependencies.json',import.meta.url)));for(const[p,h]of Object.entries(pinned))assert.equal(createHash('sha256').update(readFileSync(p)).digest('hex'),h,p);
 });
 test('A23: backup cold browser import requires no IO, UUID, clock or dynamic code generation',async()=>{

@@ -329,10 +329,46 @@ reported separately.
 
 Session known-history and native expected/next subset checks now use Sets with
 identical exact-string membership and required-order results. Their membership
-lookups grow linearly. Frozen controller/identity checks, including same-host
-portable inspection's includes search, remain byte-identical and can still have
-quadratic comparison work. They are measured separately, not claimed repaired.
+lookups grow linearly. R5 left frozen controller/identity membership quadratic;
+the explicitly authorized R6 revision below addresses those searches.
 No latency ceiling is inferred from loaded-machine timings. R4 raw-number and
 prototype-first protections, CAS/Web Locks, readback/history, portable consent
 and source protection remain required. The180-second display-wait flaky cause
 is still unconfirmed.
+
+
+## R6: authorized membership-only revision
+
+The user authorized changes to the frozen controller and related identity/history
+membership searches after the sixth independent audit. Only lookup indexes change:
+
+- controller witness indexes authority.issuedIds once after replay;
+- controller portable inspection indexes expected.issuedIds only when the checkpoint
+  digest is already known, preserving the unknown-checkpoint short circuit;
+- requireReservations still validates shape and UUID-tail aliases before building
+  an exact-string index of reserved;
+- each correction indexes its next table's reservedIds before checking original
+  assignment IDs; correction order and all replay validators are unchanged;
+- Undo indexes removal operation IDs for receipt filtering; the ordered history
+  comparison, ticket identity, LIFO rule and snapshot restoration remain required.
+
+The arrays remain authoritative. Sets never replace, sort, shorten or persist the
+reservation, command, correction or deletion arrays. For valid strings Set.has has
+identical membership semantics to includes, including namespace prefixes. These
+checks cost O(n+m) lookup work and O(m) temporary index memory per invocation;
+whole replay, serialization and per-command graph validation are not claimed
+linear. Single digest/receipt lookups and small fixed allowlists are unchanged.
+Progress-row, catalog-mapping and G03 engines are outside this permission.
+
+The historical-dependencies manifest advances exactly three approved persistence
+hashes (controller, identity, codec); its other thirty entries remain fixed. The
+workbench Undo change is also limited to membership and is not in that manifest.
+The previous manifest and exact before/after hashes are sealed in R6 evidence.
+No validation is removed and no test is skipped. New measured tests must fail on
+sealed R5 as well as pass on R6; CI records real native Chromium input, Long Tasks,
+operation counts and unchanged ordered IDs/raw. This is implementer evidence,
+not independent audit approval or authority to publish.
+
+Aggregate32MiB record closure and the Japanese/16MiB display-wait flaky remain
+separate unresolved investigations. No new capacity cap or timeout relaxation
+is introduced by R6. Normal /planner remains on the legacy route.

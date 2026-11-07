@@ -48,7 +48,8 @@ export function unionReservations(...groups: readonly string[][]): string[] {
 export function requireReservations(reserved: unknown, required: string[]): asserts reserved is string[] {
   validateReservations(reserved);
   unionReservations(reserved, required);
-  if (required.some(id => !reserved.includes(id))) throw new Error('backup_reservations_missing');
+  const reservedIndex = new Set(reserved);
+  if (required.some(id => !reservedIndex.has(id))) throw new Error('backup_reservations_missing');
 }
 export function newCommandIds(command: Command): string[] {
   return [command.operationId, ...(command.kind === 'add' ? [command.attempt.id]
