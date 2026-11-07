@@ -80,13 +80,20 @@ for (const [kind,s] of sources) {
    assert.ok(r.holds.length);
   }
  });
- test(`F02 ${kind} S2+S2 remains held without independent S credit`,async()=>{
+ test(`F02 ${kind} S2+S2 retains one known S2 while independent completion stays held`,async()=>{
   const p=placement(s,'民事訴訟法','法律学科');
   const attempts=[1,2].map(()=>newAttempt(s.context.catalog,p,2,'earned','schooling'));
   const r=await calculateRecordedCredits(JSON.stringify({attempts,ownedRecords:[],removals:[]}),s,scope('法律学科'));
   assert.equal(card(r,'professional-law-required-elective').earned,0);
-  assert.equal(card(r,'professional-law-schooling').earned,0);
-  assert.ok(r.holds.length);
+  // R2: two regular S2 claims prove at least one S2, never independent completion4.
+  assert.equal(card(r,'professional-law-schooling').earned,2);
+  assert.notEqual(card(r,'professional-law-schooling').status,'satisfied');
+  assert.equal(r.informational.length,2);
+  assert.deepEqual(r.informational.map(a=>[a.method,a.contribution]),[['schooling',2],['schooling',2]]);
+  assert.equal(r.courses.length,1);
+  assert.deepEqual([r.courses[0].recordedEarned,r.courses[0].completedCredits,r.courses[0].increment,r.courses[0].schoolingCredits],[4,0,0,2]);
+  assert.equal(r.holds.length,2);
+  assert.ok(r.holds.every(h=>h.reason==='schooling_independence_evidence_required'));
  });
  test(`F02 ${kind} legitimate Law partial S2 requires eight full courses`,async()=>{
   const master=s.context.catalog;
