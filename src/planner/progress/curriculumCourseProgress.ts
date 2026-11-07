@@ -186,7 +186,7 @@ export function deriveCurriculumCourseProgress(
       if (repeatable) return completion(credits, unknown);
       if (group.official.length) {
         const current = completion(officialEarned, unknown);
-        if (!projected || current === 'complete' || unknown) return current;
+        if (!projected || current === 'complete') return current;
         // A future row cannot turn unverified earned T2+S2 into a regular award.
         // Check future regular structure separately from both official ownership
         // and manual earned rows; zero intent preserves the current decision.
@@ -195,7 +195,7 @@ export function deriveCurriculumCourseProgress(
         const future = ordinaryCourseCompletion(target, futureParts);
         // Retain the existing prospective official2 + regular planned2 model.
         // Unlinked earned quantities are never used as this official base.
-        const officialPartialPlan = target === 4 && officialEarned === 2
+        const officialPartialPlan = !unknown && target === 4 && officialEarned === 2
           && futureParts.some(c => c.credits === 2 && ['correspondence', 'schooling', 'media'].includes(c.method));
         return future.completedCredits > 0 || officialPartialPlan ? 'complete' : current;
       }

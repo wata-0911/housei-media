@@ -152,9 +152,9 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     const completed = repeat || completion.completedCredits > 0;
     // Independent, correctly sized S records survive a held whole-Course claim.
     const properSchooling = components.filter((c,i) => isSchooling(i) && c.credits === (target === 1 ? 1 : 2));
-    const countedSchooling = repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits
-      : target === 4 ? (properSchooling.length === 1 ? 2 : 0) : Math.min(target, properSchooling.length * (target === 1 ? 1 : 2));
     const partialSchooling = lawPartialSchoolingCredits(mapping, components);
+    const countedSchooling = partialSchooling === 2 ? 2 : repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits
+      : target === 4 ? (properSchooling.length === 1 ? 2 : 0) : Math.min(target, properSchooling.length * (target === 1 ? 1 : 2));
     const credits = repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits : completed ? target : total;
     allocations.push({ mapping, credits, learnerRecord: true, lawPartialSchoolingCredits: partialSchooling, ...(completion.held && !repeat ? { completionHoldReason: reason! } : {}), completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling,
       fact: { canonicalName: course.canonicalName, curriculumCourseId: course.id,

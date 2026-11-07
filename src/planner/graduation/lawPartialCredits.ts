@@ -6,7 +6,8 @@ export function lawPartialSchoolingCredits(mapping: Mapping, components: Ordinar
   const substantive = components.filter(c => c.credits !== 0);
   return mapping.department === '法律学科' && mapping.category === '専門教育'
     && ['選択必修', '選択'].includes(mapping.requirementType ?? '') && mapping.curriculumCredits === 4
-    && substantive.length === 1 && substantive[0].credits === 2 && ['schooling', 'media'].includes(substantive[0].method) ? 2 : 0;
+    // Several S2 claims establish at least one S2, never independent completion4.
+    && substantive.length > 0 && substantive.every(c => c.credits === 2 && ['schooling', 'media'].includes(c.method)) ? 2 : 0;
 }
 
 type LawCourse = { id: string; mapping: Mapping; completedCredits: number; partialSchoolingCredits: number };
