@@ -211,3 +211,35 @@ synchronous check, ABA and physical power-loss recovery still need F04 acceptanc
 
 The future Attempt-restore file UI must apply the same strict byte boundary with
 its64 MiB policy. F01-R2 does not add that UI or connect the normal Planner.
+
+
+## F01-R3: loadability before durable commit
+
+After the pinned controller serializes/replays a candidate and applies its32 MiB
+record policy, the production boundary fixes the complete host-reservation record
+in an immutable private snapshot. A separate read-only instance of the SAME
+historical persistence.load parses, witnesses and replays that exact raw against
+its actual checkpoint/ID envelope and migration environment. Its reconstructed
+state must equal the candidate JSON. Any parser/resource/replay failure returns
+`authority_unreadable_before_put` before the real store's commit/put. The same
+snapshot is passed to commit; caller data cannot replace its raw after validation.
+Legacy keys are rechecked after asynchronous validation and immediately before
+native put, and native CAS still checks the whole expected record. A successful
+preflight neither grants edit permission nor adds verified host history; only
+complete actual readback does that. The historical33 files are unchanged.
+
+The16 MiB migration input,64 MiB Attempt backup and32 MiB final-record policies
+are unchanged. Being under a size policy is not proof that the historical parser
+can read the serialized result. An8 MiB whitespace-padded valid22 (and16 MiB
+boundary inputs) may be held with put0 even though source decoding/preview passed.
+The exact original source remains in the protection download and legacy storage;
+no whitespace stripping, raw normalization or partial archive is used. Supporting
+such long quoted archives needs a separately versioned/audited reading path.
+Existing unreadable records are not repaired or overwritten automatically.
+
+Diagnostics first walk own data descriptors iteratively with a visited Set.
+An alias/cycle is refused on its first revisit BEFORE the historical recursive
+comparator, giving linear graph discovery instead of exponentially traversing
+DAG paths. Accessors are rejected without invoking getters. The historical
+comparator still decides JSON shape/array holes/extra properties/numeric meaning
+for non-shared trees. Original IndexedDB values are never normalized or repaired.

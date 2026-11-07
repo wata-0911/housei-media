@@ -16,6 +16,7 @@ import { emptyLegacySnapshot, inspectAuthorityAdmission, readLegacySnapshot, sam
 import { decodeMigrationSource, type prepareMigrationEnvironment } from '../migration/source';
 import { inspectMigrationInput, inspectAttemptBackupInput } from './migrationInput';
 import { requireAttemptAuthority } from '../persistence/authorityFormat';
+import { freeze } from '../migration/contracts';
 import type { Attempt, AttemptId, AttemptOperationId, AttemptOwnedRecord, OwnedRecordId } from '../types';
 import type { AtomicAttemptStore, AuthorityRecord } from '../persistence/contracts';
 import type { PlannerWriteLocks } from '../../backup/storage';
@@ -115,8 +116,23 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       const restricted = { ...next, issuedIds: unionReservations(next.issuedIds, allocator.canonicalReservations()) };
       if (new TextEncoder().encode(JSON.stringify(restricted)).byteLength > 32 * 1024 * 1024)
         throw new Error('capacity_limit: host reservation envelope exceeds 33554432 bytes');
-      const written = structuredClone(restricted);
-      await store.commit(expected, restricted, requireLegacyUnchanged);
+      // The exact serialized candidate must survive the NEXT load's pinned
+      // parser, witness and replay before it can become durable authority.
+      // Inspecting source.raw or the pre-serialization state cannot prove this.
+      const written = freeze(structuredClone(restricted));
+      try {
+        const verifier = createAttemptPersistence({ read: async () => written,
+          commit: async () => { throw new Error('candidate_verifier_readonly'); } }, undefined, environment);
+        const loaded = await verifier.load();
+        if (!loaded || !sameAttemptData(loaded.state, JSON.parse(written.raw!)))
+          throw new Error('candidate_roundtrip_mismatch');
+      } catch (error) {
+        throw new Error('authority_unreadable_before_put: ' + String(error));
+      }
+      // Validation contains asynchronous digest/replay work. Recheck legacy
+      // here; native CAS and the synchronous beforePut still fence actual put.
+      requireLegacyUnchanged();
+      await store.commit(expected, written, requireLegacyUnchanged);
       attempt.written = written;
     },
   }, locks, environment);
