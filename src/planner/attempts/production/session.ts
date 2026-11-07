@@ -16,6 +16,7 @@ import { emptyLegacySnapshot, inspectAuthorityAdmission, readLegacySnapshot, sam
 import { decodeMigrationSource, type prepareMigrationEnvironment } from '../migration/source';
 import { inspectMigrationInput, inspectAttemptBackupInput } from './migrationInput';
 import { requireAttemptAuthority } from '../persistence/authorityFormat';
+import { isAuthorityJsonTree } from '../persistence/authorityData';
 import { freeze } from '../migration/contracts';
 import type { Attempt, AttemptId, AttemptOperationId, AttemptOwnedRecord, OwnedRecordId } from '../types';
 import type { AtomicAttemptStore, AuthorityRecord } from '../persistence/contracts';
@@ -121,6 +122,7 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       // Inspecting source.raw or the pre-serialization state cannot prove this.
       const written = freeze(structuredClone(restricted));
       try {
+        requireAttemptAuthority(written); // Inspect lexical numbers before the pinned load parses them.
         const verifier = createAttemptPersistence({ read: async () => written,
           commit: async () => { throw new Error('candidate_verifier_readonly'); } }, undefined, environment);
         const loaded = await verifier.load();
@@ -349,7 +351,16 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       finally { saving = null; }
     }); },
     // Do not let an unrelated protection read impersonate the verifier's read.
-    protectCurrent: () => exclusive(() => options.protectAuthority ? options.protectAuthority() : api.protectCurrent()),
+    protectCurrent: () => exclusive(async () => {
+      if (options.protectAuthority) return options.protectAuthority();
+      // Diagnostic protection must bypass adoption/number parsing even when
+      // ordinary load is held. It never updates lastRead, knowledge or rights.
+      const original = await store.read();
+      if (!isAuthorityJsonTree(original)) throw new Error('protection_unrepresentable: original remains in storage');
+      const snapshot = freeze(structuredClone(original));
+      return createAttemptPersistence({ read: async () => snapshot,
+        commit: async () => { throw new Error('protection_readonly'); } }, undefined, environment).protectCurrent();
+    }),
     add(placementId: string, inputJson: string) {
       requireId(placementId);
       const h = current(), input = editInput(record(inputJson, ['plannedYear', 'method', 'status']));

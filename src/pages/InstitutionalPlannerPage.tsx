@@ -107,7 +107,8 @@ export default function InstitutionalPlannerPage() {
     <h1>履修プランナー A＋B＋C 結合候補</h1>
     <p className="notice">隔離環境の候補です。下書きは別途保存が必要です。画面を離れると未保存の入力は失われます。</p>
     <p role="status" data-testid="save-status">{state.notice}</p>
-    {(state.error || protectionError) && <p role="alert">{state.error || protectionError}。保存内容を消去する自動修復は行いません。</p>}
+    {state.error && <p role="alert">{state.error}。保存内容を消去する自動修復は行いません。</p>}
+    {protectionError && <p role="alert" data-testid="protection-error">{protectionError}。保存内容を消去する自動修復は行いません。</p>}
     <fieldset disabled={state.busy} aria-label="保存操作"><legend>保存・保護</legend>
       <button disabled={!state.ready || !!state.proposal || !(state.graph ? state.admission?.canEdit : state.admission?.canCreate)} onClick={() => void controller.prepare()}>{state.graph ? '保存内容を準備' : '新規計画の保存を準備'}</button>
       <button onClick={() => {

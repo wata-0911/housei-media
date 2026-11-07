@@ -10,6 +10,11 @@ export function isAuthorityJsonTree(value: unknown): boolean {
     while (pending.length) {
       const node = pending.pop();
       if (!node || typeof node !== 'object') continue;
+      // Reject known non-JSON types BEFORE ownKeys can enumerate millions of
+      // TypedArray indexes. Match the unchanged historical prototype policy.
+      const prototype = Object.getPrototypeOf(node);
+      if (Array.isArray(node) ? prototype !== Array.prototype
+        : prototype !== Object.prototype && prototype !== null) return false;
       if (seen.has(node)) return false;
       seen.add(node);
       for (const key of Reflect.ownKeys(node)) {

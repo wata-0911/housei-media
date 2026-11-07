@@ -243,3 +243,47 @@ comparator, giving linear graph discovery instead of exponentially traversing
 DAG paths. Accessors are rejected without invoking getters. The historical
 comparator still decides JSON shape/array holes/extra properties/numeric meaning
 for non-shared trees. Original IndexedDB values are never normalized or repaired.
+
+## F01-R4: raw number lexemes and early non-JSON rejection
+
+Every F01 authority raw is lexically checked BEFORE whole JSON.parse and the
+historical load/witness/replay. This includes native read, actual/expected/next
+CAS records, production reads and the immutable candidate used by R3. Lossy
+decimal tokens return `authority_number_precision`; a held record never becomes
+verified knowledge or edit authority. It cannot produce a normal backup or be
+used as a restore destination. A later reload of the same anomaly stays held.
+Valid decimal equivalents4/4.0/4e0/40e-1 and0/null remain supported. Quoted strings,
+including source.raw and categoryRaw, are not rescanned as numeric JSON values.
+
+The new lexical front end is iterative and does not replace the frozen parser or
+validator. Object-key strings alone use native JSON string decoding for duplicate
+key comparison; no numeric value is parsed by that operation. Byte caps remain
+16 MiB legacy migration,32 MiB authority raw (inside the existing32 MiB final
+record envelope),64 MiB Attempt backup. The scanner budgets depth64,1,000,000
+values and100,000 children per container before whole JSON.parse. Numeric tokens
+are capped at256 characters and exponent digits at16; significant exponent
+magnitude beyond6 digits is held too. Such resource holds leave original data
+intact, including large or unusual previously stored records; they are not repair
+or blanket permission for every JSON under a byte cap. Long quoted strings are
+scanned without a recursive/quoted-token regex. The R3 pinned load still decides
+whether an exact serialized candidate can safely be committed.
+
+Diagnostic protection bypasses adoption and numeric conversion deliberately.
+The browser uses the existing native protectOriginal; the generic memory fallback
+uses a separate read-only protection reader over an immutable lossless snapshot.
+Neither updates lastRead, knownRecord, permissions or host reservations. Raw
+protection remains distinct from a validated Attempt backup. It can preserve all
+lexemes of a held raw; unknown structured-clone values still fail lossless export.
+
+Before ownKeys or descriptors, each object node is checked against the SAME
+prototype policy as the frozen comparator: Object.prototype/null or regular
+Array.prototype only. TypedArray/DataView/ArrayBuffer/Map/Set/Date and subclasses
+are rejected at that step, including nested values. Shared/cyclic plain data
+retains R3's iterative first-revisit rejection; no getter is invoked and array
+holes/extensions/non-enumerable/symbol properties keep their existing rejection.
+
+The isolated page displays load/save and protection errors separately (R4 P2).
+This changes diagnostic visibility only. Existing180-second reload waits in the
+Japanese/16 MiB browser cases remain an unresolved flaky candidate; retries do
+not establish a product fix. Main-route migration, old-writer/ABA control, future
+browser/resource behavior and physical durability still require F04 acceptance.
