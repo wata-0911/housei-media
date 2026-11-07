@@ -1273,7 +1273,7 @@ function professionalCards(
           // The 2026 identity binds the opening to the law table row (p.46).
           // A decorated opening title is not an institutional course name.
           const institutional = catalog.curriculum?.courses.find(course => course.id === offering.curriculumCourseId
-            && maps.some(mapping => mapping.source.page === 46 && course.mappingIds.includes(mapping.mappingId)));
+            && maps.some(mapping => course.mappingIds.includes(mapping.mappingId)));
           // Preserve the pre-foundation catalog's comparison-only path. Current
           // institutional catalogs never fall back to an annual display name.
           const canonical = catalog.curriculum ? institutional?.canonicalName
@@ -1388,9 +1388,14 @@ function applyRecognition(cards: ProgressCard[], profile: GraduationProfile): Pr
     // synthesize a completion from potentially overlapping source ownership.
     const selectCandidate = (candidate: ProgressCard): ProgressCard => {
       const language = ({ english: '英語', german: '独語', french: '仏語', unknown: '言語未確認' } as const)[row.language];
-      if (card.status === 'satisfied') return { ...card,
+      const otherLanguages = row.language === 'unknown' ? [] : (card.details ?? []).filter(detail => detail.label !== language);
+      const otherSatisfied = otherLanguages.some(detail => (detail.earned ?? 0) >= 4 && (detail.schooling ?? 0) >= 2);
+      // Recognition owns its named language. Its missing S cannot be repaired
+      // with potentially overlapping awards from that same language (H38).
+      if (card.status === 'satisfied' && otherSatisfied) return { ...card,
         note: `${card.note ?? ''} ${language}の認定候補: ${candidate.reason ?? '公式認定の内訳を確認済みです。'}` };
-      if (card.status === 'unknown' && candidate.status === 'unsatisfied') return { ...card,
+      if (card.status === 'unknown' && candidate.status === 'unsatisfied'
+        && otherLanguages.some(detail => detail.reason || (detail.earned ?? 0) > 0)) return { ...card,
         earned: Math.max(card.earned ?? 0, candidate.earned ?? 0) };
       return candidate;
     };
