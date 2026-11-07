@@ -374,6 +374,7 @@ test('search: isolated ABC entry connects shared search and formal session to th
   assert.deepEqual(graduationModules, [
     'src/planner/attempts/graduation/adapter.ts',
     'src/planner/attempts/graduation/impact.ts',
+    'src/planner/attempts/graduation/legacyRecordedEvidence.ts',
     'src/planner/attempts/graduation/recordedCalculation.ts',
   ]);
   for (const path of ['src/pages/InstitutionalPlannerPage.tsx', 'src/planner/attempts/production/acController.ts'])
