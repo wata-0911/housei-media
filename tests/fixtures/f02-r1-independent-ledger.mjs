@@ -22,6 +22,7 @@ export function foreignLedger(state,catalog) {
 }
 
 export function lawLedger(state,catalog,scope) {
+ const politicsSessions=new Map([['e0c4749c-d0ac-40af-8bd0-2952f7da9a88','summer'],['81911901-205b-49ff-8efc-a0440bf15309','summer'],['f0ec8fff-cf06-4a95-a0b4-266670a07b8f','winter'],['4bf76def-db1f-46c8-a3bc-df3f8cac1164','winter'],['5c3198fc-10c5-4806-bb2f-bd477670fbf3','media-first-term']]);
  const repeats={'政治学':4,'法律学演習':8,'法律学特講':8,'総合特講':16},groups=new Map();
  for(const i of state.items.filter(i=>i.status==='earned')) {
   const o=catalog.offerings.find(o=>o.id===i.offeringId);if(o?.resolutionStatus!=='matched')continue;
@@ -34,7 +35,8 @@ export function lawLedger(state,catalog,scope) {
  let required=0,pure=0,partial=0,count=0;
  for(const g of groups.values()) {
   let credits=0;
-  if(repeats[g.name])credits=Math.min(repeats[g.name],g.rows.filter(r=>r.n===2).length*2);
+  if(g.name==='政治学'){const eligible=g.rows.filter(r=>r.n===2);if(eligible.some(r=>!politicsSessions.has(r.id)))throw Error('review the original politics opening separately');credits=Math.min(4,new Set(eligible.map(r=>politicsSessions.get(r.id))).size*2);}
+  else if(repeats[g.name])credits=Math.min(repeats[g.name],g.rows.filter(r=>r.n===2).length*2);
   else if(g.target===4)credits=g.rows.some(r=>r.method==='correspondence'&&r.n===4)?4:0;
   else if(g.target===2)credits=g.rows.some(r=>r.n===2)?2:0;
   else throw Error('separately review law composition');

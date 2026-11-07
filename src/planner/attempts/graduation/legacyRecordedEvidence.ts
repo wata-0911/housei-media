@@ -3,6 +3,7 @@ import type { PersistenceSource } from '../persistence/contracts';
 import type { CurriculumPlacement } from '../../institutional/types';
 import { sameAttemptData } from '../validation';
 import { isMediaSchooling } from '../../progress/mediaSchooling';
+import { recordedOpeningSessionKey } from '../../graduation/recordedOpeningEvidence';
 
 /** Read-only interpretation of a decoded, frozen schema22 source. A reference
  * alone is insufficient: the original earned item, method and placement must
@@ -22,10 +23,10 @@ export function legacyRecordedEvidence(a: Attempt, source: PersistenceSource, p:
     || a.plan.importedSourceCourseId !== items[0].importedSourceCourseId) return null;
   const original = items[0];
   return { offeringId: offering.id,
+    // One original source row can supply quantity/method evidence only once.
+    sourceRowKey: JSON.stringify([source.rawSha256, source.sourceCatalogSha256, offering.id]),
     omittedCredits: !Object.hasOwn(a.plan, 'contribution') && !Object.hasOwn(original, 'courseCreditContribution') ? offering.credits : null,
     mediaAsSchooling: isMediaSchooling(offering),
     // Fixed original year/term/period, not planned year, Attempt ID or title.
-    repeatKey: offering.academicYear === source.sourceCatalog.academicYear && offering.classCode
-      && offering.deliveryCategory && offering.period
-      ? JSON.stringify([offering.curriculumCourseId, offering.academicYear, offering.deliveryCategory, offering.period]) : null };
+    repeatKey: recordedOpeningSessionKey(offering, source.sourceCatalog.academicYear) };
 }

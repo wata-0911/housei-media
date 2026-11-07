@@ -1,0 +1,262 @@
+{
+  "basis": "R3-C only: original politics summer normal/teacher share one session, likewise winter. Raw input rows/contributions remain unchanged. No approval of remaining historical cells.",
+  "fixedCourseId": "curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce",
+  "independentInputCounts": {
+    "dense-earned": {
+      "rawRows": 5,
+      "rawContribution": 10,
+      "distinctSessions": 3,
+      "candidateS": 6,
+      "ordinaryCap": 4,
+      "confirmedSchoolingCap": 4,
+      "lawElective": 96,
+      "lawTotal": 128
+    },
+    "dense-mixed": {
+      "rawEarnedRows": 2,
+      "rawContribution": 4,
+      "distinctSessions": 1,
+      "ordinary": 2,
+      "schooling": 2,
+      "otherPureElective": 26,
+      "public": 2,
+      "lawElective": 30,
+      "otherRequiredElective": 12,
+      "lawTotal": 42
+    }
+  },
+  "reviewedChanges": [
+    {
+      "previous": null,
+      "next": {
+        "case": "法学部 / 法律学科/dense-earned",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 138,
+        "new": 132
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-earned",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 3,
+        "new": 5
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-earned",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 6,
+        "new": 10
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 36,
+        "new": 32
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 36,
+        "new": 30
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 36,
+        "new": 32
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 36,
+        "new": 30
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/note",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": "純粋な選択 34単位 + 選択必修超過 0単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+        "new": "純粋な選択 30単位 + 選択必修超過 0単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/note",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": "純粋な選択 34単位 + 選択必修超過 0単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+        "new": "純粋な選択 28単位 + 選択必修超過 0単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+      }
+    },
+    {
+      "previous": null,
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-schooling/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 44,
+        "new": 42
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-total/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 60,
+        "new": 44
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-total/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 60,
+        "new": 42
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-total/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 60,
+        "new": 44
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-total/normalEarned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 60,
+        "new": 42
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/referenceProgress/0/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 94,
+        "new": 74
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/referenceProgress/0/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 94,
+        "new": 72
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 60,
+        "new": 44
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 60,
+        "new": 42
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 36,
+        "new": 32
+      },
+      "next": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 36,
+        "new": 30
+      }
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/counted",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 2,
+        "new": 4
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 1,
+        "new": 2
+      },
+      "next": null
+    },
+    {
+      "previous": {
+        "case": "法学部 / 法律学科/dense-mixed",
+        "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+        "oldPresent": true,
+        "newPresent": true,
+        "old": 2,
+        "new": 4
+      },
+      "next": null
+    }
+  ],
+  "oldManifest192Cells": 895,
+  "newManifest192Cells": 892,
+  "removedBecauseEqualToHistorical": 5,
+  "newChangedFromHistorical": 2,
+  "revisedExistingCells": 8,
+  "otherManifestSetsUnchanged": [
+    "168",
+    "completion",
+    "basis"
+  ],
+  "prior40CellReview": "Historical R1 review retained; original politics raw rows/quantity remain 5/10 and 2/4. Current effective sessions/candidates are 3/6 and 1/2; two mixed effective-count cells superseded by original-slot evidence. No blanket approval of 2199 cells."
+}

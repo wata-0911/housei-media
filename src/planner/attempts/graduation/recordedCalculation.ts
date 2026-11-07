@@ -97,9 +97,21 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     if (specialOfficialCourse(course.canonicalName, mapping.department, mapping) && !repeat) { block('special_course_rule_not_connected'); continue; }
     if (holds.some(h => group.attempts.some(a => a.id === h.attemptId))) continue;
     const evidence = group.attempts.map(a => legacyRecordedEvidence(a, source, p));
+    const consumedSourceRows = new Set<string>();
+    const repeatedSourceClaim = evidence.map(e => {
+      if (!e) return false;
+      if (consumedSourceRows.has(e.sourceRowKey)) return true;
+      consumedSourceRows.add(e.sourceRowKey); return false;
+    });
     const components = group.attempts.map((a,i) => ({
-      credits: Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : evidence[i]?.omittedCredits ?? null,
-      method: p.methodConstraint.requiredMethod && p.methodConstraint.requiredMethod !== a.method.value
+      credits: Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : repeatedSourceClaim[i] ? null : evidence[i]?.omittedCredits ?? null,
+      // p.45: native foreign S belongs to the S1 placement. A free method
+      // label on a T2 placement supplies no S eligibility (nor a T2 award).
+      // Bound old openings and official facts retain their separate evidence.
+      method: repeatedSourceClaim[i] || (mapping.category === '外国語'
+        && ['schooling', 'media'].includes(a.method.value)
+        && !(p.compositionCredits === 1 && p.methodConstraint.requiredMethod === 'schooling') && !evidence[i]) ? 'unknown'
+        : p.methodConstraint.requiredMethod && p.methodConstraint.requiredMethod !== a.method.value
         && !(p.methodConstraint.requiredMethod === 'schooling' && evidence[i]?.mediaAsSchooling)
         ? 'unknown' : a.method.value,
     }));
@@ -139,7 +151,7 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
       : repeatCandidates.slice(0,1);
     if (repeat && !repeatIndexes.length) { block('repeatable_component_requires_schooling2'); continue; }
     if (repeat) group.attempts.forEach((a,i) => {
-      if (!repeatIndexes.includes(i)) holds.push({ attemptId: a.id, reason: repeatCandidates.includes(i)
+      if (!repeatIndexes.includes(i)) holds.push({ attemptId: a.id, reason: repeatedSourceClaim[i] || repeatCandidates.includes(i)
         ? 'repeatable_independence_unverified' : 'repeatable_component_requires_schooling2' });
     });
     const foreignIndexes = components.flatMap((c,i) => isSchooling(i) && c.credits === 1 ? [i] : []).slice(0,4);
@@ -154,7 +166,7 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     const properSchooling = components.filter((c,i) => isSchooling(i) && c.credits === (target === 1 ? 1 : 2));
     const partialSchooling = lawPartialSchoolingCredits(mapping, components);
     const countedSchooling = partialSchooling === 2 ? 2 : repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits
-      : target === 4 ? (properSchooling.length === 1 ? 2 : 0) : Math.min(target, properSchooling.length * (target === 1 ? 1 : 2));
+      : target === 4 ? (properSchooling.length > 0 ? 2 : 0) : Math.min(target, properSchooling.length * (target === 1 ? 1 : 2));
     const credits = repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits : completed ? target : total;
     allocations.push({ mapping, credits, learnerRecord: true, lawPartialSchoolingCredits: partialSchooling, ...(completion.held && !repeat ? { completionHoldReason: reason! } : {}), completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling,
       fact: { canonicalName: course.canonicalName, curriculumCourseId: course.id,
@@ -163,7 +175,7 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     courses.push({ id, authority: 'learner_record' as const, increment: completed ? credits : 0, recordedEarned: quantitiesKnown ? total : null,
       completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling, repeatable: Boolean(repeat) || foreignSchooling,
       quantityInterpretations: group.attempts.map((a,i) => ({ attemptId: a.id, value: components[i].credits,
-        basis: Object.hasOwn(a.plan!, 'contribution') ? 'explicit_learner' : evidence[i]?.omittedCredits !== null && evidence[i]?.omittedCredits !== undefined ? 'decoded_legacy_opening' : 'unknown',
+        basis: Object.hasOwn(a.plan!, 'contribution') ? 'explicit_learner' : !repeatedSourceClaim[i] && evidence[i]?.omittedCredits !== null && evidence[i]?.omittedCredits !== undefined ? 'decoded_legacy_opening' : 'unknown',
         legacyOfferingId: evidence[i]?.offeringId ?? null })) });
   }
   const retained = source.kind === 'new-plan' ? undefined : source.state;

@@ -6503,22 +6503,6 @@
     },
     {
       "case": "法学部 / 法律学科/dense-earned",
-      "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
-      "oldPresent": true,
-      "newPresent": true,
-      "old": 3,
-      "new": 5
-    },
-    {
-      "case": "法学部 / 法律学科/dense-earned",
-      "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
-      "oldPresent": true,
-      "newPresent": true,
-      "old": 6,
-      "new": 10
-    },
-    {
-      "case": "法学部 / 法律学科/dense-earned",
       "path": "/cards/professional-law-required-elective/details/0/earned",
       "oldPresent": true,
       "newPresent": true,
@@ -6912,7 +6896,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 36,
-      "new": 32
+      "new": 30
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -6920,7 +6904,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 36,
-      "new": 32
+      "new": 30
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -6928,7 +6912,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": "純粋な選択 34単位 + 選択必修超過 0単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
-      "new": "純粋な選択 30単位 + 選択必修超過 0単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
+      "new": "純粋な選択 28単位 + 選択必修超過 0単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。"
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -6973,30 +6957,6 @@
       "newPresent": true,
       "old": null,
       "new": "S2の成績が受験票発送予定日までに確定したことと、T2の受験資格を確認できないため完成を保留しています。"
-    },
-    {
-      "case": "法学部 / 法律学科/dense-mixed",
-      "path": "/cards/professional-law-elective/repeatableCourses/2/counted",
-      "oldPresent": true,
-      "newPresent": true,
-      "old": 2,
-      "new": 4
-    },
-    {
-      "case": "法学部 / 法律学科/dense-mixed",
-      "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
-      "oldPresent": true,
-      "newPresent": true,
-      "old": 1,
-      "new": 2
-    },
-    {
-      "case": "法学部 / 法律学科/dense-mixed",
-      "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
-      "oldPresent": true,
-      "newPresent": true,
-      "old": 2,
-      "new": 4
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -7200,7 +7160,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 60,
-      "new": 44
+      "new": 42
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -7208,7 +7168,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 60,
-      "new": 44
+      "new": 42
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -7264,7 +7224,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 94,
-      "new": 74
+      "new": 72
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -7368,7 +7328,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 60,
-      "new": 44
+      "new": 42
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -7408,7 +7368,7 @@
       "oldPresent": true,
       "newPresent": true,
       "old": 36,
-      "new": 32
+      "new": 30
     },
     {
       "case": "法学部 / 法律学科/dense-mixed",
@@ -7604,6 +7564,22 @@
       "newPresent": true,
       "old": "旧新課程の同種科目同定が必要。",
       "new": "条件付き算入許可を表すrule_typeが未定義。"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-schooling/normalEarned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 138,
+      "new": 132
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/professional-law-schooling/normalEarned",
+      "oldPresent": true,
+      "newPresent": true,
+      "old": 44,
+      "new": 42
     }
   ],
   "basis": "2026 学習のしおり pp.10-11,30-32; exact historical outputs retained; F02 correction only",

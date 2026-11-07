@@ -158,6 +158,6 @@ for(const c of legacyCases().filter(c=>c.name.includes('/dense-')))test(`F02-R1 
  if(c.scopeId===law) {
   const a=lawLedger(c.state,catalog,law);assert.equal(card(r,'professional-law-total').normalEarned??card(r,'professional-law-total').earned,a.total);
   assert.equal(card(r,'professional-law-elective').normalEarned??card(r,'professional-law-elective').earned,a.elective);
-  assertLawDenseRequirements(r,a.total,a.elective);
+  assertLawDenseRequirements(r,a.total,a.elective,c.name.split('/').at(-1));
  }
 });

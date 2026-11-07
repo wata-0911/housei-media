@@ -1,4 +1,5 @@
 import { allocateLawPartialCredits, lawPartialSchoolingCredits } from './lawPartialCredits';
+import { recordedOpeningSessionKey } from './recordedOpeningEvidence';
 import { ordinaryCourseCompletion, ordinaryCompletionReason, type OrdinaryComponent } from '../progress/ordinaryCourseCompletion';
 import { assertFiniteNumbers } from './finiteNumbers';
 import { CALLIGRAPHY_CURRICULUM_ID, deriveCalligraphyProgress, isCalligraphyCourse, type CalligraphyProgress } from '../progress/calligraphyProgress';
@@ -834,6 +835,7 @@ function professionalCards(
   const ambiguous = new Set<string>();
   const incompleteMetadata = new Set<string>();
   const legacyRepeatable = new Set<string>();
+  const politicsEarnedSessions = new Set<string>();
   const repeatables = new Map<string, { name: string; type: string; limit: number; limitCourses: number; earned: number; inProgress: number; planned: number; courses: Set<string> }>();
   const entries = new Map<string, CurriculumEntry>();
   const addTo = (name: string, item: PlannerItem, offering: Offering) => addOfferingTotals(bucket(name), item, offering);
@@ -913,7 +915,16 @@ function professionalCards(
     if (rule) {
       const [, name, limit, limitCourses] = rule;
       const repeat = repeatables.get(`${type}:${name}`) ?? { name, type, limit, limitCourses, earned: 0, inProgress: 0, planned: 0, courses: new Set<string>() };
-      if (item.status === 'earned') { repeat.earned += politics ? plannerItemCreditContribution(item, offering) === 2 ? 2 : 0 : offering.credits; repeat.courses.add(offering.id); }
+      if (item.status === 'earned') {
+        const session = politics ? recordedOpeningSessionKey(offering, catalog.academicYear) : offering.id;
+        // Keep all raw rows; count a simultaneous normal/teacher registration
+        // once. Missing original session evidence establishes at most one.
+        const key = session ?? `unverified:${institutionalCourse!.id}`;
+        if (politics) {
+          if (plannerItemCreditContribution(item, offering) === 2 && !politicsEarnedSessions.has(key)) { repeat.earned += 2; politicsEarnedSessions.add(key); }
+        } else repeat.earned += offering.credits;
+        repeat.courses.add(key);
+      }
       else if (item.status === 'in_progress') repeat.inProgress += offering.credits;
       else if (item.status === 'planned') repeat.planned += offering.credits;
       repeatables.set(`${type}:${name}`, repeat);
@@ -1243,6 +1254,7 @@ function professionalCards(
         make('professional-law-total', '専門教育：合計', total, totalTarget, totalTarget !== null && total.earned >= totalTarget, undefined, '選択必修・選択の卒業算入見込み合計です。', baseReason)]),
       (() => {
         const schooling = emptyTotals();
+        const politicsSessions = new Set<string>();
         for (const item of sources.schooling) {
           if (item.status !== 'earned') continue;
           const offering = offerings.get(item.offeringId);
@@ -1252,6 +1264,11 @@ function professionalCards(
           const canonical = offering.courseId ? catalog.courses.find(course => course.id === offering.courseId)?.canonicalName : offering.name;
           // Public courses and every exact official ＊ row are excluded.  No fuzzy name matching.
           if (!canonical || LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026.has(canonical) || maps.some(mapping => mapping.requirementType === '公開科目')) continue;
+          if (offering.curriculumCourseId === 'curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce') {
+            const key = recordedOpeningSessionKey(offering, catalog.academicYear) ?? 'unverified';
+            if (politicsSessions.has(key) || politicsSessions.size >= 2) continue;
+            politicsSessions.add(key);
+          }
           schooling.earned += offering.credits;
         }
         schooling.earned += official.filter(a => a.mapping.scopeId === scopeId && a.mapping.category === '専門教育'

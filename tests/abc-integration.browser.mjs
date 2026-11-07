@@ -4,6 +4,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {serveAc} from './ac-static-server.mjs';
 import {initialState,catalog,officialRow} from './fixtures/yi07-graduation.mjs';
+import {isMediaSchooling} from '../src/planner/progress/mediaSchooling.ts';
 import fixed from './fixtures/abc-fixed.json' with{type:'json'};
 const {chromium}=await import(process.env.PLANNER_PLAYWRIGHT_MODULE||'playwright');
 const out=process.env.ABC_EVIDENCE||new URL('../../evidence/abc-browser/',import.meta.url).pathname;await mkdir(out,{recursive:true});
@@ -66,5 +67,26 @@ for(const [label,items,total]of [['omitted-T4-S0',[['35fb5bad-ec27-4c60-a16e-227
   await p.getByLabel('旧schema22原文から明示移行').setInputFiles({name:`${label}.json`,mimeType:'application/json',buffer:Buffer.from(raw)});await p.getByRole('group',{name:'保存確認',exact:true}).waitFor();await confirm(p);await reload(p);const before=await authority(p);await calculate(p);
   const totalCard=p.getByTestId('recorded-calculation').locator('[data-requirement-id="professional-law-total"]');assert.equal(await totalCard.locator('td').nth(1).getAttribute('data-value'),String(total));const stored=JSON.parse(before.raw);assert.equal(stored.schemaVersion,23);assert.equal(stored.source.raw,raw);assert.deepEqual(stored.graph.attempts.map(a=>Object.hasOwn(a.plan,'contribution')),items.map(([,n])=>n!==undefined));assert.deepEqual(await authority(p),before);assert.deepEqual(h.errors,[]);
   await writeFile(join(out,`f02-r2-migration-${label}.json`),JSON.stringify({raw,authority:before,text:await p.getByTestId('recorded-calculation').textContent(),errors:h.errors},null,2));
+ }finally{await h.close();}
+});
+
+async function startR3(p,schema,state=initialState()){
+ if(schema===23){const raw=JSON.stringify(state);await p.getByLabel('旧schema22原文から明示移行').setInputFiles({name:'r3-real22.json',mimeType:'application/json',buffer:Buffer.from(raw)});await p.getByRole('group',{name:'保存確認',exact:true}).waitFor();await confirm(p);}else await save(p);
+ await reload(p);
+}
+for(const schema of [23,24])test(`ABC F02-R3 A schema${schema}: invalid media never supplies foreign S; genuine S1x2 does`,{timeout:900000},async()=>{
+ const h=await setup(390),p=h.page,stages=[];try{
+  await startR3(p,schema);await add(p,'correspondence','2','英語2');await add(p,'correspondence','2','英語3');
+  const check=async(label,satisfied,held)=>{await save(p);await reload(p);const before=await authority(p);await calculate(p);const foreign=p.getByTestId('recorded-calculation').locator('[data-requirement-id="group-foreign"]');assert.equal(await foreign.locator('td').nth(1).getAttribute('data-value'),'4');assert.equal(await foreign.locator('td').nth(0).textContent()==='条件上達成',satisfied);assert.equal(await p.locator('[data-held-attempt-id]').count(),held);assert.deepEqual(await authority(p),before);const data=JSON.parse(before.raw);assert.equal(data.schemaVersion,schema);stages.push({label,authority:before,text:await p.getByTestId('recorded-calculation').textContent()});};
+  await check('T2+T2',false,0);const extra=await add(p,'media','2','英語2');await check('invalid media2',false,1);const invalid=JSON.parse(stages.at(-1).authority.raw).graph.attempts.at(-1);assert.equal(await p.locator('[data-held-attempt-id]').getAttribute('data-held-attempt-id'),invalid.id);await extra.getByRole('button',{name:'計画から削除',exact:true}).click();await check('delete invalid',false,0);await add(p,'schooling','1','英語SⓈ※');await add(p,'schooling','1','英語SⓈ※');await check('genuine S1x2',true,0);assert.deepEqual(h.errors,[]);await writeFile(join(out,`f02-r3-A-${schema}.json`),JSON.stringify({stages,errors:h.errors},null,2));
+ }finally{await h.close();}
+});
+for(const schema of [23,24])test(`ABC F02-R3 B schema${schema}: S8 survives duplicate add delete Undo with original quantities`,{timeout:900000},async()=>{
+ const h=await setup(1280),p=h.page,stages=[];try{
+  const names=schema===23?['行政法','刑法総論','民事訴訟法','国際法各論']:['行政法','刑事訴訟法','債権総論','刑法各論'];const state=initialState();Object.assign(state.graduationProfile,{admissionYear:2026,admissionType:'first_year',curriculumApplicability:'current_2026'});
+  if(schema===23)state.items=names.flatMap(name=>['correspondence','schooling'].map(method=>{const o=catalog.offerings.find(o=>o.method===method&&!isMediaSchooling(o)&&catalog.curriculum.courses.some(c=>c.id===o.curriculumCourseId&&c.canonicalName===name));assert.ok(o,`${name}/${method}`);return {offeringId:o.id,status:'earned',plannedYear:null,plannedTerm:null,studyYear:null,earnedOrder:null,courseCreditContribution:method==='correspondence'?4:2};}));
+  await startR3(p,schema,state);if(schema===24)for(const name of names){await add(p,'correspondence','4',name);await add(p,'schooling','2',name);}
+  const check=async(label,extra)=>{await save(p);await reload(p);const before=await authority(p);await calculate(p);const root=p.getByTestId('recorded-calculation'),total=root.locator('[data-requirement-id="professional-law-total"]'),schooling=root.locator('[data-requirement-id="professional-law-schooling"]');assert.equal(await total.locator('td').nth(1).getAttribute('data-value'),'16');assert.equal(await schooling.locator('td').nth(1).getAttribute('data-value'),'8');assert.equal(await schooling.locator('td').nth(0).textContent(),'条件上達成');for(const row of await p.locator('[data-recorded-course-id]').all())assert.match(await row.textContent(),/スクーリング 2/);const a=JSON.parse(before.raw);assert.equal(a.schemaVersion,schema);assert.equal(a.graph.attempts.filter(a=>a.membership.kind==='active').length,extra?9:8);assert.deepEqual(a.graph.attempts.slice(0,8).map(a=>a.plan.contribution.value),[4,2,4,2,4,2,4,2]);if(schema===23)assert.equal(a.source.raw,JSON.stringify(state));assert.deepEqual(await authority(p),before);stages.push({label,authority:before,text:await root.textContent()});};
+  await check('four valid S2',false);const extra=await add(p,'schooling','2',names[0]);await check('duplicate added',true);const id=JSON.parse(stages.at(-1).authority.raw).graph.attempts.at(-1).id;assert.equal(await p.locator(`[data-held-attempt-id="${id}"]`).count(),1);await extra.getByRole('button',{name:'計画から削除',exact:true}).click();await check('duplicate deleted',false);await p.getByRole('button',{name:'この履修回をUndo',exact:true}).click();await check('duplicate restored',true);assert.deepEqual(h.errors,[]);await writeFile(join(out,`f02-r3-B-${schema}.json`),JSON.stringify({stages,errors:h.errors},null,2));
  }finally{await h.close();}
 });
