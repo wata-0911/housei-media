@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {requireReservations} from '../src/planner/attempts/persistence/identity.ts';
+import * as identity from '../src/planner/attempts/persistence/identity.ts';
+const requireReservations=identity.requireCanonicalReservations??identity.requireReservations;
 import {createAttemptPersistence} from '../src/planner/attempts/persistence/controller.ts';
 import {emptyAuthority} from '../src/planner/attempts/persistence/contracts.ts';
 import {backupDigest} from '../src/planner/digest.ts';
@@ -8,6 +9,17 @@ import {applyCommand,newOperationId} from '../src/planner/attempts/workbench/ope
 import {makeAttempt} from '../src/planner/attempts/workbench/catalogView.ts';
 import {env,mixed,media} from './fixtures/migration-fixture.mjs';
 const uuid=n=>n.toString(16).padStart(8,'0')+'-aaab-4aaa-8aab-000000000000';
+test('R6 generic reservation helper preserves custom iterator refusal',()=>{
+ const reserved=[uuid(1)];Object.defineProperty(reserved,Symbol.iterator,{value:function*(){yield uuid(2);}});
+ assert.throws(()=>identity.requireReservations(reserved,[uuid(2)]),/backup_reservations_missing/);
+});
+test('R6 generic reservation helper preserves sealed R5 Proxy get order',()=>{
+ const trace=[],reserved=new Proxy([uuid(1)],{get(target,key,receiver){trace.push(String(key));return Reflect.get(target,key,receiver);}});
+ identity.requireReservations(reserved,[uuid(1)]);
+ assert.deepEqual(trace,['some','length','0','map','length','constructor','0','length','length','0','includes','length','0']);
+ const sentinel=new Error('original getter'),throwing=new Proxy([uuid(1)],{get(target,key,receiver){if(key==='includes')throw sentinel;return Reflect.get(target,key,receiver);}});
+ assert.throws(()=>identity.requireReservations(throwing,[uuid(1)]),error=>error===sentinel);
+});
 // Counts real native calls, delegates unchanged; candidate positions are not CPU instructions.
 async function measure(run,minimum=1000){
  const includes=Array.prototype.includes,has=Set.prototype.has;let calls=0,positions=0,lookups=0;const maps=new WeakMap();
@@ -51,6 +63,8 @@ test('R6 Undo cross-history membership keeps LIFO, snapshots and order',async()=
  for(let i=0;i<3;i++){const attempt=makeAttempt(context.catalog,{title:'履歴'+i,courseId:null,placementId:null,plan:{plannedYear:null,plannedTerm:null,studyYear:null,status:'planned',earnedOrder:null},method:'unknown',note:''});attempts.push(attempt);workspace=applyCommand(workspace,{kind:'add',operationId:attempt.creationOperationId,attempt},context);}
  for(const attempt of attempts)workspace=applyCommand(workspace,{kind:'remove',operationId:newOperationId(),attemptId:attempt.id},context);
  const before=JSON.stringify(workspace),wrong=workspace.graph.removals[0];assert.throws(()=>applyCommand(workspace,{kind:'undo',operationId:newOperationId(),attemptId:wrong.attemptSnapshot.id,removalOperationId:wrong.operationId},context),/undo_order_conflict/);assert.equal(JSON.stringify(workspace),before);
+ const generic={...workspace,receipts:new Proxy(workspace.receipts,{get:(target,key,receiver)=>Reflect.get(target,key,receiver)})},ticket=workspace.graph.removals.at(-1);
+ const genericCalls=await countNestedSome(/t\.operationId\s*===\s*r\.operationId/,()=>{const result=applyCommand(generic,{kind:'undo',operationId:newOperationId(),attemptId:ticket.attemptSnapshot.id,removalOperationId:ticket.operationId},context);assert.equal(result.graph.removals.length,2);});assert.equal(genericCalls,3,'generic Proxy workspace retains original receipt lookup path');
  const calls=await countNestedSome(/t\.operationId\s*===\s*r\.operationId/,()=>{while(workspace.graph.removals.length){const ticket=workspace.graph.removals.at(-1);workspace=applyCommand(workspace,{kind:'undo',operationId:newOperationId(),attemptId:ticket.attemptSnapshot.id,removalOperationId:ticket.operationId},context);}});
  assert.deepEqual(workspace.graph.attempts,attempts);console.log(JSON.stringify({kind:'r6-undo',nestedMembershipCalls:calls}));assert.equal(calls,0);
 });

@@ -8,10 +8,10 @@ const output=process.env.F01_R6_EVIDENCE,red=process.env.F01_R6_RED;
 assert.ok(output&&red,'explicit CI evidence and isolated baseline directories required');
 const results=[];
 for(const [name,cwd,file,expected] of [
- ['red-unit',red,'tests/authority-r6.test.mjs',{tests:13,pass:7,fail:6}],
- ['red-browser',red,'tests/authority-r6.browser.mjs',{tests:6,pass:0,fail:6}],
- ['green-unit',process.cwd(),'tests/authority-r6.test.mjs',{tests:13,pass:13,fail:0}],
- ['green-browser',process.cwd(),'tests/authority-r6.browser.mjs',{tests:6,pass:6,fail:0}],
+ ['red-unit',red,'tests/authority-r6.test.mjs',{tests:15,pass:9,fail:6}],
+ ['red-browser',red,'tests/authority-r6.browser.mjs',{tests:7,pass:1,fail:6}],
+ ['green-unit',process.cwd(),'tests/authority-r6.test.mjs',{tests:15,pass:15,fail:0}],
+ ['green-browser',process.cwd(),'tests/authority-r6.browser.mjs',{tests:7,pass:7,fail:0}],
 ]){
  const start=Date.now(),loadBefore=os.loadavg(),r=spawnSync(process.execPath,['--import','tsx','--test',file],{cwd,encoding:'utf8',maxBuffer:32*1024*1024,env:process.env}),log=(r.stdout||'')+(r.stderr||'');
  writeFileSync(join(output,name+'.log'),log);const metrics=Object.fromEntries(['tests','pass','fail','cancelled','skipped','todo'].map(key=>[key,Number(log.match(new RegExp('^# '+key+' (\\d+)\\s*$','m'))?.[1])]));

@@ -10,7 +10,7 @@ import { sameAttemptData } from '../validation';
 import { assignmentIds, issuedIds, encodeState, replayState, requireLiveMigration } from './codec';
 import { BACKUP_FORMAT, BACKUP_VERSION, NEW_BACKUP_VERSION, exactKeys, type AtomicAttemptStore, type AttemptState, type PersistenceSource, type NewPlanSource, type AuthorityRecord, type CorrectionEvidence } from './contracts';
 import { createNewPlanSource, emptyNewPlanWorkspace, encodeNewPlan, newPlanIssuedIds } from './newPlan';
-import { catalogUuids, checkFreshCommandIds, idTail, referencedUuids, requireReservations, sourceUuids, unionReservations, validateReservations } from './identity';
+import { catalogUuids, checkFreshCommandIds, idTail, referencedUuids, requireCanonicalReservations as requireReservations, sourceUuids, unionReservations, validateReservations } from './identity';
 
 export type PersistenceHandle = { state: AttemptState; workspace: Workspace; source: PersistenceSource };
 type Recovery = { raw: string; rawSha256: string; reservedIds: string[]; portable: boolean };

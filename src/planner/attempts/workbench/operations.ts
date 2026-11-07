@@ -15,6 +15,9 @@ export type Command = { operationId: AttemptOperationId } & (
   | { kind: 'delete_todo'; recordId: OwnedRecordId }
 );
 export type Workspace = { graph: AttemptGraph; receipts: Command[]; usedTodoIds: string[] };
+// Only workspaces created here and extended from them have private, frozen receipts.
+// A generic caller's accessors/proxies keep the original observable lookup path.
+const canonicalWorkspaces = new WeakSet<Workspace>();
 export const newOperationId = (): AttemptOperationId => `hosei:attempt-op:${crypto.randomUUID()}`;
 export const newRecordId = (): OwnedRecordId => `hosei:owned:${crypto.randomUUID()}`;
 export const newAttemptIds = () => ({ id: `hosei:attempt:${crypto.randomUUID()}` as AttemptId, creationOperationId: newOperationId() });
@@ -24,7 +27,8 @@ function requireValid(graph: unknown, context: AttemptValidationContext): assert
 }
 export function createWorkspace(graph: AttemptGraph, context: AttemptValidationContext): Workspace {
   requireValid(graph, context);
-  return freeze({ graph: structuredClone(graph), receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
+  const workspace = freeze({ graph: structuredClone(graph), receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
+  canonicalWorkspaces.add(workspace); return workspace;
 }
 function keys(value: object, allowed: string[]) {
   if (Object.keys(value).some(k => !allowed.includes(k))) throw new Error('unknown_operation_field');
@@ -95,8 +99,11 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
       if (!ticket) throw new Error('unknown_removal');
       // Ticket positions are relative to their deletion-time active list. Only
       // reversing the proven deletion history makes those positions composable.
-      const removalIndex = new Set(graph.removals.map(t => t.operationId));
-      const history = workspace.receipts.filter(r => r.kind === 'remove' && removalIndex.has(r.operationId));
+      let history: Command[];
+      if (canonicalWorkspaces.has(workspace)) {
+        const removalIndex = new Set(graph.removals.map(t => t.operationId));
+        history = workspace.receipts.filter(r => r.kind === 'remove' && removalIndex.has(r.operationId));
+      } else history = workspace.receipts.filter(r => r.kind === 'remove' && graph.removals.some(t => t.operationId === r.operationId));
       if (history.length !== graph.removals.length || history.some((r, i) => r.kind !== 'remove'
         || r.operationId !== graph.removals[i].operationId || r.attemptId !== graph.removals[i].attemptSnapshot.id)) {
         throw new Error('undo_history_unproven: 削除順を操作履歴で確認できないため、Undoを停止しました。');
@@ -151,5 +158,7 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
     });
     if (!result.valid) throw new Error(result.issues.map(i => i.code).join(', '));
   }
-  return freeze({ graph, receipts: [...workspace.receipts, command], usedTodoIds: command.kind === 'add_record' && command.record.kind === 'todo' ? [...workspace.usedTodoIds, command.record.payload.id] : [...workspace.usedTodoIds] });
+  const next = freeze({ graph, receipts: [...workspace.receipts, command], usedTodoIds: command.kind === 'add_record' && command.record.kind === 'todo' ? [...workspace.usedTodoIds, command.record.payload.id] : [...workspace.usedTodoIds] });
+  if (canonicalWorkspaces.has(workspace)) canonicalWorkspaces.add(next);
+  return next;
 }

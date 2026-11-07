@@ -345,11 +345,14 @@ membership searches after the sixth independent audit. Only lookup indexes chang
 - controller witness indexes authority.issuedIds once after replay;
 - controller portable inspection indexes expected.issuedIds only when the checkpoint
   digest is already known, preserving the unknown-checkpoint short circuit;
-- requireReservations still validates shape and UUID-tail aliases before building
-  an exact-string index of reserved;
+- controller calls requireCanonicalReservations only for its JSON/replay-derived
+  arrays. It validates shape and UUID-tail aliases before the exact-string index;
+  the generic requireReservations retains its original accessor/iterator behavior;
 - each correction indexes its next table's reservedIds before checking original
   assignment IDs; correction order and all replay validators are unchanged;
-- Undo indexes removal operation IDs for receipt filtering; the ordered history
+- Undo indexes removal operation IDs for receipt filtering only for privately
+  branded, internally created frozen workspaces. Unbranded/caller/Proxy workspaces
+  retain the original search and observable accesses. The ordered history
   comparison, ticket identity, LIFO rule and snapshot restoration remain required.
 
 The arrays remain authoritative. Sets never replace, sort, shorten or persist the
@@ -358,6 +361,8 @@ identical membership semantics to includes, including namespace prefixes. These
 checks cost O(n+m) lookup work and O(m) temporary index memory per invocation;
 whole replay, serialization and per-command graph validation are not claimed
 linear. Single digest/receipt lookups and small fixed allowlists are unchanged.
+The generic compatibility paths may still perform quadratic work; only the
+canonical persisted JSON and internally issued workspace paths are optimized.
 Progress-row, catalog-mapping and G03 engines are outside this permission.
 
 The historical-dependencies manifest advances exactly three approved persistence
