@@ -14,21 +14,41 @@ await mkdir(out, { recursive: true });
 const { chromium } = await import(pathToFileURL(process.env.PLANNER_PLAYWRIGHT_MODULE).href);
 const { serveAc } = await import(pathToFileURL(join(product, 'tests/ac-static-server.mjs')).href);
 const { catalog, initialState, officialRow } = await import(pathToFileURL(join(product, 'tests/fixtures/yi07-graduation.mjs')).href);
+const { setThesisProgressForScope } = await import(pathToFileURL(join(product, 'src/planner/graduation/thesisSelection.ts')).href);
+const { env: migrationEnv } = await import(pathToFileURL(join(product, 'tests/fixtures/migration-fixture.mjs')).href);
+const { decodeMigrationSource } = await import(pathToFileURL(join(product, 'src/planner/attempts/migration/source.ts')).href);
 
 const geography = '4d450b06-fb99-4bf2-a769-fe5f68dd337a';
 const r1Id = 'curriculum:6c7dc42c-bd35-47df-9bc2-4b6f6da77e95';
 const r1Name = '人文地理学特講（地域・産業・生活）';
 const destinations = ['地理特講（地誌学特講）', '地理特講（人文地理学演習）', '地理特講（自然地理学演習）', '地域特講（現地研究）'];
+const destinationIds = ['curriculum:763f0ed3-0c6a-42e9-972c-4cf29de549bc', 'curriculum:8fb43286-9d1d-444d-aa8f-4479f30d1c2a',
+  'curriculum:53c249d9-c2ec-4754-a633-37b5dc66f392', 'curriculum:ff7f30ab-1445-4c69-9213-3e92b45eacf1'];
 const widths = [1280, 390];
 const fixture = async name => readFile(new URL(name, fixtureDir));
 const phase = (name, data = {}) => console.log(JSON.stringify({ phase: name, at: new Date().toISOString(), ...data }));
 
-async function environment(width, entry) {
+async function environment(width, entry, scenario) {
   const server = await serveAc(join(product, entry === 'planner' ? 'dist' : '..', entry === 'planner' ? '' : 'dist-ac'), entry === 'planner' ? 'index.html' : 'dev/ac/index.html');
   const browser = await chromium.launch({ headless: true, executablePath: process.env.PLANNER_BROWSER_EXECUTABLE });
   const context = await browser.newContext({ viewport: { width, height: 900 }, acceptDownloads: true, reducedMotion: 'reduce' });
   const errors = [], consoleErrors = [], network = [];
-  await context.route('**/*', route => new URL(route.request().url()).origin === server.origin ? route.continue() : route.abort());
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.origin === server.origin) return route.continue();
+    // The product references font CSS and analytics JS. Serve inert local
+    // responses, never contact either host; retain the event in evidence.
+    if (url.origin === 'https://fonts.googleapis.com' && url.pathname.startsWith('/css2')) {
+      network.push({ type: 'local-stub', url: url.href });
+      return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
+    }
+    if (url.origin === 'https://www.googletagmanager.com' && url.pathname === '/gtag/js') {
+      network.push({ type: 'local-stub', url: url.href });
+      return route.fulfill({ status: 200, contentType: 'text/javascript', body: '' });
+    }
+    network.push({ type: 'unexpected-external', url: url.href });
+    return route.abort();
+  });
   const page = await context.newPage();
   page.setDefaultTimeout(120000);
   page.on('dialog', d => d.accept());
@@ -38,7 +58,7 @@ async function environment(width, entry) {
   page.on('response', response => { if (response.status() >= 400) network.push({ type: 'http', url: response.url(), status: response.status() }); });
   await page.goto(`${server.origin}/${entry === 'planner' ? 'planner' : '__dev/ac'}`);
   if (entry === 'ac') await page.getByTestId('save-status').filter({ hasText: /新規計画を開始できます|再読込・照合/ }).waitFor();
-  const label = `${entry}-${width}`;
+  const label = `${scenario}-${entry}-${width}`;
   return { page, errors, consoleErrors, network, async close(failed = false) {
     await page.screenshot({ path: join(out, `${label}-${failed ? 'failure' : 'final'}.png`), fullPage: true }).catch(() => {});
     await writeFile(join(out, `${label}-browser.json`), JSON.stringify({ errors, consoleErrors, network, viewport: width, userAgent: await page.evaluate(() => navigator.userAgent).catch(() => null) }, null, 2));
@@ -91,7 +111,9 @@ async function cardValue(page, id) {
 async function add(page, name, amount, method = 'schooling') {
   await page.locator('#course-query').fill(name);
   await page.getByRole('radio', { name: '完全一致' }).check();
-  await page.getByLabel('学科・コース・共通科目', { exact: true }).selectOption(geography);
+  const scopeSelect = page.locator('.institutional-search .controls select');
+  assert.equal(await scopeSelect.count(), 1, 'scope selector exists in the rendered search controls');
+  await scopeSelect.selectOption(geography);
   const row = page.getByRole('list', { name: '制度科目の検索結果' }).getByRole('listitem').filter({ has: page.getByRole('heading', { name, exact: true }) });
   assert.equal(await row.count(), 1, `${name}: unique geography placement`);
   await row.getByRole('button', { name: 'この配置を選ぶ' }).click();
@@ -116,14 +138,14 @@ function attempt(state, id) { const found = state.graph.attempts.find(a => a.id 
 function assertBrowserClean(h) {
   assert.deepEqual(h.errors, [], 'pageerror');
   assert.deepEqual(h.consoleErrors, [], 'console errors');
-  assert.deepEqual(h.network.filter(e => !e.url.endsWith('/favicon.ico')), [], 'failed/error network');
+  assert.deepEqual(h.network.filter(e => e.type !== 'local-stub' && !e.url.endsWith('/favicon.ico')), [], 'failed/error network');
 }
 async function assertViewport(page, width) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${width}px overflow`);
 }
 
 for (const width of widths) test(`A: old Planner K5 S0/S2/S6 backup restore and reload at ${width}px`, { timeout: 600000 }, async () => {
-  const h = await environment(width, 'planner'), { page } = h; let failed = true;
+  const h = await environment(width, 'planner', 'A'), { page } = h; let failed = true;
   try {
     for (const [name, expected] of [['zero', 0], ['S2', 2], ['S6', 6]]) {
       const file = await fixture(`K5-${name}-backup.json`), backup = JSON.parse(file);
@@ -133,14 +155,17 @@ for (const width of widths) test(`A: old Planner K5 S0/S2/S6 backup restore and 
       await page.getByRole('button', { name: '確認したバックアップで全件置換する' }).click();
       await page.getByText('全データを置き換えて保存しました。再読み込み後も保持されます。').waitFor();
       await page.reload();
+      await page.getByRole('heading', { name: '卒業要件の部分進捗' }).waitFor();
       const cards = page.locator('section[aria-labelledby="graduation-progress-heading"] article');
       for (const label of ['専門教育：スクーリング必修', '専門教育：合計']) {
         const card = cards.filter({ has: page.getByRole('heading', { name: label, exact: true }) });
+        await card.waitFor();
         assert.equal(await card.count(), 1, label);
         assert.match(await card.textContent(), new RegExp(`${expected}\\s*/\\s*${label.includes('合計') ? 82 : 6}単位`));
         if (expected < 6 && label.includes('スクーリング')) {
           assert.match(await card.textContent(), /判定保留/);
           assert.doesNotMatch(await card.textContent(), /達成/);
+          assert.match(await card.textContent(), /保存された寄与量.*算入を保留/);
         }
       }
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('hosei-planner:v1')));
@@ -153,7 +178,7 @@ for (const width of widths) test(`A: old Planner K5 S0/S2/S6 backup restore and 
 });
 
 for (const width of widths) test(`B: native24 K4 transfer hold, edit, delete and Undo at ${width}px`, { timeout: 600000 }, async () => {
-  const h = await environment(width, 'ac'), { page } = h; let failed = true;
+  const h = await environment(width, 'ac', 'B'), { page } = h; let failed = true;
   try {
     await save(page); await reload(page);
     const ids = [];
@@ -162,10 +187,11 @@ for (const width of widths) test(`B: native24 K4 transfer hold, edit, delete and
     let stored = JSON.parse((await authority(page)).raw);
     assert.equal(stored.schemaVersion, 24);
     assert.deepEqual(ids.map(id => attempt(stored, id).plan.contribution.value), [2, 2, 2, 1]);
+    assert.deepEqual(ids.map(id => attempt(stored, id).identity.ref.institutionalCourseId), destinationIds, 'four fixed destination identities');
     await calculate(page);
     for (const id of ids) {
       const row = page.locator(`[data-held-attempt-id="${id}"]`);
-      await row.waitFor(); assert.ok((await row.textContent()).trim().length > 10);
+      await row.waitFor(); assert.match(await row.textContent(), /保留/);
     }
     for (const id of ['professional-geography-schooling-required', 'professional-geography-elective', 'professional-geography-total']) assert.equal((await cardValue(page, id)).earned, '0', id);
     phase('B-four-held', { width, ids });
@@ -197,14 +223,17 @@ for (const width of widths) test(`B: native24 K4 transfer hold, edit, delete and
 });
 
 for (const width of widths) test(`C/D: official22 to formal23 R1 exact raw and 4/4 at ${width}px`, { timeout: 600000 }, async () => {
-  const h = await environment(width, 'ac'), { page } = h; let failed = true;
+  const h = await environment(width, 'ac', 'C-D-official-R1'), { page } = h; let failed = true;
   try {
     const course = catalog.curriculum.courses.find(c => c.id === r1Id); assert.ok(course);
-    const legacy = initialState();
+    let legacy = initialState();
     legacy.selectedScopeId = geography;
     Object.assign(legacy.graduationProfile, { admissionYear: 2026, admissionType: 'first_year', curriculumApplicability: 'current_2026' });
     legacy.importedCourseAchievements = [officialRow(course, 4)];
+    legacy = setThesisProgressForScope(legacy, catalog, geography, { selection: 'selected' });
     const raw = ` \n${JSON.stringify(legacy, null, 2)}\r\n`;
+    const decoded = await decodeMigrationSource(raw, migrationEnv, catalog);
+    assert.equal(decoded.status, 'decoded', `official22 fixture must be accepted without source normalization: ${JSON.stringify(decoded.diagnostics)}`);
     await page.getByLabel('旧schema22原文から明示移行').setInputFiles({ name: 'synthetic-r1-official22.json', mimeType: 'application/json', buffer: Buffer.from(raw) });
     await confirm(page); await reload(page);
     const stored = JSON.parse((await authority(page)).raw);
@@ -222,7 +251,7 @@ for (const width of widths) test(`C/D: official22 to formal23 R1 exact raw and 4
 });
 
 for (const width of widths) for (const [name, expected] of [['zero', [0, 0, 0, 0]], ['S2', [1, 1, 0, 0]]]) test(`C: K5 ${name} schema22 to formal23 retains source and zero at ${width}px`, { timeout: 600000 }, async () => {
-  const h = await environment(width, 'ac'), { page } = h; let failed = true;
+  const h = await environment(width, 'ac', `C-K5-${name}`), { page } = h; let failed = true;
   try {
     const bytes = await fixture(`K5-${name}-schema22.json`), raw = bytes.toString('utf8');
     const source = JSON.parse(raw);
@@ -258,7 +287,7 @@ for (const width of widths) for (const [name, expected] of [['zero', [0, 0, 0, 0
 });
 
 for (const width of widths) test(`D: native24 R1 T4 edit 0/null/4 and Undo at ${width}px`, { timeout: 600000 }, async () => {
-  const h = await environment(width, 'ac'), { page } = h; let failed = true;
+  const h = await environment(width, 'ac', 'D-native-R1'), { page } = h; let failed = true;
   try {
     await save(page); await reload(page);
     const id = await add(page, r1Name, 4, 'correspondence');

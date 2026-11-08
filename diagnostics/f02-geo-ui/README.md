@@ -10,7 +10,7 @@ This branch contains only a diagnostic workflow, a Playwright browser harness, a
 - Base `dev`: `35b69eddbc7124010137b2b094b919f9ce889e58`
 - Diagnostic ref: `refs/heads/diag/f02-geo-pr241-ui-20261108`
 
-The workflow triggers only on a push to that ref. It checks out the product commit and diagnostic commit in different paths, verifies the target tree and fixture hashes, builds the fixed product, then runs actual Chromium on GitHub-hosted Ubuntu with Node 22 and Playwright 1.62.1. The token has read-only contents permission; checkout does not retain credentials. The harness serves only local build output and blocks non-loopback requests. It contains no personal data.
+The workflow triggers only on a push to that ref. It checks out the product commit and diagnostic commit in different paths, verifies the target tree and fixture hashes, builds the fixed product, then runs actual Chromium on GitHub-hosted Ubuntu with Node 22 and Playwright 1.62.1. The token has read-only contents permission; checkout does not retain credentials. The harness serves only local build output. The two known product font/analytics resources receive inert local responses and are logged; every other non-loopback request is blocked and fails the clean-network assertion. No external request is sent. It contains no personal data.
 
 ## Measured scenarios
 
