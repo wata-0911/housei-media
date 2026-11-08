@@ -4,7 +4,7 @@ import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import {gunzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
-import {approvedDeltas,compareFieldCorrected,compare168,outputDeltas} from './fixtures/work-b-field-baseline.mjs';
+import {approvedDeltas,f02Deltas,compareCompletion,compareFieldCorrected,compare168,outputDeltas} from './fixtures/work-b-field-baseline.mjs';
 import {legacyCases,catalog,calculateState,calculateCompletion,snapshotValue} from './fixtures/yi07-graduation.mjs';
 import {scenarios,calculateScenario} from './fixtures/unresolved-condition-scenarios.mjs';
 const fixture=name=>JSON.parse(gunzipSync(readFileSync(new URL('./fixtures/'+name,import.meta.url))));
@@ -14,15 +14,15 @@ const expected=(base,name)=>base.cases.find(c=>c.name===name).output;
 const snapshots192=new Map(),snapshots168=new Map();
 for(const c of c192)snapshots192.set(c.name,snapshotValue(calculateState(c.state,c.scopeId)));
 for(const c of c168)snapshots168.set(c.name,snapshotValue(calculateScenario(c)));
-test('strict 192/168 complete delta sets: F4=50 / F4=16 and P2=6',()=>{
+test('strict 192/168 exact F02 deltas with immutable historical F4/P2 manifests',()=>{
  assert.deepEqual(c192.map(c=>c.name),b192.cases.map(c=>c.name));assert.equal(c192.length,192);
  assert.deepEqual(c168.map(c=>c.name),b168.cases.map(c=>c.name));assert.equal(c168.length,168);
  assert.deepEqual(Object.fromEntries(Object.entries(approvedDeltas).map(([k,v])=>[k,v.length])),{'192-f4':50,'168-f4':16,'168-p2':6});
  for(const [cases,base,current,compare]of [[c192,b192,snapshots192,compareFieldCorrected],[c168,b168,snapshots168,compare168]]){
   let count=0;for(const c of cases){compare(current.get(c.name),expected(base,c.name),c.name);count+=outputDeltas(current.get(c.name),expected(base,c.name),c.name).length;}
-  assert.equal(count,cases.length===192?50:22);
+  assert.equal(count,cases.length===192?892:24);
  }
- for(const c of c192)assert.deepEqual(snapshotValue(calculateCompletion(c.state,c.scopeId)),b192.cases.find(b=>b.name===c.name).completionOutput,c.name+' completion');
+ for(const c of c192)compareCompletion(snapshotValue(calculateCompletion(c.state,c.scopeId)),b192.cases.find(b=>b.name===c.name).completionOutput,c.name);
 });
 test('168 full baseline reconstructs every unchanged historical hash',()=>{
  const hashes=JSON.parse(readFileSync(new URL('./fixtures/unresolved-engine-baseline.json',import.meta.url)));
@@ -35,7 +35,8 @@ function independentlyExpected(cell){
  return fieldLedger(catalog,c,cell.requirementId).values[cell.field];
 }
 for(const cell of approvedDeltas['192-f4'])test('independent approved new value '+cell.case+'/'+cell.requirementId+'/'+cell.field,()=>{
- assert.equal(cell.new,independentlyExpected(cell));
+ const corrected=f02Deltas['192'].find(r=>r.case===cell.case&&r.path===cell.path);
+ assert.equal(corrected?.new??cell.old,independentlyExpected(cell));
  const actual=snapshots192.get(cell.case).requirements.find(r=>r.requirementId===cell.requirementId);
  assert.equal(actual[cell.field],independentlyExpected(cell));
 });
@@ -46,7 +47,8 @@ for(const [set,base,current,compare]of [['192-f4',b192,snapshots192,compareField
   if(present)p[keys.at(-1)]=value;else delete p[keys.at(-1)];
  }
  for(const cell of approvedDeltas[set])for(const mode of ['999','missing'])test(`mutation ${set} ${cell.case}${cell.path} ${mode}`,()=>{
-  const actual=structuredClone(current.get(cell.case));mutate(actual,cell.path,mode==='999'?999:cell.old,mode==='999'||cell.oldPresent);
+  const actual=structuredClone(current.get(cell.case));const corrected=f02Deltas[base===b192?'192':'168'].find(r=>r.case===cell.case&&r.path===cell.path);
+  mutate(actual,cell.path,mode==='999'?999:corrected?corrected.old:undefined,mode==='999'||(corrected?corrected.oldPresent:false));
   assert.throws(()=>compare(actual,expected(base,cell.case),cell.case),assert.AssertionError);
  });
  for(const mode of ['extra-case','extra-field','card','reference','unknown','order','undefined-vs-absent','completion'])test(`mutation ${set} protected ${mode}`,()=>{

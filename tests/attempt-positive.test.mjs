@@ -13,10 +13,10 @@ const placement = master.placements.find(p => p.scopeId === common && p.composit
 const graph = attempts => JSON.stringify({ attempts, ownedRecords: [], removals: [] });
 const attempt = (method, credits, status = 'earned', p = placement) => newAttempt(master, p, credits, status, method);
 for (const program of programs) {
-  for (const [name, parts, expected] of [['T2',[['correspondence',2]],0],['T2+S2',[['correspondence',2],['schooling',2]],4],['T4',[['correspondence',4]],4]]) {
+  for (const [name, parts, expected] of [['T2',[['correspondence',2]],0],['T2+S2',[['correspondence',2],['schooling',2]],0],['T4',[['correspondence',4]],4]]) {
     test(`positive ${program.displayName} ${name}`, async () => {
       const r = await calculateRecordedCredits(graph(parts.map(([m,c])=>attempt(m,c))),source,program.scopeId);
-      assert.equal(r.status,'calculated'); assert.deepEqual(r.holds,[]);
+      assert.equal(r.status,'calculated'); assert.deepEqual(r.holds.map(h=>h.reason),name==='T4'?[]:Array(parts.length).fill(name==='T2'?'course_components_incomplete':'mixed_completion_evidence_required'));
       assert.equal(r.courses[0].completedCredits,expected);
       assert.equal(r.progress.cards.find(c=>c.requirementId==='group-general').earned,expected);
       assert.equal(r.courses[0].schoolingCredits,name==='T2+S2'?2:0);
@@ -26,7 +26,7 @@ for (const program of programs) {
   }
   test(`positive ${program.displayName} duplicate ordinary cannot yield8`, async () => {
     const r=await calculateRecordedCredits(graph([attempt('correspondence',4),attempt('correspondence',4)]),source,program.scopeId);
-    assert.deepEqual(r.holds,[]); assert.equal(r.courses[0].completedCredits,4);
+    assert.equal(r.holds.length,1);assert.equal(r.holds[0].reason,'additional_course_components_not_counted');assert.equal(r.informational.length,2);assert.equal(r.courses[0].recordedEarned,8);assert.equal(r.courses[0].increment,4);assert.equal(r.courses[0].completedCredits,4);
     assert.equal(r.progress.cards.find(c=>c.requirementId==='group-general').earned,4);
   });
   test(`positive ${program.displayName} plans never become earned`, async () => {
@@ -53,7 +53,7 @@ test('documented Law repeat cap uses existing department allocator',async()=>{
  const p=master.placements.find(p=>p.scopeId===program.scopeId&&p.officialName==='法律学演習'&&p.institutionalCourseId&&p.identityDecision.status==='safe');
  assert.ok(p);
  const r=await calculateRecordedCredits(graph(Array.from({length:6},()=>attempt('schooling',2,'earned',p))),source,program.scopeId);
- assert.equal(r.courses.length,0);assert.equal(r.holds.length,6);assert.ok(r.holds.every(h=>h.reason==='repeatable_independence_unverified'));
+ assert.equal(r.courses.length,1);assert.deepEqual([r.courses[0].recordedEarned,r.courses[0].completedCredits,r.courses[0].increment,r.courses[0].schoolingCredits],[12,2,2,2]);assert.equal(r.holds.length,5);assert.ok(r.holds.every(h=>h.reason==='repeatable_independence_unverified'));
 });
 for (const program of programs) test(`ambiguous repeat family held ${program.displayName}`,async()=>{
  const p=master.placements.find(p=>p.scopeId===program.scopeId&&p.auditRecord.canonicalName==='総合特講');assert.ok(p);

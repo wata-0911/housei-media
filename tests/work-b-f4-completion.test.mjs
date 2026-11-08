@@ -41,9 +41,9 @@ for(const [field,rid]of specs){
  test(field+'/same annual opening duplicate is not independent evidence',()=>{assert.equal(row(run([item(t,2),item(t,2)])).status,'unknown');});
  test(field+'/same name cannot merge different institutional identities',()=>{const cat=structuredClone(catalog);cat.offerings.find(o=>o.id===other.id).name=t.name;assert.equal(row(run([item(t,2),item(other,2)],[],cat)).earned,0);});
 }
-for(const ids of [['a41b5c04-4723-4dfd-805d-29b271e99afa','386b3eb5-ff6e-434d-a720-d32505b90bb0'],['386b3eb5-ff6e-434d-a720-d32505b90bb0','82cbc5a6-4868-4bc9-bb68-ed457bc3ab08']])test('same institutional Course '+ids+' completes once, no S2+S2 ban',()=>{
+for(const ids of [['a41b5c04-4723-4dfd-805d-29b271e99afa','386b3eb5-ff6e-434d-a720-d32505b90bb0'],['386b3eb5-ff6e-434d-a720-d32505b90bb0','82cbc5a6-4868-4bc9-bb68-ed457bc3ab08']])test('same institutional Course '+ids+' retains both S2 records but needs independent-content evidence',()=>{
  const os=ids.map(id=>catalog.offerings.find(o=>o.id===id));assert.equal(os[0].curriculumCourseId,os[1].curriculumCourseId);
- const p=run(os.map(o=>item(o,2))),r=p.requirements.find(r=>r.requirementId===specs[1][1]);assert.equal(r.earned,1);assert.equal(r.status,'satisfied');assert.equal(p.cards.find(c=>c.requirementId==='professional-history-elective').earned,4);
+ const p=run(os.map(o=>item(o,2))),r=p.requirements.find(r=>r.requirementId===specs[1][1]);assert.equal(r.earned,0);assert.equal(r.status,'unknown');assert.equal(p.cards.find(c=>c.requirementId==='professional-history-elective').earned,0);
  const incomplete=run([item(os[0],2,'earned'),item(os[1],2,'planned')]);assert.equal(incomplete.requirements.find(r=>r.requirementId===specs[1][1]).earned,0);
 });
 test('field scopes and similar names do not import another department',()=>{

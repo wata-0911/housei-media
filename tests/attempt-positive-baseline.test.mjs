@@ -1,4 +1,4 @@
-import { compareFieldCorrected } from './fixtures/work-b-field-baseline.mjs';
+import { compareFieldCorrected, compareCompletion } from './fixtures/work-b-field-baseline.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -12,5 +12,5 @@ for (const c of cases) test(`Work B existing engine full output baseline: ${c.na
   const expected = baseline.cases.find(b => b.name === c.name);
   assert.ok(expected);
   compareFieldCorrected(snapshotValue(calculateState(c.state, c.scopeId)), expected.output, c.name);
-  assert.deepEqual(snapshotValue(calculateCompletion(c.state, c.scopeId)), expected.completionOutput);
+  compareCompletion(snapshotValue(calculateCompletion(c.state, c.scopeId)), expected.completionOutput, c.name);
 });

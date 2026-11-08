@@ -1,0 +1,276 @@
+{
+  "basis": "Only listed R1 cells are newly rederived. Retained F02 cells are regression contracts, not independent institutional approval.",
+  "reviewedBaselineCells": [
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-elective/normalEarned",
+      "expected": 96,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-elective/note",
+      "expected": "純粋な選択 74単位 + 選択必修超過 16単位 + 公開科目算入 2単位 + 8科目32単位達成後に認められる4単位科目のスクーリング部分修得 0単位。",
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-total/normalEarned",
+      "expected": 128,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
+      "expected": 128,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
+      "expected": 96,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "経済学部 / 経済学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "経済学部 / 経済学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 12,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "経済学部 / 商業学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 10,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 7,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 5,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 7,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 5,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 7,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 5,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 31,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 27,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+      "expected": 5,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-earned",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+      "expected": 10,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-in_progress",
+      "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
+      "expected": 2,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-in_progress",
+      "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
+      "expected": 2,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-planned",
+      "path": "/requirements/5755e04d-5c56-4a34-a2b4-afca335676e2/earned",
+      "expected": 2,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-planned",
+      "path": "/requirements/8e08d5c3-a3ab-47e9-81c8-c9a3f8426a67/earned",
+      "expected": 2,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/earned",
+      "expected": 8,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/group-foreign/details/0/schooling",
+      "expected": 6,
+      "reason": "p45 regular S1 per row; ordinary Course counted once, S2 independently retained"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/counted",
+      "expected": 4,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/courses",
+      "expected": 2,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    },
+    {
+      "case": "法学部 / 法律学科/dense-mixed",
+      "path": "/cards/professional-law-elective/repeatableCourses/2/earned",
+      "expected": 4,
+      "reason": "p47 b,d exact Course identity, politics max4, shared exclusive law allocation including public/thesis"
+    }
+  ],
+  "reviewedCatalogLawCases": [
+    "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"undecided\"]",
+    "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"selected\"]",
+    "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"first_year\",\"not_selected\"]",
+    "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"undecided\"]",
+    "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"selected\"]",
+    "[\"e31201f3-4f1d-432a-906e-6af94af294c9\",\"earned\",\"other_transfer\",\"not_selected\"]"
+  ],
+  "currentCatalogLawAbsolute": {
+    "required": 64,
+    "pure": 94,
+    "publicCredits": 2,
+    "elective": 128,
+    "total": 160,
+    "politicsRows": 5,
+    "politicsRaw": 10,
+    "politicsCounted": 4
+  },
+  "restoredHistoricalAbsoluteCases": 18,
+  "retainedUnchanged": {
+    "baseline168": 24,
+    "completion": 556,
+    "historicalCatalogCells": 684
+  },
+  "priorAuditReported": {
+    "compared": 2132,
+    "independentlyMatched": 324,
+    "wrongPoliticsCells": 8,
+    "notIndividuallyRederived": 1800
+  },
+  "remainingReview": "All retained cells outside the R1 listing retain their prior review level. Do not interpret an exact delta test as a new independent oracle."
+}

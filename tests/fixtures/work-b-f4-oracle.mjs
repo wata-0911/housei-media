@@ -19,10 +19,13 @@ export function fieldLedger(catalog,c,rid){
   if(unit==='courses'&&!proven)throw Error('oracle evidence missing '+o.id);
   const credits=item.courseCreditContribution??o.credits;
   const id=proven?course.id:'unresolved:'+o.id;
-  const group=groups.get(id)??{id,composition:proven?course.curriculumCredits:null,earned:0,inProgress:0,planned:0};group[status]+=credits;groups.set(id,group);
+  const group=groups.get(id)??{id,composition:proven?course.curriculumCredits:unit==='credits'?ms[0].curriculumCredits:null,earned:0,inProgress:0,planned:0};group[status]+=credits;groups.set(id,group);
   rows.push({courseId:course?.id??null,offeringId:o.id,method:o.method,status,credits,composition:course?.curriculumCredits??null,mappingIds:ms.map(m=>m.mappingId)});
  }
  const values={earned:0,inProgress:0,planned:0};
- for(const status of Object.keys(values))values[status]=unit==='courses'?[...groups.values()].filter(g=>g.composition>0&&g[status]>=g.composition).length:rows.filter(r=>r.status===status).reduce((s,r)=>s+r.credits,0);
+ const completed=g=>{const rr=rows.filter(r=>(r.courseId??'unresolved:'+r.offeringId)===g.id&&r.status==='earned');
+  if(unit==='credits'&&rr.some(r=>['地誌学特講','人文地理学演習','自然地理学演習'].includes(catalog.curriculum.courses.find(c=>c.id===r.courseId)?.canonicalName??catalog.offerings.find(o=>o.id===r.offeringId)?.name))) return true;
+  return g.composition===4?rr.some(r=>r.method==='correspondence'&&r.credits===4):g.composition===2&&rr.length>0&&rr.every(r=>r.credits===2);};
+ for(const status of Object.keys(values))values[status]=unit==='courses'?[...groups.values()].filter(g=>g.composition>0&&(status==='earned'?completed(g):g[status]>=g.composition)).length:status==='earned'?[...groups.values()].reduce((s,g)=>s+(completed(g)?(catalog.curriculum.courses.find(c=>c.id===g.id)?.canonicalName==='地誌学特講'?g.earned:g.composition):0),0):rows.filter(r=>r.status===status).reduce((s,r)=>s+r.credits,0);
  return {values:{...values,status:values.earned>=target?'satisfied':'unsatisfied'},rows,groups:[...groups.values()],target,unit};
 }

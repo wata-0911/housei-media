@@ -70,15 +70,15 @@ for(const [field,rid] of specs){
  for(const status of ['earned','in_progress','planned'])test(`residual ${field}/T2+S2 ${status} keeps lifecycle independent`,()=>{
   const x=setup(field,rid);x.state.items=[t,s].map(o=>({offeringId:o.id,status,courseCreditContribution:2,plannedYear:2026,plannedTerm:null,studyYear:null,earnedOrder:null}));
   const q=x.row(),column=status==='in_progress'?'inProgress':status;
-  assert.equal(q[column],1);assert.equal(q.earned,status==='earned'?1:0);assert.equal(q.status,status==='earned'?'satisfied':'unsatisfied');
-  assert.equal(x.progress().cards.find(c=>c.requirementId==='professional-history-elective').earned,status==='earned'?4:0);
+  assert.equal(q[column],status==='earned'?0:1);assert.equal(q.earned,0);assert.equal(q.status,status==='earned'?'unknown':'unsatisfied');
+  assert.equal(x.progress().cards.find(c=>c.requirementId==='professional-history-elective').earned,0);
  });
- test(`residual ${field}/S2+S2 needs two owned records, no blanket method ban`,()=>{
+ test(`residual ${field}/S2+S2 ownership alone cannot prove independent content`,()=>{
   const x=setup(field,rid),pairCourse=pool.find(c=>os(c).filter(o=>o.method==='schooling').length>=2);
   const openings=pairCourse?os(pairCourse).filter(o=>o.method==='schooling').slice(0,2):[s,s];
   x.state.items=openings.map(o=>({offeringId:o.id,status:'earned',courseCreditContribution:2,plannedYear:2026,plannedTerm:null,studyYear:null,earnedOrder:null}));
   const q=x.row();
-  if(pairCourse){assert.equal(q.earned,1);assert.equal(q.status,'satisfied');assert.equal(x.progress().cards.find(c=>c.requirementId==='professional-history-elective').earned,4);}
+  if(pairCourse){assert.equal(q.earned,0);assert.equal(q.status,'unknown');assert.equal(x.progress().cards.find(c=>c.requirementId==='professional-history-elective').earned,0);}
   else{assert.equal(q.earned,null);assert.equal(q.status,'unknown');assert.match(q.reason,/所有関係/);}
  });
 }

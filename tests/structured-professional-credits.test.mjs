@@ -53,7 +53,7 @@ for (const p of programs) test(`P2 actual catalog: ${p.displayName} completed-on
     [t.target, 'satisfied', 'supported', t.target, t.target]);
 });
 
-for (const p of programs) test(`P2 actual catalog: ${p.displayName} T2 plus S2 completes the same Course`, () => {
+for (const p of programs) test(`P2 actual catalog: ${p.displayName} T2 plus S2 without confirmation holds Course completion`, () => {
   const t = target(p), offerings = ordinary(p, t.type);
   const correspondence = offerings.find(o => catalog.offerings.some(s => s.method === 'schooling' && s.credits === 2
     && s.resolutionStatus === 'matched' && s.curriculumCourseId === o.curriculumCourseId
@@ -64,7 +64,7 @@ for (const p of programs) test(`P2 actual catalog: ${p.displayName} T2 plus S2 c
   const items = [...offerings.filter(o => o.id !== correspondence.id).slice(0, t.target / 4 - 1).map(o => item(o)),
     item(correspondence, 2), item(schooling)];
   const progress = run(p, items), row = rowFor(progress, ruleFor(p, t.type));
-  assert.deepEqual([row.earned, row.status, card(progress, t.id).earned, overall(progress)], [t.target, 'satisfied', t.target, t.target]);
+  assert.deepEqual([row.earned, row.status, card(progress, t.id).earned, overall(progress)], [t.target-4, 'unknown', t.target-4, t.target-4]);
 });
 
 for (const p of programs.filter(p => p.department === '日本文学科')) {

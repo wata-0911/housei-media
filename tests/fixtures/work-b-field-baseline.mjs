@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {snapshotValue} from './yi07-graduation.mjs';
+export const f02Deltas=JSON.parse(readFileSync(new URL('./f02-baseline-deltas.json',import.meta.url)));
 export const approvedDeltas=JSON.parse(readFileSync(new URL('./work-b-approved-deltas.json',import.meta.url)));
 const present=(parent,key)=>Object.hasOwn(parent,key)?{present:true,value:parent[key]}:{present:false};
 const esc=key=>String(key).replaceAll('~','~0').replaceAll('/','~1');
@@ -37,8 +38,10 @@ export function outputDeltas(actual,old,caseName){
 function cells(rows){return ordered(rows.map(r=>({case:r.case,path:r.path,oldPresent:r.oldPresent,newPresent:r.newPresent,...(r.oldPresent?{old:r.old}:{}),...(r.newPresent?{new:r.new}:{})})));}
 export function assertExactDeltas(actual,old,caseName,sets){
  assert.equal(typeof caseName,'string','explicit fixed case required');
- const approved=sets.flatMap(name=>approvedDeltas[name]).filter(r=>r.case===caseName);
+ const approved=sets.flatMap(name=>name.startsWith('f02-')?f02Deltas[name.slice(4)]:approvedDeltas[name]).filter(r=>r.case===caseName);
  assert.deepEqual(outputDeltas(actual,old,caseName),cells(approved),caseName+' exact approved delta set');
 }
-export const compareFieldCorrected=(actual,old,caseName)=>assertExactDeltas(actual,old,caseName,['192-f4']);
-export const compare168=(actual,old,caseName)=>assertExactDeltas(actual,old,caseName,['168-f4','168-p2']);
+export const compareFieldCorrected=(actual,old,caseName)=>assertExactDeltas(actual,old,caseName,['f02-192']);
+export const compare168=(actual,old,caseName)=>assertExactDeltas(actual,old,caseName,['f02-168']);
+
+export const compareCompletion=(actual,old,caseName)=>assertExactDeltas(actual,old,caseName,['f02-completion']);

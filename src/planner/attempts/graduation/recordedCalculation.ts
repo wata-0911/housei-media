@@ -1,3 +1,6 @@
+import { legacyRecordedEvidence } from './legacyRecordedEvidence';
+import { allocateLawPartialCredits, lawPartialSchoolingCredits } from '../../graduation/lawPartialCredits';
+import { ordinaryCourseCompletion } from '../../progress/ordinaryCourseCompletion';
 import { finiteNonnegativeSum } from '../../graduation/finiteNumbers';
 import { parseAttemptGraphJson } from '../jsonInput';
 import rulesJson from '../../../data/graduation_rules.json';
@@ -93,46 +96,111 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     const repeat = officialRepeatableRule(rules.programs.find(p => p.scopeId === scopeId)!.department, course);
     if (specialOfficialCourse(course.canonicalName, mapping.department, mapping) && !repeat) { block('special_course_rule_not_connected'); continue; }
     if (holds.some(h => group.attempts.some(a => a.id === h.attemptId))) continue;
-    const valid = group.attempts.every(a => typeof a.plan!.contribution?.value === 'number'
-      && Number.isFinite(a.plan!.contribution.value) && a.plan!.contribution.value >= 0 && a.method.value !== 'unknown'
-      && (!p.methodConstraint.requiredMethod || p.methodConstraint.requiredMethod === a.method.value));
-    if (!valid) { block('explicit_quantity_and_compatible_method_required'); continue; }
-    const total = finiteNonnegativeSum(group.attempts.map(a => a.plan!.contribution!.value!));
-    const schooling = finiteNonnegativeSum(group.attempts.map(a => a.method.value === 'correspondence' ? 0 : a.plan!.contribution!.value!));
-    if (total === null || schooling === null) { block('aggregate_quantity_non_finite'); continue; }
+    const evidence = group.attempts.map(a => legacyRecordedEvidence(a, source, p));
+    // Resolve a source-slot collision before consuming its single award. An
+    // explicit0/null/fraction cannot take the evidence away from a proper S1
+    // just by being first. A lone edited0 still uses its explicit0 below.
+    const sourceClaims = new Map<string, number[]>();
+    evidence.forEach((e,i) => {
+      if (e) sourceClaims.set(e.sourceRowKey, [...(sourceClaims.get(e.sourceRowKey) ?? []), i]);
+    });
+    const repeatedSourceClaim = evidence.map(() => false);
+    for (const indexes of sourceClaims.values()) {
+      const winner = indexes.find(i => {
+        const a = group.attempts[i];
+        const n = Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : evidence[i]!.omittedCredits;
+        return n === (['schooling', 'media'].includes(a.method.value) ? p.compositionCredits === 1 ? 1 : 2 : p.compositionCredits);
+      }) ?? indexes[0];
+      indexes.forEach(i => { repeatedSourceClaim[i] = i !== winner; });
+    }
+    const components = group.attempts.map((a,i) => ({
+      credits: Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : repeatedSourceClaim[i] ? null : evidence[i]?.omittedCredits ?? null,
+      // p.45: native foreign S belongs to the S1 placement. A free method
+      // label on a T2 placement supplies no S eligibility (nor a T2 award).
+      // Bound old openings and official facts retain their separate evidence.
+      method: repeatedSourceClaim[i] || (mapping.category === '外国語'
+        && ['schooling', 'media'].includes(a.method.value)
+        && !(p.compositionCredits === 1 && p.methodConstraint.requiredMethod === 'schooling') && !evidence[i]) ? 'unknown'
+        : p.methodConstraint.requiredMethod && p.methodConstraint.requiredMethod !== a.method.value
+        && !(p.methodConstraint.requiredMethod === 'schooling' && evidence[i]?.mediaAsSchooling)
+        ? 'unknown' : a.method.value,
+    }));
+    const quantitiesKnown = components.every(c => c.credits !== null && Number.isFinite(c.credits) && c.credits >= 0);
+    const valid = quantitiesKnown && components.every(c => c.method !== 'unknown');
+    const regularCompletion = ordinaryCourseCompletion(p.compositionCredits, components);
+    const knownSchooling = components.some(c => ['schooling', 'media'].includes(c.method)
+      && c.credits === (p.compositionCredits === 1 ? 1 : 2));
+    if (!valid && regularCompletion.completedCredits === 0 && !knownSchooling) {
+      block('explicit_quantity_and_compatible_method_required');
+      // Known safe placement, unknown quantity: preserve known subtotal0 with an
+      // explicit unknown reason. Absence and an explicit recorded0 remain different.
+      if (!repeat) allocations.push({ mapping, credits: 0, completedCredits: 0, schoolingCredits: 0,
+        learnerRecord: true, completionHoldReason: 'explicit_quantity_and_compatible_method_required',
+        fact: { canonicalName: course.canonicalName, curriculumCourseId: course.id } });
+      continue;
+    }
+    const total = finiteNonnegativeSum(components.map(c => c.credits ?? 0));
+    if (total === null) { block('aggregate_quantity_non_finite'); continue; }
     const target = p.compositionCredits;
     if (target === null || target <= 0) { block('composition_unknown'); continue; }
-    // Ordinary extra attempts are not additional copies of the same Course.
-    // Ambiguous excess is held rather than choosing an arbitrary S distribution.
-    if (!repeat && total > target && schooling > 0) { block('ordinary_reenrollment_excess'); continue; }
-    if (repeat && group.attempts.some(a => a.plan!.contribution!.value !== 2 || a.method.value !== 'schooling')) {
-      block('repeatable_component_requires_schooling2'); continue;
+    // p.45 explicitly permits repeated foreign-language S1 (up to four);
+    // this is not the ordinary S2+S2 completion rule.
+    const isSchooling = (i: number) => ['schooling', 'media'].includes(components[i].method);
+    const foreignSchooling = mapping.category === '外国語' && target === 1
+      && components.some((c,i) => isSchooling(i) && c.credits === 1);
+    const repeatCandidates = components.flatMap((c,i) => c.credits === 2 && isSchooling(i) ? [i] : []);
+    const provenRepeats = new Map<string, number>();
+    for (const i of repeatCandidates) {
+      const key = evidence[i]?.repeatKey;
+      if (course.id === 'curriculum:f49de1e6-82ae-4b86-8c0a-453ef41995ce' && mapping.department === '法律学科'
+        && key && !provenRepeats.has(key)) provenRepeats.set(key,i);
     }
-    if (repeat && group.attempts.length > 1) { block('repeatable_independence_unverified'); continue; }
-    // p.31: a normal T4 examination is not two T2 examinations.
-    // Only the documented T4 or T2+S2 structures are enabled for a four-credit Course.
-    if (!repeat && target === 4) {
-      const t = group.attempts.filter(a => a.method.value === 'correspondence').map(a => a.plan!.contribution!.value!);
-      const sc = group.attempts.filter(a => a.method.value !== 'correspondence').map(a => a.plan!.contribution!.value!);
-      const wholeT = t.length > 0 && t.every(n => n === 4) && sc.length === 0;
-      const partialT = t.length === 1 && t[0] === 2 && sc.length === 0;
-      const mixed = t.length === 1 && t[0] === 2 && sc.length === 1 && sc[0] === 2;
-      if (!wholeT && !partialT && !mixed) { block('unsupported_course_component_structure'); continue; }
+    // Distinct original openings may establish two old registrations. Native
+    // IDs alone never establish independent repeat awards. Cap at the rule.
+    const repeatIndexes = provenRepeats.size ? [...provenRepeats].sort(([a],[b]) => a.localeCompare(b)).slice(0,repeat?.[3] ?? 1).map(([,i]) => i)
+      : repeatCandidates.slice(0,1);
+    if (repeat && !repeatIndexes.length) { block('repeatable_component_requires_schooling2'); continue; }
+    if (repeat) group.attempts.forEach((a,i) => {
+      if (!repeatIndexes.includes(i)) holds.push({ attemptId: a.id, reason: repeatedSourceClaim[i] || repeatCandidates.includes(i)
+        ? 'repeatable_independence_unverified' : 'repeatable_component_requires_schooling2' });
+    });
+    const foreignIndexes = components.flatMap((c,i) => isSchooling(i) && c.credits === 1 ? [i] : []).slice(0,4);
+    const completion = foreignSchooling ? { completedCredits: foreignIndexes.length, reason: foreignIndexes.length < group.attempts.length ? 'additional_course_components_not_counted' : null, held: false, countedIndexes: foreignIndexes } : regularCompletion;
+    const reason = !repeat ? completion.reason : null;
+    if (reason) {
+      if (completion.completedCredits > 0) group.attempts.forEach((a,i) => { if (!completion.countedIndexes.includes(i)) holds.push({ attemptId: a.id, reason }); });
+      else block(reason);
     }
-    const completed = total >= target;
-    if (!completed && schooling > 0) { block('partial_schooling_exception_not_connected'); continue; }
-    const credits = repeat ? Math.min(total, repeat[2]) : completed ? target : total;
-    const sCredits = repeat ? Math.min(schooling, repeat[2]) : completed ? schooling : 0;
-    allocations.push({ mapping, credits, completedCredits: repeat ? credits : completed ? target : 0, schoolingCredits: sCredits,
+    const completed = repeat || completion.completedCredits > 0;
+    // Independent, correctly sized S records survive a held whole-Course claim.
+    const properSchooling = components.filter((c,i) => isSchooling(i) && c.credits === (target === 1 ? 1 : 2));
+    const partialSchooling = lawPartialSchoolingCredits(mapping, components);
+    const countedSchooling = partialSchooling === 2 ? 2 : repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits
+      : target === 4 ? (properSchooling.length > 0 ? 2 : 0) : Math.min(target, properSchooling.length * (target === 1 ? 1 : 2));
+    const credits = repeat ? repeatIndexes.length * 2 : foreignSchooling ? completion.completedCredits : completed ? target : total;
+    allocations.push({ mapping, credits, learnerRecord: true, lawPartialSchoolingCredits: partialSchooling, ...(completion.held && !repeat ? { completionHoldReason: reason! } : {}), completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling,
       fact: { canonicalName: course.canonicalName, curriculumCourseId: course.id,
-        ...(repeat ? { repeatableEvidence: { label: repeat[1], attempts: group.attempts.map(a => ({ attemptId: a.id })),
-          earnedTotal: total, countedCredits: credits, excessCredits: total - credits, limit: repeat[2], limitCourses: repeat[3] } } : {}) } });
-    courses.push({ id, authority: 'learner_record' as const, increment: credits, recordedEarned: total,
-      completedCredits: repeat ? credits : completed ? target : 0, schoolingCredits: sCredits, repeatable: Boolean(repeat) });
+        ...(repeat ? { repeatableEvidence: { label: repeat[1], attempts: repeatIndexes.map(i => ({ attemptId: group.attempts[i].id })),
+          earnedTotal: credits, countedCredits: credits, excessCredits: 0, limit: repeat[2], limitCourses: repeat[3] } } : {}) } });
+    courses.push({ id, authority: 'learner_record' as const, increment: completed ? credits : 0, recordedEarned: quantitiesKnown ? total : null,
+      completedCredits: repeat || foreignSchooling ? credits : completed ? target : 0, schoolingCredits: countedSchooling, repeatable: Boolean(repeat) || foreignSchooling,
+      quantityInterpretations: group.attempts.map((a,i) => ({ attemptId: a.id, value: components[i].credits,
+        basis: Object.hasOwn(a.plan!, 'contribution') ? 'explicit_learner' : !repeatedSourceClaim[i] && evidence[i]?.omittedCredits !== null && evidence[i]?.omittedCredits !== undefined ? 'decoded_legacy_opening' : 'unknown',
+        legacyOfferingId: evidence[i]?.offeringId ?? null })) });
   }
   const retained = source.kind === 'new-plan' ? undefined : source.state;
   const progress = calculateGraduationProgress([], rules, scopeId, retained?.publicCourses, retained?.thesisSelection,
     details, rows, profile, retained ? thesisProgressForScope(retained, rules, scopeId) : null, {}, allocations);
+  const partialAllocation = allocateLawPartialCredits([...official.allocations.map(a => ({
+    id: a.fact.curriculumCourseId!, mapping: a.mapping, completedCredits: a.completedCredits, partialSchoolingCredits: 0,
+  })), ...allocations.map(a => ({
+    id: a.fact.curriculumCourseId!, mapping: a.mapping, completedCredits: a.completedCredits,
+    partialSchoolingCredits: a.lawPartialSchoolingCredits ?? 0,
+  }))]);
+  for (const course of courses) {
+    const oldId = master.placements.find(p => p.id === groups.get(course.id)?.placementId)?.auditRecord.oldCurriculumCourseId;
+    if (oldId && partialAllocation.has(oldId) && 'increment' in course) course.increment = partialAllocation.get(oldId)!;
+  }
   // Future intent quantities are exposed per record; the earned-only seam does not allocate projections.
   for (const row of [...progress.requirements, ...progress.cards]) {
     if (informational.some(a => a.status === 'planned')) row.planned = null;
