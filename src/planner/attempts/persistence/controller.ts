@@ -259,8 +259,14 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     });
     const replay = await validateState(handle.state);
     const raw = JSON.stringify(replay.state), digest = await backupDigest(replay.state);
+    // A portable backup authenticates its reservation array order. Keep the
+    // existing host's permanent prefix, then append the incoming order before
+    // any locally burned or replay-derived IDs not already present.
+    const reservations = detail.recovery
+      ? unionReservations(detail.expected.issuedIds, detail.recovery.reservedIds, [...sessionIssuedIds], replay.requiredReservations)
+      : unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations);
     const next: AuthorityRecord = { raw, revision: detail.expected.revision + 1,
-      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
+      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: reservations };
     validateAuthority(next);
     if (utf8Bytes(JSON.stringify(next)) > maxRecordBytes) throw new Error(`capacity_limit: ${maxRecordBytes} bytes。archiveは省略しません。`);
     // Same lock as legacy Planner. IDB adds atomic CAS + one-record put; no
