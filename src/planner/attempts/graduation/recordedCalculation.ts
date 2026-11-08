@@ -9,6 +9,7 @@ import { thesisProgressForScope } from '../../graduation/thesisSelection';
 import { calculateGraduationProgress, type CourseAllocationInput } from '../../graduation/graduationProgress';
 import { specialOfficialCourse, deriveOfficialGraduationFacts } from '../../graduation/officialGraduationFacts';
 import { officialRepeatableRule } from '../../graduation/officialRepeatableEvidence';
+import { geographyDestinationCourse } from '../../graduation/geographyAllocationEvidence';
 import { createNewPlanSource } from '../persistence/newPlan';
 import type { PersistenceSource } from '../persistence/contracts';
 import { requireDecoded } from '../migration/source';
@@ -88,6 +89,19 @@ export async function calculateRecordedCredits(graphJson: string, source: Persis
     const course = rules.curriculum?.courses.find(c => c.id === p.auditRecord.oldCurriculumCourseId);
     const block = (reason: string) => { group.attempts.forEach(a => holds.push({ attemptId: a.id, reason })); };
     if (!mapping || !course || !sameAttemptData(mapping.curriculumCredits, p.compositionCredits)) { block('rule_mapping_conflict'); continue; }
+    // A destination Course row is not an independent award. Official/raw or
+    // learner ownership of the row does not establish preceding staged uses.
+    if (geographyDestinationCourse(course, mapping)) {
+      block('geography_transfer_evidence_required');
+      const values = group.attempts.map(a => Object.hasOwn(a.plan!, 'contribution') ? a.plan!.contribution!.value : null);
+      courses.push({ id, authority: 'learner_record' as const, increment: 0,
+        recordedEarned: values.every((n): n is number => n !== null && Number.isFinite(n) && n >= 0)
+          ? finiteNonnegativeSum(values as number[]) : null,
+        completedCredits: 0, schoolingCredits: 0, repeatable: false,
+        quantityInterpretations: group.attempts.map((a, i) => ({ attemptId: a.id, value: values[i],
+          basis: Object.hasOwn(a.plan!, 'contribution') ? 'explicit_learner' : 'unknown', legacyOfferingId: null })) });
+      continue;
+    }
     const ownedOfficial = official.facts.some(f => f.curriculumCourseId === course.id);
     if (ownedOfficial) { courses.push({ id, authority: 'official' as const, increment: 0 }); continue; }
     if (holds.some(h => group.attempts.some(a => a.id === h.attemptId))) continue;
