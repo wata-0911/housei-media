@@ -94,7 +94,8 @@ export async function replayMigrationState(value: unknown) {
     assessment.scheduledDate = c.newDate;
     if (JSON.stringify(raw, null, 2) !== c.proposedRaw) throw new Error('correction_other_field_changed');
     const nextTable = state.corrections[i + 1]?.originalAssignments ?? state.assignments;
-    if (assignmentIds(c.originalAssignments).some(id => !nextTable.reservedIds.includes(id))) throw new Error('correction_assignment_history');
+    const reservedIndex = new Set(nextTable.reservedIds);
+    if (assignmentIds(c.originalAssignments).some(id => !reservedIndex.has(id))) throw new Error('correction_assignment_history');
   }
   // Includes unused reservations and IDs from earlier date-correction tables.
   unionReservations(issuedIds(state.assignments, workspace, state.corrections));

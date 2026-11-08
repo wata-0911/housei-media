@@ -104,3 +104,57 @@ jobs:
       - name: Grade import full-history backup and isolated restore (Chromium)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:grade-import-backup-browser && PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" G03_REQUIRE_CLEAN_EXPORTER=1 npm run test:grade-import-backup-revision-browser
+
+      - name: F01 authority and ABC isolated browser regressions
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/home-planner-browser/node_modules/playwright/index.mjs
+        run: |
+          npm run build:ac-integration
+          npm run test:authority-admission-browser
+          npm run test:ac-integration-browser
+          npm run test:abc-integration-browser
+
+  f01-membership-evidence:
+    if: ${{ github.head_ref == 'work/f01-authority-migration-safety-20261106' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout complete history for sealed RED and both merge parents
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        id: install
+        run: npm ci
+      - name: Install Chromium evidence runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/f01-r6-browser" --no-save --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/f01-r6-browser/node_modules/playwright/cli.js" install --with-deps chromium
+
+      # Sequential Linux evidence: the exact new tests also run against the sealed R5 source.
+      - name: F01 R6 membership RED and GREEN evidence
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && github.head_ref == 'work/f01-authority-migration-safety-20261106' }}
+        env:
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/f01-r6-browser/node_modules/playwright/index.mjs
+        run: |
+          mkdir -p "$RUNNER_TEMP/f01-r6-evidence" "$RUNNER_TEMP/f01-r6-red"
+          git show -s --format=fuller HEAD > "$RUNNER_TEMP/f01-r6-evidence/checkout.txt"
+          git rev-parse HEAD HEAD^{tree} HEAD^1 HEAD^2 >> "$RUNNER_TEMP/f01-r6-evidence/checkout.txt"
+          git archive a761132e700763edef5c644af2eb0ea5616ef812 | tar -x -C "$RUNNER_TEMP/f01-r6-red"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/f01-r6-red/node_modules"
+          cp tests/authority-r6.test.mjs tests/authority-r6.browser.mjs "$RUNNER_TEMP/f01-r6-red/tests/"
+          F01_R6_EVIDENCE="$RUNNER_TEMP/f01-r6-evidence" F01_R6_RED="$RUNNER_TEMP/f01-r6-red" node scripts/f01-r6-evidence.mjs
+
+      - name: Preserve F01 R6 raw evidence
+        if: ${{ always() && github.head_ref == 'work/f01-authority-migration-safety-20261106' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: f01-r6-membership-evidence
+          path: ${{ runner.temp }}/f01-r6-evidence
+          if-no-files-found: error

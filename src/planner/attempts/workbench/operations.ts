@@ -15,6 +15,39 @@ export type Command = { operationId: AttemptOperationId } & (
   | { kind: 'delete_todo'; recordId: OwnedRecordId }
 );
 export type Workspace = { graph: AttemptGraph; receipts: Command[]; usedTodoIds: string[] };
+// Only workspaces created here and extended from them have private, frozen receipts.
+// A generic caller's accessors/proxies keep the original observable lookup path.
+const canonicalWorkspaces = new WeakSet<Workspace>();
+// A linear replay extends the current tip. Keep its private lookup table across
+// those immutable workspaces; rebuilding only when a caller branches from an
+// older workspace prevents later receipts from leaking into that branch.
+type ReceiptIndex = { tip: Workspace; byId: Map<AttemptOperationId, Command> };
+const receiptIndexes = new WeakMap<Workspace, ReceiptIndex>();
+function receiptIndex(workspace: Workspace): ReceiptIndex | undefined {
+  let index = receiptIndexes.get(workspace);
+  if (!index) return undefined;
+  if (index.tip !== workspace) {
+    index = { tip: workspace, byId: new Map(workspace.receipts.map(r => [r.operationId, r])) };
+    receiptIndexes.set(workspace, index);
+  }
+  return index;
+}
+function hasRows<T, K extends keyof T>(oldRows: T[], nextRows: T[], key: K): boolean {
+  const nextIds = new Set(nextRows.map(row => row[key]));
+  return oldRows.every(row => nextIds.has(row[key]));
+}
+// Malformed cloned inputs retain the old short-circuit/error path. A canonical
+// graph already has validated rows; this check only qualifies the new array.
+function indexableRows(rows: unknown[], key: string): boolean {
+  for (let i = 0; i < rows.length; i++) {
+    if (!Object.hasOwn(rows, i)) return false;
+    const row = rows[i];
+    if (!row || typeof row !== 'object' || !Object.hasOwn(row, key)) return false;
+    const id = (row as Record<string, unknown>)[key];
+    if (typeof id !== 'string' && (typeof id !== 'number' || !Number.isFinite(id))) return false;
+  }
+  return true;
+}
 export const newOperationId = (): AttemptOperationId => `hosei:attempt-op:${crypto.randomUUID()}`;
 export const newRecordId = (): OwnedRecordId => `hosei:owned:${crypto.randomUUID()}`;
 export const newAttemptIds = () => ({ id: `hosei:attempt:${crypto.randomUUID()}` as AttemptId, creationOperationId: newOperationId() });
@@ -24,7 +57,10 @@ function requireValid(graph: unknown, context: AttemptValidationContext): assert
 }
 export function createWorkspace(graph: AttemptGraph, context: AttemptValidationContext): Workspace {
   requireValid(graph, context);
-  return freeze({ graph: structuredClone(graph), receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
+  const workspace = freeze({ graph: structuredClone(graph), receipts: [], usedTodoIds: graph.ownedRecords.filter(r => r.kind === 'todo').map(r => r.payload.id) });
+  canonicalWorkspaces.add(workspace);
+  receiptIndexes.set(workspace, { tip: workspace, byId: new Map() });
+  return workspace;
 }
 function keys(value: object, allowed: string[]) {
   if (Object.keys(value).some(k => !allowed.includes(k))) throw new Error('unknown_operation_field');
@@ -40,7 +76,8 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
   if (!commandKeys[command.kind]) throw new Error('unknown_operation');
   keys(command, ['kind', 'operationId', ...commandKeys[command.kind]]);
   if (!/^hosei:attempt-op:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(command.operationId)) throw new Error('invalid_operation_id');
-  const receipt = workspace.receipts.find(r => r.operationId === command.operationId);
+  const index = receiptIndex(workspace);
+  const receipt = index ? index.byId.get(command.operationId) : workspace.receipts.find(r => r.operationId === command.operationId);
   if (receipt) {
     if (!sameAttemptData(receipt, command)) throw new Error('operation_replay_conflict');
     return workspace;
@@ -95,7 +132,11 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
       if (!ticket) throw new Error('unknown_removal');
       // Ticket positions are relative to their deletion-time active list. Only
       // reversing the proven deletion history makes those positions composable.
-      const history = workspace.receipts.filter(r => r.kind === 'remove' && graph.removals.some(t => t.operationId === r.operationId));
+      let history: Command[];
+      if (canonicalWorkspaces.has(workspace)) {
+        const removalIndex = new Set(graph.removals.map(t => t.operationId));
+        history = workspace.receipts.filter(r => r.kind === 'remove' && removalIndex.has(r.operationId));
+      } else history = workspace.receipts.filter(r => r.kind === 'remove' && graph.removals.some(t => t.operationId === r.operationId));
       if (history.length !== graph.removals.length || history.some((r, i) => r.kind !== 'remove'
         || r.operationId !== graph.removals[i].operationId || r.attemptId !== graph.removals[i].attemptSnapshot.id)) {
         throw new Error('undo_history_unproven: 削除順を操作履歴で確認できないため、Undoを停止しました。');
@@ -121,12 +162,18 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
       if (r.kind === 'media') {
         const p = command.payload as Extract<AttemptOwnedRecord, { kind: 'media' }>['payload'];
         if (!Array.isArray(p.lessons) || !Array.isArray(p.assessments)
-          || r.payload.lessons.some(l => !p.lessons.some(n => n.lesson === l.lesson))
-          || r.payload.assessments.some(a => !p.assessments.some(n => n.id === a.id))) throw new Error('progress_row_lost');
+          || (index && indexableRows(p.lessons, 'lesson')
+            ? !hasRows(r.payload.lessons, p.lessons, 'lesson')
+            : r.payload.lessons.some(l => !p.lessons.some(n => n.lesson === l.lesson)))
+          || (index && indexableRows(p.assessments, 'id')
+            ? !hasRows(r.payload.assessments, p.assessments, 'id')
+            : r.payload.assessments.some(a => !p.assessments.some(n => n.id === a.id)))) throw new Error('progress_row_lost');
       }
       if (r.kind === 'correspondence') {
         const p = command.payload as Extract<AttemptOwnedRecord, { kind: 'correspondence' }>['payload'];
-        if (!Array.isArray(p.reports) || r.payload.reports.some(r => !p.reports.some(n => n.reportNumber === r.reportNumber))) throw new Error('progress_row_lost');
+        if (!Array.isArray(p.reports) || (index && indexableRows(p.reports, 'reportNumber')
+          ? !hasRows(r.payload.reports, p.reports, 'reportNumber')
+          : r.payload.reports.some(r => !p.reports.some(n => n.reportNumber === r.reportNumber)))) throw new Error('progress_row_lost');
         if (Object.hasOwn(r.payload, 'calligraphyBatchStatus') && !Object.hasOwn(p, 'calligraphyBatchStatus')) throw new Error('progress_field_lost');
       }
       r.payload = command.payload; break;
@@ -150,5 +197,12 @@ export function applyCommand(workspace: Workspace, input: Command, context: Atte
     });
     if (!result.valid) throw new Error(result.issues.map(i => i.code).join(', '));
   }
-  return freeze({ graph, receipts: [...workspace.receipts, command], usedTodoIds: command.kind === 'add_record' && command.record.kind === 'todo' ? [...workspace.usedTodoIds, command.record.payload.id] : [...workspace.usedTodoIds] });
+  const next = freeze({ graph, receipts: [...workspace.receipts, command], usedTodoIds: command.kind === 'add_record' && command.record.kind === 'todo' ? [...workspace.usedTodoIds, command.record.payload.id] : [...workspace.usedTodoIds] });
+  if (index) {
+    canonicalWorkspaces.add(next);
+    index.byId.set(command.operationId, command);
+    index.tip = next;
+    receiptIndexes.set(next, index);
+  }
+  return next;
 }
