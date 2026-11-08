@@ -1,0 +1,75 @@
+name: F02 GEO PR241 isolated Chromium diagnostic
+
+on:
+  push:
+    branches:
+      - diag/f02-geo-pr241-ui-20261108
+
+permissions:
+  contents: read
+
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout fixed audited product
+        uses: actions/checkout@v4
+        with:
+          ref: 1872d76f8fc4bff172388f3901273d74860ddc8b
+          path: product
+          persist-credentials: false
+      - name: Checkout diagnostic harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+      - name: Verify immutable product and synthetic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C product rev-parse HEAD)" = 1872d76f8fc4bff172388f3901273d74860ddc8b
+          test "$(git -C product rev-parse HEAD^{tree})" = c1f1b3c29efccb022145c6633026ac699b024ec4
+          test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
+          (cd harness/diagnostics/f02-geo-ui/fixtures && sha256sum -c SHA256SUMS)
+          mkdir -p geo-ui-evidence
+          git -C product show -s --format='product commit %H%nproduct tree %T' | tee geo-ui-evidence/revisions.txt
+          git -C harness show -s --format='harness commit %H%nharness tree %T' | tee -a geo-ui-evidence/revisions.txt
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: product/package-lock.json
+      - name: Install exact product dependencies
+        working-directory: product
+        run: npm ci
+      - name: Install Chromium with CI Playwright version
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/f02-geo-browser" --no-save --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/f02-geo-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Build fixed product and isolated AC app
+        working-directory: product
+        run: |
+          npm run build
+          npm run build:ac-integration
+      - name: Run actual Chromium acceptance scenarios
+        shell: bash
+        env:
+          PRODUCT_ROOT: ${{ github.workspace }}/product
+          GEO_UI_ARTIFACT_DIR: ${{ github.workspace }}/geo-ui-evidence
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/f02-geo-browser/node_modules/playwright/index.mjs
+        run: |
+          set -euo pipefail
+          cd "$PRODUCT_ROOT"
+          node --import tsx --test --test-concurrency=1 --test-reporter=tap "$GITHUB_WORKSPACE/harness/diagnostics/f02-geo-ui/geo-ui.browser.mjs" 2>&1 | tee "$GEO_UI_ARTIFACT_DIR/test.log"
+      - name: Upload phase logs and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f02-geo-pr241-ui-${{ github.sha }}
+          path: geo-ui-evidence/
+          if-no-files-found: error

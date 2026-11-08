@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 22,
+  "selectedScopeId": "4d450b06-fb99-4bf2-a769-fe5f68dd337a",
+  "thesisSelection": "selected",
+  "thesisProgressByScope": {
+    "4d450b06-fb99-4bf2-a769-fe5f68dd337a": {
+      "selection": "selected",
+      "status": "not_started"
+    }
+  },
+  "thesisGuidanceByScope": {},
+  "items": [
+    {
+      "offeringId": "13c309fb-7805-40ef-87b2-d00507944956",
+      "status": "earned",
+      "plannedYear": 2026,
+      "plannedTerm": null,
+      "studyYear": null,
+      "earnedOrder": null,
+      "courseCreditContribution": 1
+    },
+    {
+      "offeringId": "27492960-3500-4adb-8cbe-31b583d8ae57",
+      "status": "earned",
+      "plannedYear": 2026,
+      "plannedTerm": null,
+      "studyYear": null,
+      "earnedOrder": null,
+      "courseCreditContribution": 1
+    },
+    {
+      "offeringId": "302232c4-d3a2-474c-a278-2a94fc6784e3",
+      "status": "earned",
+      "plannedYear": 2026,
+      "plannedTerm": null,
+      "studyYear": null,
+      "earnedOrder": null,
+      "courseCreditContribution": 2
+    },
+    {
+      "offeringId": "033a0fec-e6ea-4141-9bde-c3a8cfe5d002",
+      "status": "earned",
+      "plannedYear": 2026,
+      "plannedTerm": null,
+      "studyYear": null,
+      "earnedOrder": null,
+      "courseCreditContribution": 2
+    }
+  ],
+  "publicCourses": [],
+  "todos": [],
+  "mediaSchoolingProgress": {},
+  "courseEvaluations": {},
+  "correspondenceProgress": {},
+  "importedStudyRecords": [],
+  "importedCourseAchievements": [],
+  "importedCourseUserMeta": {},
+  "graduationProfile": {
+    "admissionYear": 2026,
+    "currentStudyYear": null,
+    "admissionType": "first_year",
+    "recognizedCredits": {
+      "totalCredits": null,
+      "schoolingEquivalentCredits": null,
+      "openUniversityCredits": null,
+      "general": {
+        "humanities": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "social": {
+          "mode": "unknown",
+          "credits": null
+        },
+        "natural": {
+          "mode": "unknown",
+          "credits": null
+        }
+      },
+      "foreignLanguage": {
+        "mode": "unknown",
+        "credits": null,
+        "language": "unknown",
+        "schoolingEquivalentCredits": null
+      },
+      "physicalEducation": {
+        "mode": "unknown",
+        "credits": null
+      },
+      "professionalCourses": []
+    },
+    "curriculumApplicability": "current_2026"
+  }
+}
