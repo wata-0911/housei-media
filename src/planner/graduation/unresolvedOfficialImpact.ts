@@ -1,6 +1,7 @@
 import type { GraduationProfile, Mapping, PlannerCatalog, StructuredRequirement } from '../plannerCatalog';
 import { officialFactCreditState, specialOfficialCourse, type OfficialGraduationFact } from './officialGraduationFacts';
 import { GEOGRAPHY_TRANSFER_RULES_2026 } from './geographyTransferRules';
+import { geographyDestinationMapping } from './geographyAllocationEvidence';
 
 /** H41 describes possible destinations, never allocation or credit quantities.
  * H31 has a different authority (manual_review Offering.mappingIds); keep it separate.
@@ -70,7 +71,8 @@ function candidateImpact(mapping: Mapping, canonicalName: string, department: st
   const historyOverview = department === '史学科' && ['日本史概説', '東洋史概説', '西洋史概説'].includes(canonicalName);
   // Never normalize a special family into an ordinary single Course. Only these
   // existing exact routing tables supply a complete potential destination set.
-  if (specialOfficialCourse(canonicalName, department, mapping) && !geographyRule && !historyOverview) return null;
+  if (specialOfficialCourse(canonicalName, department, mapping) && !geographyRule && !historyOverview
+    && !geographyDestinationMapping(mapping)) return null;
   const add = (requirementType: string, field = mapping.field) => destinations.push({ category: '専門教育', field, requirementType });
   if (geographyRule) for (const [bucket] of geographyRule.stages) {
     const [type, field] = bucket.split(':');

@@ -23,6 +23,7 @@ import { officialRepeatableRule } from './officialRepeatableEvidence';
 import { repeatableRule } from './repeatableRules';
 import { specialLectureProgress, type SpecialLectureProgress } from './specialLectureProgress';
 import { allocateGeographyTransfers, geographyTransferKind, type GeographyTransferKind } from './geographyTransferRules';
+import { geographyDestinationOffering } from './geographyAllocationEvidence';
 import { evaluatePublicCourseLimit, publicCourseLimitFor, type PublicCourseProgress } from './publicCourseRules';
 import { thesisPolicyForScope } from './thesisSelection';
 import { classifyUnknownReason, coverageForCard, LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026, sourcesForGraduationCard, thesisCreditsForDepartment, type CoverageStatus, type GraduationSourceRef, type UnknownReasonCategory } from './graduationSources';
@@ -1630,16 +1631,24 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     existingCourseIds.add(key);
     return [{ offeringId: offering.id, status: 'earned' as const, plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null }];
   });
-  // p.55 field-study stages consume regular S1 awards, never fractional or
-  // zero learner rows. Preserve the records; filter only calculation inputs.
-  const invalidFieldStudy = new Set(plannerItems.filter(item => {
+  // The four destination Course rows are descriptions of transfers, not new
+  // awards. No present annual/learner row proves their independent source.
+  const destinationItems = new Set(plannerItems.filter(item => {
     const offering = catalogOfferings.get(item.offeringId);
-    return item.status === 'earned' && offering && geographyTransferKind(offering,
-      id => catalog.courses.find(c => c.id === id)?.canonicalName ?? null) === 'fieldStudy'
-      && plannerItemCreditContribution(item, offering) !== 1;
+    return offering && geographyDestinationOffering(offering, catalog);
   }));
-  const regularPlannerItems = plannerItems.filter(item => !invalidFieldStudy.has(item));
-  const calculationItems: CalculationItems = { ordinary: [...regularPlannerItems, ...recognizedItems], schooling: regularPlannerItems };
+  // p.55 stages consume exact earned S1/S2 awards. A saved explicit zero is
+  // retained on the learner row, but cannot be replaced by Offering.credits.
+  const invalidGeography = new Set(plannerItems.filter(item => {
+    const offering = catalogOfferings.get(item.offeringId);
+    const kind = offering && geographyTransferKind(offering,
+      id => catalog.courses.find(c => c.id === id)?.canonicalName ?? null);
+    return item.status === 'earned' && kind
+      && plannerItemCreditContribution(item, offering!) !== (kind === 'fieldStudy' ? 1 : 2);
+  }));
+  const regularPlannerItems = plannerItems.filter(item => !destinationItems.has(item) && !invalidGeography.has(item));
+  const calculationItems: CalculationItems = { ordinary: [...regularPlannerItems,
+    ...recognizedItems.filter(item => { const offering = catalogOfferings.get(item.offeringId); return !offering || !geographyDestinationOffering(offering, catalog); })], schooling: regularPlannerItems };
   const offerings = catalogOfferings;
   const resolve = createMappingResolver(catalog);
   const commonScopes = new Set(catalog.programs.filter(program => program.isCommon).map(program => program.scopeId));
@@ -1647,7 +1656,7 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
   // One completion gate feeds ordinary requirement and common-card consumers.
   // Keep original records for professional partial exceptions and S reference.
   const ordinaryGroups = new Map<string, { mapping: Mapping; canonicalName: string; items: PlannerItem[]; components: OrdinaryComponent[] }>();
-  for (const item of plannerItems) {
+  for (const item of regularPlannerItems) {
     const offering = offerings.get(item.offeringId);
     if (item.status !== 'earned' || !offering || offering.resolutionStatus !== 'matched') continue;
     for (const mapping of eligibleMappings(offering)) {
@@ -1663,10 +1672,12 @@ export function calculateGraduationProgress(items: PlannerItem[], catalog: Plann
     }
   }
   const excludedOrdinary = new Set<PlannerItem>();
-  const completionHolds: Array<{ mapping: Mapping; canonicalName: string; reason: string }> = [...invalidFieldStudy].flatMap(item => {
+  const completionHolds: Array<{ mapping: Mapping; canonicalName: string; reason: string }> = [...invalidGeography, ...destinationItems].flatMap(item => {
     const offering = offerings.get(item.offeringId)!;
-    return plannerItemCreditContribution(item, offering) === 0 ? [] : eligibleMappings(offering).map(mapping => ({
-      mapping, canonicalName: '現地研究', reason: 'unsupported_course_component_structure',
+    if (item.status !== 'earned') return [];
+    return eligibleMappings(offering).map(mapping => ({
+      mapping, canonicalName: offering.name, reason: destinationItems.has(item)
+        ? 'geography_transfer_evidence_required' : 'geography_earned_quantity_conflict',
     }));
   });
   for (const group of ordinaryGroups.values()) {

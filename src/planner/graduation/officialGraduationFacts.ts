@@ -7,6 +7,7 @@ import { LAW_SCHOOLING_EXCLUDED_CANONICAL_NAMES_2026 } from './graduationSources
 import { resolveRecognizedProfessionalCurriculumIdentity } from './recognizedProfessionalIdentity';
 import { officialCandidateMappings } from './unresolvedOfficialImpact';
 import { deriveOfficialRepeatableEvidence, officialRepeatableAggregateDiagnostics, officialRepeatableRule, officialRepeatableSourceSignature, type OfficialRepeatableEvidence } from './officialRepeatableEvidence';
+import { geographyDestinationCourse, geographyDestinationMapping } from './geographyAllocationEvidence';
 
 export type OfficialUnknownReason = 'curriculum_identity_unresolved' | 'mapping_not_found' | 'mapping_conflict'
   | 'duplicate_official_rows' | 'metadata_unknown' | 'special_rule_evidence_required' | 'out_of_scope';
@@ -87,6 +88,7 @@ export function deriveMethodEvidence(row: ImportedCourseAchievement, records: Im
 export function specialOfficialCourse(name: string, department: string | null, mapping: Mapping): boolean {
   const base = baseName(name);
   return base === '卒業論文' || base === '基礎特講' || base === '書道実技'
+    || geographyDestinationMapping(mapping)
     || /旧課程|旧カリキュラム/.test(name)
     || mapping.requirementType === '公開科目' || /公開科目/.test(name)
     || REPEATABLE_CREDIT_RULES.some(([d, family]) => d === department && (base === family || base.replace(/[0-9]+$/, '') === family))
@@ -160,16 +162,32 @@ export function deriveOfficialGraduationFacts(
   // calculation representative. Persisted rows and their order remain untouched.
   const copiesById = new Map<string, ImportedCourseAchievement[]>();
   for (const row of rows) copiesById.set(row.id, [...(copiesById.get(row.id) ?? []), row]);
+  // One official source ID cannot supply both a Geography source Course and
+  // its destination. Keep both claims visible before representative selection
+  // so reversing raw rows cannot choose which side receives the award.
+  const geographyClaimConflicts = new Set([...copiesById].filter(([, copies]) => {
+    if (new Set(copies.map(r => exactImportedCurriculumId(r, catalog))).size < 2) return false;
+    return copies.some(r => {
+      const course = courses.get(exactImportedCurriculumId(r, catalog) ?? '');
+      return course?.mappingIds.some(id => {
+        const mapping = mappings.get(id);
+        return mapping && geographyDestinationCourse(course, mapping);
+      });
+    });
+  }).map(([id]) => id));
   const conflictingIds = new Set([...copiesById].filter(([, copies]) =>
     new Set(copies.map(officialRepeatableSourceSignature)).size > 1).map(([id]) => id));
-  const representatives = [...copiesById.values()].map(copies => {
+  const representatives = [...copiesById].flatMap(([sourceId, copies]) => {
+    if (geographyClaimConflicts.has(sourceId)) return [...new Map(copies
+      .slice().sort((a, b) => officialRepeatableSourceSignature(a).localeCompare(officialRepeatableSourceSignature(b)))
+      .map(r => [exactImportedCurriculumId(r, catalog), r])).values()];
     const nativeRepeats = copies.filter(row => {
       const course = courses.get(exactImportedCurriculumId(row, catalog) ?? '');
       return course && sourceEvidence(row) !== null && officialRepeatableRule(department, course);
     });
     // Restrict the new representative policy to this Issue's native repeat path.
-    if (!nativeRepeats.length) return copies[copies.length - 1];
-    return nativeRepeats.sort((a, b) => officialRepeatableSourceSignature(a).localeCompare(officialRepeatableSourceSignature(b)))[0];
+    if (!nativeRepeats.length) return [copies[copies.length - 1]];
+    return [nativeRepeats.sort((a, b) => officialRepeatableSourceSignature(a).localeCompare(officialRepeatableSourceSignature(b)))[0]];
   });
   for (const row of representatives.sort((a, b) => a.id.localeCompare(b.id))) {
     const id = exactImportedCurriculumId(row, catalog);
@@ -214,6 +232,9 @@ export function deriveOfficialGraduationFacts(
     // R1/R2: metadata/Mapping holds cannot erase known native aggregate conflicts.
     if (repeatable) fact.diagnostics.push(...officialRepeatableAggregateDiagnostics(repeatableRows, course, catalog, records));
     if (identityConflict) { hold('curriculum_identity_unresolved'); continue; }
+    if (sourceRowIds.some(id => geographyClaimConflicts.has(id))) {
+      hold('duplicate_official_rows', 'geography_source_claim_conflict'); continue;
+    }
     if (group.length > 1 && !repeatable) { hold('duplicate_official_rows', 'conflicting_source_rows'); continue; }
     if (course.scopeIds.slice().sort().join() !== [...new Set(course.mappingIds.flatMap(id => mappings.get(id)?.scopeId ?? []))].sort().join()) fact.diagnostics.push('scope_ids_differ_from_mapping_scopes');
     if (!course.mappingIds.length || course.mappingIds.some(id => !mappings.has(id))) { hold('mapping_not_found'); continue; }

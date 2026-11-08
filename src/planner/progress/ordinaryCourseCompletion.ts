@@ -36,5 +36,7 @@ export function ordinaryCompletionReason(reason: string): string {
     unsupported_course_component_structure: '科目構成単位に対応する正規の修得方式・数量を確認できないため完成を保留しています。',
     explicit_quantity_and_compatible_method_required: '修得数量または方式が不明のため完成を保留しています。',
     course_components_incomplete: '科目構成単位が未完成のため、通常の卒業単位には算入していません。',
+    geography_transfer_evidence_required: '地理の振替先は先行配分・独立した履修回・同一出所の排他を確認できないため算入を保留しています。',
+    geography_earned_quantity_conflict: '修得済みの地理開講について保存された寄与量が正規の1回分と一致しないため算入を保留しています。',
   } as Record<string, string>)[reason] ?? reason;
 }
