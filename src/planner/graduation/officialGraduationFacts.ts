@@ -86,6 +86,15 @@ export function deriveMethodEvidence(row: ImportedCourseAchievement, records: Im
 }
 
 export function specialOfficialCourse(name: string, department: string | null, mapping: Mapping): boolean {
+  // p.54 lists this fixed T4 Course as a human-geography required elective.
+  // Its parenthesized descriptor is part of the Course identity, not an S2
+  // attempt of the separate 人文地理学特講 family on p.55.
+  if (department === '地理学科' && name === '人文地理学特講（地域・産業・生活）'
+    && mapping.mappingId === '6c7dc42c-bd35-47df-9bc2-4b6f6da77e95'
+    && mapping.scopeId === '4d450b06-fb99-4bf2-a769-fe5f68dd337a'
+    && mapping.category === '専門教育' && mapping.field === '人文地理の分野'
+    && mapping.requirementType === '選択必修' && mapping.curriculumCredits === 4
+    && !mapping.schoolingOnly && !mapping.mediaOnly) return false;
   const base = baseName(name);
   return base === '卒業論文' || base === '基礎特講' || base === '書道実技'
     || geographyDestinationMapping(mapping)

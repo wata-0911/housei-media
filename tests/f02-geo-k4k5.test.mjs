@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { catalog, initialState, calculateState, newAttempt, officialRow } from './fixtures/yi07-graduation.mjs';
-import { master } from './fixtures/migration-fixture.mjs';
+import { master, decode, preview } from './fixtures/migration-fixture.mjs';
 import { calculateRecordedCredits } from '../src/planner/attempts/graduation/recordedCalculation.ts';
 import { createNewPlanSource } from '../src/planner/attempts/persistence/newPlan.ts';
 import { deriveOfficialGraduationFacts } from '../src/planner/graduation/officialGraduationFacts.ts';
@@ -17,6 +17,60 @@ const item = (offering, value) => ({ offeringId: offering.id, status: 'earned', 
   plannedTerm: null, studyYear: null, earnedOrder: null, courseCreditContribution: value });
 const destinations = ['地理特講（地誌学特講）', '地理特講（人文地理学演習）',
   '地理特講（自然地理学演習）', '地域特講（現地研究）'];
+const humanRegionalT4 = catalog.curriculum.courses.find(c => c.id === 'curriculum:6c7dc42c-bd35-47df-9bc2-4b6f6da77e95');
+
+test('R1 fixed human geography T4: official22 earns four required elective credits', async () => {
+  assert.equal(humanRegionalT4.canonicalName, '人文地理学特講（地域・産業・生活）');
+  assert.equal(humanRegionalT4.curriculumCredits, 4);
+  const s = state(); s.importedCourseAchievements = [officialRow(humanRegionalT4, 4)];
+  const before = JSON.stringify(s);
+  assert.equal((await decode(s)).status, 'decoded');
+  const facts = deriveOfficialGraduationFacts(s.importedCourseAchievements, [], catalog, scope, s.graduationProfile);
+  assert.equal(facts.allocations.length, 1);
+  assert.equal(earned(calculateState(s, scope), 'required-elective'), 4);
+  assert.equal(earned(calculateState(s, scope), 'total'), 4);
+  assert.equal(JSON.stringify(s), before);
+});
+
+test('R1 fixed human geography T4: formal23 keeps source raw and four credits', async () => {
+  const s = state(); s.importedCourseAchievements = [officialRow(humanRegionalT4, 4)];
+  const before = JSON.stringify(s);
+  const migration = await preview(s);
+  assert.equal(migration.source.raw, JSON.stringify(s, null, 2));
+  const graph = migration.result.target.graph, raw = JSON.stringify(graph);
+  const result = await calculateRecordedCredits(raw, migration.source, scope);
+  assert.equal(result.status, 'calculated');
+  assert.equal(earned(result.progress, 'required-elective'), 4);
+  assert.equal(earned(result.progress, 'total'), 4);
+  assert.equal(JSON.stringify(s), before);
+  assert.equal(JSON.stringify(graph), raw);
+});
+
+test('R1 fixed human geography T4: native24 correspondence earns four credits', async () => {
+  const placement = master.placements.find(p => p.auditRecord.oldCurriculumCourseId === humanRegionalT4.id && p.scopeId === scope);
+  assert.ok(placement);
+  const attempt = newAttempt(master, placement, 4, 'earned', 'correspondence');
+  const graph = { attempts: [attempt], ownedRecords: [], removals: [] }, raw = JSON.stringify(graph);
+  const result = await calculateRecordedCredits(raw, await createNewPlanSource(), scope);
+  assert.equal(result.status, 'calculated');
+  assert.equal(earned(result.progress, 'required-elective'), 4);
+  assert.equal(earned(result.progress, 'total'), 4);
+  assert.equal(JSON.stringify(graph), raw);
+});
+
+test('R1 separate human S2 family remains held without attempt evidence', async () => {
+  const course = catalog.curriculum.courses.find(c => c.canonicalName === '人文地理学特講' && c.scopeIds.includes(scope));
+  assert.equal(course.curriculumCredits, 2);
+  const s = state(); s.importedCourseAchievements = [officialRow(course, 2)];
+  assert.equal(deriveOfficialGraduationFacts(s.importedCourseAchievements, [], catalog, scope, s.graduationProfile).allocations.length, 0);
+  assert.equal(earned(calculateState(s, scope), 'total'), 0);
+  const placement = master.placements.find(p => p.auditRecord.oldCurriculumCourseId === course.id && p.scopeId === scope);
+  assert.ok(placement);
+  const graph = { attempts: [newAttempt(master, placement, 2, 'earned', 'correspondence')], ownedRecords: [], removals: [] };
+  const result = await calculateRecordedCredits(JSON.stringify(graph), await createNewPlanSource(), scope);
+  assert.ok(result.holds.some(h => h.attemptId === graph.attempts[0].id));
+  assert.equal(earned(result.progress, 'total'), 0);
+});
 
 for (const name of destinations) test(`K4 ${name}: no independent destination award in official, ABC24, or old opening`, async () => {
   const course = catalog.curriculum.courses.find(c => c.canonicalName === name && c.scopeIds.includes(scope));
