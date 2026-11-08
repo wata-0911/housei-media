@@ -1,0 +1,132 @@
+name: F01 R7 R8 isolated Chromium 120s
+
+on:
+  push:
+    branches:
+      - diag/f01-r7-r8-chromium-120s-20261108
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.ref == 'refs/heads/diag/f01-r7-r8-chromium-120s-20261108'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: [R7, R8]
+    steps:
+      - name: Checkout diagnostic files
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: diag
+      - name: Checkout fixed R7
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 4ca99ca791062a5015027d1493cbc6dd69465595
+          path: candidate
+      - name: Verify candidate tree and unchanged original test
+        working-directory: candidate
+        env:
+          CANDIDATE: ${{ matrix.candidate }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/f01-evidence"
+          test "$(git rev-parse HEAD)" = 4ca99ca791062a5015027d1493cbc6dd69465595
+          test "$(git rev-parse HEAD^{tree})" = fe18f38acba49131a977c36491f741425a7ffb09
+          test "$(sha256sum ../diag/diagnostics/r7-to-r8.patch | cut -d' ' -f1)" = 4aaeb0898dacb27d13afbc70b1dce3f270bb8e3fca80ed98d186563bb9b80955
+          if [ "$CANDIDATE" = R8 ]; then
+            git apply --index ../diag/diagnostics/r7-to-r8.patch
+            expected=24f7d536266d84485563d0f47a907ade0f9656a6
+          else
+            expected=fe18f38acba49131a977c36491f741425a7ffb09
+          fi
+          git diff --cached --check
+          test "$(git write-tree)" = "$expected"
+          git diff --cached --quiet -- tests/authority-r7.browser.mjs
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/f01-evidence/checkout.txt"
+          printf 'candidate=%s\nexpected_tree=%s\nactual_tree=%s\n' "$CANDIDATE" "$expected" "$(git write-tree)" >> "$RUNNER_TEMP/f01-evidence/checkout.txt"
+          date -u +'%Y-%m-%dT%H:%M:%SZ' >> "$RUNNER_TEMP/f01-evidence/checkout.txt"
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Install project dependencies
+        working-directory: candidate
+        run: npm ci
+      - name: Install Playwright 1.62.1 Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/f01-playwright" --no-save --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/f01-playwright/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Build AC harness and record versions
+        working-directory: candidate
+        env:
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/f01-playwright/node_modules/playwright/index.mjs
+        run: |
+          set -euo pipefail
+          npm run build:ac-integration > "$RUNNER_TEMP/f01-evidence/build.log" 2>&1
+          {
+            node --version
+            npm --version
+            node "$RUNNER_TEMP/f01-playwright/node_modules/playwright/cli.js" --version
+            browser_path=$(node --input-type=module -e 'const {chromium}=await import(process.env.PLANNER_PLAYWRIGHT_MODULE); console.log(chromium.executablePath())')
+            "$browser_path" --version
+            uname -a
+            uptime
+          } > "$RUNNER_TEMP/f01-evidence/versions.txt" 2>&1
+      - name: Run unchanged schema23 test with internal 120s timeout
+        id: original
+        working-directory: candidate
+        env:
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/f01-playwright/node_modules/playwright/index.mjs
+        run: |
+          set -uo pipefail
+          report="$RUNNER_TEMP/f01-evidence"
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > "$report/start.txt"
+          /usr/bin/time -v -o "$report/resource.txt" node --import tsx --test --test-concurrency=1 --test-name-pattern='^R7 schema23 real backup survives same and separate origins$' tests/authority-r7.browser.mjs > "$report/test.tap" 2>&1 &
+          test_pid=$!
+          while kill -0 "$test_pid" 2>/dev/null; do
+            date -u +'%Y-%m-%dT%H:%M:%SZ' >> "$report/process-samples.txt"
+            ps -eo pid,ppid,etime,pcpu,rss,comm | awk 'NR==1 || $6 ~ /(node|chrome|chromium)/' >> "$report/process-samples.txt"
+            sleep 2
+          done
+          wait "$test_pid"
+          code=$?
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > "$report/end.txt"
+          printf '%s\n' "$code" > "$report/exit-code.txt"
+          uptime >> "$report/versions.txt"
+          exit "$code"
+      - name: Phase probe on a separate diagnostic copy after timeout
+        if: ${{ failure() && steps.original.outcome == 'failure' }}
+        working-directory: candidate
+        env:
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/f01-playwright/node_modules/playwright/index.mjs
+        run: |
+          set -uo pipefail
+          report="$RUNNER_TEMP/f01-evidence"
+          if ! grep -Eq 'cancelled|test timed out|timeout' "$report/test.tap"; then
+            echo 'Original test failed without timeout; phase probe not run.' > "$report/phase-status.txt"
+            exit 0
+          fi
+          node ../diag/diagnostics/instrument-r7.mjs tests/authority-r7.browser.mjs tests/authority-r7.phase.browser.mjs
+          cmp -s tests/authority-r7.browser.mjs <(git show HEAD:tests/authority-r7.browser.mjs)
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > "$report/phase-start.txt"
+          /usr/bin/time -v -o "$report/phase-resource.txt" node --import tsx --test --test-concurrency=1 --test-name-pattern='^R7 schema23 real backup survives same and separate origins$' tests/authority-r7.phase.browser.mjs > "$report/phase.tap" 2>&1
+          code=$?
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > "$report/phase-end.txt"
+          printf '%s\n' "$code" > "$report/phase-exit-code.txt"
+          exit 0
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f01-${{ matrix.candidate }}-chromium-120s
+          path: ${{ runner.temp }}/f01-evidence
+          if-no-files-found: warn
+          retention-days: 30

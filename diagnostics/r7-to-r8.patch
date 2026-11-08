@@ -1,0 +1,248 @@
+diff --git a/package.json b/package.json
+index c5a393e..6b84e5c 100644
+--- a/package.json
++++ b/package.json
+@@ -9,7 +9,7 @@
+     "lint": "eslint .",
+     "typecheck": "tsc --noEmit",
+     "preview": "vite preview",
+-    "test:planner": "node --import tsx --test tests/official-repeatable.test.mjs tests/calligraphy-progress.test.mjs tests/calligraphy-state-references.test.mjs tests/calligraphy-partial-details.test.mjs tests/planner.test.mjs tests/curriculum-foundation.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-model.test.mjs tests/curriculum-course-ui.test.mjs tests/component-provenance.test.mjs tests/graduation-audit.test.mjs tests/manual-graduation-credits.test.mjs tests/structured-professional-credits.test.mjs tests/grade-import-privacy.test.mjs tests/grade-import-identity.test.mjs tests/unresolved-conditions.test.mjs tests/institutional-catalog.test.mjs tests/institutional-search.test.mjs tests/attempt-contract.test.mjs tests/migration.test.mjs tests/attempt-workbench.test.mjs tests/attempt-persistence.test.mjs tests/attempt-new-plan.test.mjs tests/attempt-graduation.test.mjs tests/institutional-readonly.test.mjs tests/institutional-shared-ui.test.mjs tests/attempt-positive.test.mjs tests/attempt-positive-baseline.test.mjs tests/work-b-f1-f6.test.mjs tests/work-b-official-repeat-boundaries.test.mjs tests/work-b-strict-deltas.test.mjs tests/work-b-final-boundaries.test.mjs tests/work-b-professional-matrix.test.mjs tests/work-b-audit-reproductions.test.mjs tests/work-b-ra-f4.test.mjs tests/work-b-f4-completion.test.mjs tests/work-b-residual.test.mjs tests/attempt-production-session.test.mjs tests/attempt-production-load-revocation.test.mjs tests/attempt-ac-integration.test.mjs tests/attempt-abc-integration.test.mjs tests/authority-admission.test.mjs tests/authority-remediation.test.mjs tests/authority-r2.test.mjs tests/authority-r2-bytes.test.mjs tests/authority-r3.test.mjs tests/authority-r4.test.mjs tests/authority-r5.test.mjs tests/authority-r6.test.mjs tests/authority-r7.test.mjs",
++    "test:planner": "node --import tsx --test tests/official-repeatable.test.mjs tests/calligraphy-progress.test.mjs tests/calligraphy-state-references.test.mjs tests/calligraphy-partial-details.test.mjs tests/planner.test.mjs tests/curriculum-foundation.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-model.test.mjs tests/curriculum-course-ui.test.mjs tests/component-provenance.test.mjs tests/graduation-audit.test.mjs tests/manual-graduation-credits.test.mjs tests/structured-professional-credits.test.mjs tests/grade-import-privacy.test.mjs tests/grade-import-identity.test.mjs tests/unresolved-conditions.test.mjs tests/institutional-catalog.test.mjs tests/institutional-search.test.mjs tests/attempt-contract.test.mjs tests/migration.test.mjs tests/attempt-workbench.test.mjs tests/attempt-persistence.test.mjs tests/attempt-new-plan.test.mjs tests/attempt-graduation.test.mjs tests/institutional-readonly.test.mjs tests/institutional-shared-ui.test.mjs tests/attempt-positive.test.mjs tests/attempt-positive-baseline.test.mjs tests/work-b-f1-f6.test.mjs tests/work-b-official-repeat-boundaries.test.mjs tests/work-b-strict-deltas.test.mjs tests/work-b-final-boundaries.test.mjs tests/work-b-professional-matrix.test.mjs tests/work-b-audit-reproductions.test.mjs tests/work-b-ra-f4.test.mjs tests/work-b-f4-completion.test.mjs tests/work-b-residual.test.mjs tests/attempt-production-session.test.mjs tests/attempt-production-load-revocation.test.mjs tests/attempt-ac-integration.test.mjs tests/attempt-abc-integration.test.mjs tests/authority-admission.test.mjs tests/authority-remediation.test.mjs tests/authority-r2.test.mjs tests/authority-r2-bytes.test.mjs tests/authority-r3.test.mjs tests/authority-r4.test.mjs tests/authority-r5.test.mjs tests/authority-r6.test.mjs tests/authority-r7.test.mjs tests/authority-r8.test.mjs",
+     "test:extension": "node --test extension/hosei-planner-import/tests/*.test.mjs",
+     "test:planner-browser": "node --import tsx --test tests/planner-save-lock.browser.mjs",
+     "build:extension-dev": "npm run check:grade-import && node scripts/build-extension-dev.mjs",
+@@ -49,8 +49,8 @@
+     "test:work-b-final": "node --import tsx --test --test-concurrency=1 tests/work-b-f1-f6.test.mjs tests/work-b-strict-deltas.test.mjs tests/work-b-final-boundaries.test.mjs tests/work-b-official-repeat-boundaries.test.mjs tests/attempt-positive.test.mjs tests/work-b-professional-matrix.test.mjs tests/work-b-audit-reproductions.test.mjs tests/work-b-ra-f4.test.mjs tests/work-b-f4-completion.test.mjs",
+     "test:abc-integration": "node --import tsx --test tests/attempt-abc-integration.test.mjs",
+     "test:abc-integration-browser": "node --import tsx --test tests/abc-integration.browser.mjs",
+-    "test:authority-admission": "node --import tsx --test tests/authority-admission.test.mjs tests/authority-remediation.test.mjs tests/authority-r2.test.mjs tests/authority-r2-bytes.test.mjs tests/authority-r3.test.mjs tests/authority-r4.test.mjs tests/authority-r5.test.mjs tests/authority-r6.test.mjs tests/authority-r7.test.mjs",
+-    "test:authority-admission-browser": "node --import tsx --test --test-concurrency=1 tests/authority-admission.browser.mjs tests/authority-remediation.browser.mjs tests/authority-remediation-ui.browser.mjs tests/authority-r2.browser.mjs tests/authority-r2-ui.browser.mjs tests/authority-r3.browser.mjs tests/authority-r4.browser.mjs tests/authority-r5.browser.mjs tests/authority-r6.browser.mjs tests/authority-r7.browser.mjs"
++    "test:authority-admission": "node --import tsx --test tests/authority-admission.test.mjs tests/authority-remediation.test.mjs tests/authority-r2.test.mjs tests/authority-r2-bytes.test.mjs tests/authority-r3.test.mjs tests/authority-r4.test.mjs tests/authority-r5.test.mjs tests/authority-r6.test.mjs tests/authority-r7.test.mjs tests/authority-r8.test.mjs",
++    "test:authority-admission-browser": "node --import tsx --test --test-concurrency=1 tests/authority-admission.browser.mjs tests/authority-remediation.browser.mjs tests/authority-remediation-ui.browser.mjs tests/authority-r2.browser.mjs tests/authority-r2-ui.browser.mjs tests/authority-r3.browser.mjs tests/authority-r4.browser.mjs tests/authority-r5.browser.mjs tests/authority-r6.browser.mjs tests/authority-r7.browser.mjs tests/authority-r8.browser.mjs"
+   },
+   "dependencies": {
+     "@line/liff": "^2.31.2",
+diff --git a/src/planner/attempts/persistence/controller.ts b/src/planner/attempts/persistence/controller.ts
+index 4803975..14974f5 100644
+--- a/src/planner/attempts/persistence/controller.ts
++++ b/src/planner/attempts/persistence/controller.ts
+@@ -259,8 +259,14 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
+     });
+     const replay = await validateState(handle.state);
+     const raw = JSON.stringify(replay.state), digest = await backupDigest(replay.state);
++    // A portable backup authenticates its reservation array order. Keep the
++    // existing host's permanent prefix, then append the incoming order before
++    // any locally burned or replay-derived IDs not already present.
++    const reservations = detail.recovery
++      ? unionReservations(detail.expected.issuedIds, detail.recovery.reservedIds, [...sessionIssuedIds], replay.requiredReservations)
++      : unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations);
+     const next: AuthorityRecord = { raw, revision: detail.expected.revision + 1,
+-      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
++      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: reservations };
+     validateAuthority(next);
+     if (utf8Bytes(JSON.stringify(next)) > maxRecordBytes) throw new Error(`capacity_limit: ${maxRecordBytes} bytes。archiveは省略しません。`);
+     // Same lock as legacy Planner. IDB adds atomic CAS + one-record put; no
+diff --git a/tests/authority-r8.browser.mjs b/tests/authority-r8.browser.mjs
+new file mode 100644
+index 0000000..6e51875
+--- /dev/null
++++ b/tests/authority-r8.browser.mjs
+@@ -0,0 +1,102 @@
++import { before, after, test } from 'node:test';
++import assert from 'node:assert/strict';
++import { build } from 'esbuild';
++import { createServer } from 'node:http';
++import { files, initialState } from './fixtures/migration-fixture.mjs';
++
++const { chromium } = await import(process.env.PLANNER_PLAYWRIGHT_MODULE || 'playwright');
++const primary = JSON.stringify(initialState());
++let browser;
++const servers = [];
++const origins = [];
++
++before(async () => {
++  const output = await build({ stdin: { resolveDir: new URL('../', import.meta.url).pathname, contents: `
++    import { createPlannerAttemptSession } from './src/planner/attempts/production/session';
++    import { createAuthorityIndexedDbStore } from './src/planner/attempts/persistence/authorityIndexedDb';
++    import { readLegacySnapshot } from './src/planner/attempts/production/authorityAdmission';
++    import { prepareMigrationEnvironment } from './src/planner/attempts/migration/source';
++    export const store = createAuthorityIndexedDbStore(indexedDB);
++    export const make = (legacy = false) => createPlannerAttemptSession(store, navigator.locks,
++      legacy ? { readLegacy: () => readLegacySnapshot(localStorage),
++        migrationEnvironment: () => prepareMigrationEnvironment(${JSON.stringify(files)}),
++        protectAuthority: () => store.protectOriginal() } : undefined);
++  ` }, bundle: true, platform: 'browser', format: 'esm', write: false, logLevel: 'silent' });
++  for (let i = 0; i < 2; i++) {
++    const server = createServer((request, response) => {
++      response.setHeader('Content-Type', request.url === '/bundle.mjs' ? 'text/javascript' : 'text/html');
++      response.end(request.url === '/bundle.mjs' ? output.outputFiles[0].text : '<title>F01 R8 reservation order</title>');
++    });
++    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
++    servers.push(server);
++    origins.push(`http://127.0.0.1:${server.address().port}`);
++  }
++  browser = await chromium.launch({ headless: true });
++});
++
++after(async () => {
++  await browser?.close();
++  for (const server of servers) {
++    server.closeAllConnections();
++    await new Promise(resolve => server.close(resolve));
++  }
++});
++
++for (const schema of [23, 24]) for (const commandCount of [0, 1, 16]) {
++  test(`R8 schema${schema} ${commandCount} commands retain ordered reservations across origins`, { timeout: 300000 }, async t => {
++    const sourceContext = await browser.newContext();
++    const destinationContext = await browser.newContext();
++    t.after(async () => { await sourceContext.close(); await destinationContext.close(); });
++    const sourcePage = await sourceContext.newPage();
++    await sourcePage.goto(origins[0]);
++    const source = await sourcePage.evaluate(async ({ schema, commandCount, primary }) => {
++      const { store, make } = await import('/bundle.mjs');
++      if (schema === 23) localStorage.setItem('hosei-planner:v1', primary);
++      const api = make(schema === 23);
++      await api.load();
++      await api.save(schema === 23 ? await api.prepareMigration(primary) : await api.prepareSave(), true);
++      if (commandCount) {
++        api.add('hosei:cp:b99c65d5-5917-422d-bda4-75a4f99ad8b7', JSON.stringify({ plannedYear: 2038, method: 'correspondence', status: 'planned' }));
++        const id = api.graph().attempts.at(-1).id;
++        for (let i = 1; i < commandCount; i++) api.recordContribution(id, JSON.stringify({ value: i % 4 }));
++        await api.save(await api.prepareSave(), true);
++      }
++      const backup = await api.createBackup();
++      return { backup, authority: await store.read(), primary: localStorage.getItem('hosei-planner:v1') };
++    }, { schema, commandCount, primary });
++    assert.equal(source.primary, schema === 23 ? primary : null);
++    const body = JSON.parse(source.backup);
++    assert.equal(body.state.history.commands.length, commandCount);
++    assert.deepEqual(body.reservedIds, source.authority.issuedIds);
++
++    const destinationPage = await destinationContext.newPage();
++    await destinationPage.goto(origins[1]);
++    const destination = await destinationPage.evaluate(async ({ schema, backup }) => {
++      const { store, make } = await import('/bundle.mjs');
++      const api = make(schema === 23);
++      await api.load();
++      const dbBefore = (await indexedDB.databases()).length;
++      let puts = 0;
++      const put = IDBObjectStore.prototype.put;
++      IDBObjectStore.prototype.put = function (...args) { puts++; return put.apply(this, args); };
++      const preview = await api.prepareRestore(backup);
++      const previewPuts = puts;
++      await api.save(preview, true, preview.adoptionSha256);
++      const authority = await store.read();
++      const fresh = make(schema === 23);
++      await fresh.load();
++      const repeated = await fresh.createBackup();
++      return { dbBefore, previewPuts, puts, authority, repeated: JSON.parse(repeated),
++        primary: localStorage.getItem('hosei-planner:v1') };
++    }, { schema, backup: source.backup });
++    assert.equal(destination.dbBefore, 0);
++    assert.equal(destination.previewPuts, 0);
++    assert.equal(destination.puts, 1);
++    assert.equal(destination.primary, null);
++    assert.equal(destination.authority.raw, source.authority.raw);
++    assert.deepEqual(destination.repeated.state, body.state);
++    if (schema === 23) assert.equal(destination.repeated.state.source.raw, primary);
++    assert.deepEqual(destination.authority.issuedIds, source.authority.issuedIds);
++    assert.deepEqual(destination.repeated.reservedIds, body.reservedIds);
++  });
++}
+diff --git a/tests/authority-r8.test.mjs b/tests/authority-r8.test.mjs
+new file mode 100644
+index 0000000..442d254
+--- /dev/null
++++ b/tests/authority-r8.test.mjs
+@@ -0,0 +1,77 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { createAttemptPersistence } from '../src/planner/attempts/persistence/controller.ts';
++import { emptyAuthority } from '../src/planner/attempts/persistence/contracts.ts';
++import { backupDigest } from '../src/planner/digest.ts';
++import { makeAttempt } from '../src/planner/attempts/workbench/catalogView.ts';
++import { newOperationId } from '../src/planner/attempts/workbench/operations.ts';
++
++const locks = { request: async (_name, _options, run) => run() };
++function host() {
++  let record = emptyAuthority();
++  let puts = 0;
++  const store = {
++    read: async () => structuredClone(record),
++    commit: async (expected, next) => {
++      assert.deepEqual(record, expected);
++      record = structuredClone(next);
++      puts++;
++    },
++  };
++  return { api: createAttemptPersistence(store, locks), record: () => structuredClone(record), puts: () => puts };
++}
++async function save(api, preview) {
++  return api.commit(preview, true, preview.previousRaw, preview.sourceRaw);
++}
++async function add(api, handle, title) {
++  const attempt = makeAttempt(handle.source.context.catalog, {
++    title, courseId: null, placementId: null,
++    plan: { plannedYear: null, plannedTerm: null, studyYear: null, status: 'planned', earnedOrder: null },
++    method: 'unknown', note: '',
++  });
++  const preview = await api.prepareEdits(handle, [{ kind: 'add', operationId: attempt.creationOperationId, attempt }]);
++  return { handle: await save(api, preview), attempt };
++}
++
++test('R8 restore keeps existing host prefix, incoming order and removed IDs across another restore', async () => {
++  const source = host();
++  let sourceHandle = await save(source.api, await source.api.prepareNewPlan());
++  const added = await add(source.api, sourceHandle, 'source attempt');
++  sourceHandle = added.handle;
++  sourceHandle = await save(source.api, await source.api.prepareEdits(sourceHandle,
++    [{ kind: 'remove', operationId: newOperationId(), attemptId: added.attempt.id }]));
++  const sourceRaw = source.record().raw;
++  const backup = await source.api.createBackup(sourceHandle);
++  const incoming = JSON.parse(backup).reservedIds;
++  assert.deepEqual(incoming, source.record().issuedIds);
++  assert.ok(incoming.includes(added.attempt.id), 'deleted attempt ID remains reserved');
++
++  const target = host();
++  let targetHandle = await save(target.api, await target.api.prepareNewPlan());
++  targetHandle = (await add(target.api, targetHandle, 'host attempt')).handle;
++  const hostPrefix = target.record().issuedIds;
++  const expected = [...new Set([...hostPrefix, ...incoming])];
++  const hostOnly = hostPrefix.find(id => !incoming.includes(id));
++  assert.ok(hostOnly);
++  const conflicting = JSON.parse(backup);
++  conflicting.reservedIds.push(`hosei:owned:${hostOnly.split(':').at(-1)}`);
++  delete conflicting.sha256;
++  await assert.rejects(target.api.inspectBackup(JSON.stringify({ ...conflicting,
++    sha256: await backupDigest(conflicting) })), /recovery_host_collision|reservation_uuid_collision/);
++  assert.equal(target.puts(), 2, 'alias conflict cannot write');
++  const preview = await target.api.inspectBackup(backup);
++  assert.equal(target.puts(), 2, 'preview is read only');
++  await assert.rejects(save(target.api, preview), /portable_adoption_and_protection_required/);
++  assert.equal(target.puts(), 2, 'missing consent cannot write');
++  await target.api.commit(preview, true, preview.previousRaw, preview.sourceRaw,
++    { acceptedBackupRawSha256: preview.recovery.rawSha256, protectedBackupRaw: backup });
++  assert.deepEqual(target.record().issuedIds, expected);
++  assert.equal(target.record().raw, sourceRaw);
++  const loaded = await target.api.load();
++  const repeated = await target.api.createBackup(loaded);
++  assert.deepEqual(JSON.parse(repeated).reservedIds, expected);
++  const again = await target.api.inspectBackup(repeated);
++  await save(target.api, again);
++  assert.deepEqual(target.record().issuedIds, expected);
++  assert.equal(target.record().raw, sourceRaw);
++});
+diff --git a/tests/grade-import-backup/historical-dependencies.json b/tests/grade-import-backup/historical-dependencies.json
+index 890eacc..3061538 100644
+--- a/tests/grade-import-backup/historical-dependencies.json
++++ b/tests/grade-import-backup/historical-dependencies.json
+@@ -20,7 +20,7 @@
+   "src/planner/attempts/jsonInput.ts": "068acba6fea88d5909f260943236bcff164bc9d94cae805f900baa21bfbc8492",
+   "src/planner/attempts/persistence/codec.ts": "3faf7fd5ef1e42dac9767b3760a3615e346076e7dfbf616624b1a4dffdc5f210",
+   "src/planner/attempts/persistence/contracts.ts": "a57716eb16f3f565661714d83e216369f778c82ca3f283eb0c0c9718b65c648a",
+-  "src/planner/attempts/persistence/controller.ts": "71dd66d8eb5c73b2f2594ccb0c73b11477c17b7378f36399788b427551a2c447",
++  "src/planner/attempts/persistence/controller.ts": "f85dafaebba38ab30c23d43ddcdcd4c4e04349c873e891fa4dfefbb7fabd1c69",
+   "src/planner/attempts/persistence/identity.ts": "a7b4ff0300249378caf4916d3c18f8d753085e890d7f09bb1ec87780acaa36de",
+   "src/planner/attempts/persistence/indexedDb.ts": "7d6c2ce5294055844f49ec9bfe09c9095b63b2e559f193b1fc585ffa23985690",
+   "src/planner/attempts/persistence/newPlan.ts": "ba73b8d1fb8a46ab9c9f8caea3349a81d8584fb6c51e274401a166ce9a111c61",
