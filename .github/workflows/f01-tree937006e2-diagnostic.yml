@@ -1,0 +1,83 @@
+name: F01 fixed tree 937006e2 diagnostic
+on:
+  push:
+    branches: [diag/f01-tree937006e2-ci-20261109]
+permissions:
+  contents: read
+concurrency:
+  group: f01-fixed-tree-diagnostic
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - {node: '22.23.4', phase: node}
+          - {node: '24.13.0', phase: node}
+          - {node: '22.23.4', phase: core}
+          - {node: '22.23.4', phase: r2}
+          - {node: '22.23.4', phase: r3}
+          - {node: '22.23.4', phase: r4}
+          - {node: '22.23.4', phase: r5}
+          - {node: '22.23.4', phase: r6}
+          - {node: '22.23.4', phase: r7}
+          - {node: '22.23.4', phase: r8}
+          - {node: '22.23.4', phase: ac}
+          - {node: '22.23.4', phase: abc}
+          - {node: '22.23.4', phase: capacity}
+          - {node: '24.13.0', phase: abc}
+          - {node: '24.13.0', phase: ac}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Fixed source fingerprint
+        id: fixed
+        run: |
+          mkdir -p "$RUNNER_TEMP/f01-output"
+          python3 diagnostics/f01-ci-20261109/verify.py > "$RUNNER_TEMP/f01-output/fingerprint.json"
+      - name: Install exact project lock
+        if: ${{ !cancelled() && steps.fixed.outcome == 'success' }}
+        id: install
+        run: npm ci --no-audit --no-fund
+      - name: Isolated existing-CI Chromium runtime
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && matrix.phase != 'node' }}
+        id: browser
+        run: |
+          npm install --prefix "$RUNNER_TEMP/f01-browser" --no-save --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/f01-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          cp "$RUNNER_TEMP/f01-browser/node_modules/playwright/package.json" "$RUNNER_TEMP/f01-output/playwright-package.json"
+      - name: Independent phase with retained failures
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (matrix.phase == 'node' || steps.browser.outcome == 'success') }}
+        env:
+          F01_OUTPUT: ${{ runner.temp }}/f01-output
+          F01_REAL_PLAYWRIGHT: ${{ runner.temp }}/f01-browser/node_modules/playwright/index.mjs
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: python3 diagnostics/f01-ci-20261109/run.py ${{ matrix.phase }}
+      - name: Preserve evidence on success and failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: f01-${{ matrix.node }}-${{ matrix.phase }}
+          path: |
+            ${{ runner.temp }}/f01-output
+            ../evidence
+          retention-days: 7
+          if-no-files-found: error
+  verdict:
+    needs: diagnostic
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - env:
+          RESULT: ${{ needs.diagnostic.result }}
+        run: test "$RESULT" = success

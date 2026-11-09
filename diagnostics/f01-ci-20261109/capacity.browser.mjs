@@ -1,0 +1,25 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {createServer} from 'node:http';
+import {writeFile} from 'node:fs/promises';
+const {chromium}=await import(process.env.PLANNER_PLAYWRIGHT_MODULE);
+test('synthetic UTF8 16MiB and authority lexical 32MiB bounds; native unknown record stays protected',{timeout:180000},async()=>{
+ const output=await build({stdin:{resolveDir:process.cwd(),contents:"export {readMigrationFile} from './src/planner/attempts/production/migrationFile';export {inspectMigrationInput} from './src/planner/attempts/production/migrationInput';export {inspectAuthorityInput} from './src/planner/attempts/persistence/jsonLexemes';export {createPlannerAttemptSession} from './src/planner/attempts/production/session';export {createAuthorityIndexedDbStore} from './src/planner/attempts/persistence/authorityIndexedDb';"},bundle:true,write:false,platform:'browser',format:'esm'});
+ const server=createServer((req,res)=>{res.setHeader('Content-Type',req.url==='/bundle.js'?'text/javascript':'text/html');res.end(req.url==='/bundle.js'?output.outputFiles[0].text:'<title>Synthetic capacity</title>');});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const browser=await chromium.launch({headless:true});const context=await browser.newContext();const page=await context.newPage();
+ try{await page.goto('http://127.0.0.1:'+server.address().port);const result=await page.evaluate(async()=>{
+  const m=await import('/bundle.js'),tasks=[];const observer=new PerformanceObserver(l=>tasks.push(...l.getEntries().map(e=>e.duration)));observer.observe({type:'longtask',buffered:true});
+  const exact=n=>{const base=JSON.stringify({note:'日'.repeat(Math.floor((n-20)/3))});return base+' '.repeat(n-new TextEncoder().encode(base).length);};
+  const checks=[];for(const n of [16*1024*1024-1,16*1024*1024,16*1024*1024+1]){const raw=exact(n);let reads=0,error=null;try{const text=await m.readMigrationFile({size:n,arrayBuffer:async()=>{reads++;return new TextEncoder().encode(raw).buffer;}});m.inspectMigrationInput(text);if(text!==raw)throw Error('bytes_changed');}catch(e){error=String(e);}checks.push({n,reads,error});}
+  const lexical=[];for(const n of [32*1024*1024-1,32*1024*1024,32*1024*1024+1]){let error=null;try{m.inspectAuthorityInput(exact(n));}catch(e){error=String(e);}lexical.push({n,error});}
+  const store=m.createAuthorityIndexedDbStore(indexedDB),api=m.createPlannerAttemptSession(store,navigator.locks);await api.load();await api.save(await api.prepareSave(),true);const good=await store.read(),backup=await api.createBackup();const hash=async x=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(x))))).map(x=>x.toString(16).padStart(2,'0')).join('');
+  const seed=async v=>{const q=indexedDB.open('hosei-yi06-isolated-v1',1);const db=await new Promise(r=>q.onsuccess=()=>r(q.result));await new Promise((r,j)=>{const t=db.transaction('authority','readwrite');t.objectStore('authority').put(v,'current');t.oncomplete=r;t.onabort=()=>j(t.error);});db.close();};
+  const bad={...good,raw:exact(32*1024*1024+1)};await seed(bad);let refused=null;try{await api.load();}catch(e){refused=String(e);}const canEdit=api.admission().canEdit;let backupRefused=false;try{await api.createBackup();}catch{backupRefused=true;}
+  const q=indexedDB.open('hosei-yi06-isolated-v1',1),db=await new Promise(r=>q.onsuccess=()=>r(q.result));const actual=await new Promise(r=>{const t=db.transaction('authority'),g=t.objectStore('authority').get('current');t.oncomplete=()=>r(g.result);});db.close();const unchanged=await hash(actual)===await hash(bad);
+  // Test-only simulated external writer restores its prior checkpoint. No product auto-repair.
+  await seed(good);await api.load();const after=await store.read();const restored=JSON.stringify(after)===JSON.stringify(good);const b=await api.createBackup();await new Promise(r=>setTimeout(r,100));observer.disconnect();
+  return {checks,lexical,refused,canEdit,backupRefused,unchanged,restored,idsOrdered:JSON.stringify(after.issuedIds)===JSON.stringify(good.issuedIds),backupExact:b===backup,longTasks:tasks,fullValid16MiBPlan:'NOT_RUN: lexical file boundary only',fullValid32MiBAuthority:'NOT_RUN: unknown oversized record refusal only',physicalOOM:'NOT_RUN: bounded runner diagnostics; no deliberate exhaustion'};
+ });console.log(JSON.stringify(result));await writeFile(process.env.F01_OUTPUT+'/capacity-summary.json',JSON.stringify(result,null,2));assert.equal(result.checks[0].error,null);assert.equal(result.checks[1].error,null);assert.equal(result.checks[2].reads,0);assert.match(result.checks[2].error,/limit/);assert.equal(result.lexical[1].error,null);assert.match(result.lexical[2].error,/limit/);assert.ok(result.refused);assert.equal(result.canEdit,false);assert.ok(result.backupRefused&&result.unchanged&&result.restored&&result.idsOrdered&&result.backupExact);
+ }finally{await context.close();await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
+});
