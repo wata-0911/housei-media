@@ -57,7 +57,7 @@ import { matchedNameOfferings, normalizeImportBaseName, repairImportedAchievemen
 import { createUnifiedCourseRows, importedAchievementStatusLabel } from '../src/planner/progress/unifiedCourseView.ts';
 import { effectiveRecognitionForAdmission, graduationProfileValidationError, initialGraduationProfile, missingGraduationProfilePrerequisites, normalizeAdmissionYear, normalizeNonnegativeNumber, officialRecognitionPrefill, recognizedCreditBreakdownTotal, unallocatedRecognizedCredits } from '../src/planner/graduation/graduationProfile.ts';
 import { plannerItemFromCourseSearch, updatePlannerItem } from '../src/planner/planning/plannerItemState.ts';
-import { annualCreditLimitReferences, annualCreditLimitStatus } from '../src/planner/planning/annualPlan.ts';
+import { annualCreditLimitReferences, annualCreditLimitStatus, summarizeCategories } from '../src/planner/planning/annualPlan.ts';
 import { guidanceEligibilityCreditResult, guidanceForScope, thesisGuidanceViews } from '../src/planner/graduation/thesisGuidance.ts';
 import {
   mediaPngKey,
@@ -923,7 +923,7 @@ test('existing scope and todos survive state changes without adding todo UI', ()
   assert.equal(validateState({ ...state, todos: [state.todos[0], state.todos[0]] }, catalog), false);
 });
 
-const { selectablePrograms, termOptions, groupAnnualPlan, createCreditClassifier, summarizeCategories } = await import('../src/planner/planning/annualPlan.ts');
+const { selectablePrograms, termOptions, groupAnnualPlan, createCreditClassifier } = await import('../src/planner/planning/annualPlan.ts');
 
 test('all eight affiliations round-trip with year, catalog term, legacy term and todos', () => {
   assert.equal(selectablePrograms(catalog).length, 8);

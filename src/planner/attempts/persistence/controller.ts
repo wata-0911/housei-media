@@ -10,7 +10,7 @@ import { sameAttemptData } from '../validation';
 import { assignmentIds, issuedIds, encodeState, replayState, requireLiveMigration } from './codec';
 import { BACKUP_FORMAT, BACKUP_VERSION, NEW_BACKUP_VERSION, exactKeys, type AtomicAttemptStore, type AttemptState, type PersistenceSource, type NewPlanSource, type AuthorityRecord, type CorrectionEvidence } from './contracts';
 import { createNewPlanSource, emptyNewPlanWorkspace, encodeNewPlan, newPlanIssuedIds } from './newPlan';
-import { catalogUuids, checkFreshCommandIds, idTail, referencedUuids, requireReservations, sourceUuids, unionReservations, validateReservations } from './identity';
+import { catalogUuids, checkFreshCommandIds, idTail, referencedUuids, requireCanonicalReservations as requireReservations, sourceUuids, unionReservations, validateReservations } from './identity';
 
 export type PersistenceHandle = { state: AttemptState; workspace: Workspace; source: PersistenceSource };
 type Recovery = { raw: string; rawSha256: string; reservedIds: string[]; portable: boolean };
@@ -64,7 +64,8 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     const digest = await backupDigest(state);
     if (!authority.committed.includes(digest)) throw new Error('unverified_assignment_history: このブラウザの確定保存履歴がありません。原文を保護してください。');
     const replay = await validateState(state);
-    if (replay.state.history.issuedIds.some(id => !authority.issuedIds.includes(id))) throw new Error('issuance_history_missing');
+    const issuedIndex = new Set(authority.issuedIds);
+    if (replay.state.history.issuedIds.some(id => !issuedIndex.has(id))) throw new Error('issuance_history_missing');
     return replay;
   }
   async function validateState(state: unknown) {
@@ -223,8 +224,14 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     requireReservations(reserved, required);
     unionReservations(reserved, r.requiredReservations);
     await checkReplacement(r.state, r.source, reserved, expected);
-    const recovery: Recovery = { raw, rawSha256: await backupRawDigest(raw), reservedIds: reserved,
-      portable: !expected.committed.includes(await backupDigest(r.state)) || reserved.some(id => !expected.issuedIds.includes(id)) };
+    const rawSha256 = await backupRawDigest(raw);
+    // Index only for membership; the authoritative reservation order is unchanged.
+    let portable = !expected.committed.includes(await backupDigest(r.state));
+    if (!portable) {
+      const issuedIndex = new Set(expected.issuedIds);
+      portable = reserved.some(id => !issuedIndex.has(id));
+    }
+    const recovery: Recovery = { raw, rawSha256, reservedIds: reserved, portable };
     const handle = await makeHandle(r.workspace, { ...replayOrigin(r), expected, fresh: false, recovery });
     return preview(handle, 'restore');
   }
@@ -252,8 +259,14 @@ export function createAttemptPersistence(store: AtomicAttemptStore, locks: Plann
     });
     const replay = await validateState(handle.state);
     const raw = JSON.stringify(replay.state), digest = await backupDigest(replay.state);
+    // A portable backup authenticates its reservation array order. Keep the
+    // existing host's permanent prefix, then append the incoming order before
+    // any locally burned or replay-derived IDs not already present.
+    const reservations = detail.recovery
+      ? unionReservations(detail.expected.issuedIds, detail.recovery.reservedIds, [...sessionIssuedIds], replay.requiredReservations)
+      : unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations);
     const next: AuthorityRecord = { raw, revision: detail.expected.revision + 1,
-      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: unionReservations(detail.expected.issuedIds, [...sessionIssuedIds], replay.requiredReservations, detail.recovery?.reservedIds ?? []) };
+      committed: [...new Set([...detail.expected.committed, digest])], issuedIds: reservations };
     validateAuthority(next);
     if (utf8Bytes(JSON.stringify(next)) > maxRecordBytes) throw new Error(`capacity_limit: ${maxRecordBytes} bytes。archiveは省略しません。`);
     // Same lock as legacy Planner. IDB adds atomic CAS + one-record put; no

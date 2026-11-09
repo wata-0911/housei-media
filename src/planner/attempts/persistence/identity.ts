@@ -50,6 +50,14 @@ export function requireReservations(reserved: unknown, required: string[]): asse
   unionReservations(reserved, required);
   if (required.some(id => !reserved.includes(id))) throw new Error('backup_reservations_missing');
 }
+/** Internal JSON/replay boundary only. Keep the generic helper above unchanged
+ * for callers with observable accessors, proxies or custom array methods. */
+export function requireCanonicalReservations(reserved: unknown, required: string[]): asserts reserved is string[] {
+  validateReservations(reserved);
+  unionReservations(reserved, required);
+  const reservedIndex = new Set(reserved);
+  if (required.some(id => !reservedIndex.has(id))) throw new Error('backup_reservations_missing');
+}
 export function newCommandIds(command: Command): string[] {
   return [command.operationId, ...(command.kind === 'add' ? [command.attempt.id]
     : command.kind === 'add_record' ? [command.record.id, ...(command.record.kind === 'todo' ? [command.record.payload.id] : [])] : [])];
