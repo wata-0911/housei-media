@@ -24,11 +24,16 @@ for name,cmd in suites[phase]:
    code=p.wait(timeout=1800);status='PASS' if code==0 else 'FAIL'
   except subprocess.TimeoutExpired:
    os.killpg(p.pid,signal.SIGKILL);p.wait();code=124;status='TIMEOUT'
+ if phase=='abc' and name=='abc-integration' and code==0:
+  text=log.read_text()
+  if not all(token in text for token in ['# tests 17','# pass 17','# skipped 0','# cancelled 0']):
+   code=1;status='FAIL';print('ABC full-count evidence guard failed',flush=True)
  results.append({'suite':name,'command':cmd,'exit':code,'status':status,'seconds':round(time.time()-start,3)})
  (out/'summary.json').write_text(json.dumps(results,indent=2))
  print(name,status,code,flush=True)
- if phase=='abc' and name=='abc-integration' and code==0:
-  text=log.read_text();assert '# tests 17' in text and '# pass 17' in text and '# skipped 0' in text and '# cancelled 0' in text
+ if code!=0:
+  print('--- synthetic suite failure tail (80 lines) ---',flush=True)
+  print('\n'.join(log.read_text(errors='replace').splitlines()[-80:]),flush=True)
 # Subprocess peak RSS is reported by time; browser descendants/cgroup peak are separate evidence.
 for f in ['/sys/fs/cgroup/memory.peak','/sys/fs/cgroup/memory.events']:
  try:(out/pathlib.Path(f).name).write_text(pathlib.Path(f).read_text())
