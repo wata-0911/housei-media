@@ -3,8 +3,11 @@ import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { createHash } from 'node:crypto';
 import { GRADE_HANDOFF_REQUEST, GRADE_HANDOFF_RESPONSE } from '../src/planner/gradeImport/directGradeHandoff.ts';
-import { STORAGE_KEY } from '../src/planner/backup/storage.ts';
+import { initialState, STORAGE_KEY, BACKUP_KEY } from '../src/planner/backup/storage.ts';
+import { catalog } from '../src/planner/catalog/catalog.ts';
+import { plannerItemFromCourseSearch } from '../src/planner/planning/plannerItemState.ts';
 
 const origin = `http://127.0.0.1:${process.env.PLANNER_BROWSER_PORT || 4187}`;
 let browser, server;
@@ -246,7 +249,7 @@ test('consumed destination does not scroll again on tab changes, collapse, searc
   await page.locator('#grade-import > summary').click();
   await page.getByRole('tab', { name: 'メディア', exact: true }).click();
   await page.getByRole('tab', { name: '年間履修計画', exact: true }).click();
-  const search = page.getByLabel('科目名・科目コード・クラスコード・開講区分・期', { exact: true });
+  const search = page.getByLabel('科目名・シラバス科目ナンバリング・クラスコード・開講区分・期', { exact: true });
   await search.fill('日本');
   await page.getByRole('tab', { name: 'プロフィール', exact: true }).click();
   const department = page.getByLabel('所属学科', { exact: true });
@@ -312,4 +315,138 @@ test('successful extension handoff opens import and previews without saving', as
   assert.equal(new URL(page.url()).hash, '');
   assert.equal(await page.evaluate(key => localStorage.getItem(key), STORAGE_KEY), null);
   assert.equal(await scrollCount(page), 0);
+});
+
+// Capture real Chromium pixels in the existing job log without changing CI or dependencies.
+async function label147AScreenshot(locator, width, stage) {
+  const bytes = await locator.screenshot({ type: 'png' });
+  const encoded = bytes.toString('base64'), size = 4096;
+  for (let offset = 0; offset < encoded.length; offset += size) {
+    console.log(JSON.stringify({ issue147A: 'png', width, stage, index: offset / size,
+      parts: Math.ceil(encoded.length / size), data: encoded.slice(offset, offset + size) }));
+  }
+  console.log(JSON.stringify({ issue147A: 'png-sha256', width, stage,
+    bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }));
+}
+
+for (const width of [1280, 390]) test(`#147-A real Chromium ${width}px: labels, ARIA, wrapping, keyboard/search/add and stored-record preservation`, async t => {
+  assert.equal(browser.browserType().name(), 'chromium', '#147-A acceptance requires real Chromium');
+  const page = await open(t, '/', { viewport: { width, height: width === 390 ? 844 : 900 }, reducedMotion: 'reduce' });
+  try {
+    const target = catalog.offerings.find(offering => offering.classCode === '35007');
+    assert.ok(target);
+    assert.equal(catalog.offerings.filter(offering => offering.classCode === '35007').length, 1);
+    const existing = catalog.offerings.find(offering => offering.id !== target.id);
+    const seed = { ...initialState(), items: [plannerItemFromCourseSearch(existing.id)] };
+    const raw = ' \n' + JSON.stringify(seed, null, 2) + '\n';
+    const recovery = ' \n#147-A exact recovery bytes\n';
+    await page.evaluate(({ key, backup, raw, recovery }) => {
+      localStorage.setItem(key, raw); localStorage.setItem(backup, recovery);
+      localStorage.setItem('issue147a-unrelated', 'unchanged sentinel');
+    }, { key: STORAGE_KEY, backup: BACKUP_KEY, raw, recovery });
+    await page.goto(origin + '/planner');
+    const section = page.getByRole('region', { name: '科目を探す', exact: true });
+    await section.waitFor();
+    const label = '科目名・シラバス科目ナンバリング・クラスコード・開講区分・期';
+    const query = section.getByRole('searchbox', { name: label, exact: true });
+    assert.equal(await query.getAttribute('id'), 'course-query');
+    assert.equal(await query.getAttribute('aria-describedby'), 'course-search-help');
+    const help = section.locator('#course-search-help');
+    const helpText = await help.innerText();
+    assert.ok(helpText.includes('シラバス科目ナンバリング・クラスコード・開講区分・期も対象です。'));
+    assert.ok(helpText.includes('ナンバリングとクラスコードは2026年参照カタログの値です。'));
+    assert.ok(helpText.includes('単位修得試験・リポート提出用の5桁コードは検索・表示の対象外です。'));
+    const storage = () => page.evaluate(() => Object.fromEntries(Object.entries(localStorage).sort()));
+    const beforeSearch = await storage();
+    assert.equal(beforeSearch[STORAGE_KEY], raw);
+    assert.equal(beforeSearch[BACKUP_KEY], recovery);
+
+    const cdp = await page.context().newCDPSession(page);
+    const { root } = await cdp.send('DOM.getDocument');
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: '#course-query' });
+    const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false });
+    const accessible = nodes.find(node => node.role?.value === 'searchbox');
+    assert.ok(accessible && !accessible.ignored);
+    assert.equal(accessible.name.value, label);
+    assert.equal(accessible.description.value.replace(/\s+/g, ' ').trim(), helpText.replace(/\s+/g, ' ').trim());
+    await cdp.detach();
+
+    const results = section.getByRole('list', { name: '検索結果', exact: true });
+    for (const code of ['HSS100TA', 'LAW200TB', 'LANe100TA']) {
+      const offering = catalog.offerings.find(row => row.subjectCode === code && row.method === 'correspondence');
+      assert.ok(offering);
+      await query.fill(code);
+      await results.getByText(`シラバス科目ナンバリング（2026年参照カタログ）：${code} / クラスコード：${offering.classCode ?? '—'}`, { exact: true }).first().waitFor();
+      assert.deepEqual(await storage(), beforeSearch, 'code searches must preserve exact stored bytes');
+    }
+    await query.fill(''); await query.focus(); await page.keyboard.type('35007');
+    assert.equal(await query.inputValue(), '35007');
+    const targetLabel = `シラバス科目ナンバリング（2026年参照カタログ）：${target.subjectCode} / クラスコード：35007`;
+    const row = results.locator(':scope > li').filter({ hasText: targetLabel });
+    await row.waitFor(); assert.equal(await row.count(), 1);
+    assert.equal(await row.getByRole('heading').innerText(), target.name);
+    const partial = section.getByRole('radio', { name: '部分一致', exact: true });
+    const exact = section.getByRole('radio', { name: '完全一致', exact: true });
+    await partial.focus(); await page.keyboard.press('ArrowRight');
+    assert.equal(await exact.isChecked(), true);
+    await page.waitForFunction(() => document.querySelector('ul[aria-label="検索結果"]').children.length === 0);
+    assert.ok((await help.innerText()).includes('科目名全体が一致する科目を検索します。'));
+    await partial.check(); await row.waitFor();
+    assert.deepEqual(await storage(), beforeSearch, 'keyboard/mode changes must preserve existing raw and recovery');
+
+    const geometry = await section.locator('label[for="course-query"], #course-search-help').evaluateAll(elements => elements.map(el => {
+      const box = el.getBoundingClientRect(), range = document.createRange(); range.selectNodeContents(el);
+      const rects = [...range.getClientRects()].filter(rect => rect.width > 0);
+      return { element: el.id || el.getAttribute('for'), left: box.left, right: box.right, width: box.width,
+        clientWidth: el.clientWidth, scrollWidth: el.scrollWidth, clientHeight: el.clientHeight, scrollHeight: el.scrollHeight,
+        lines: new Set(rects.map(rect => Math.round(rect.top))).size,
+        textInside: rects.every(rect => rect.left >= box.left - 1 && rect.right <= box.right + 1 && rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1) };
+    }));
+    const resultGeometry = await row.getByText(targetLabel, { exact: true }).evaluate(el => {
+      const box = el.getBoundingClientRect();
+      return { left: box.left, right: box.right, clientWidth: el.clientWidth, scrollWidth: el.scrollWidth, clientHeight: el.clientHeight, scrollHeight: el.scrollHeight };
+    });
+    for (const box of [...geometry, resultGeometry]) {
+      assert.ok(box.left >= -1 && box.right <= width + 1, JSON.stringify(box));
+      assert.ok(box.scrollWidth <= box.clientWidth + 1 && box.scrollHeight <= box.clientHeight + 1, JSON.stringify(box));
+    }
+    assert.ok(geometry.every(box => box.textInside), JSON.stringify(geometry));
+    if (width === 390) assert.ok(geometry.every(box => box.lines > 1), 'long label and help must wrap on mobile');
+    const spacing = await section.evaluate(el => {
+      const label = el.querySelector('label[for="course-query"]').getBoundingClientRect();
+      const input = el.querySelector('#course-query').getBoundingClientRect();
+      const help = el.querySelector('#course-search-help');
+      return label.bottom <= input.top + 1 && help.getBoundingClientRect().top >= el.querySelector('fieldset').getBoundingClientRect().bottom - 1
+        && help.getBoundingClientRect().bottom <= help.nextElementSibling.getBoundingClientRect().top + 1;
+    });
+    assert.ok(spacing, 'label, input, help and following controls must not overlap');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await label147AScreenshot(section, width, 'before-add');
+    assert.deepEqual(await storage(), beforeSearch);
+
+    const add = row.getByRole('button', { name: `${target.name}（35007）を履修計画に追加`, exact: true });
+    assert.equal(await add.isDisabled(), false);
+    if (width === 390) { await add.focus(); await page.keyboard.press('Enter'); } else await add.click();
+    await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).items.some(item => item.offeringId === id), { key: STORAGE_KEY, id: target.id });
+    const afterAdd = await storage();
+    assert.deepEqual(JSON.parse(afterAdd[STORAGE_KEY]), { ...seed, items: [...seed.items, {
+      offeringId: target.id, status: 'planned', plannedYear: null, plannedTerm: null, studyYear: null, earnedOrder: null,
+    }] }, 'only the requested new record is appended with unchanged initial field values');
+    assert.deepEqual({ ...afterAdd, [STORAGE_KEY]: raw }, beforeSearch, 'all other storage keys remain byte-identical');
+    assert.equal(await add.isDisabled(), true);
+    assert.equal(await add.innerText(), '追加済み');
+    await page.reload(); await section.waitFor();
+    await query.fill('35007'); await row.waitFor();
+    assert.equal(await add.isDisabled(), true);
+    assert.deepEqual(await storage(), afterAdd, 'reload/search must not rewrite committed bytes or duplicate records');
+    await label147AScreenshot(section, width, 'after-reload');
+    console.log(JSON.stringify({ issue147A: 'PASS', width, engine: browser.browserType().name(), version: browser.version(),
+      geometry, resultGeometry, accessibleName: accessible.name.value, accessibleDescription: accessible.description.value,
+      seedRawSha256: createHash('sha256').update(raw).digest('hex'), searchRawBytesUnchanged: true,
+      existingRecordAndOtherFieldsPreserved: true, addAction: width === 390 ? 'keyboard Enter' : 'pointer click',
+      duplicateAddDisabled: true, recoveryAndUnrelatedBytesUnchanged: true, reloadBytesUnchanged: true }));
+  } catch (error) {
+    await label147AScreenshot(page, width, 'failure').catch(capture => console.log(JSON.stringify({ issue147A: 'screenshot-error', width, error: String(capture) })));
+    throw error;
+  }
 });
