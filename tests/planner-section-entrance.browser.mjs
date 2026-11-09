@@ -127,7 +127,7 @@ for (const width of [1440, 390]) for (const reducedMotion of ['no-preference', '
     await tab('年間履修計画');
     await page.locator('summary').filter({ hasText: '成績データを取り込む' }).click();
     const panel = page.locator('#grade-import-panel');
-    await panel.getByRole('textbox', { name: 'またはJSONを貼り付け', exact: true }).fill(JSON.stringify(grade));
+    await panel.getByRole('textbox', { name: '成績JSONをここに貼り付け', exact: true }).fill(JSON.stringify(grade));
     await panel.getByRole('button', { name: '読み込み・検証', exact: true }).click();
     await panel.locator('fieldset').waitFor();
     await visible();
