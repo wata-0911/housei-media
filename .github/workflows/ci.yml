@@ -89,6 +89,14 @@ jobs:
           node "$RUNNER_TEMP/home-planner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:home-planner-browser
 
+      - name: Year-independent read-only sidecar (Chromium 390/1280)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/home-planner-browser/node_modules/playwright/index.mjs
+        run: |
+          export PLANNER_BROWSER_EXECUTABLE="$(node --input-type=module -e 'const { chromium } = await import(process.env.PLANNER_PLAYWRIGHT_MODULE); process.stdout.write(chromium.executablePath());')"
+          YI_SIDECAR_EVIDENCE="$RUNNER_TEMP/yi-readonly-search-evidence" npm run test:yi-readonly-search-browser
+
       - name: Grade import native host (Chromium)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/home-planner-browser/node_modules/playwright/index.mjs" npm run test:grade-import-host-browser

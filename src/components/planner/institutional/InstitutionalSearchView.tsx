@@ -2,7 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import type { InstitutionalSearchAdapter, InstitutionalSearchRow } from '../../../planner/institutional/search';
 import { compositionLabel, filterPlacementNames, type NameMatchMode } from './searchView';
 
-function PlacementCard({ row, onSelect }: { row: InstitutionalSearchRow; onSelect?: (row: InstitutionalSearchRow) => void }) {
+function PlacementCard({ row, onSelect, showSelectionEvidence }: { row: InstitutionalSearchRow; onSelect?: (row: InstitutionalSearchRow) => void; showSelectionEvidence?: boolean }) {
   const p = row.placement;
   return <li>
     <h3>{p.officialName}</h3>
@@ -14,7 +14,7 @@ function PlacementCard({ row, onSelect }: { row: InstitutionalSearchRow; onSelec
     <p className="notice">本人への課程適用: 未確認（unknown）。履修条件・希望する履修方法は要確認。開講・履修可能性・卒業算入は未判定です。</p>
     <p>出典: {row.sourceRevision.title} {row.sourceRevision.editionLabel}年版 / 冊子p.{p.officialRow.printedPage}（PDF p.{p.officialRow.pdfPage}） / 行 {p.officialRow.row}</p>
     {onSelect && p.kind === 'course_placement' && <button type="button" onClick={() => onSelect(row)}>この配置を選ぶ</button>}
-    {!onSelect && <details><summary>公式根拠・未確定事項を確認</summary>
+    {(!onSelect || showSelectionEvidence) && <details><summary>公式根拠・未確定事項を確認</summary>
       <p>identity: {p.identityDecision.status} / {row.institutionalCourse ? 'IC確定（資料版内）' : 'IC未確定'}</p>
       <p>配置: {p.placementRoleKey} / 根拠行: {p.officialRow.evidenceId}</p>
       <p>identityの判断理由: {p.identityDecision.reason.join(' / ') || '記載なし'}</p>
@@ -34,7 +34,7 @@ function PlacementCard({ row, onSelect }: { row: InstitutionalSearchRow; onSelec
 }
 
 /** Shared search presentation. Selection never creates an Attempt or saves data. */
-export function InstitutionalSearchView({ adapter: source, onSelect, selectionNotice = '保存機能は接続待ちです。' }: { adapter: InstitutionalSearchAdapter; onSelect?: (row: InstitutionalSearchRow) => void; selectionNotice?: string }) {
+export function InstitutionalSearchView({ adapter: source, onSelect, selectionNotice = '保存機能は接続待ちです。', showSelectionEvidence = false }: { adapter: InstitutionalSearchAdapter; onSelect?: (row: InstitutionalSearchRow) => void; selectionNotice?: string; showSelectionEvidence?: boolean }) {
   const id = useId();
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<NameMatchMode>('partial');
@@ -61,7 +61,7 @@ export function InstitutionalSearchView({ adapter: source, onSelect, selectionNo
     <p role="status">検索結果 {rows.length}件 / 表示 {Math.min(limit, rows.length)}件</p>
     {result.status !== 'documented_slice_only' && <p role="alert">検索資料版・対象を確認できません: {result.status}</p>}
     {result.status === 'documented_slice_only' && rows.length === 0 && <p>該当する配置はありません。正式名称・一致方法・学科条件を確認してください。</p>}
-    <ul className="results" aria-label="制度科目の検索結果">{rows.slice(0, limit).map(row => <PlacementCard key={row.placement.id} row={row} onSelect={onSelect} />)}</ul>
+    <ul className="results" aria-label="制度科目の検索結果">{rows.slice(0, limit).map(row => <PlacementCard key={row.placement.id} row={row} onSelect={onSelect} showSelectionEvidence={showSelectionEvidence} />)}</ul>
     {rows.length > limit && <button type="button" onClick={() => setLimit(n => n + 30)}>さらに30件表示（残り{rows.length - limit}件）</button>}
   </section>;
 }
