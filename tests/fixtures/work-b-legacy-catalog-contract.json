@@ -1,0 +1,6564 @@
+{
+  "version": 1,
+  "basis": "Approved option 2; fixed pre-foundation input, institutional identity/composition ledger; shiori sourceRefs p.53 (mapping source page 52). No actual graduation output was read to generate this fixture.",
+  "inputBindings": {
+    "src/data/planner_catalog_2026.json": "cf1a5c2c1c8879108c8c5a5d72aecb4e9c3f60d6603a21542497ac1c72fa7625",
+    "src/data/planner_curriculum_2026.json": "e68d2a02854a4a0558dcf06235d4feae688f5b12cf9949a4dda5b4ac7f055b06",
+    "src/data/planner_manual_mapping_overrides_2026.json": "79cd2d5f3fb5b0f698f8af4439c3aab5f64c01abf393f44123a5532076c78535",
+    "src/data/planner_official_mapping_overrides_2026.json": "ff82cb92c5970130e58e4b59c56897d35ddee69ec97255501bf99a593bb69eff"
+  },
+  "cases": [
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"planned\",\"first_year\",\"undecided\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "planned",
+      "admissionType": "first_year",
+      "thesis": "undecided",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 11,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 7,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 8,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"planned\",\"first_year\",\"selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "planned",
+      "admissionType": "first_year",
+      "thesis": "selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 11,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 7,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 8,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"planned\",\"first_year\",\"not_selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "planned",
+      "admissionType": "first_year",
+      "thesis": "not_selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 11,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 7,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 8,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"planned\",\"other_transfer\",\"undecided\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "planned",
+      "admissionType": "other_transfer",
+      "thesis": "undecided",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 11,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 7,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 8,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"planned\",\"other_transfer\",\"selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "planned",
+      "admissionType": "other_transfer",
+      "thesis": "selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 11,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 7,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 8,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"planned\",\"other_transfer\",\"not_selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "planned",
+      "admissionType": "other_transfer",
+      "thesis": "not_selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 11,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 7,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 0,
+            "planned": 8,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"in_progress\",\"first_year\",\"undecided\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "in_progress",
+      "admissionType": "first_year",
+      "thesis": "undecided",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 11,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 7,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 8,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"in_progress\",\"first_year\",\"selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "in_progress",
+      "admissionType": "first_year",
+      "thesis": "selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 11,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 7,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 8,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"in_progress\",\"first_year\",\"not_selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "in_progress",
+      "admissionType": "first_year",
+      "thesis": "not_selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 11,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 7,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 8,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"in_progress\",\"other_transfer\",\"undecided\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "in_progress",
+      "admissionType": "other_transfer",
+      "thesis": "undecided",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 11,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 7,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 8,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"in_progress\",\"other_transfer\",\"selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "in_progress",
+      "admissionType": "other_transfer",
+      "thesis": "selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 11,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 7,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 8,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"in_progress\",\"other_transfer\",\"not_selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "in_progress",
+      "admissionType": "other_transfer",
+      "thesis": "not_selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 11,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 7,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unsatisfied",
+            "earned": 0,
+            "inProgress": 8,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"earned\",\"first_year\",\"undecided\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "earned",
+      "admissionType": "first_year",
+      "thesis": "undecided",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 11,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 7,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 8,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"earned\",\"first_year\",\"selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "earned",
+      "admissionType": "first_year",
+      "thesis": "selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 11,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 7,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 8,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"earned\",\"first_year\",\"not_selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "earned",
+      "admissionType": "first_year",
+      "thesis": "not_selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 11,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 7,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 8,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"earned\",\"other_transfer\",\"undecided\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "earned",
+      "admissionType": "other_transfer",
+      "thesis": "undecided",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 11,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 7,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 8,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"earned\",\"other_transfer\",\"selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "earned",
+      "admissionType": "other_transfer",
+      "thesis": "selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 11,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 7,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 8,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "key": "[\"118c5183-6aec-4fa1-905a-265f25d86db1\",\"earned\",\"other_transfer\",\"not_selected\"]",
+      "scopeId": "118c5183-6aec-4fa1-905a-265f25d86db1",
+      "status": "earned",
+      "admissionType": "other_transfer",
+      "thesis": "not_selected",
+      "current": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 11,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 7,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "satisfied",
+            "earned": 8,
+            "inProgress": 0,
+            "planned": 0,
+            "target": 1,
+            "unit": "courses",
+            "reason": null,
+            "coverageStatus": "supported",
+            "unknownReasonCategory": null,
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 19,
+        "unknownCount": 55,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      },
+      "legacy": {
+        "requirements": [
+          {
+            "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+            "label": "専門教育：日本史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+            "label": "専門教育：東洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          },
+          {
+            "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+            "label": "専門教育：西洋史：選択",
+            "ruleType": "min_courses",
+            "status": "unknown",
+            "earned": null,
+            "inProgress": null,
+            "planned": null,
+            "target": 1,
+            "unit": "courses",
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "coverageStatus": "unknown",
+            "unknownReasonCategory": "rule_unimplemented",
+            "sourceRefs": [
+              {
+                "title": "2026年度 学習のしおり（教育課程表）",
+                "year": 2026,
+                "page": "p.53"
+              }
+            ]
+          }
+        ],
+        "evaluableCount": 16,
+        "unknownCount": 58,
+        "unknownReasons": [
+          {
+            "reason": "旧課程の追加措置は正本16頁の範囲外。",
+            "count": 9,
+            "labels": [
+              "law",
+              "japanese_performance",
+              "geography"
+            ]
+          },
+          {
+            "reason": "条件または例外を安全に自動評価できません",
+            "count": 9,
+            "labels": [
+              "外国語",
+              "日本史概説・西洋史概説・東洋史概説",
+              "卒業論文第2次指導"
+            ]
+          },
+          {
+            "reason": "可変の科目構成単位と例外を扱う専用rule_typeが未定義。単位数はmappingから補完しない。",
+            "count": 9,
+            "labels": [
+              "history",
+              "japanese_performance",
+              "japanese_language"
+            ]
+          },
+          {
+            "reason": "個別開講の上限値は本PDFに記載なし。",
+            "count": 8,
+            "labels": [
+              "japanese_language",
+              "japanese_literature",
+              "economics"
+            ]
+          },
+          {
+            "reason": "修得順・科目指定の再配分または履修前提条件を表す専用rule_typeが未定義。",
+            "count": 4,
+            "labels": [
+              "history"
+            ]
+          },
+          {
+            "reason": "対象科目のmappingを一意に特定できません",
+            "count": 4,
+            "labels": [
+              "総合特講",
+              "基礎特講",
+              "（他学部・他学科公開科目）"
+            ]
+          },
+          {
+            "reason": "課題合格・期限・再提出を伴う選択肢は現rule_typeでは完全に表現できない。",
+            "count": 3,
+            "labels": [
+              "japanese_language",
+              "japanese_performance",
+              "japanese_literature"
+            ]
+          },
+          {
+            "reason": "制度科目identityまたは履修の所有関係が不明のため、完成科目数を保留しています",
+            "count": 3,
+            "labels": [
+              "専門教育：日本史：選択",
+              "専門教育：東洋史：選択",
+              "専門教育：西洋史：選択"
+            ]
+          },
+          {
+            "reason": "条件・段階の優先順位を持つ再配分は現エンジンで未対応。無条件繰越へ単純化しない。",
+            "count": 3,
+            "labels": [
+              "geography"
+            ]
+          },
+          {
+            "reason": "修得順により割当が変わるため自動評価できません",
+            "count": 2,
+            "labels": [
+              "史学演習"
+            ]
+          },
+          {
+            "reason": "条件付き算入許可を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "law"
+            ]
+          },
+          {
+            "reason": "旧新課程の同種科目同定が必要。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "履修禁止を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          },
+          {
+            "reason": "条件付き算入除外を表すrule_typeが未定義。",
+            "count": 1,
+            "labels": [
+              "common"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

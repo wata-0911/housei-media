@@ -5,13 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run catalog:check && npm run check:grade-import && vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:planner:2026-candidate-provisional": "node --import tsx --test --test-concurrency=4 --test-reporter=tap tests/calligraphy-partial-details.test.mjs tests/calligraphy-progress.test.mjs tests/calligraphy-state-references.test.mjs tests/component-provenance.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-2026.test.mjs tests/curriculum-course-ui.test.mjs tests/f02-r2-projection-positive.test.mjs tests/grade-import-identity.test.mjs tests/grade-import-privacy.test.mjs tests/graduation-audit-2026.test.mjs tests/manual-graduation-credits.test.mjs tests/official-repeatable.test.mjs tests/planner.test.mjs tests/recovery-a08.stage9.test.mjs tests/recovery-compat.stage7.test.mjs tests/recovery-cr01.stage7.test.mjs tests/recovery-retry.stage7.test.mjs tests/structured-professional-credits.test.mjs tests/unresolved-conditions-2026.test.mjs",
+    "catalog:check": "node --import tsx scripts/generate-curriculum-catalog.mts --check",
+    "check:grade-import": "node scripts/build-grade-import.mjs --check",
+    "test:planner": "npm run test:planner:2026-candidate -- tests/stage18-oldraw-boundary.test.mjs tests/stage19-restore-intent.test.mjs",
+    "test:planner:2026-candidate": "node --import tsx --test --test-concurrency=4 --test-reporter=tap tests/calligraphy-partial-details.test.mjs tests/calligraphy-progress.test.mjs tests/calligraphy-state-references.test.mjs tests/component-provenance.test.mjs tests/course-progress.test.mjs tests/curriculum-centered-2026.test.mjs tests/curriculum-course-ui.test.mjs tests/f02-r2-projection-positive.test.mjs tests/grade-import-identity.test.mjs tests/grade-import-privacy.test.mjs tests/graduation-audit.original.test.mjs tests/manual-graduation-credits.test.mjs tests/official-repeatable.test.mjs tests/planner.test.mjs tests/recovery-a08.stage9.test.mjs tests/recovery-compat.stage7.test.mjs tests/recovery-cr01.stage7.test.mjs tests/recovery-retry.stage7.test.mjs tests/structured-professional-credits.test.mjs tests/unresolved-conditions-2026.test.mjs tests/curriculum-foundation.original.test.mjs tests/f02-r1-legacy-2026.test.mjs tests/f02-r2-legacy-2026.test.mjs tests/f02-r3-legacy-2026.test.mjs tests/f02-r4-legacy-2026.test.mjs tests/f02-completion-legacy-2026.test.mjs tests/f02-geo-legacy-2026.test.mjs tests/f02-geo-t4-legacy-2026.test.mjs tests/attempt-positive-baseline.legacy-2026.test.mjs tests/work-b-strict-deltas.legacy-2026.test.mjs tests/work-b-residual.legacy-2026.test.mjs tests/work-b-ra-f4.legacy-2026.test.mjs tests/work-b-f4-completion.legacy-2026.test.mjs tests/f02-stage17-mixed-legacy-2026.test.mjs"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "framer-motion": "^12.38.0",
+    "html-to-image": "^1.11.13",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0"
@@ -29,8 +36,10 @@
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.15",
     "typescript": "5.9",
     "typescript-eslint": "^8.70.0",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "esbuild": "0.28.2"
   }
 }
