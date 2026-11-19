@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run catalog:check && npm run check:grade-import && vite build",
+    "build:planner:2026-separated": "vite build --config vite.planner-2026.config.mjs --outDir dist-planner-2026",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
