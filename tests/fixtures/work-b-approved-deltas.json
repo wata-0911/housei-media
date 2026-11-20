@@ -1,0 +1,727 @@
+{
+  "192-f4": [
+    {
+      "case": "文学部 / 地理学科/C",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "earned",
+      "old": 0,
+      "new": 2,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/in-progress",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "inProgress",
+      "old": 0,
+      "new": 2,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/planned",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "planned",
+      "old": 0,
+      "new": 2,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "earned",
+      "old": 0,
+      "new": 52,
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/status",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "earned",
+      "old": 0,
+      "new": 48,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/status",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "earned",
+      "old": 0,
+      "new": 48,
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-earned",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/status",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-in_progress",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "inProgress",
+      "old": 0,
+      "new": 52,
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-in_progress",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "inProgress",
+      "old": 0,
+      "new": 48,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-in_progress",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "inProgress",
+      "old": 0,
+      "new": 48,
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-planned",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "planned",
+      "old": 0,
+      "new": 52,
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-planned",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "planned",
+      "old": 0,
+      "new": 48,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-planned",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "planned",
+      "old": 0,
+      "new": 48,
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "earned",
+      "old": 0,
+      "new": 16,
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "inProgress",
+      "old": 0,
+      "new": 12,
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "planned",
+      "old": 0,
+      "new": 18,
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7194208b-295c-4c85-89f6-9ed8a4bffae6",
+      "field": "status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "path": "/requirements/7194208b-295c-4c85-89f6-9ed8a4bffae6/status",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "earned",
+      "old": 0,
+      "new": 14,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "inProgress",
+      "old": 0,
+      "new": 16,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "planned",
+      "old": 0,
+      "new": 12,
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/status",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "earned",
+      "old": 0,
+      "new": 20,
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "inProgress",
+      "old": 0,
+      "new": 14,
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "planned",
+      "old": 0,
+      "new": 6,
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/dense-mixed",
+      "requirementId": "e7c03938-4546-46da-af20-0743b7cc71e3",
+      "field": "status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "path": "/requirements/e7c03938-4546-46da-af20-0743b7cc71e3/status",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "earned",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/earned",
+      "old": 0,
+      "new": 11,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "status",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "earned",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/earned",
+      "old": 0,
+      "new": 6,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "status",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+      "field": "earned",
+      "path": "/requirements/d9010be2-cce5-4db6-8e7c-c8f279a3c430/earned",
+      "old": 0,
+      "new": 8,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-earned",
+      "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+      "field": "status",
+      "path": "/requirements/d9010be2-cce5-4db6-8e7c-c8f279a3c430/status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-in_progress",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "inProgress",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/inProgress",
+      "old": 0,
+      "new": 11,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-in_progress",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "inProgress",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/inProgress",
+      "old": 0,
+      "new": 6,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-in_progress",
+      "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+      "field": "inProgress",
+      "path": "/requirements/d9010be2-cce5-4db6-8e7c-c8f279a3c430/inProgress",
+      "old": 0,
+      "new": 8,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-planned",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "planned",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/planned",
+      "old": 0,
+      "new": 11,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-planned",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "planned",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/planned",
+      "old": 0,
+      "new": 6,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-planned",
+      "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+      "field": "planned",
+      "path": "/requirements/d9010be2-cce5-4db6-8e7c-c8f279a3c430/planned",
+      "old": 0,
+      "new": 8,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "earned",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/earned",
+      "old": 0,
+      "new": 2,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "inProgress",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/inProgress",
+      "old": 0,
+      "new": 1,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "planned",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/planned",
+      "old": 0,
+      "new": 2,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "1b783c86-e99e-4407-906b-4fed610c3dce",
+      "field": "status",
+      "path": "/requirements/1b783c86-e99e-4407-906b-4fed610c3dce/status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "earned",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/earned",
+      "old": 0,
+      "new": 1,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "inProgress",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/inProgress",
+      "old": 0,
+      "new": 2,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "planned",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/planned",
+      "old": 0,
+      "new": 1,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "b588eb9e-e08f-4059-8e37-d1df90165988",
+      "field": "status",
+      "path": "/requirements/b588eb9e-e08f-4059-8e37-d1df90165988/status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+      "field": "earned",
+      "path": "/requirements/d9010be2-cce5-4db6-8e7c-c8f279a3c430/earned",
+      "old": 0,
+      "new": 5,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+      "field": "inProgress",
+      "path": "/requirements/d9010be2-cce5-4db6-8e7c-c8f279a3c430/inProgress",
+      "old": 0,
+      "new": 2,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 史学科/dense-mixed",
+      "requirementId": "d9010be2-cce5-4db6-8e7c-c8f279a3c430",
+      "field": "status",
+      "path": "/requirements/d9010be2-cce5-4db6-8e7c-c8f279a3c430/status",
+      "old": "unsatisfied",
+      "new": "satisfied",
+      "oldPresent": true,
+      "newPresent": true
+    }
+  ],
+  "168-f4": [
+    {
+      "case": "文学部 / 地理学科/C",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/earned",
+      "old": 0,
+      "new": 2,
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/status",
+      "old": "unsatisfied",
+      "new": "unknown",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "status",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/earned",
+      "old": 0,
+      "new": null,
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "earned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/inProgress",
+      "old": 0,
+      "new": null,
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/planned",
+      "old": 0,
+      "new": null,
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "planned",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/reason",
+      "old": null,
+      "new": "対象科目に単位数不明の開講があります",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "reason",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/coverageStatus",
+      "old": "supported",
+      "new": "unknown",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "coverageStatus",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/unknownReasonCategory",
+      "old": null,
+      "new": "course_matching",
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "unknownReasonCategory",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/evaluableCount",
+      "old": 15,
+      "new": 14,
+      "requirementId": null,
+      "field": "evaluableCount",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/unknownCount",
+      "old": 64,
+      "new": 65,
+      "requirementId": null,
+      "field": "unknownCount",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/unknownReasons/8/count",
+      "old": 2,
+      "new": 3,
+      "requirementId": null,
+      "field": "unknownReasons/8/count",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/unknownReasons/8/labels/0",
+      "old": "専門教育：選択必修",
+      "new": "専門教育：人文：選択必修",
+      "requirementId": null,
+      "field": "unknownReasons/8/labels/0",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/unknownReasons/8/labels/1",
+      "old": "専門教育",
+      "new": "専門教育：選択必修",
+      "requirementId": null,
+      "field": "unknownReasons/8/labels/1",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/I-credits",
+      "path": "/unknownReasons/8/labels/2",
+      "new": "専門教育",
+      "requirementId": null,
+      "field": "unknownReasons/8/labels/2",
+      "oldPresent": false,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/in-progress",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/inProgress",
+      "old": 0,
+      "new": 2,
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "inProgress",
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 地理学科/planned",
+      "path": "/requirements/7f6c6015-9f88-4743-8993-c9f522abce04/planned",
+      "old": 0,
+      "new": 2,
+      "requirementId": "7f6c6015-9f88-4743-8993-c9f522abce04",
+      "field": "planned",
+      "oldPresent": true,
+      "newPresent": true
+    }
+  ],
+  "168-p2": [
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/C",
+      "requirementId": "820f36a3-b3b4-4a39-ac48-f4371944f920",
+      "field": "earned",
+      "path": "/requirements/820f36a3-b3b4-4a39-ac48-f4371944f920/earned",
+      "old": 2,
+      "new": 0,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 日本文学科 / 言語コース/C",
+      "requirementId": "3895617e-9032-41bf-8b61-66a6cd755326",
+      "field": "earned",
+      "path": "/requirements/3895617e-9032-41bf-8b61-66a6cd755326/earned",
+      "old": 2,
+      "new": 0,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/C",
+      "requirementId": "f1859e4f-1999-47e4-9544-86597d50a976",
+      "field": "earned",
+      "path": "/requirements/f1859e4f-1999-47e4-9544-86597d50a976/earned",
+      "old": 2,
+      "new": 0,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 日本文学科 / 芸能文化コース/C",
+      "requirementId": "06769b1e-ba33-4b10-9404-a66a88e03009",
+      "field": "earned",
+      "path": "/requirements/06769b1e-ba33-4b10-9404-a66a88e03009/earned",
+      "old": 2,
+      "new": 0,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/C",
+      "requirementId": "32a86efc-4b8d-4227-9c23-3d155fd888cf",
+      "field": "earned",
+      "path": "/requirements/32a86efc-4b8d-4227-9c23-3d155fd888cf/earned",
+      "old": 2,
+      "new": 0,
+      "oldPresent": true,
+      "newPresent": true
+    },
+    {
+      "case": "文学部 / 日本文学科 / 文学コース/C",
+      "requirementId": "1a1ea312-05ac-4fb8-9247-8132f7e77477",
+      "field": "earned",
+      "path": "/requirements/1a1ea312-05ac-4fb8-9247-8132f7e77477/earned",
+      "old": 2,
+      "new": 0,
+      "oldPresent": true,
+      "newPresent": true
+    }
+  ]
+}
