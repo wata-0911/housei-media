@@ -9,6 +9,7 @@ async function mount() {
     if (window.top !== window.self || !window.isSecureContext) throw new Error('Standalone secure document required');
     const response = await fetch('/planner-2026-deployment.json', {
       credentials: 'same-origin', redirect: 'error', cache: 'no-store',
+      +});
     if (!response.ok) throw new Error('Missing deployment configuration');
     const oldUrl = legacyPlannerLink(await response.json(), location.origin);
     const store = window.localStorage;
