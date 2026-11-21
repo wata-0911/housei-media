@@ -5,12 +5,13 @@ import {serveAc} from './ac-static-server.mjs';
 import {mixed} from './fixtures/migration-fixture.mjs';
 const {chromium}=await import(process.env.PLANNER_PLAYWRIGHT_MODULE||'playwright');
 const evidence=new URL(process.env.AC_BROWSER_EVIDENCE || '../../evidence/browser/',import.meta.url);await mkdir(evidence,{recursive:true});
+const dist=process.env.AC_BROWSER_DIST || new URL('../../dist-ac',import.meta.url).pathname;
 const legacyRaw=' \n'+JSON.stringify(mixed(),null,2)+'\r\n', recoveryRaw='broken recovery raw\t';
 const title='世界地誌（1）（アジア）';
 const authority=page=>page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('hosei-yi06-isolated-v1',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});return new Promise((resolve,reject)=>{const tx=db.transaction('authority','readonly'),get=tx.objectStore('authority').get('current');let value;get.onsuccess=()=>value=get.result;tx.oncomplete=()=>{db.close();resolve(value);};tx.onabort=()=>reject(tx.error);});});
 function checkState(a){const s=JSON.parse(a.raw);assert.equal(s.schemaVersion,24);assert.equal(s.retained.graduationCheckComplete,false);assert.equal(s.retained.graduationEvaluation,'not_evaluated');return s;}
 for(const width of [1280,390])test(`A+C native browser ${width}: CRUD, failure, unknown outcome, load failure, CAS, C01`,{timeout:600000},async()=>{
- const server=await serveAc(new URL('../../dist-ac',import.meta.url).pathname),origin=server.origin;
+ const server=await serveAc(dist),origin=server.origin;
  const browser=await chromium.launch({headless:true,executablePath:process.env.PLANNER_BROWSER_EXECUTABLE});
  const context=await browser.newContext({viewport:{width,height:900},acceptDownloads:true,reducedMotion:'reduce'});const errors=[],phases=[];let page;const start=Date.now();
  function phase(name){const value={width,name,elapsedMs:Date.now()-start};phases.push(value);console.log(JSON.stringify(value));}
@@ -21,6 +22,11 @@ for(const width of [1280,390])test(`A+C native browser ${width}: CRUD, failure, 
  await context.addInitScript(()=>{
   window.moves=[];const scroll=Element.prototype.scrollIntoView;Element.prototype.scrollIntoView=function(o){window.moves.push(this.id);return scroll.call(this,o);};
   const put=IDBObjectStore.prototype.put,transaction=IDBDatabase.prototype.transaction,complete=Object.getOwnPropertyDescriptor(IDBTransaction.prototype,'oncomplete').set;
+  const broadcast=BroadcastChannel.prototype.postMessage;
+  BroadcastChannel.prototype.postMessage=function(...args){
+   if(window.silentAcCommit&&this.name==='hosei-attempt-authority-invalidation')return;
+   return broadcast.apply(this,args);
+  };
   window.fault='';IDBObjectStore.prototype.put=function(...args){if(window.fault==='quota'){window.fault='';throw new DOMException('synthetic quota','QuotaExceededError');}return put.apply(this,args);};
   IDBDatabase.prototype.transaction=function(...args){if(window.fault==='read'&&args[1]==='readonly')throw Error('synthetic_read_failed');const tx=transaction.apply(this,args);
    if(args[1]==='readwrite')Object.defineProperty(tx,'oncomplete',{configurable:true,set(fn){complete.call(tx,function(e){if(window.fault==='unknown'){window.fault='';this.onabort?.(e);}else {if(window.fault==='postread')window.fault='read';fn.call(this,e);}});}});
@@ -51,8 +57,12 @@ for(const width of [1280,390])test(`A+C native browser ${width}: CRUD, failure, 
  await add();await prepare();await page.evaluate(()=>window.fault='postread');await confirm(page,false);assert.doesNotMatch(await status(page).textContent(),/保存済み/);await page.evaluate(()=>window.fault='');committed=await authority(page);assert.equal(checkState(committed).graph.attempts.length,3);await reload();assert.deepEqual(await authority(page),committed);phase('post-commit-read-failure-reconciled');
  // Failed read revokes prepared save and retains last display snapshot.
  await prepare();await page.evaluate(()=>window.fault='read');await page.getByRole('button',{name:'保存内容を再読込',exact:true}).click();await page.getByRole('alert').filter({hasText:'synthetic_read_failed'}).waitFor();assert.equal(await page.getByRole('group',{name:'保存確認',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'保存内容を準備',exact:true}).isDisabled(),true);await page.evaluate(()=>window.fault='');assert.deepEqual(await authority(page),committed);await reload();phase('failed-load-recovered');
- // Both tabs share real Web Locks and native CAS; only the winner's addition persists.
- const other=await context.newPage();other.setDefaultTimeout(120000);other.on('dialog',d=>d.accept());await open(other);await add(page,'2041');await add(other,'2042');await prepare(page);await prepare(other);await confirm(page);const winner=await authority(page);await confirm(other,false);assert.deepEqual(await authority(other),winner);await reload(other);assert.equal(checkState(await authority(other)).graph.attempts.length,4);assert.equal(checkState(winner).graph.attempts.filter(a=>a.plan.plannedYear===2042).length,0);await other.close();await unchangedLegacy();phase('two-tab-cas');
+ // Suppress the winner's notification here to prove the native CAS also
+ // stops a stale writer when no notification is received.
+ const other=await context.newPage();other.setDefaultTimeout(120000);other.on('dialog',d=>d.accept());await open(other);await add(page,'2041');await add(other,'2042');await prepare(page);await prepare(other);await page.evaluate(()=>window.silentAcCommit=true);await confirm(page);const winner=await authority(page);await confirm(other,false);assert.deepEqual(await authority(other),winner);await reload(other);assert.equal(checkState(await authority(other)).graph.attempts.length,4);assert.equal(checkState(winner).graph.attempts.filter(a=>a.plan.plannedYear===2042).length,0);await other.close();await unchangedLegacy();phase('two-tab-cas');
+ // A failed save can have an unknown durable outcome, so the failed tab may
+ // still send a recheck signal. Reconcile before using the winning tab again.
+ await reload(page);
  // Identity and method boundaries through the rendered shared search/form.
  await page.locator('#course-query').fill('ビジネス英語A');await page.getByRole('button',{name:'この配置を選ぶ',exact:true}).first().click();await page.getByRole('form',{name:'履修記録の入力'}).getByLabel('履修方法',{exact:true}).selectOption('correspondence');await page.getByRole('button',{name:'下書きへ追加',exact:true}).click();await page.getByRole('alert').filter({hasText:'方式を確認'}).waitFor();assert.deepEqual(await authority(page),winner);await page.getByRole('button',{name:'入力を閉じる'}).click();
  // C01: actual shortcuts, repeat, back/forward, direct hash and reload.
@@ -66,7 +76,7 @@ for(const width of [1280,390])test(`A+C native browser ${width}: CRUD, failure, 
 });
 
 test('A+C native schema22 explicit migration → schema23 reload/edit/remove/Undo preserves officials and source bytes',{timeout:600000},async()=>{
- const server=await serveAc(new URL('../../dist-ac',import.meta.url).pathname),origin=server.origin;
+ const server=await serveAc(dist),origin=server.origin;
  const browser=await chromium.launch({headless:true,executablePath:process.env.PLANNER_BROWSER_EXECUTABLE});
  const context=await browser.newContext({viewport:{width:390,height:900},acceptDownloads:true});
  try{

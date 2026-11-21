@@ -1,3 +1,4 @@
+import { inventoryFromVerifiedBackup } from '../progress/savedInventory';
 import { calculateRecordedCredits } from '../graduation/recordedCalculation';
 import { backupRawDigest } from '../../backup/plannerBackupCompatibility';
 import { STORAGE_KEY, BACKUP_KEY } from '../../backup/storagePrimitives';
@@ -79,8 +80,14 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
   let admission: AuthorityAdmission | null = null, legacyExpected: LegacySnapshot | null = null;
   let knownRecord: AuthorityRecord | null = null;
   let observedRecord: AuthorityRecord | null = null, lastRead: AuthorityRecord | null = null, readFence: AuthorityRecord | null = null;
-  let saving: { written: AuthorityRecord | null; readback: AuthorityRecord | null; readingBack: boolean } | null = null;
+  let saving: { generation: number; admission: AuthorityAdmission; written: AuthorityRecord | null;
+    readback: AuthorityRecord | null; readingBack: boolean } | null = null;
   const proposals = new WeakMap<object, { generation: number; preview: PersistencePreview }>();
+  function requireSaveAuthority(attempt: NonNullable<typeof saving>) {
+    requireLegacyUnchanged();
+    if (saving !== attempt || generation !== attempt.generation || reloadRequired || admission !== attempt.admission)
+      throw new Error('stale_save_revoked');
+  }
   const api = createAttemptPersistence({
     async read() {
       let current: AuthorityRecord;
@@ -110,9 +117,8 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
     async commit(expected, next) {
       const attempt = saving;
       if (!attempt || attempt.written) throw new Error('save_attempt_required');
-      // Called UNDER the persistence controller's shared Web Lock, immediately
-      // before atomic IDB CAS. Neither legacy key is ever written here.
-      requireLegacyUnchanged();
+      // The persistence controller has acquired the shared Web Lock.
+      requireSaveAuthority(attempt);
       // Host reservations only add restrictions. Keep the historical #196
       // controller byte-pinned and never mutate its private expected snapshot.
       const restricted = { ...next, issuedIds: unionReservations(next.issuedIds, allocator.canonicalReservations()) };
@@ -133,10 +139,10 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       } catch (error) {
         throw new Error('authority_unreadable_before_put: ' + String(error));
       }
-      // Validation contains asynchronous digest/replay work. Recheck legacy
-      // here; native CAS and the synchronous beforePut still fence actual put.
-      requireLegacyUnchanged();
-      await store.commit(expected, written, requireLegacyUnchanged);
+      // Async replay and the native CAS transaction can both wait. Recheck
+      // before handing off, then synchronously before scheduling the put.
+      requireSaveAuthority(attempt);
+      await store.commit(expected, written, () => requireSaveAuthority(attempt));
       attempt.written = written;
     },
   }, locks, environment);
@@ -228,6 +234,28 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       schemaVersion: preview.handle.state.schemaVersion, officialRows: preview.handle.state.retained.importedCourseAchievements.length });
     proposals.set(value, { generation, preview }); return value;
   }
+  function readVerifiedBackup<T>(read: (raw: string, saved: PersistenceHandle) => T | Promise<T>) {
+    return exclusive(async () => {
+      if (!handle || reloadRequired || commands.length) throw new Error('saved_snapshot_required');
+      requireLegacyUnchanged();
+      return withPlannerWriteLock(async () => {
+        return boundToObserved(async () => {
+          const saved = await verifyDestination();
+          if (!saved) throw new Error('stale_backup_requires_reload');
+          const raw = await api.createBackup(saved);
+          await inspectPortableBackup(raw);
+          // Detect a non-cooperating writer between the export's internal read
+          // and its asynchronous digest/replay work. Never issue a stale file.
+          const result = await read(raw, saved);
+          await verifyDestination(); requireLegacyUnchanged(); return result;
+        });
+      }, locks, true).catch(error => {
+        if (error instanceof Error && /^stale_authority_/.test(error.message))
+          error = new Error('stale_backup_requires_reload');
+        reloadRequired = true; admission = unavailableAdmission(error); throw error;
+      });
+    });
+  }
   return {
     async prepareMigration(raw: string) { return exclusive(async () => {
       if (reloadRequired) throw new Error('session_requires_reload');
@@ -265,27 +293,12 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
     graph: () => workspace?.graph ?? null,
     source: () => handle?.source ?? null,
     admission: () => admission,
-    /** Export a verified committed snapshot only, under the same writer lock.
-     * Raw protection remains available when normal backup validation fails. */
-    async createBackup() { return exclusive(async () => {
-      if (!handle || reloadRequired || commands.length) throw new Error('saved_snapshot_required');
-      requireLegacyUnchanged();
-      return withPlannerWriteLock(async () => {
-        return boundToObserved(async () => {
-          const saved = await verifyDestination();
-          if (!saved) throw new Error('stale_backup_requires_reload');
-          const raw = await api.createBackup(saved);
-          await inspectPortableBackup(raw);
-          // Detect a non-cooperating writer between the export's internal read
-          // and its asynchronous digest/replay work. Never issue a stale file.
-          await verifyDestination(); requireLegacyUnchanged(); return raw;
-        });
-      }, locks, true).catch(error => {
-        if (error instanceof Error && /^stale_authority_/.test(error.message))
-          error = new Error('stale_backup_requires_reload');
-        reloadRequired = true; admission = unavailableAdmission(error); throw error;
-      });
-    }); },
+    /** Export only a verified committed snapshot. */
+    createBackup: () => readVerifiedBackup(raw => raw),
+    readSavedInventory: () => readVerifiedBackup((raw, saved) => {
+      if (!admission?.canEdit) throw new Error('saved_display_not_admitted');
+      return inventoryFromVerifiedBackup(raw, saved.source.context.catalog);
+    }),
     /** Contract for a later restore UI. Selection is read only; portable source
      * adoption is separate from ordinary save confirmation. Never restores LS. */
     async prepareRestore(raw: string) { return exclusive(async () => {
@@ -332,10 +345,15 @@ export function createPlannerAttemptSession(store: AtomicAttemptStore & { commit
       if (!p || p.generation !== generation) throw new Error('stale_preview');
       if (reloadRequired) throw new Error('session_requires_reload');
       if (!confirmed) throw new Error('explicit_confirmation_required');
+      const acceptedAdmission = admission;
+      if (!acceptedAdmission || !(acceptedAdmission.canEdit || acceptedAdmission.canCreate || acceptedAdmission.canMigrate))
+        throw new Error('authority_save_blocked');
       // A save attempt consumes all previews, including failures with an unknown
       // transaction outcome. Reconcile through load before issuing another edit.
-      proposals.delete(proposal); generation++;
-      const attempt = { written: null, readback: null, readingBack: false } as NonNullable<typeof saving>;
+      proposals.delete(proposal);
+      const attempt: NonNullable<typeof saving> = {
+        generation: ++generation, admission: acceptedAdmission, written: null, readback: null, readingBack: false,
+      };
       saving = attempt;
       try {
         const recovery = p.preview.recovery;
