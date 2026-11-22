@@ -12,7 +12,7 @@ import { protectLegacyPlannerRaw } from '../planner/attempts/production/session'
 import type { AttemptId, AttemptOwnedRecord } from '../planner/attempts/types';
 import { STORAGE_KEY, BACKUP_KEY } from '../planner/backup/storagePrimitives';
 import { AttemptProgressEditor } from '../components/planner/institutional/AttemptProgressEditor';
-import { GradeImportLookup, SavedAttemptDisplay } from '../components/planner/institutional/SavedAttemptDisplay';
+import { GradeImportLookup, SavedAttemptDisplay, type ReadGradeReference } from '../components/planner/institutional/SavedAttemptDisplay';
 import '../components/planner/institutional/institutionalSearch.css';
 import '../components/planner/institutional/planner.css';
 
@@ -45,7 +45,7 @@ function SaveConfirmation({ proposal, controller, busy, cancel, notify }: { prop
 }
 
 /** Connected presentation; mounted only by the isolated integration entry. */
-export default function InstitutionalPlannerPage() {
+export default function InstitutionalPlannerPage({ readGradeReference }: { readGradeReference: ReadGradeReference }) {
   const location = useLocation();
   const handled = useRef<string | null>(null);
   const [source] = useState(loadCurrentCurriculumSearchAdapter), [controller] = useState(createAcController);
@@ -203,7 +203,8 @@ export default function InstitutionalPlannerPage() {
       fileGeneration.current++; controller.cancel();
     }} />}
     <SavedAttemptDisplay state={savedDisplay} verify={() => void controller.verifySaved()} disabled={locked || hasChanges || !state.graph} />
-    <GradeImportLookup key={resetInputs} attempts={state.graph?.attempts ?? []} disabled={locked} open={openAttempt} />
+    <GradeImportLookup key={resetInputs} attempts={state.graph?.attempts ?? []} disabled={locked} open={openAttempt}
+      readGradeReference={readGradeReference} />
     <InstitutionalSearchView adapter={source} selectionNotice="選択は入力フォームを開く操作です。下書きへの反映と、確認後の正式保存を別々に行います。" onSelect={row => {
       if (locked || !closePlan(true)) return;
       setSelection(row); setEditing(null); requestAnimationFrame(() => form.current?.focus());

@@ -1,4 +1,4 @@
-import { createGradeSourceArchive } from '../gradeImport/sourceArchive';
+import { createGradeSourceArchive, SOURCE_LIMITS } from '../gradeImport/sourceArchive';
 import { createLedger, verifyLedgerState } from '../gradeImport/ledger';
 import { previewImport, verifyImportPreview } from '../gradeImport/preview';
 import { prepareConfirmation, planAdoption, verifyAdoptionPlan } from '../gradeImport/adoption';
@@ -18,6 +18,23 @@ export function freeze<T>(v: T): DeepReadonly<T> {
   if (v && typeof v === 'object') { Object.values(v).forEach(freeze); Object.freeze(v); }
   return v as DeepReadonly<T>;
 }
+export const GRADE_SOURCE_REFERENCE_MAX_BYTES = SOURCE_LIMITS.maxRawBytes;
+export type GradeSourceReference = DeepReadonly<{
+  rawSha256: string;
+  rows: { rawName: string; earnedCredits: number | null; compositionCredits: number | null }[];
+}>;
+
+/** Project a verified source for read-only lookup without an adoption context or save grant. */
+export async function decodeGradeSourceReference(raw: unknown): Promise<GradeSourceReference> {
+  const archive = await createGradeSourceArchive(raw);
+  return freeze({
+    rawSha256: archive.rawSha256,
+    rows: archive.dto.courses.map(({ rawName, earnedCredits, compositionCredits }) => ({
+      rawName, earnedCredits: earnedCredits.value, compositionCredits: compositionCredits.value,
+    })),
+  });
+}
+
 export function parse(raw: unknown): unknown {
   if (typeof raw !== 'string') fail('input_type');
   if (raw.length > LIMITS.bytes || new TextEncoder().encode(raw).length > LIMITS.bytes) fail('resource_limit');

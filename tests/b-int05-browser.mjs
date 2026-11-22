@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { createRequire } from 'node:module';
@@ -156,9 +157,51 @@ for (const width of [390, 1280]) test('B-INT05 Chromium ' + width + 'px native s
     assert.equal(await learner(schooling).getByLabel('スクーリング評価（本人記録）').inputValue(), 'A');
 
     const grade = page.getByRole('region', { name: '成績ファイルから対象を確認' });
-    await grade.getByLabel('成績 JSON（原行参照）').setInputFiles({ name: 'synthetic-grade.json',
-      mimeType: 'application/json', buffer: fixtureGradeFile() });
-    await grade.getByLabel('成績原行').selectOption('0');
+    const gradeInput = grade.getByLabel('成績 JSON（原行参照）');
+    const rowPicker = grade.getByLabel('成績原行');
+    const gradeBytes = fixtureGradeFile();
+    const gradeText = gradeBytes.toString('utf8');
+    const gradeDigest = createHash('sha256').update(gradeBytes).digest('hex');
+    const gradeReference = grade.getByText('取込参照 1行 / 原文 SHA256 ' + gradeDigest, { exact: true });
+    const duplicate = gradeText.replace('"schemaVersion": 1', '"schemaVersion": 1, "schemaVersion": 1');
+    const underflow = gradeText.replace('"value": 1', '"value": 1e-999');
+    assert.notEqual(duplicate, gradeText);
+    assert.notEqual(underflow, gradeText);
+    for (const [name, buffer, message] of [
+      ['invalid-utf8', Buffer.from([0xc3, 0x28]), '成績 JSON の原文とバージョンを照合できません。'],
+      ['utf8-bom', Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), gradeBytes]), '成績 JSON の原文とバージョンを照合できません。'],
+      ['duplicate-key', Buffer.from(duplicate), '成績 JSON の原文とバージョンを照合できません。'],
+      ['underflow', Buffer.from(underflow), '成績 JSON の原文とバージョンを照合できません。'],
+      ['oversized', Buffer.alloc(1024 * 1024 + 1), '成績ファイルが読取上限を超えています。'],
+    ]) {
+      await gradeInput.setInputFiles({ name: 'synthetic-grade.json', mimeType: 'application/json', buffer: gradeBytes });
+      await gradeReference.waitFor();
+      assert.equal(await grade.getByRole('alert').count(), 0);
+      await gradeInput.setInputFiles({ name: name + '.json', mimeType: 'application/json', buffer });
+      await grade.getByRole('alert').filter({ hasText: message }).waitFor();
+      assert.equal(await rowPicker.count(), 0);
+    }
+    await page.evaluate(() => {
+      const read = File.prototype.arrayBuffer;
+      File.prototype.arrayBuffer = async function () {
+        const bytes = await read.call(this);
+        if (this.name === 'stale-grade.json') {
+          await new Promise(resolve => { window.releaseGradeFileRead = resolve; });
+          File.prototype.arrayBuffer = read;
+        }
+        return bytes;
+      };
+    });
+    await gradeInput.setInputFiles({ name: 'stale-grade.json', mimeType: 'application/json', buffer: Buffer.from([0xc3, 0x28]) });
+    await page.waitForFunction(() => typeof window.releaseGradeFileRead === 'function');
+    await gradeInput.setInputFiles({ name: 'synthetic-grade.json', mimeType: 'application/json', buffer: gradeBytes });
+    await gradeReference.waitFor();
+    await page.evaluate(async () => {
+      window.releaseGradeFileRead();
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    assert.equal(await grade.getByRole('alert').count(), 0);
+    await rowPicker.selectOption('0');
     assert.match(await grade.textContent(), /修得 1・構成 4単位.*対応未照合/);
     const choices = grade.getByRole('button', { name: /本人入力を開く/ });
     assert.equal(await choices.count(), 2);

@@ -1,8 +1,7 @@
 import { useRef, useState } from 'react';
 import type { SavedDisplay } from '../../../planner/attempts/production/acController';
 import type { Attempt, AttemptId } from '../../../planner/attempts/types';
-import { createGradeSourceArchive, SOURCE_LIMITS, type DeepReadonly, type GradeSourceArchive } from '../../../planner/attempts/gradeImport/sourceArchive';
-import { readMigrationFile } from '../../../planner/attempts/production/migrationFile';
+import type { GradeSourceReference } from '../../../planner/attempts/gradeImportHost/codec';
 import { methodLabels } from './planLabels';
 
 const quantity = (value: number | null | undefined) => value == null ? '未確認' : String(value);
@@ -43,14 +42,19 @@ export function SavedAttemptDisplay({ state, verify, disabled }: { state: SavedD
   </section>;
 }
 
-export function GradeImportLookup({ attempts, disabled, open }: {
+export type ReadGradeReference = (file: File) => Promise<
+  { status: 'tooLarge' } | { status: 'verified'; reference: GradeSourceReference }
+>;
+
+export function GradeImportLookup({ attempts, disabled, open, readGradeReference }: {
   attempts: readonly Attempt[]; disabled: boolean; open: (id: AttemptId) => void;
+  readGradeReference: ReadGradeReference;
 }) {
   const readToken = useRef(0);
-  const [archive, setArchive] = useState<DeepReadonly<GradeSourceArchive> | null>(null);
+  const [reference, setReference] = useState<GradeSourceReference | null>(null);
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
-  const row = selected === '' ? undefined : archive?.dto.courses[Number(selected)];
+  const row = selected === '' ? undefined : reference?.rows[Number(selected)];
   const matches = row ? attempts.filter(attempt => attempt.membership.kind === 'active' && attempt.originalTitle === row.rawName) : [];
   return <section aria-label="成績ファイルから対象を確認">
     <h2>成績ファイルから対象を確認</h2>
@@ -60,24 +64,25 @@ export function GradeImportLookup({ attempts, disabled, open }: {
       event.currentTarget.value = '';
       if (!file) return;
       const token = ++readToken.current;
-      setArchive(null); setSelected(''); setError('');
-      if (file.size > SOURCE_LIMITS.maxRawBytes) { setError('成績ファイルが読取上限を超えています。'); return; }
-      void readMigrationFile(file).then(raw => createGradeSourceArchive(raw)).then(value => {
-        if (token === readToken.current) setArchive(value);
+      setReference(null); setSelected(''); setError('');
+      void readGradeReference(file).then(result => {
+        if (token !== readToken.current) return;
+        if (result.status === 'tooLarge') { setError('成績ファイルが読取上限を超えています。'); return; }
+        setReference(result.reference);
       }).catch(() => {
         if (token === readToken.current) setError('成績 JSON の原文とバージョンを照合できません。');
       });
     }} /></label>
     {error && <p role="alert">{error}</p>}
-    {archive && <>
-      <p className="muted">取込参照 {archive.dto.courses.length}行 / 原文 SHA256 {archive.rawSha256}</p>
+    {reference && <>
+      <p className="muted">取込参照 {reference.rows.length}行 / 原文 SHA256 {reference.rawSha256}</p>
       <label>成績原行<select value={selected} onChange={event => setSelected(event.target.value)}>
         <option value="">選択してください</option>
-        {archive.dto.courses.map((row, i) => <option value={i} key={i}>{i + 1}行目 {row.rawName}</option>)}
+        {reference.rows.map((row, i) => <option value={i} key={i}>{i + 1}行目 {row.rawName}</option>)}
       </select></label>
     </>}
     {row && <>
-      <p>原行の修得 {quantity(row.earnedCredits.value)}・構成 {quantity(row.compositionCredits.value)}単位 / 履修回との対応未照合</p>
+      <p>原行の修得 {quantity(row.earnedCredits)}・構成 {quantity(row.compositionCredits)}単位 / 履修回との対応未照合</p>
       <p>{matches.length ? '名称一致は操作先の候補です。年度・方式・IDで選択してください。' : '名称一致する履修回がありません。制度科目検索から対象を確認してください。'}</p>
       {matches.map(attempt => <button type="button" key={attempt.id} disabled={disabled} onClick={() => open(attempt.id)}>
         本人入力を開く {attempt.originalTitle} / {attempt.plan?.plannedYear ?? '年度未設定'} / {methodLabels[attempt.method.value]} / {attempt.id}
