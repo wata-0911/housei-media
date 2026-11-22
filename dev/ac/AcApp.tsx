@@ -11,7 +11,7 @@ const Planner = lazy(async () => {
     { readMigrationFile },
   ] = await Promise.all([
     import('../../src/pages/InstitutionalPlannerPage'),
-    import('../../src/planner/attempts/gradeImportHost/codec'),
+    import('../../src/planner/attempts/gradeImportHost/sourceReference'),
     import('../../src/planner/attempts/production/migrationFile'),
   ]);
   async function readGradeReference(file: File) {

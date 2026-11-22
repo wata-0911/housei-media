@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { SavedDisplay } from '../../../planner/attempts/production/acController';
 import type { Attempt, AttemptId } from '../../../planner/attempts/types';
-import type { GradeSourceReference } from '../../../planner/attempts/gradeImportHost/codec';
+import type { GradeSourceReference } from '../../../planner/attempts/gradeImportHost/sourceReference';
 import { methodLabels } from './planLabels';
 
 const quantity = (value: number | null | undefined) => value == null ? '未確認' : String(value);
