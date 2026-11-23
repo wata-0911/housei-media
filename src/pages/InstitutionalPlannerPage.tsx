@@ -12,6 +12,9 @@ import { protectLegacyPlannerRaw } from '../planner/attempts/production/session'
 import type { AttemptId, AttemptOwnedRecord } from '../planner/attempts/types';
 import { STORAGE_KEY, BACKUP_KEY } from '../planner/backup/storagePrimitives';
 import { AttemptProgressEditor } from '../components/planner/institutional/AttemptProgressEditor';
+import { AttemptExportPanel, type AttemptExportReceipt } from '../components/planner/institutional/AttemptExportPanel';
+import { exportPin } from '../planner/attempts/exports/attemptExport';
+import { backupDigest } from '../planner/digest';
 import { GradeImportLookup, SavedAttemptDisplay, type ReadGradeReference } from '../components/planner/institutional/SavedAttemptDisplay';
 import '../components/planner/institutional/institutionalSearch.css';
 import '../components/planner/institutional/planner.css';
@@ -52,15 +55,22 @@ export default function InstitutionalPlannerPage({ readGradeReference }: { readG
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const initial = useRef<Promise<boolean> | null>(null);
   const fileGeneration = useRef(0);
+  const [readingFile, setReadingFile] = useState(false);
+  const readingFileNow = useRef(false);
+  const markFileReading = useCallback((value: boolean) => {
+    readingFileNow.current = value;
+    setReadingFile(value);
+  }, []);
   const invalidateFileRead = useCallback(() => {
     fileGeneration.current++; controller.invalidateSelection();
   }, [controller]);
   const migrationInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const element = migrationInput.current;
-    element?.addEventListener('cancel', invalidateFileRead);
-    return () => element?.removeEventListener('cancel', invalidateFileRead);
-  }, [invalidateFileRead]);
+    const cancel = () => { invalidateFileRead(); markFileReading(false); };
+    element?.addEventListener('cancel', cancel);
+    return () => element?.removeEventListener('cancel', cancel);
+  }, [invalidateFileRead, markFileReading]);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -83,8 +93,8 @@ export default function InstitutionalPlannerPage({ readGradeReference }: { readG
   }, [location.key, location.hash, loaded]);
 
   const [unsent, setUnsent] = useState<ReadonlySet<string>>(() => new Set());
+  const unsentNow = useRef(unsent);
   const [resetInputs, setResetInputs] = useState(0);
-  const [readingFile, setReadingFile] = useState(false);
   const [selection, setSelection] = useState<InstitutionalSearchRow | null>(null), [editing, setEditing] = useState<string | null>(null);
   const [protectionError, setProtectionError] = useState('');
   const form = useRef<HTMLDivElement>(null);
@@ -132,12 +142,29 @@ export default function InstitutionalPlannerPage({ readGradeReference }: { readG
     return () => window.removeEventListener('beforeunload', warn);
   }, [hasChanges, state.busy, readingFile]);
   function markUnsent(key: string, value: boolean) {
-    setUnsent(previous => {
-      if (previous.has(key) === value) return previous;
-      const next = new Set(previous);
-      if (value) next.add(key); else next.delete(key);
-      return next;
-    });
+    const previous = unsentNow.current;
+    if (previous.has(key) === value) return;
+    const next = new Set(previous);
+    if (value) next.add(key); else next.delete(key);
+    unsentNow.current = next;
+    setUnsent(next);
+  }
+  async function verifyExport(): Promise<AttemptExportReceipt | null> {
+    const before = controller.getSnapshot();
+    const inputs = unsentNow.current;
+    const fileStamp = fileGeneration.current;
+    const startPin = exportPin(before, !!inputs.size || readingFileNow.current);
+    if (!startPin || typeof navigator.locks?.request !== 'function') return null;
+    if (!await controller.verifySaved()) return null;
+
+    const checked = controller.getSnapshot();
+    const pin = exportPin(checked, !!unsentNow.current.size || readingFileNow.current);
+    if (!pin || !checked.graph || checked.graph !== before.graph ||
+        pin.snapshot.graphSha256 !== startPin.snapshot.graphSha256) return null;
+    const isCurrent = () => controller.getSnapshot() === checked && unsentNow.current === inputs &&
+      fileGeneration.current === fileStamp && !readingFileNow.current;
+    if (!isCurrent() || await backupDigest(checked.graph) !== pin.snapshot.graphSha256 || !isCurrent()) return null;
+    return { state: checked, inputs, pin, isCurrent };
   }
   function closePlan(discard?: boolean) {
     if (discard && unsent.has('plan') && !window.confirm('送信していない履修入力を破棄しますか？')) return false;
@@ -152,14 +179,14 @@ export default function InstitutionalPlannerPage({ readGradeReference }: { readG
   function restore(file?: File) {
     if (!file || unsent.size || state.dirty || locked) return;
     const stamp = ++fileGeneration.current;
-    setReadingFile(true); setProtectionError('');
+    markFileReading(true); setProtectionError('');
     controller.invalidateSelection();
     void readAttemptBackupFile(file).then(raw => {
       if (stamp === fileGeneration.current) return controller.prepareRestore(raw);
     }).catch(error => {
       if (stamp === fileGeneration.current) setProtectionError(String(error));
     }).finally(() => {
-      if (stamp === fileGeneration.current) setReadingFile(false);
+      if (stamp === fileGeneration.current) markFileReading(false);
     });
   }
   const locked = !state.ready || state.busy || !!state.proposal || readingFile;
@@ -178,8 +205,10 @@ export default function InstitutionalPlannerPage({ readGradeReference }: { readG
       <button onClick={() => {
         if ((hasChanges || readingFile) && !window.confirm('未保存の下書きを破棄し、保存内容を再読込します。続けますか？')) return;
         fileGeneration.current++; controller.invalidateSelection(); setProtectionError('');
-        setSelection(null); setEditing(null); setUnsent(new Set());
-        setReadingFile(false); setResetInputs(value => value + 1); void controller.load();
+        const cleared = new Set<string>();
+        unsentNow.current = cleared;
+        setSelection(null); setEditing(null); setUnsent(cleared);
+        markFileReading(false); setResetInputs(value => value + 1); void controller.load();
       }}>保存内容を再読込</button>
       <button disabled={locked || hasChanges || !state.graph} onClick={() => void protect(controller.createBackup, 'attempt-plan-backup.json')}>可搬バックアップをダウンロード</button>
       <label>可搬バックアップから復元<input type="file" accept=".json,application/json" disabled={locked || hasChanges} onChange={e => {
@@ -193,9 +222,11 @@ export default function InstitutionalPlannerPage({ readGradeReference }: { readG
         const stamp = ++fileGeneration.current;
         controller.invalidateSelection(); setProtectionError('');
         const file = e.target.files?.[0]; e.target.value = '';
+        markFileReading(!!file);
         if (file) void readMigrationFile(file).then(raw => {
           if (stamp === fileGeneration.current) return controller.prepareMigration(raw);
-        }).catch(error => { if (stamp === fileGeneration.current) setProtectionError(String(error)); });
+        }).catch(error => { if (stamp === fileGeneration.current) setProtectionError(String(error)); })
+          .finally(() => { if (stamp === fileGeneration.current) markFileReading(false); });
       }} /></label>
     </fieldset>
     {unsent.size > 0 && <p role="status">送信していない入力があります。下書きに反映するか、入力を取り消してから保存してください。</p>}
@@ -203,6 +234,7 @@ export default function InstitutionalPlannerPage({ readGradeReference }: { readG
       fileGeneration.current++; controller.cancel();
     }} />}
     <SavedAttemptDisplay state={savedDisplay} verify={() => void controller.verifySaved()} disabled={locked || hasChanges || !state.graph} />
+    <AttemptExportPanel state={state} inputs={unsent} readingFile={readingFile} verify={verifyExport} />
     <GradeImportLookup key={resetInputs} attempts={state.graph?.attempts ?? []} disabled={locked} open={openAttempt}
       readGradeReference={readGradeReference} />
     <InstitutionalSearchView adapter={source} selectionNotice="選択は入力フォームを開く操作です。下書きへの反映と、確認後の正式保存を別々に行います。" onSelect={row => {
