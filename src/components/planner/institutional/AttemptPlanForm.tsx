@@ -6,14 +6,14 @@ type Attempt = { plan: Pick<PlannerItem, 'status' | 'plannedYear' | 'plannedTerm
 
 export type PlanDraft = { plan: NonNullable<Attempt['plan']>; method: Attempt['method']['value'] };
 
-export function AttemptPlanForm({ attempt, title, disabled, locked, save, close }: {
-  attempt?: Attempt; title: string; disabled: boolean; locked: boolean; save: (draft: PlanDraft) => Promise<boolean>; close: () => void;
+export function AttemptPlanForm({ attempt, title, disabled, locked, save, close, onUnsent }: {
+  attempt?: Attempt; title: string; disabled: boolean; locked: boolean; save: (draft: PlanDraft) => Promise<boolean>; close: (discard?: boolean) => void; onUnsent?: () => void;
 }) {
   const id = useId();
   const [error, setError] = useState('');
   const year = useRef<HTMLInputElement>(null);
   const submitted = useRef(false);
-  return <form aria-label="履修記録の入力" onKeyDown={e => {
+  return <form aria-label="履修記録の入力" onChange={onUnsent} onKeyDown={e => {
     if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
   }} onSubmit={async e => {
     e.preventDefault();
@@ -41,6 +41,6 @@ export function AttemptPlanForm({ attempt, title, disabled, locked, save, close 
       <button type="submit" disabled={disabled}>{attempt ? '変更を下書きに反映' : '下書きへ追加'}</button>
     </fieldset>
     {error && <p role="alert">{error}</p>}
-    <button type="button" disabled={locked} onClick={close}>入力を閉じる</button>
+    <button type="button" disabled={locked} onClick={() => close(true)}>入力を閉じる</button>
   </form>;
 }

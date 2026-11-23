@@ -15,6 +15,11 @@ export async function readSavedProgress(session: SavedSession) {
   const backupRaw = await session.createBackup();
   // Only bytes returned by the bound production session cross this seam.
   const backup = JSON.parse(backupRaw) as AttemptBackup | NewPlanBackup;
+  return projectSavedProgress(backup);
+}
+
+// A pure projection; only the production session establishes backup authority.
+export function projectSavedProgress(backup: AttemptBackup | NewPlanBackup) {
   const { state } = backup;
   return freeze({
     snapshot: { schemaVersion: state.schemaVersion, backupSha256: backup.sha256,
