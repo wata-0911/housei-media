@@ -65,18 +65,54 @@ function ingest(state, input) {
   return applyImport(state, importPreview(input, catalog.offerings, state.importedStudyRecords, state.importedCourseAchievements), catalog.offerings);
 }
 
+test('empty authority starts in v3; unlinked native media saves and restores without migration consent', async () => {
+  const fixture = storeFixture();
+  const port = fixture.open();
+  const empty = await port.refresh();
+  assert.equal(empty.raw, null);
+  assert.equal(empty.needsIndependentUpgrade, false);
+  const sport = { ...data.courses[0], rawName: '健康・スポーツ科学概論［スポーツコーチングの基礎］(後期メディア)',
+    earnedCredits: numeric(0), schoolings: [{ ...data.courses[0].schoolings[0], rawTerm: '後期メディア', term: '後期メディア' }, data.courses[0].schoolings[1]] };
+  const next = ingest(empty.state, { ...data, courses: [sport] });
+  const [{ row, record }] = sameOriginImportedRows(next, new Map(catalog.offerings.map(o => [o.id, o])), []).independent;
+  assert.equal(row.courseId, null);
+  assert.equal(row.selectedOfferingId, null);
+  assert.equal(next.importedCourseUserMeta[row.id].lifecycleStatus, 'in_progress');
+  const plan = await port.save(null, next, isCurrent);
+  assert.equal(JSON.parse(plan.raw).version, 3);
+  assert.equal(plan.needsIndependentUpgrade, false);
+  const progress = { totalLessons: 14, lessons: [{ lesson: 1, videoCompleted: true, testCompleted: true }], assessments: [] };
+  const media = await port.save(plan.raw, plan.state, isCurrent, {
+    offeringId: null, sourceId: row.id, recordId: record.id, approveV3: false, progress,
+  });
+  assert.equal(JSON.parse(media.raw).primaryRaw, JSON.parse(plan.raw).primaryRaw);
+  const [track] = JSON.parse(media.raw).tracks;
+  assert.equal(track.offeringId, null);
+  assert.equal(track.owner, record.id);
+  assert.deepEqual((await fixture.open().refresh()).independentProgress[record.id], progress);
+  const restored = await restore(storeFixture().open(), await exportBackup(port));
+  assert.deepEqual(JSON.parse(restored.raw).tracks, [track]);
+  assert.equal(restored.needsIndependentUpgrade, false);
+  assert.deepEqual(fixture.writes, [A, A]);
+  assert.equal(fixture.values.has(P), false);
+  assert.equal(fixture.values.has(R), false);
+});
+
 test('v2 stays read-only on boot; consented v3 preserves source and original strings; old writers fail closed', async () => {
   const fixture = storeFixture();
-  const editor = fixture.open();
   const old = fixture.open(openV2);
-  const initial = await editor.refresh();
+  const initial = await old.refresh();
   const next = ingest(initial.state, data);
   const source = next.importedCourseAchievements[0];
   const record = next.importedStudyRecords.find(row => row.sourceCourseId === source.id);
   assert.equal(source.courseId, null);
   assert.deepEqual(source.candidateOfferingIds, []);
   assert.equal(next.importedCourseUserMeta[source.id].lifecycleStatus, 'in_progress');
-  const previous = await editor.save(initial.raw, next, isCurrent);
+  const previous = await old.save(initial.raw, next, isCurrent);
+  const editor = fixture.open();
+  assert.equal((await editor.refresh()).raw, previous.raw);
+  assert.equal(editor.view().needsIndependentUpgrade, true);
+  assert.deepEqual(fixture.writes, [A]);
   const oldBackup = await exportBackup(editor);
   assert.equal(JSON.parse(previous.raw).version, 2);
   assert.equal(JSON.parse(oldBackup).format, 'hosei-planner:2026:portable:v2');
@@ -192,7 +228,7 @@ test('complete, partial and composition-unknown records can be edited when the l
     [[1, '2026'], [1, '2027'], [2, '2026'], [4, '2026']]);
   for (const [index, { record, row }] of cases.entries()) {
     saved = await port.save(saved.raw, saved.state, isCurrent, {
-      offeringId: null, recordId: record.id, sourceId: row.id, approveV3: index === 0,
+      offeringId: null, recordId: record.id, sourceId: row.id, approveV3: false,
       progress: { totalLessons: 14 + index, lessons: [], assessments: [] },
     });
   }

@@ -179,7 +179,8 @@ function SiteLayout() {
         {!embedded && <Footer />}
 
       </div>
-      {!embedded && <PageEdgeNavigation bottomInset={adInset} reloadPlannerLocation={isEmbeddedPlannerParentBuild} />}
+      {!embedded && <PageEdgeNavigation bottomInset={adInset} reloadPlannerLocation
+        plannerPath={import.meta.env.VITE_PLANNER_2026_URL === '/planner' ? '/planner' : null} />}
       {hasViewportBottomAd && <ViewportBottomAd onInsetChange={setAdInset} />}
     </>;
 }

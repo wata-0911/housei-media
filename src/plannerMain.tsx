@@ -72,7 +72,6 @@ function StandalonePlannerLayout({ children, canOpen }: { children: ReactNode; c
     <div className="flex min-h-screen flex-col bg-gray-50" style={{ paddingBottom: adInset }}>
       <Header reloadDocument />
       <main className="flex-grow">
-        {canOpen && <a className="inline-block px-4 py-3 text-sm text-[#002255] underline" href="/privacy#planner-guide">成績取込・バックアップの使い方</a>}
         {children}
       </main>
       <Footer reloadDocument />

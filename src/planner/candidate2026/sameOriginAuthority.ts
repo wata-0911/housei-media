@@ -428,7 +428,7 @@ export function openSameOriginAuthority({ store, catalog, locks, isAdmitted, che
       return { raw: current.a, state, progress: data?.progress ?? state.mediaSchoolingProgress, heldMediaOfferingIds,
         independentProgress: data?.independent ?? {}, linkedSourceIds, heldIndependentRecordIds,
         carriedImportedOfferingIds: data?.carriedImportedOfferingIds,
-        needsIndependentUpgrade: (data?.envelope.version ?? 2) < 3,
+        needsIndependentUpgrade: data?.envelope.version === 2,
         legacyProgressReviews, claimedLegacyOfferingIds, generation: data?.envelope.generation,
         error: blocked || !environmentConfirmed || !isAdmitted() || !locks ? holdMessage : !data && legacyPresent ? '旧保存は閲覧用です。保護付きの移行を確認してください。' : null };
     } catch { return { raw: current.a, state: initialState(), progress: {}, heldMediaOfferingIds: [], error: formatMessage }; }
@@ -488,7 +488,7 @@ export function openSameOriginAuthority({ store, catalog, locks, isAdmitted, che
       }, isCurrent);
     }
     const tracks = [...(previous?.envelope.tracks ?? [])];
-    const version = previous?.envelope.version ?? 2;
+    const version = previous?.envelope.version ?? 3;
     const primaryRaw = () => previous && canonicalBackupJson(next) === canonicalBackupJson(previousState)
       ? previous.envelope.primaryRaw : JSON.stringify(next);
 

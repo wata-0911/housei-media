@@ -698,6 +698,28 @@ async function runCandidate() {
   const page = await open(ctx);
   const shot = shotFor(page);
   await homeLinks(page, true, shot);
+  for (const [path, label, anchor] of [
+    ['/', '科目検索へ', 'course-query'], ['/qa', '卒業要件へ', 'graduation-progress-heading'],
+    ['/contact', '履修・修得一覧へ', 'planned-heading'], ['/', 'メディア記録へ', 'media-panel'],
+  ]) {
+    await page.goto(parent + path);
+    const edge = page.getByRole('navigation', { name: 'ページ移動' });
+    await edge.locator('.edge-scroll').press('ArrowDown');
+    const ticket = page.waitForRequest(req => req.isNavigationRequest() && req.frame() === page.mainFrame()
+      && new URL(req.url()).pathname === '/planner');
+    await edge.getByRole('button', { name: label, exact: true }).click();
+    await ticket;
+    await page.waitForURL(parent + '/planner#' + anchor);
+    const embedded = page.getByTitle('2026年度版 履修プランナー');
+    await embedded.waitFor();
+    const frame = await (await embedded.elementHandle()).contentFrame();
+    await frame.waitForURL(child + childPath + '#' + anchor);
+    await frame.getByRole('tablist').waitFor();
+    const focusId = anchor === 'graduation-progress-heading' ? 'planner-start' : anchor;
+    await frame.waitForFunction(id => document.activeElement?.id === id, focusId);
+    assert.deepEqual((await readRaw(page)).writes, []);
+  }
+  log('site shortcuts cross the document boundary', { labels: 4, parentStorageWrites: 0, childStayedOnExpectedOrigin: true });
   await page.goto(parent + '/planner#synthetic-sensitive-value');
   let frame = await workspace(page);
   // Only explicit navigation fragments may transit into the child.
@@ -731,7 +753,9 @@ async function runCandidate() {
     { ...sport, rawName: '合成確定済み科目', earnedCredits: numeric(0),
       schoolings: [{ ...courseSlot, rawGrade: 'D', grade: 'D' }, blank] },
     { ...sport, rawName: matchedName,
-      schoolings: [{ ...courseSlot, rawTerm: '後期メディア', term: '後期メディア' }, blank] }];
+      schoolings: [{ ...courseSlot, rawTerm: '後期メディア', term: '後期メディア' }, blank] },
+    { ...sport, rawName: '行政法(前期メディア)',
+      schoolings: [{ ...courseSlot, rawYear: '2025', year: '2025', rawTerm: '前期', term: '前期' }, blank] }];
   const data = { ...grade, courses: rows };
   await uploadGrade(frame, data);
   let initial = await readRaw(frame);
@@ -758,6 +782,24 @@ async function runCandidate() {
     initial = await commit(frame, initial, () => official.getByRole('combobox', { name: '履修状態' }).selectOption('in_progress'));
   }
   await frame.getByRole('tab', { name: 'メディア', exact: true }).click();
+  const optional = frame.locator('details').filter({
+    has: frame.getByText('スクーリング方式・期の確認（必要な場合のみ）', { exact: true }),
+  });
+  await optional.waitFor();
+  assert.equal(await optional.evaluate(el => el.open), false);
+  const tentative = optional.getByRole('combobox', { name: '行政法(前期メディア)', exact: true });
+  assert.equal(await tentative.isVisible(), false);
+  await optional.locator('summary').click();
+  await tentative.waitFor();
+  assert.equal(await tentative.inputValue(), '');
+  assert.equal(await optional.getByText(rawName, { exact: true }).count(), 0);
+  assert.equal(primary(initial).importedCourseAchievements.find(row => row.rawName === '行政法(前期メディア)').selectedOfferingId, null);
+  const afterReview = await readRaw(frame);
+  assert.deepEqual(afterReview.raw, initial.raw);
+  assert.deepEqual(afterReview.writes, initial.writes);
+  await optional.locator('summary').click();
+  assert.equal(await tentative.isVisible(), false);
+  log('ambiguous and native media coexist', { optionalClosed: true, noNativeRowPrompt: true, noAutoMatch: true, noWrites: true });
   const independentCard = frame.locator('[data-media-source-record]');
   await runGreen({ frame, page, shot, nav, imported: initial, src, independentCard, payload: JSON.stringify(data) });
   await ctx.close();
@@ -799,21 +841,26 @@ async function runGreen({ frame, page, shot, nav, imported, src, independentCard
   stage = await commit(frame, stage, () => catalogCard.getByRole('button', { name: '14回', exact: true }).click());
   const linked = parsed(stage).tracks[0];
   assert.equal(linked.offeringId, searchOffering);
-  assert.equal(parsed(stage).version, 2);
+  assert.equal(parsed(stage).version, 3);
   await annual.click();
   const csv = await download(page, () => frame.getByRole('button', { name: 'CSVで保存', exact: true }).click());
   assert.ok(csv.toString().includes('科目名'));
   assert.ok(csv.toString().includes('60073') || csv.toString().includes('メディア'));
-  const oldBackup = await download(page, () => action(frame, '新版の通常バックアップ').click());
-  assert.equal(JSON.parse(oldBackup).format, 'hosei-planner:2026:portable:v2');
+  const beforeMedia = await download(page, () => action(frame, '新版の通常バックアップ').click());
+  assert.equal(JSON.parse(beforeMedia).format, 'hosei-planner:2026:portable:v3');
+  // The same pre-track content is valid v2. Give it to a fresh protected restore
+  // to test legacy UI separately from the new-user path.
+  const envelopeV2 = JSON.stringify({ ...JSON.parse(JSON.parse(beforeMedia).envelope), version: 2 });
+  const oldBackup = Buffer.from(JSON.stringify({ envelope: envelopeV2, format: 'hosei-planner:2026:portable:v2',
+    sha256: digest(envelopeV2) }));
 
   await media.click();
   const oldRecords = firstState.importedStudyRecords;
   const sportId = oldRecords.find(record => record.sourceCourseId === src.id && record.method === 'schooling').id;
   let sportCard = frame.locator('[data-media-source-record="' + sportId + '"]');
-  assert.equal(await sportCard.getByRole('button', { name: '14回', exact: true }).isDisabled(), true);
+  assert.equal(await sportCard.getByRole('button', { name: '14回', exact: true }).isDisabled(), false);
+  assert.equal(await frame.getByRole('checkbox', { name: /保存形式を更新して進捗を記録/ }).count(), 0);
   assert.deepEqual((await readRaw(frame)).raw, stage.raw);
-  await frame.getByRole('checkbox', { name: /保存形式をv3に更新/ }).check();
   stage = await commit(frame, stage, () => sportCard.getByRole('button', { name: '14回', exact: true }).click());
   const v3 = parsed(stage);
   assert.equal(v3.version, 3);
@@ -932,9 +979,26 @@ async function runGreen({ frame, page, shot, nav, imported, src, independentCard
     assert.equal(parsed(restored).version, version);
     assert.deepEqual(parsed(restored).tracks, expected.tracks);
     assert.equal(parsed(restored).primaryRaw, expected.primaryRaw);
+    if (version === 2) {
+      await fresh.getByRole('tab', { name: 'メディア', exact: true }).click();
+      const preset = fresh.locator('[data-media-source-record="' + sportId + '"]').getByRole('button', { name: '14回', exact: true });
+      const acknowledgment = fresh.getByRole('checkbox', { name: /保存形式を更新して進捗を記録/ });
+      assert.equal(await preset.isDisabled(), true);
+      assert.equal(await acknowledgment.isChecked(), false);
+      const exported = await download(freshPage, () => fresh.getByRole('button', { name: '更新前のバックアップを保存', exact: true }).click());
+      assert.equal(JSON.parse(exported).format, 'hosei-planner:2026:portable:v2');
+      assert.equal(JSON.parse(exported).envelope, restored.raw[0]);
+      const afterDownload = await readRaw(fresh);
+      assert.deepEqual(afterDownload.raw, restored.raw);
+      assert.deepEqual(afterDownload.writes, restored.writes);
+      await acknowledgment.check();
+      const upgraded = await commit(fresh, restored, () => preset.click());
+      assert.equal(parsed(upgraded).version, 3);
+      assert.equal(parsed(upgraded).primaryRaw, expected.primaryRaw);
+    }
     await freshPage.close();
   }
-  log('protected v2 and v3 regular backup', { originalPrimaryAndTrackIdsPreserved: true, alteredProofWrites: 0 });
+  log('protected v2 and v3 regular backup', { originalPrimaryAndTrackIdsPreserved: true, alteredProofWrites: 0, existingV2UpgradeRequiresConsent: true });
   await frame.getByRole('tab', { name: 'プロフィール', exact: true }).click();
   const program = frame.getByLabel('所属学科');
   const scope = await program.locator('option').evaluateAll(options => options.map(option => option.value).find(Boolean));

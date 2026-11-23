@@ -53,11 +53,11 @@ function readRecoveryRetryRequired(): boolean {
   catch { return false; } // readSavedState owns the unavailable-storage guidance.
 }
 
-function downloadOriginal(raw: string) {
+function downloadOriginal(raw: string, filename = 'hosei-planner-recovery.json') {
   const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'hosei-planner-recovery.json';
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -214,8 +214,11 @@ export default function PlannerPage({ authority }: { authority?: SameOriginAutho
   const legacyMedia = [...importedDerived.media, ...(orphanDerived?.media ?? [])]
     .filter(history => !officialMediaIds.has(history.sourceCourseId))
     .map(history => ({ ...history, canConfirmOffering: canConfirmSource(history.sourceCourseId) }));
+  const trackableSourceIds = new Set([...independentSourceIds, ...managedMedia.media
+    .filter(entry => !mediaAccess.heldOfferingIds.has(entry.offering.id))
+    .map(entry => entry.sourceCourseId)]);
   const pendingMedia = [...importedDerived.mediaPending, ...managedMedia.pending, ...(orphanDerived?.mediaPending ?? [])]
-    .filter(row => !independentSourceIds.has(row.sourceCourseId))
+    .filter(row => !trackableSourceIds.has(row.sourceCourseId))
     .map(row => ({ ...row, canConfirmOffering: canConfirmSource(row.sourceCourseId) }));
   const personalMediaStartOptions: PersonalMediaStartOption[] = state.importedCourseAchievements
     .filter(row => !independentSourceIds.has(row.id) && partialEarnedMediaSourceIds.has(row.id) && (
@@ -330,6 +333,16 @@ export default function PlannerPage({ authority }: { authority?: SameOriginAutho
     return commit(state, '旧進捗を本人の履修回へ引き継ぎました。元の進捗と公式成績を保持しています。', () => {
       if (!stillConfirmed() || mediaDocument.current !== documentGeneration) throw new Error('引継ぎの確認が変わりました。');
     }, { legacyReview: review });
+  }
+
+  async function exportBeforeIndependentUpgrade() {
+    if (!authority || !independent?.needsIndependentUpgrade) return;
+    try {
+      await authority.exportAuthority(text => downloadOriginal(text, 'hosei-planner-2026-backup.json'));
+      setSaveError(null);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'バックアップを保存できませんでした。');
+    }
   }
 
   function changeIndependentProgress(sourceId: string, recordId: string, progress: IndependentProgress, approveV3: boolean) {
@@ -745,7 +758,7 @@ export default function PlannerPage({ authority }: { authority?: SameOriginAutho
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab" tabIndex={-1} className="scroll-mt-40 md:scroll-mt-24">
         <MediaSchoolingProgress key={importEpoch} items={mediaItemsForDisplay} offerings={offeringsById} progress={progressForDisplay} officialAchievements={officialMedia} importedAchievements={legacyMedia} importedManaged={managedMedia.media} heldOfferingIds={mediaAccess.heldOfferingIds} importedPending={pendingMedia} partialEarnedSourceIds={partialEarnedMediaSourceIds} personalStartOptions={personalMediaStartOptions} onStartPersonalMedia={startPersonalMediaPlan} routeKey={navigationKey} savedRaw={loaded.raw} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={resolveImportedMedia}
           legacyProgressReviews={independent?.legacyProgressReviews} authorityGeneration={independent?.generation} onClaimLegacyProgress={claimLegacyProgress}
-          independentRows={independentRows} heldIndependentRecordIds={independent?.heldIndependentRecordIds} independentProgress={independent?.independentProgress} needsIndependentUpgrade={independent?.needsIndependentUpgrade} onIndependentChange={changeIndependentProgress} />
+          independentRows={independentRows} heldIndependentRecordIds={independent?.heldIndependentRecordIds} independentProgress={independent?.independentProgress} needsIndependentUpgrade={independent?.needsIndependentUpgrade} onExportUpgradeBackup={exportBeforeIndependentUpgrade} onIndependentChange={changeIndependentProgress} />
       </div>}
       {activeTab === 'profile' && <div ref={profilePanelRef} id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" tabIndex={-1} className="scroll-mt-24">
         <PlannerProfileTab

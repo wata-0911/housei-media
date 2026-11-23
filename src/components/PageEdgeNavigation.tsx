@@ -53,8 +53,8 @@ function menuLayout({ position, size, bounds }: Frame) {
 }
 
 export default function PageEdgeNavigation({ plannerPath = '/planner', includeMedia = true, bottomInset = 0, reloadPlannerLocation = false }:
-    { plannerPath?: string; includeMedia?: boolean; bottomInset?: number; reloadPlannerLocation?: boolean }) {
-    const availableDestinations = includeMedia ? destinations : destinations.slice(0, -1);
+    { plannerPath?: string | null; includeMedia?: boolean; bottomInset?: number; reloadPlannerLocation?: boolean }) {
+    const availableDestinations = plannerPath === null ? [] : includeMedia ? destinations : destinations.slice(0, -1);
     const location = useLocation();
     const navigate = useNavigate();
     const root = useRef<HTMLDivElement>(null);
@@ -67,7 +67,11 @@ export default function PageEdgeNavigation({ plannerPath = '/planner', includeMe
     const [open, setOpen] = useState(false);
     const [selected, setSelected] = useState<number | null>(null);
     const [scroll, setScroll] = useState({ atTop: true, canScroll: false });
-    const changeOpen = useCallback((value: boolean) => { openRef.current = value; setOpen(value); }, []);
+    const changeOpen = useCallback((value: boolean) => {
+        const next = value && plannerPath !== null;
+        openRef.current = next;
+        setOpen(next);
+    }, [plannerPath]);
     const close = useCallback(() => {
         if (root.current?.querySelector('.edge-shortcuts')?.contains(document.activeElement)) button.current?.focus({ preventScroll: true });
         changeOpen(false); setSelected(null);
@@ -136,7 +140,9 @@ export default function PageEdgeNavigation({ plannerPath = '/planner', includeMe
     const anchor = open && menu ? menu.anchor : frame?.position;
     function choose(index: number) {
         close();
-        const target = plannerPath + '#' + availableDestinations[index][0];
+        const destination = availableDestinations[index];
+        if (plannerPath === null || !destination) return;
+        const target = plannerPath + '#' + destination[0];
         if (reloadPlannerLocation) window.location.assign(target);
         else navigate(target);
     }
@@ -153,6 +159,7 @@ export default function PageEdgeNavigation({ plannerPath = '/planner', includeMe
         close(); event.currentTarget.setPointerCapture(event.pointerId);
         current.timer = window.setTimeout(() => {
             if (gesture.current !== current || current.mode !== 'pending') return;
+            if (plannerPath === null) { current.mode = 'cancelled'; return; }
             current.mode = menu?.compact && menu.height < LIST_HEIGHT ? 'menu' : 'select';
             suppressClick.current = true; changeOpen(true);
         }, LONG_PRESS_MS);
@@ -201,15 +208,21 @@ export default function PageEdgeNavigation({ plannerPath = '/planner', includeMe
         onFocus={event => { if (!gesture.current && !physicalTap.current && !suppressClick.current && !event.currentTarget.contains(event.relatedTarget)) changeOpen(true); }}
         onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
         <span className="edge-safe-area" aria-hidden="true" />
-        <span id="edge-instructions" className="sr-only">短押しで上下移動、長押しでメニュー、長押し前に動かすと位置移動。キーボードはTabで項目選択、Escapeで閉鎖、Altと矢印キーで位置移動、HomeとEndで上下移動。読み上げのボタン操作でメニューを開けます。</span>
+        <span id="edge-instructions" className="sr-only">短押しで上下移動、長押し前に動かすと位置移動。Altと矢印キーで位置移動、HomeとEndで上下移動。{plannerPath !== null && '長押しでメニューを開き、Tabで項目選択、Escapeで閉鎖できます。読み上げのボタン操作でもメニューを開けます。'}</span>
         {open && <span className="edge-bridge" aria-hidden="true" style={bridge} />}
-        <button ref={button} type="button" className="edge-scroll" aria-expanded={open} aria-controls="edge-shortcuts" aria-describedby="edge-instructions"
+        <button ref={button} type="button" className="edge-scroll" aria-expanded={plannerPath === null ? undefined : open} aria-controls={plannerPath === null ? undefined : 'edge-shortcuts'} aria-describedby="edge-instructions"
             onPointerDown={start} onPointerMove={move} onPointerUp={event => finish(event)} onPointerCancel={event => finish(event, true)} onLostPointerCapture={event => finish(event, true)}
             onKeyDown={event => {
                 if (event.defaultPrevented) return;
                 const delta: Record<string, Point> = { ArrowLeft: { x: -20, y: 0 }, ArrowRight: { x: 20, y: 0 }, ArrowUp: { x: 0, y: -20 }, ArrowDown: { x: 0, y: 20 } };
                 if (event.altKey && frame && delta[event.key]) { event.preventDefault(); setFrame({ ...frame, position: clamp({ x: frame.position.x + delta[event.key].x, y: frame.position.y + delta[event.key].y }, frame.size, frame.bounds) }); }
-                else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); suppressClick.current = false; if (openRef.current) close(); else changeOpen(true); }
+                else if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    suppressClick.current = false;
+                    if (plannerPath === null) moveToEdge();
+                    else if (openRef.current) close();
+                    else changeOpen(true);
+                }
                 else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); changeOpen(true); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(`[data-edge-destination="${event.key === 'ArrowDown' ? 0 : availableDestinations.length - 1}"]`)?.focus()); }
                 else if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); moveToEdge(event.key === 'Home' ? 'top' : 'bottom'); }
             }}
@@ -219,7 +232,7 @@ export default function PageEdgeNavigation({ plannerPath = '/planner', includeMe
                 if (suppressed && (event.detail !== 0 || ('pointerType' in event.nativeEvent && event.nativeEvent.pointerType))) { event.preventDefault(); return; }
                 // Scroll only after an actual short pointer sequence. Virtual / AT
                 // activation opens the shortcuts even when click.detail is nonzero.
-                if (tap && scroll.canScroll) moveToEdge();
+                if ((tap || plannerPath === null) && scroll.canScroll) moveToEdge();
                 else { changeOpen(true); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>('[data-edge-destination="0"]')?.focus()); }
 
             }}>{label}</button>
