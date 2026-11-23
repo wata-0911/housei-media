@@ -24,7 +24,7 @@ export function harness(logicalTables = [[], [], rows32(), rows32()]) {
   const alerts = [], logs = [], copied = [];
   const document = { querySelectorAll(selector) { assert.equal(selector, 'table[id="seisekiTabele110"]'); return tables; } };
   class FixedDate extends Date { constructor(...args) { super(...(args.length ? args : [capturedAt])); } }
-  const context = vm.createContext({ document, Date: FixedDate,
+  const context = vm.createContext({ window: { open() { assert.ok(copied.length > 0); return null; } }, document, Date: FixedDate,
     location: { protocol: 'https:', hostname: 'www.tsukyo.hosei.ac.jp' },
     navigator: { clipboard: { async writeText(text) { copied.push(text); } } },
     alert: text => alerts.push(text),

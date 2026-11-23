@@ -2,6 +2,10 @@
 
 Plannerの「成績データを取り込む」→「成績JSONの取得方法」からコードをコピーし、ブラウザのブックマークの **URL欄** に登録します。`javascript:` を含む全体を保存してください。ログイン済みの法政Web学習サービスで成績表を表示して実行し、科目数とコピー成功を確認してからPlannerの既存JSON貼り付け欄へ貼り付けます。「読み込み・検証」でプレビューし、保存操作まではPlannerデータを変更しません。
 
+コピー成功後だけ `https://hosei-tsukyo-media.com/planner#grade-import` を別タブで開くよう要求します。法政の元タブは移動しません。既存の `#grade-import` が取込欄を開き、スクロール・フォーカスします。URLには固定の画面識別子しか含めません。貼付→読み込み・検証（Preview）→明示的反映は従来どおりです。
+
+`noopener,noreferrer` でopenerとRefererを渡しません。この指定では成功時にも `window.open` がnullを返すため、開いたとは断定せず、通知には常に固定URLを新しいタブのアドレス欄へ入力する手順を表示します。ポップアップ拒否・例外でもコピー結果は維持します。コピー失敗・不明、抽出・検証失敗時は開きません。空タブの先行確保や元タブへのフォールバックは行いません。
+
 ## 共通sourceと生成物
 
 - `shared/grade-import/extractor.js` が唯一のparser sourceです。既存の date / report / numberField / schooling / course / cellsForRow / isCategoryRow / isCourseRow / extractRows / inspectTable / selectCandidate / extractCurrentDocument の処理を変更せず移しています。
@@ -22,7 +26,7 @@ extractorとclipboard transportは分離しています。将来のpostMessage a
 ## 安全性とブラウザ制限
 
 - HTTPSの `hosei.ac.jp` / `.hosei.ac.jp` 配下のみで動作し、現在のdocument内の `table[id="seisekiTabele110"]` を読みます。frame探索、認証状態の照会、ログイン処理はしません。ログインして成績表を開く操作は利用者が行います。公開案内: https://www.tsukyo.hosei.ac.jp/about-weblearning/
-- ネットワークAPI、remote script injection、eval、ストレージ保存、telemetryはありません。法政ID・認証Cookie・全ページHTMLを読みません。出力はextractorが明示的に構築するcontractの項目のみです。
+- 画面遷移禁止の唯一の例外は、コピー成功後の上記固定URLへの別タブ要求です。ネットワークAPI、remote script injection、eval、ストレージ保存、telemetryはありません。法政ID・認証Cookie・全ページHTMLを読みません。出力はextractorが明示的に構築するcontractの項目のみです。
 - 成績JSONをURL/query/hashへ含めません。ブックマークURLにあるのは共通ソースから生成したプログラムだけです。URIエンコードで `#` / `%` / 改行の解釈を避け、voidラッパーで実行結果によるページ置換を防ぎます。
 - React 19の `sanitizeURL` が `javascript:` hrefをブロックするため、Plannerではリンク属性へ設定せず、JSON moduleから取得した文字列をread-only textareaとコピーAPIへ渡します。Vite build後も不活性な文字列です。`dangerouslySetInnerHTML` やDOMへのhref強制設定は使いません。
 - self-containedでも、ブラウザや成績ページ側のCSPによりBookmarklet実行が拒否される場合があります。CSPを緩和/迂回せず、既存Chrome拡張へ戻れる案内にしています。実ページでのCSP・ブックマーク登録・クリップボード権限の組合せは実機確認が必要です。
