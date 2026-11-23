@@ -125,10 +125,12 @@ jobs:
           PLANNER_PLAYWRIGHT_MODULE: ${{ runner.temp }}/home-planner-browser/node_modules/playwright/index.mjs
           B_INT05_DIST: ../dist-ac
           B_INT07_DIST: ../dist-ac
+          B_INT22_DIST: ../dist-ac
         run: |
           chromium_path="$(node --input-type=module -e 'const {chromium} = await import(process.env.PLANNER_PLAYWRIGHT_MODULE); console.log(chromium.executablePath());')"
           test -x "$chromium_path"
           PLANNER_BROWSER_EXECUTABLE="$chromium_path" node --test --test-concurrency=1 tests/b-int05-browser.mjs tests/b-int07-browser.mjs
+          PLANNER_BROWSER_EXECUTABLE="$chromium_path" node --import tsx --test --test-concurrency=1 tests/b-int22-export.browser.mjs
 
   f01-membership-evidence:
     if: ${{ github.head_ref == 'work/f01-authority-migration-safety-20261106' }}
