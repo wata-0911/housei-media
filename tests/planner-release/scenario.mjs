@@ -685,6 +685,14 @@ async function runImportedDevCarryForward() {
   await ctx.close();
 }
 
+async function revealOfficial(frame, sourceId) {
+  const row = frame.locator('[data-official-id="' + sourceId + '"]');
+  const enclosingCourse = row.locator('xpath=ancestor::section[@data-curriculum-course-id]');
+  const toggle = enclosingCourse.getByRole('button', { name: '詳細・編集を開く', exact: true });
+  if (await toggle.count()) await toggle.click();
+  return row;
+}
+
 async function runCandidate() {
   const ctx = await context();
   const page = await open(ctx);
@@ -745,7 +753,7 @@ async function runCandidate() {
   for (const name of ['合成構成不明メディア', '合成修得済メディア']) {
     const source = state.importedCourseAchievements.find(row => row.rawName === name);
     assert.equal(state.importedCourseUserMeta[source.id], undefined);
-    const official = frame.locator('[data-official-id="' + source.id + '"]');
+    const official = await revealOfficial(frame, source.id);
     await official.locator('summary').filter({ hasText: 'ユーザー管理情報' }).click();
     initial = await commit(frame, initial, () => official.getByRole('combobox', { name: '履修状態' }).selectOption('in_progress'));
   }
@@ -756,8 +764,13 @@ async function runCandidate() {
 }
 
 async function runGreen({ frame, page, shot, nav, imported, src, independentCard, payload }) {
+  assert.equal(await page.getByRole('banner').count(), 1);
+  assert.equal(await frame.getByRole('banner').count(), 0);
   assert.equal(await page.locator('footer').count(), 0);
   assert.equal(await frame.locator('footer').count(), 1);
+  const homeLink = frame.locator('footer').getByRole('link', { name: 'ホーム', exact: true });
+  assert.equal(new URL(await homeLink.getAttribute('href')).origin, parent);
+  assert.equal(await homeLink.getAttribute('target'), '_top');
   assert.equal(await page.evaluate(() => scrollY), 0);
   const firstState = primary(imported);
   const sport = firstState.importedCourseAchievements.filter(row => row.rawName === src.rawName);
@@ -879,11 +892,11 @@ async function runGreen({ frame, page, shot, nav, imported, src, independentCard
   log('CSV and media PNG parity', { localCsvDownload: true, pngPreviewGenerated: true, gradeBearingPlanPngHidden: true });
   stage = await readRaw(frame);
   await annual.click();
-  const official = frame.locator('[data-official-id="' + src.id + '"]');
+  const official = await revealOfficial(frame, src.id);
   await official.locator('summary').filter({ hasText: 'ユーザー管理情報' }).click();
   stage = await commit(frame, stage, () => official.getByRole('combobox', { name: '履修状態' }).selectOption(''));
   assert.equal(primary(stage).importedCourseUserMeta[src.id].lifecycleStatus, null);
-  const partialOfficial = frame.locator('[data-official-id="' + partial.id + '"]');
+  const partialOfficial = await revealOfficial(frame, partial.id);
   if (!await partialOfficial.getByRole('combobox', { name: '履修状態' }).isVisible()) {
     await partialOfficial.locator('summary').filter({ hasText: 'ユーザー管理情報' }).click();
   }

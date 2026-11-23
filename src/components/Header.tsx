@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isEmbeddedPlannerParentBuild } from '../planner/candidate2026/embeddedPlanner';
 
-export default function Header() {
+export default function Header({ reloadDocument = false }: { reloadDocument?: boolean } = {}) {
   const showPlanner2026 = import.meta.env.VITE_PLANNER_2026_URL === '/planner';
   // 検索バーの開閉状態と、入力されたキーワードを管理
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -16,7 +16,9 @@ export default function Header() {
     
     if (keyword.trim() !== '') {
       // Q&Aページにキーワードを渡して移動
-      navigate(`/qa?q=${encodeURIComponent(keyword)}`);
+      const destination = `/qa?q=${encodeURIComponent(keyword)}`;
+      if (reloadDocument) window.location.assign(destination);
+      else navigate(destination);
       setIsSearchOpen(false); // 検索バーを閉じる
       setKeyword(''); // 入力内容をリセット
     }
@@ -37,7 +39,7 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
 
         {/* ロゴ部分 */}
-        <Link reloadDocument={isEmbeddedPlannerParentBuild} to="/" className="text-xl md:text-2xl font-medium tracking-widest text-white flex items-baseline hover:text-[#E65C00] transition-colors duration-300">
+        <Link reloadDocument={reloadDocument || isEmbeddedPlannerParentBuild} to="/" className="text-xl md:text-2xl font-medium tracking-widest text-white flex items-baseline hover:text-[#E65C00] transition-colors duration-300">
           法政通信メディア
         </Link>
 
@@ -45,13 +47,13 @@ export default function Header() {
         <nav className="flex items-center">
           <ul className="flex flex-wrap justify-center gap-x-4 gap-y-3 md:gap-x-8 text-sm tracking-widest font-light text-white/80 items-center">
             <li>
-              <Link reloadDocument={isEmbeddedPlannerParentBuild} to="/" className="hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
+              <Link reloadDocument={reloadDocument || isEmbeddedPlannerParentBuild} to="/" className="hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
             </li>
             <li>
-              <Link to="/qa" className="hover:text-[#E65C00] transition-colors duration-300">Q&A</Link>
+              <Link reloadDocument={reloadDocument} to="/qa" className="hover:text-[#E65C00] transition-colors duration-300">Q&A</Link>
             </li>
             <li>
-              <Link to="/contact" className="hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
+              <Link reloadDocument={reloadDocument} to="/contact" className="hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
             </li>
 
             {showPlanner2026 && <li>

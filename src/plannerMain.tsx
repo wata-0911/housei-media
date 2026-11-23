@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import PlannerPage from './pages/PlannerPage';
 import Footer from './components/Footer';
+import Header from './components/Header';
 import PageEdgeNavigation from './components/PageEdgeNavigation';
+import ViewportBottomAd, { hasViewportBottomAd } from './components/ViewportBottomAd';
 import { checkSameOriginEnvironment, openSameOriginAuthority, SAME_ORIGIN_AUTHORITY } from './planner/candidate2026/sameOriginAuthority';
 import { catalog } from './planner/catalog/catalog';
 import { embeddedPlannerParentOrigin, isEmbeddedPlannerBuild, isEmbeddedPlannerDocument } from './planner/candidate2026/embeddedPlanner';
@@ -64,26 +66,42 @@ export function PlannerWorkspace() {
   </>;
 }
 
+function StandalonePlannerLayout({ children, canOpen }: { children: ReactNode; canOpen: boolean }) {
+  const [adInset, setAdInset] = useState(0);
+  return <>
+    <div className="flex min-h-screen flex-col bg-gray-50" style={{ paddingBottom: adInset }}>
+      <Header reloadDocument />
+      <main className="flex-grow">
+        {canOpen && <a className="inline-block px-4 py-3 text-sm text-[#002255] underline" href="/privacy#planner-guide">成績取込・バックアップの使い方</a>}
+        {children}
+      </main>
+      <Footer reloadDocument />
+    </div>
+    {canOpen && <PageEdgeNavigation plannerPath={window.location.pathname} bottomInset={adInset} />}
+    {hasViewportBottomAd && <ViewportBottomAd onInsetChange={setAdInset} />}
+  </>;
+}
+
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element not found');
 
 const appRoot = createRoot(root);
 const parentOrigin = embeddedPlannerParentOrigin();
-void canOpenWorkspace().then(canOpen => appRoot.render(
-  <BrowserRouter>
-    {!isEmbeddedPlannerBuild && <nav aria-label="履修プランナーの案内" className="flex flex-wrap gap-x-5 gap-y-2 px-4 py-3 text-sm text-[#002255]">
-      <a className="underline" href="/">法政通信メディア</a>
-      <a className="underline" href="/privacy#planner-guide">成績取込・バックアップの使い方</a>
-      <a className="underline" href="/privacy">プライバシーポリシー</a>
-    </nav>}
-    <main>
-      {canOpen
-        ? <PlannerWorkspace />
-        : <p className="p-4" role="status">{plannerEnabled && (isEmbeddedPlannerBuild || isPlannerPath())
-          ? 'この配信先の編集資格を確認できないため、履修プランナーの保存領域は開きません。'
-          : 'このページでは履修プランナーを利用できません。'}</p>}
-    </main>
-    {canOpen && <PageEdgeNavigation plannerPath={window.location.pathname} />}
-    {parentOrigin && <Footer parentOrigin={parentOrigin} />}
-  </BrowserRouter>,
-));
+void canOpenWorkspace().then(canOpen => {
+  const workspace = canOpen
+    ? <PlannerWorkspace />
+    : <p className="p-4" role="status">{plannerEnabled && (isEmbeddedPlannerBuild || isPlannerPath())
+      ? 'この配信先の編集資格を確認できないため、履修プランナーの保存領域は開きません。'
+      : 'このページでは履修プランナーを利用できません。'}</p>;
+  appRoot.render(
+    <BrowserRouter>
+      {isEmbeddedPlannerBuild
+        ? <>
+          <main>{workspace}</main>
+          {canOpen && <PageEdgeNavigation plannerPath={window.location.pathname} />}
+          {parentOrigin && <Footer parentOrigin={parentOrigin} />}
+        </>
+        : <StandalonePlannerLayout canOpen={canOpen}>{workspace}</StandalonePlannerLayout>}
+    </BrowserRouter>,
+  );
+});
