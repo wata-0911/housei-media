@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useReducedMotion, motion, AnimatePresence } from 'framer-motion';
 import './member.css'
 
 // 各メンバーのデータに実際の情報を反映しました
@@ -88,6 +88,7 @@ const membersData: Member[] = [
 ];
 
 const ProfileCard = () => {
+  const shouldReduceMotion = useReducedMotion();
   const [currentMemberIndex, setCurrentMemberIndex] = useState<number>(0)
   const currentMember = membersData[currentMemberIndex]
 
@@ -109,10 +110,10 @@ const ProfileCard = () => {
       <AnimatePresence mode="wait">
         <motion.div
           key={currentMemberIndex}
-          initial={{ opacity: 0, y: 6 }}
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.25 }}
+          exit={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -6 }}
+          transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.25 }}
           className="profile-card"
         >
           <div className="line-top-left"></div>
