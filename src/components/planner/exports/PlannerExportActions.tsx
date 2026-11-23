@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { plannerExportCsv, plannerExportFileName, type PlannerExportPresentation } from '../../../planner/exports/plannerExport';
 
-type Props = { presentation: PlannerExportPresentation; showPlanImage?: boolean };
+type Props = { presentation: PlannerExportPresentation };
 
 function downloadBlob(contents: string, fileName: string, type: string) {
   const url = URL.createObjectURL(new Blob([contents], { type }));

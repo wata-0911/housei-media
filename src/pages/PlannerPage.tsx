@@ -712,7 +712,7 @@ export default function PlannerPage({ authority }: { authority?: SameOriginAutho
         <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null || saving} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
         {mediaAccess.heldOfferingIds.size > 0 && <p className="text-sm text-amber-900">履修回を確認できないメディア進捗は、メディアタブで閲覧できます。履修計画の進捗表示と書き出しでは保留しています。</p>}
         <CurriculumCourseList key={importEpoch} heldMediaOfferingIds={mediaAccess.heldOfferingIds} catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null || saving} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
-        <PlannerExportActions presentation={exportPresentation} showPlanImage={!authority} />
+        <PlannerExportActions presentation={exportPresentation} />
         {authority ? <SameOriginBackupPanel authority={authority} disabled={saving}
           gradeDraft={gradeDraft} readGradeDraft={readGradeDraft}
           onBusyChange={busy => { writePending.current = busy; setSaving(busy); setRestoringBackup(busy); }}

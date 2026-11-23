@@ -710,9 +710,9 @@ async function runCandidate() {
   await frame.locator('.edge-scroll').waitFor();
   await shot('annual');
   const nav = frame.getByRole('navigation', { name: 'ページ移動' });
-  const rawName = '健康・スポーツ科学概論';
-  const sport = { ...grade.courses[0], rawName };
-  const courseSlot = sport.schoolings[0];
+  const rawName = '健康・スポーツ科学概論［スポーツコーチングの基礎］(後期メディア)';
+  const courseSlot = { ...grade.courses[0].schoolings[0], rawTerm: '後期メディア', term: '後期メディア' };
+  const sport = { ...grade.courses[0], rawName, schoolings: [courseSlot, blank] };
   const rows = [sport,
     { ...sport, schoolings: [{ ...courseSlot, rawYear: '2027', year: '2027' }, blank] },
     { ...sport, rawName: '経営学特講（合成未照合）', earnedCredits: numeric(1) },
@@ -731,6 +731,14 @@ async function runCandidate() {
   const state = JSON.parse(JSON.parse(initial.raw[0]).primaryRaw);
   const src = state.importedCourseAchievements[0];
   assert.equal(src.courseId, null);
+  assert.equal(src.selectedOfferingId, null);
+  const unresolvedOffering = 'debf7f03-4af5-45ee-b815-065c230b1a74';
+  assert.deepEqual(src.candidateOfferingIds, [unresolvedOffering]);
+  assert.equal(state.items.some(item => item.offeringId === unresolvedOffering), false);
+  const sportRecord = state.importedStudyRecords.find(record => record.sourceCourseId === src.id);
+  assert.equal(sportRecord.offeringId, unresolvedOffering);
+  assert.equal(sportRecord.rawTerm, '後期メディア');
+  assert.equal(sportRecord.grade, null);
   const unmatched = state.importedCourseAchievements.find(row => row.rawName.includes('合成未照合'));
   assert.equal(unmatched.courseId, null);
   assert.deepEqual(unmatched.candidateOfferingIds, []);
@@ -803,6 +811,11 @@ async function runGreen({ frame, page, shot, nav, imported, src, independentCard
   assert.equal(Object.hasOwn(track.progress, 'offeringId'), false);
   await sportCard.getByRole('button', { name: /各回一覧を表示/ }).click();
   stage = await commit(frame, stage, () => sportCard.getByRole('checkbox', { name: '動画', exact: true }).first().click());
+  stage = await commit(frame, stage, () => sportCard.getByRole('checkbox', { name: 'テスト', exact: true }).nth(1).click());
+  stage = await commit(frame, stage, () => sportCard.getByRole('button', { name: '試験を追加', exact: true }).click());
+  const assessment = parsed(stage).tracks.find(row => row.id === track.id).progress.assessments[0];
+  await sportCard.getByLabel('予定日', { exact: true }).fill('2026-12-18');
+  stage = await commit(frame, stage, () => sportCard.getByLabel('予定日', { exact: true }).press('Enter'));
   let partialCard = independentCard.filter({ hasText: '経営学特講' });
   stage = await commit(frame, stage, () => partialCard.getByRole('button', { name: '15回', exact: true }).click());
   for (const name of ['合成構成不明メディア', '合成修得済メディア', matchedName]) {
@@ -833,9 +846,24 @@ async function runGreen({ frame, page, shot, nav, imported, src, independentCard
   media = frame.getByRole('tab', { name: 'メディア', exact: true });
   sportCard = frame.locator('[data-media-source-record="' + sportId + '"]');
   partialCard = frame.locator('[data-media-source-record]').filter({ hasText: '経営学特講' });
-  assert.deepEqual((await readRaw(frame)).raw, stage.raw);
+  const reopened = await readRaw(frame);
+  assert.deepEqual(reopened.raw, stage.raw);
+  stage = reopened;
   await media.click();
   await sportCard.getByText('動画 1/14', { exact: true }).waitFor();
+  await sportCard.getByText('テスト 1/14', { exact: true }).waitFor();
+  assert.equal(await sportCard.getByLabel('予定日', { exact: true }).inputValue(), '2026-12-18');
+  stage = await commit(frame, stage, () => sportCard.getByRole('checkbox', { name: '実施済み', exact: true }).click());
+  const afterReload = parsed(stage).tracks.find(row => row.owner === sportId);
+  assert.equal(afterReload.id, track.id);
+  assert.equal(afterReload.progress.assessments[0].id, assessment.id);
+  assert.equal(afterReload.progress.assessments[0].completed, true);
+  assert.deepEqual(afterReload.progress.lessons, [
+    { lesson: 1, videoCompleted: true, testCompleted: false },
+    { lesson: 2, videoCompleted: false, testCompleted: true },
+  ]);
+  log('unresolved real catalog media progress', { offeringCourseId: src.courseId, source: src.id, detail: sportId,
+    track: track.id, videoOneAndTestTwoPreserved: true, assessmentPersistedAndEditable: true });
   await partialCard.getByText('動画 0/15', { exact: true }).waitFor();
   for (const name of ['合成構成不明メディア', '合成修得済メディア', matchedName]) {
     await frame.locator('[data-media-source-record]').filter({ hasText: name }).getByText('動画 0/14', { exact: true }).waitFor();
@@ -855,16 +883,22 @@ async function runGreen({ frame, page, shot, nav, imported, src, independentCard
   await official.locator('summary').filter({ hasText: 'ユーザー管理情報' }).click();
   stage = await commit(frame, stage, () => official.getByRole('combobox', { name: '履修状態' }).selectOption(''));
   assert.equal(primary(stage).importedCourseUserMeta[src.id].lifecycleStatus, null);
+  const partialOfficial = frame.locator('[data-official-id="' + partial.id + '"]');
+  if (!await partialOfficial.getByRole('combobox', { name: '履修状態' }).isVisible()) {
+    await partialOfficial.locator('summary').filter({ hasText: 'ユーザー管理情報' }).click();
+  }
+  stage = await commit(frame, stage, () => partialOfficial.getByRole('combobox', { name: '履修状態' }).selectOption('waiting'));
 
   const nextImport = JSON.parse(payload);
   nextImport.courses.push({ ...nextImport.courses[0], rawName: '合成追加科目' });
   await uploadGrade(frame, nextImport);
   stage = await commit(frame, stage, () => frame.getByRole('button', { name: '確認した履修実績を保存・履修計画に仮登録' }).click());
   assert.equal(primary(stage).importedCourseUserMeta[src.id].lifecycleStatus, null);
-  assert.equal(parsed(stage).tracks.find(row => row.owner === sportId).id, track.id);
+  assert.equal(primary(stage).importedCourseUserMeta[partial.id].lifecycleStatus, 'waiting');
+  assert.deepEqual(parsed(stage).tracks.find(row => row.owner === sportId), afterReload);
   assert.ok(primary(stage).importedStudyRecords.some(row => row.id === sportId));
   assert.deepEqual(await readRaw(page), { raw: [null, 'synthetic parent primary', 'synthetic parent recovery'], reads: [], writes: [] });
-  log('both entry points and re-import', { oldTrackIdPreserved: true, sourceRecordIdPreserved: true, explicitNullPreserved: true,
+  log('both entry points and re-import', { oldTrackIdPreserved: true, sourceRecordIdPreserved: true, explicitNullPreserved: true, explicitWaitingPreserved: true,
     parentData: await readRaw(page), allProgressWritesChildA: true });
   const backup = await download(page, () => action(frame, '新版の通常バックアップ').click());
   assert.equal(JSON.parse(backup).format, 'hosei-planner:2026:portable:v3');
