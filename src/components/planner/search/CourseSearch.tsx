@@ -59,7 +59,6 @@ export default function CourseSearch({ curriculumProgress, classify, catalog, se
           <p className="text-sm text-gray-600 mt-1">他学部・他学科公開科目 / 2単位</p>
           {targetYear !== null && <p className="text-xs text-gray-500 mt-1">履修可能学年: 判定保留</p>}
           <p className="text-xs text-gray-500 mt-1">追加後に実際の科目名へ変更できます</p>
-          <p className="text-xs text-gray-500 mt-1">追加時の履修予定年度は未設定です。年度は追加後に本人が選択してください。</p>
         </div>
         <button type="button" disabled={disabled} onClick={onAddPublicCourse} aria-label="公開科目を履修計画に追加"
           className="planner-button planner-button--navy shrink-0 rounded-sm bg-[#002255] text-white px-4 py-2 text-sm disabled:bg-gray-200 disabled:text-gray-600">計画に追加</button>

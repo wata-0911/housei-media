@@ -16,7 +16,7 @@ const idValid = value => typeof value === 'string' && UUID.test(value);
 const isoDay = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 
-function validTrack(track) {
+export function validTrack(track) {
   return exactShape(track, 'assessments,id,lessons,totalLessons')
     && idValid(track.id)
     && within(track.totalLessons, 1, 200)

@@ -27,10 +27,19 @@ export function currentPng(
   return png?.key === currentKey ? png : null;
 }
 
+async function readLocalPng(dataUrl: string): Promise<Pick<Response, 'ok' | 'blob'>> {
+  // The renderer already produced these bytes. Avoid a fetch under a strict
+  // connect-src policy, and never dereference a URL supplied as a render result.
+  const prefix = 'data:image/png;base64,';
+  if (!dataUrl.startsWith(prefix)) throw new Error('Invalid PNG data URL');
+  const bytes = Uint8Array.from(atob(dataUrl.slice(prefix.length)), byte => byte.charCodeAt(0));
+  return { ok: true, blob: async () => new Blob([bytes], { type: 'image/png' }) };
+}
+
 export async function preparePngData(
   node: HTMLElement,
   render: PngRenderer,
-  read: PngReader = fetch,
+  read: PngReader = readLocalPng,
   options: Partial<PngOptions> = {}
 ): Promise<{ dataUrl: string; blob: Blob }> {
   const dataUrl = await render(node, {

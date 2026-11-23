@@ -10,6 +10,7 @@ export type Capture = Readonly<{
 export type Lesson = { lesson: number; videoCompleted: boolean; testCompleted: boolean };
 export type Assessment = { id: string; label: string; scheduledDate: string | null; completed: boolean };
 export type Track = { id: string; totalLessons: number; lessons: Lesson[]; assessments: Assessment[] };
+export function validTrack(value: unknown): value is Track;
 export type Ready = { status: 'ready'; capture: Capture; primaryRaw: string; generation: string | null; tracks: Track[] };
 export type Reading = Ready | { status: 'hold'; reason: string };
 export type Receipt = Readonly<{ protectionText: string }>;

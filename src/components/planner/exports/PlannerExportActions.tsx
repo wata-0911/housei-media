@@ -11,7 +11,7 @@ import {
 
 import type { PreparedPng } from '../../../planner/exports/pngExport';
 
-type Props = { presentation: PlannerExportPresentation };
+type Props = { presentation: PlannerExportPresentation; showPlanImage?: boolean };
 
 // Keep Japanese glyphs and Latin numerals in one local serif family when the
 // presentation is rasterized. These are OS-provided fonts, so no web-font
@@ -50,6 +50,7 @@ function ExportImage({ presentation, date }: { presentation: PlannerExportPresen
 
 export default function PlannerExportActions({
   presentation,
+  showPlanImage = true,
 }: Props) {
   const imageRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +70,7 @@ export default function PlannerExportActions({
     now.getDate(),
   ]);
 
-  const readyImage = currentPng(generated, imageKey);
+  const readyImage = showPlanImage ? currentPng(generated, imageKey) : null;
 
   function handleCsv() {
     downloadBlob(
@@ -81,7 +82,7 @@ export default function PlannerExportActions({
   }
 
   async function handlePng() {
-    if (!imageRef.current) return;
+    if (!showPlanImage || !imageRef.current) return;
 
     const keyAtStart = imageKey;
     const fileName = `${baseName}.png`;
@@ -138,14 +139,14 @@ export default function PlannerExportActions({
         CSVで保存
       </button>
 
-      <button
+      {showPlanImage && <button
         type="button"
         onClick={handlePng}
         disabled={isGenerating}
         className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50"
       >
         {isGenerating ? '画像を作成中…' : '画像を生成'}
-      </button>
+      </button>}
 
       {readyImage && (
         <>
@@ -169,7 +170,7 @@ export default function PlannerExportActions({
       )}
 
       <p className="basis-full text-xs text-gray-600 sm:basis-auto">
-        CSV・画像はこの端末上で生成されます。
+        {showPlanImage ? 'CSV・画像' : 'CSV'}はこの端末上で生成されます。
       </p>
 
       {readyImage && (
@@ -190,12 +191,12 @@ export default function PlannerExportActions({
         aria-live="polite"
         className="basis-full text-sm text-[#002255]"
       >
-        {generated && !readyImage
+        {showPlanImage && generated && !readyImage
           ? '履修計画の内容が変更されました。PNGを再生成してください。'
           : message}
       </p>
 
-      <div
+      {showPlanImage && <div
         className="pointer-events-none absolute left-[-10000px] top-0"
         aria-hidden="true"
       >
@@ -205,7 +206,7 @@ export default function PlannerExportActions({
             date={now}
           />
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

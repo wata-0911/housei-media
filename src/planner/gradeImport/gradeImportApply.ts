@@ -1,3 +1,4 @@
+import { isMediaSchooling } from '../progress/mediaSchooling';
 import { parseHoseiGradeImportV1, type HoseiGradeImportCourse } from './gradeImportContract';
 import type { Offering, PlannerItem, PlannerState } from '../plannerCatalog';
 import { plannerItemFromCourseSearch } from '../planning/plannerItemState';
@@ -437,6 +438,14 @@ function sourceAggregateComplete(source: ImportedCourseAchievement): boolean {
     && source.earnedCreditsTotal !== null && source.earnedCreditsTotal >= source.compositionCredits;
 }
 
+function startsInProgress(source: ImportedCourseAchievement, units: readonly ImportPreviewUnit[]) {
+  if (sourceAggregateComplete(source)) return false;
+  const earned = source.earnedCreditsTotal ?? 0;
+  if (earned > 0) return source.compositionCredits !== null && earned < source.compositionCredits
+    && units.some(unit => !unit.courseOnly && !unit.grade && !unit.examGrade);
+  return !units.some(unit => unit.grade || unit.examGrade);
+}
+
 /** Official source duplicates may still fill a missing planner item. Their
  * unchecked preview selection only excludes official-data writes. A completed
  * source cannot manufacture a planned fallback when aggregate attribution is unsafe. */
@@ -485,7 +494,15 @@ export function autoPlannerItemsForImport(units: ImportPreviewUnit[], existing: 
       && !unresolvedSources.has([...sourceIds][0])
       && sourcesByOffering.get(id)?.size === 1
       && units.every(unit => unit.sourceCourse.earnedCreditsTotal !== null && unit.sourceCourse.earnedCreditsTotal > 0);
-    return { ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
+    const newInProgress = sourceIds.size === 1 && units.every(unit => unit.sourceExistingId === null && !unit.sourceDuplicate)
+      && startsInProgress(units[0].sourceCourse, units);
+    return { ...plannerItemFromCourseSearch(id), ...(earned ? { status: 'earned' as const, importedSourceCourseId: [...sourceIds][0] }
+      : newInProgress ? { status: 'in_progress' as const,
+        // Keep auto-import provenance separate from a search-created item.
+        ...(isMediaSchooling(offerings.find(offering => offering.id === id))
+          && offeringsBySource.get(units[0].sourceCourse.id)?.size === 1
+          && sourcesByOffering.get(id)?.size === 1 ? { importedSourceCourseId: units[0].sourceCourse.id } : {}),
+      } : {}), plannedYear: years.size === 1 ? [...years][0] : null,
       plannedTerm: terms.size === 1 ? [...terms][0] : null };
   });
 }
@@ -640,6 +657,17 @@ export function applyImport(state: PlannerState, units: ImportPreviewUnit[], off
   const selectedSources = [...new Map(selected.map(unit => [unit.sourceCourse.fingerprint, unit])).values()];
   const sourceIdFor = new Map(selectedSources.map(unit => [unit.sourceCourse.id, unit.sourceExistingId ?? unit.sourceCourse.id]));
   const sourceAdditions = selectedSources.filter(unit => unit.sourceExistingId === null).map(unit => unit.sourceCourse);
+  const importedCourseUserMeta = { ...state.importedCourseUserMeta };
+  const unitsBySource = new Map<string, ImportPreviewUnit[]>();
+  for (const unit of units) {
+    const id = unit.sourceCourse.id;
+    unitsBySource.set(id, [...(unitsBySource.get(id) ?? []), unit]);
+  }
+  for (const source of sourceAdditions) {
+    if (!Object.hasOwn(importedCourseUserMeta, source.id) && startsInProgress(source, unitsBySource.get(source.id) ?? [])) {
+      importedCourseUserMeta[source.id] = { lifecycleStatus: 'in_progress', plannedYear: null, plannedTerm: null, studyYear: null };
+    }
+  }
   const sourceUpdates = new Map(selectedSources.filter(unit => unit.sourceExistingId !== null).map(unit => [unit.sourceExistingId!, unit.sourceCourse]));
   const additions: ImportedStudyRecord[] = selected.filter(x => !x.duplicate && !x.courseOnly).map(unit => ({
     id: unit.id, fingerprint: unit.fingerprint, source: unit.source, rawName: unit.rawName, offeringId: unit.offeringId, match: unit.match,
@@ -655,7 +683,7 @@ export function applyImport(state: PlannerState, units: ImportPreviewUnit[], off
   // Reconciliation uses the verified incoming native snapshot. Persisted parent
   // years may be manual/inferred and cannot replace the source-year evidence.
   const nextEvidence = [...rows.map(row => sourceUpdates.has(row.id) ? { ...sourceUpdates.get(row.id)!, id: row.id } : row), ...sourceAdditions];
-  return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: reconcileStudyRecords(state.importedStudyRecords, additions, allIncoming, state.importedCourseAchievements, nextEvidence), importedCourseAchievements: [...rows, ...sourceAdditions] };
+  return { ...state, items: [...state.items, ...plannerAdditions], importedStudyRecords: reconcileStudyRecords(state.importedStudyRecords, additions, allIncoming, state.importedCourseAchievements, nextEvidence), importedCourseAchievements: [...rows, ...sourceAdditions], importedCourseUserMeta };
 }
 
 export function importedEarnedCreditsTotal(rows: ImportedCourseAchievement[]): number { return rows.reduce((sum, row) => sum + (row.earnedCreditsTotal && row.earnedCreditsTotal > 0 ? row.earnedCreditsTotal : 0), 0); }

@@ -3,7 +3,7 @@ import type { ImportedCourseAchievement, ImportedStudyRecord } from './gradeImpo
 import { isMediaSchooling } from '../progress/mediaSchooling';
 import { categoryFromImportRaw, type CreditCategory } from '../planning/annualPlan';
 import { resolveSafeImportedCourseId } from './importedAchievementIdentity';
-import type { ImportedCourseUserMeta, Offering, PlannerItem } from '../plannerCatalog';
+import type { ImportedCourseUserMeta, Offering, PlannerItem, PlannerState } from '../plannerCatalog';
 import type { PlannerCatalog } from '../plannerCatalog';
 import { matchedNameOfferings } from './importedAchievementRepair';
 
@@ -73,7 +73,7 @@ function derivedMediaOffering(row: ImportedCourseAchievement, group: ImportedStu
  * Finds a Media offering only from an existing safe course identity or a
  * manual selection. Names alone never activate progress tracking.
  */
-export function managedImportedMedia(rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], userMeta: Record<string, ImportedCourseUserMeta>, offerings: Map<string, Offering>): ManagedImportedMedia {
+export function managedImportedMedia(rows: ImportedCourseAchievement[], records: ImportedStudyRecord[], userMeta: Record<string, ImportedCourseUserMeta>, offerings: Map<string, Offering>, alreadyOwned: ReadonlySet<string> = new Set()): ManagedImportedMedia {
   const grouped = new Map<string, ImportedStudyRecord[]>();
   for (const record of records) if (record.sourceCourseId) grouped.set(record.sourceCourseId, [...(grouped.get(record.sourceCourseId) ?? []), record]);
   const media: ImportedManagedMedia[] = [];
@@ -93,8 +93,9 @@ export function managedImportedMedia(rows: ImportedCourseAchievement[], records:
     const selectionSource = row.selectionSource ?? (row.selectedOfferingId ? 'manual' : 'none');
     const offering = derivedMediaOffering(row, group, offerings);
     if (offering) {
-      if (!hasEarnedCredits) media.push({ sourceCourseId: row.id, rawName: row.rawName, meta, offering });
-      claim(hasEarnedCredits ? positiveClaims : claims, offering, row.id);
+      const editable = !hasEarnedCredits || alreadyOwned.has(row.id);
+      if (editable) media.push({ sourceCourseId: row.id, rawName: row.rawName, meta, offering });
+      claim(editable ? claims : positiveClaims, offering, row.id);
       continue;
     }
     const courseId = resolveSafeImportedCourseId(row, offerings);
@@ -116,6 +117,27 @@ export function managedImportedMedia(rows: ImportedCourseAchievement[], records:
     if (active.length + sources.length > 1) claims.set(id, [...active, ...sources]);
   }
   return { media: media.filter(entry => claims.get(entry.offering.id)?.length === 1), pending, claims };
+}
+
+/** A native media marker proves the delivery method, but never an Offering. */
+export function hasImportedMediaEvidence(record: ImportedStudyRecord, row: ImportedCourseAchievement, offerings: Map<string, Offering>) {
+  if (record.method !== 'schooling' || record.sourceCourseId !== row.id) return false;
+  const nativeMedia = /^(?:メ|(?:前期|後期)?メディア)$/.test(record.rawTerm?.normalize('NFKC').replace(/\s/g, '') ?? '');
+  const linked = row.selectedOfferingId ? offerings.get(row.selectedOfferingId) : undefined;
+  return nativeMedia || (isMediaSchooling(linked) && (record.offeringId === linked?.id
+    || (row.selectionSource === 'manual' && !record.rawTerm)));
+}
+
+export function independentImportedMedia(state: PlannerState, offerings: Map<string, Offering>) {
+  const courses = new Map(state.importedCourseAchievements.map(row => [row.id, row]));
+  return state.importedStudyRecords.flatMap(record => {
+    if (record.method !== 'schooling' || !record.sourceCourseId) return [];
+    const row = courses.get(record.sourceCourseId);
+    if (!row) return [];
+    const meta = state.importedCourseUserMeta[row.id];
+    if (meta?.lifecycleStatus !== 'in_progress') return [];
+    return hasImportedMediaEvidence(record, row, offerings) ? [{ row, record, meta }] : [];
+  });
 }
 
 /** A persisted Offering key alone never identifies an imported attempt. */

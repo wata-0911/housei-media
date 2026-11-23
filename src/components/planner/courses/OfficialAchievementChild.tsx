@@ -21,14 +21,14 @@ export default function OfficialAchievementChild({ official, editor }: { officia
     <ImportedSourceDetails achievements={[achievement]} records={studyRecords} offerings={editor.offerings} />
     <details className="mt-3 text-sm">
       <summary className="cursor-pointer">ユーザー管理情報（公式情報とは別に保存）</summary>
-      <p className="mt-2 text-xs text-gray-600">{hasOfficialResult ? '履修状態: 修得済み（成績表）' : `保存状態: ${meta.lifecycleStatus === 'waiting' ? '結果待ち' : meta.lifecycleStatus === 'in_progress' ? '履修中' : '判定保留'}`} / {meta.plannedYear ?? '年度未設定'} / {meta.studyYear === null ? '学年未設定' : `${meta.studyYear}年`} / {meta.plannedTerm ?? '時期未設定'}</p>
+      <p className="mt-2 text-xs text-gray-600">本人の保存状態: {meta.lifecycleStatus === 'waiting' ? '結果待ち' : meta.lifecycleStatus === 'in_progress' ? '履修中' : '判定保留'} / {meta.plannedYear ?? '年度未設定'} / {meta.studyYear === null ? '学年未設定' : `${meta.studyYear}年`} / {meta.plannedTerm ?? '時期未設定'}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs">計画年度<YearInput value={meta.plannedYear} disabled={editor.disabled} onChange={plannedYear => editor.onChangeImportedMeta(achievement.id, { plannedYear })} /></label>
         <label className="text-xs">履修学年<StudyYearSelect value={meta.studyYear} disabled={editor.disabled} onChange={studyYear => editor.onChangeImportedMeta(achievement.id, { studyYear })} /></label>
         <label className="text-xs">時期<TermSelect id={`official-term-${achievement.id}`} value={meta.plannedTerm} disabled={editor.disabled} onChange={plannedTerm => editor.onChangeImportedMeta(achievement.id, { plannedTerm })} /></label>
-        {!hasOfficialResult && <label className="text-xs">履修状態<select aria-label="履修状態" value={meta.lifecycleStatus ?? ''} disabled={editor.disabled} onChange={event => editor.onChangeImportedMeta(achievement.id, { lifecycleStatus: (event.target.value || null) as ImportedCourseUserMeta['lifecycleStatus'] })} className="w-full rounded-sm border border-gray-300 bg-white p-2 text-sm disabled:opacity-50"><option value="">判定保留</option><option value="in_progress">履修中</option><option value="waiting">結果待ち</option></select></label>}
+        <label className="text-xs">履修状態<select aria-label="履修状態" value={meta.lifecycleStatus ?? ''} disabled={editor.disabled} onChange={event => editor.onChangeImportedMeta(achievement.id, { lifecycleStatus: (event.target.value || null) as ImportedCourseUserMeta['lifecycleStatus'] })} className="w-full rounded-sm border border-gray-300 bg-white p-2 text-sm disabled:opacity-50"><option value="">判定保留</option><option value="in_progress">履修中</option><option value="waiting">結果待ち</option></select></label>
       </div>
-      {hasOfficialResult && <p className="mt-2 text-xs text-gray-600">公式結果を優先表示しています。保存済みのユーザー履修状態は保持します。</p>}
+      {hasOfficialResult && <p className="mt-2 text-xs text-gray-600">本人の履修状態を変更しても、公式結果と修得単位は変わりません。</p>}
     </details>
   </article>;
 }

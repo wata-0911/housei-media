@@ -1,7 +1,9 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { isEmbeddedPlannerParentBuild } from '../planner/candidate2026/embeddedPlanner';
 
 export default function Header() {
+  const showPlanner2026 = import.meta.env.VITE_PLANNER_2026_URL === '/planner';
   // 検索バーの開閉状態と、入力されたキーワードを管理
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -35,15 +37,15 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
 
         {/* ロゴ部分 */}
-        <Link to="/" className="text-xl md:text-2xl font-medium tracking-widest text-white flex items-baseline hover:text-[#E65C00] transition-colors duration-300">
+        <Link reloadDocument={isEmbeddedPlannerParentBuild} to="/" className="text-xl md:text-2xl font-medium tracking-widest text-white flex items-baseline hover:text-[#E65C00] transition-colors duration-300">
           法政通信メディア
         </Link>
 
         {/* ナビゲーションメニュー */}
         <nav className="flex items-center">
-          <ul className="flex space-x-5 md:space-x-8 text-sm tracking-widest font-light text-white/80 items-center">
+          <ul className="flex flex-wrap justify-center gap-x-4 gap-y-3 md:gap-x-8 text-sm tracking-widest font-light text-white/80 items-center">
             <li>
-              <Link to="/" className="hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
+              <Link reloadDocument={isEmbeddedPlannerParentBuild} to="/" className="hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
             </li>
             <li>
               <Link to="/qa" className="hover:text-[#E65C00] transition-colors duration-300">Q&A</Link>
@@ -51,6 +53,10 @@ export default function Header() {
             <li>
               <Link to="/contact" className="hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
             </li>
+
+            {showPlanner2026 && <li>
+              <Link reloadDocument to="/planner" className="hover:text-[#E65C00] transition-colors duration-300">履修計画</Link>
+            </li>}
 
             {/* 区切り線 */}
             <li className="h-4 w-[1px] bg-white/20 hidden md:block"></li>

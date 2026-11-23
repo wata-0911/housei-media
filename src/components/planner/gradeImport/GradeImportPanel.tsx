@@ -1,5 +1,5 @@
 import GradeImportBookmarklet from './GradeImportBookmarklet';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isHoseiGradeImportV1, type HoseiGradeImportV1 } from '../../../planner/gradeImport/gradeImportContract';
 import { autoPlannerItemsForImport, holdIncompleteImportSelections, importPreview, type ImportPreviewUnit, type ImportedCourseAchievement, type ImportedStudyRecord } from '../../../planner/gradeImport/gradeImportApply';
 import { focusImportedCourseList } from '../../../planner/gradeImport/importNavigation';
@@ -32,23 +32,192 @@ export function GradeImportPreviewUnit({ unit, onChange }: { unit: ImportPreview
   </div>;
 }
 
-export default function GradeImportPanel({ offerings, plannedItems, existing, existingCourses = [], disabled, onApply, directImport, onDirectResult }: { offerings: Offering[]; plannedItems: PlannerItem[]; existing: ImportedStudyRecord[]; existingCourses?: ImportedCourseAchievement[]; disabled: boolean; onApply: (units: ImportPreviewUnit[]) => boolean | Promise<boolean>; directImport?: unknown; onDirectResult?: (result: { ok: boolean; courseCount?: number }) => void }) {
+type GradeImportProps = {
+  offerings: Offering[];
+  plannedItems: PlannerItem[];
+  existing: ImportedStudyRecord[];
+  existingCourses?: ImportedCourseAchievement[];
+  disabled: boolean;
+  onApply: (units: ImportPreviewUnit[]) => boolean | Promise<boolean>;
+  directImport?: unknown;
+  onDirectResult?: (result: { ok: boolean; courseCount?: number }) => void;
+  onDraftChange?: (present: boolean) => void;
+  onDiscardDraft?: () => void;
+  allowDraftEditing?: boolean;
+  restoreEpoch?: number;
+};
+
+export default function GradeImportPanel({ offerings, plannedItems, existing, existingCourses = [], disabled,
+  onApply, directImport, onDirectResult, onDraftChange, onDiscardDraft, allowDraftEditing, restoreEpoch }: GradeImportProps) {
   const [applying, setApplying] = useState(false);
-  const [text, setText] = useState(''); const [error, setError] = useState(''); const [units, setUnits] = useState<ImportPreviewUnit[] | null>(null);
-  function read(value: string) { try { const parsed: unknown = JSON.parse(value); if (!isHoseiGradeImportV1(parsed)) throw new Error('JSON が成績表 contract v1 を満たしていません。'); setUnits(importPreview(parsed as HoseiGradeImportV1, offerings, existing, existingCourses)); setError(''); } catch (e) { setError(e instanceof Error ? e.message : 'JSON を読み込めません。'); setUnits(null); } }
-  useEffect(() => { if (directImport === undefined) return; if (!isHoseiGradeImportV1(directImport)) { setError('拡張機能から受信した成績データが contract v1 を満たしていません。反映していません。'); setUnits(null); onDirectResult?.({ ok: false }); return; } setText(''); setUnits(importPreview(directImport, offerings, existing, existingCourses)); setError(''); onDirectResult?.({ ok: true, courseCount: directImport.courses.length }); }, [directImport, offerings, existing, existingCourses, onDirectResult]);
-  function update(index: number, patch: Partial<ImportPreviewUnit>) { setUnits(current => current?.map((unit, i) => i === index ? { ...unit, ...patch, yearSource: patch.academicYear !== undefined ? 'manual' : unit.yearSource } : unit) ?? null); }
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [handoffRejected, setHandoffRejected] = useState(false);
+  const [acceptedHandoff, setAcceptedHandoff] = useState<HoseiGradeImportV1 | null>(null);
+  const [units, setUnits] = useState<ImportPreviewUnit[] | null>(null);
+  const [readingFile, setReadingFile] = useState(false);
+  const [preview, setPreview] = useState<{ inputRevision: number; restoreEpoch?: number } | null>(null);
+  const activeInput = useRef({ revision: 0, reading: false });
+  const draftOperation = useRef(0);
+  const processedDirectImport = useRef<unknown>(undefined);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const draftDisabled = disabled && !allowDraftEditing;
+  const inputRevision = activeInput.current.revision;
+  const previewMatchesInput = preview?.inputRevision === inputRevision;
+  const previewNeedsRecheck = units !== null && previewMatchesInput && preview.restoreEpoch !== restoreEpoch;
+  const canRecheckHandoff = previewNeedsRecheck && acceptedHandoff !== null;
+
+  const markDraft = useCallback((present: boolean) => {
+    ++draftOperation.current;
+    onDraftChange?.(present);
+  }, [onDraftChange]);
+
+  const replaceInput = useCallback((present: boolean, reading = false) => {
+    // Invalidate old handlers before React updates the controls.
+    const revision = activeInput.current.revision + 1;
+    activeInput.current = { revision, reading };
+    setReadingFile(reading);
+    setAcceptedHandoff(null);
+    setHandoffRejected(false);
+    markDraft(present);
+    return revision;
+  }, [markDraft]);
+
+  function read(value: string, revision: number) {
+    if (activeInput.current.reading || activeInput.current.revision !== revision) return;
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (!isHoseiGradeImportV1(parsed)) throw new Error('JSON が成績表 contract v1 を満たしていません。');
+      setUnits(importPreview(parsed as HoseiGradeImportV1, offerings, existing, existingCourses));
+      setPreview({ inputRevision: revision, restoreEpoch });
+      setError('');
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'JSON を読み込めません。');
+      setUnits(null);
+      setPreview(null);
+    }
+  }
+
+  async function selectFile(file: File) {
+    const revision = replaceInput(true, true);
+    setText('');
+    setError('');
+    try {
+      const value = await file.text();
+      if (activeInput.current.revision !== revision) return;
+      activeInput.current = { revision, reading: false };
+      setReadingFile(false);
+      setText(value);
+      read(value, revision);
+    } catch {
+      if (activeInput.current.revision !== revision) return;
+      activeInput.current = { revision, reading: false };
+      setReadingFile(false);
+      setUnits(null);
+      setPreview(null);
+      setError('JSON ファイルを読み込めません。');
+    }
+  }
+
+  useEffect(() => () => {
+    activeInput.current = { revision: activeInput.current.revision + 1, reading: false };
+    ++draftOperation.current;
+    onDraftChange?.(false);
+  }, [onDraftChange]);
+
+  useEffect(() => {
+    if (directImport === undefined) {
+      processedDirectImport.current = undefined;
+      return;
+    }
+    if (onDraftChange && processedDirectImport.current === directImport) return;
+    processedDirectImport.current = directImport;
+    let accepted: { data: HoseiGradeImportV1; units: ImportPreviewUnit[] } | undefined;
+    try {
+      if (isHoseiGradeImportV1(directImport)) {
+        accepted = { data: directImport, units: importPreview(directImport, offerings, existing, existingCourses) };
+      }
+    } catch {
+      // A failed preview does not replace the active draft.
+    }
+    if (!accepted) {
+      setHandoffRejected(true);
+      onDirectResult?.({ ok: false });
+      return;
+    }
+
+    const revision = replaceInput(true);
+    if (fileInput.current) fileInput.current.value = '';
+    setText('');
+    setAcceptedHandoff(accepted.data);
+    setUnits(accepted.units);
+    setPreview({ inputRevision: revision, restoreEpoch });
+    setError('');
+    onDirectResult?.({ ok: true, courseCount: accepted.data.courses.length });
+  }, [directImport, offerings, existing, existingCourses, onDirectResult, onDraftChange, replaceInput, restoreEpoch]);
+
+  function update(index: number, patch: Partial<ImportPreviewUnit>) {
+    if (activeInput.current.reading || preview?.inputRevision !== activeInput.current.revision) return;
+    markDraft(true);
+    setUnits(current => current?.map((unit, i) => i === index ? { ...unit, ...patch, yearSource: patch.academicYear !== undefined ? 'manual' : unit.yearSource } : unit) ?? null);
+  }
+
+  function clearDraft() {
+    replaceInput(false);
+    setText('');
+    setUnits(null);
+    setPreview(null);
+    setError('');
+    if (fileInput.current) fileInput.current.value = '';
+  }
+
+  async function apply() {
+    const input = activeInput.current;
+    if (disabled || applying || input.reading || !units || preview?.inputRevision !== input.revision
+      || preview.restoreEpoch !== restoreEpoch) return;
+    const revision = draftOperation.current;
+    setApplying(true);
+    try {
+      if (await onApply(units)) {
+        if (input.revision === activeInput.current.revision && revision === draftOperation.current) clearDraft();
+        focusImportedCourseList();
+      }
+    } finally { setApplying(false); }
+  }
   return <section id="grade-import-panel" className="border border-[#002255] bg-white p-4 space-y-3" aria-label="成績データを取り込む">
-    <h2 className="text-lg text-[#002255]">成績データを取り込む</h2><p className="text-sm">この画面ではまだ保存しません。法政IDなどcontract外の値は保存されません。</p><p className="text-sm">反映すると照合できた科目を、履修計画に仮登録します。成績表に修得単位があり、すべての履修内訳を確認でき、成績表行と開講が安全に1対1で対応する場合のみ「修得済み」とします。照合できない修得済み科目は公式実績のみ保存し、それ以外の仮登録は「計画中」とします。既存の履修計画は変更しません。反映前に内容をご確認ください。最終評価は自動設定しません。</p>
+    <h2 className="text-lg text-[#002255]">成績データを取り込む</h2><p className="text-sm">この画面ではまだ保存しません。法政IDなどcontract外の値は保存されません。</p><p className="text-sm">反映すると照合できた科目を、履修計画に仮登録します。成績表に修得単位があり、すべての履修内訳を確認でき、成績表行と開講が安全に1対1で対応する場合のみ「修得済み」とします。照合できない修得済み科目は公式実績として保存します。新規で結果が未確定の場合、本人の管理状態は「履修中」で開始します。既存の本人選択と履修計画は維持します。反映前に内容をご確認ください。最終評価は自動設定しません。</p>
     <GradeImportBookmarklet disabled={disabled} />
-    {directImport !== undefined && !error && units && <p role="status" className="border border-blue-200 bg-blue-50 p-2 text-sm">成績データを受信しました。内容を確認してから反映してください。</p>}
-    <label className="block text-sm">JSONファイル <input disabled={disabled} type="file" accept="application/json,.json" className="mt-1 block max-w-full" onChange={e => { const file = e.target.files?.[0]; if (!file) return; file.text().then(value => { setText(value); read(value); }); }} /></label>
-    <label className="block text-sm">またはJSONを貼り付け<textarea disabled={disabled} value={text} onChange={e => setText(e.target.value)} className="mt-1 min-h-24 w-full border p-2 font-mono text-xs" /></label>
-    <button type="button" disabled={disabled || !text.trim()} onClick={() => read(text)} className="planner-button planner-button--navy bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50">読み込み・検証</button>
+    {acceptedHandoff && !error && units && <p role="status" className="border border-blue-200 bg-blue-50 p-2 text-sm">成績データを受信しました。内容を確認してから反映してください。</p>}
+    <label className="block text-sm">JSONファイル <input ref={fileInput} disabled={draftDisabled} type="file" accept="application/json,.json" className="mt-1 block max-w-full" onChange={event => {
+      const file = event.target.files?.[0];
+      if (file) void selectFile(file);
+    }} /></label>
+    <label className="block text-sm">またはJSONを貼り付け<textarea disabled={draftDisabled} value={text} onChange={event => {
+      const next = event.target.value;
+      replaceInput(Boolean(next));
+      if (fileInput.current) fileInput.current.value = '';
+      setText(next);
+      setUnits(null);
+      setPreview(null);
+      setError('');
+    }} className="mt-1 min-h-24 w-full border p-2 font-mono text-xs" /></label>
+    <button type="button" disabled={draftDisabled || readingFile || (!text.trim() && !canRecheckHandoff)} onClick={() => {
+      if (activeInput.current.reading || activeInput.current.revision !== inputRevision) return;
+      markDraft(true);
+      read(text.trim() ? text : JSON.stringify(acceptedHandoff), inputRevision);
+    }} className="planner-button planner-button--navy bg-[#002255] px-3 py-2 text-sm text-white disabled:opacity-50">読み込み・検証</button>
+    {onDiscardDraft && (text || units || error || readingFile || handoffRejected) && <button type="button" disabled={draftDisabled || applying} className="ml-2 underline" onClick={() => {
+      if (!window.confirm('成績取込の未保存の入力とプレビューを破棄しますか？')) return;
+      clearDraft();
+      onDiscardDraft();
+    }}>未保存の成績取込を破棄</button>}
+    {readingFile && <p role="status">成績ファイルを読み込み中です。読み込みが終わるまでプレビューは保存できません。</p>}
+    {previewNeedsRecheck && <p role="alert">復元前のプレビューです。入力と選択は残っています。取り込む前に「読み込み・検証」をやり直してください。</p>}
+    {handoffRejected && <p role="alert" className="border border-red-300 bg-red-50 p-2 text-sm">拡張機能から受信した成績データが contract v1 を満たしていません。反映していません。</p>}
     {error && <p role="alert" className="border border-red-300 bg-red-50 p-2 text-sm">{error}</p>}
-    {units && <fieldset disabled={disabled || applying} className="min-w-0 space-y-3"><p className="text-sm">{units.filter(x => x.match === 'exact_unique' && !x.sourceIdentityConflict && !x.sourceYearConflict).length}件を一意一致、{units.filter(x => x.match !== 'exact_unique' || x.sourceIdentityConflict || x.sourceYearConflict).length}件は要確認、{units.filter(x => x.duplicate).length}件は既に保存済みです。</p>
+    {units && <fieldset disabled={draftDisabled || applying || readingFile || !previewMatchesInput} className="min-w-0 space-y-3"><p className="text-sm">{units.filter(x => x.match === 'exact_unique' && !x.sourceIdentityConflict && !x.sourceYearConflict).length}件を一意一致、{units.filter(x => x.match !== 'exact_unique' || x.sourceIdentityConflict || x.sourceYearConflict).length}件は要確認、{units.filter(x => x.duplicate).length}件は既に保存済みです。</p>
       {units.map((unit, index) => <GradeImportPreviewUnit key={unit.id} unit={unit} onChange={patch => update(index, patch)} />)}
-      <GradeImportApplyActions units={units} plannedItems={plannedItems} offerings={offerings} disabled={disabled || applying} onApply={async () => { setApplying(true); try { if (await onApply(units)) { setUnits(null); setText(''); focusImportedCourseList(); } } finally { setApplying(false); } }} />
+      <GradeImportApplyActions units={units} plannedItems={plannedItems} offerings={offerings} disabled={disabled || applying || readingFile || !previewMatchesInput || previewNeedsRecheck} onApply={apply} />
     </fieldset>}
   </section>;
 }

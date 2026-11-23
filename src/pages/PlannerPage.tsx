@@ -39,6 +39,8 @@ import { GRADE_HANDOFF_REQUEST, gradeHandoffToken, isGradeHandoffResponse } from
 import { guidanceEligibilityCredits, guidanceForScope } from '../planner/graduation/thesisGuidance';
 import { missingGraduationProfilePrerequisites } from '../planner/graduation/graduationProfile';
 import { useReducedMotion, motion } from 'framer-motion';
+import SameOriginBackupPanel from '../components/planner/backup/SameOriginBackupPanel';
+import { observeSameOriginAuthority, sameOriginImportedRows, sameOriginMediaCanEdit, type AuthorityMediaEdit, type AuthorityView, type IndependentProgress, type LegacyProgressReview, type SameOriginAuthority } from '../planner/candidate2026/sameOriginAuthority';
 import PlannerSectionEntrance from '../components/planner/common/PlannerSectionEntrance';
 
 function readSavedState(): LoadResult {
@@ -60,16 +62,32 @@ function downloadOriginal(raw: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function PlannerPage() {
+export default function PlannerPage({ authority }: { authority?: SameOriginAuthority } = {}) {
   const shouldReduceMotion = useReducedMotion();
   const location = useLocation();
-  const [loaded, setLoaded] = useState(readSavedState);
+  const [loaded, setLoaded] = useState<LoadResult>(() => authority?.view() ?? readSavedState());
+  const [authorityProgress, setAuthorityProgress] = useState(() => authority?.view().progress);
+  const [authorityHeld, setAuthorityHeld] = useState(() => authority?.view().heldMediaOfferingIds ?? []);
+  const [independent, setIndependent] = useState(() => authority?.view());
+  const applyAuthorityView = useCallback((next: AuthorityView) => {
+    setLoaded(next); setAuthorityProgress(next.progress); setAuthorityHeld(next.heldMediaOfferingIds);
+    setIndependent(next);
+  }, []);
   const writePending = useRef(false);
   const recoveryOperation = useRef(0);
   const [saving, setSaving] = useState(false);
   const [importEpoch, setImportEpoch] = useState(0);
+  const [restoringBackup, setRestoringBackup] = useState(false);
+  const [gradeDraft, setGradeDraft] = useState({ revision: 0, present: false });
+  const gradeDraftRef = useRef(gradeDraft);
+  const markGradeDraft = useCallback((present: boolean) => {
+    const next = { revision: gradeDraftRef.current.revision + 1, present };
+    gradeDraftRef.current = next;
+    setGradeDraft(next);
+  }, []);
+  const readGradeDraft = useCallback(() => gradeDraftRef.current, []);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [recoveryRetryRequired, setRecoveryRetryRequired] = useState(readRecoveryRetryRequired);
+  const [recoveryRetryRequired, setRecoveryRetryRequired] = useState(() => !authority && readRecoveryRetryRequired());
   const [recoveryRetry, setRecoveryRetry] = useState<{ id: string; url: string; verified: boolean;
     primarySha256: string | null; recoverySha256: string | null; priorRecoverySha256: string | null; generation: string; } | null>(null);
   const [initialProtectionRequired, setInitialProtectionRequired] = useState(false);
@@ -139,6 +157,8 @@ export default function PlannerPage() {
   useEffect(() => () => { if (recoveryRetry?.url) URL.revokeObjectURL(recoveryRetry.url); }, [recoveryRetry?.url]);
   useEffect(() => () => { if (initialProtection?.url) URL.revokeObjectURL(initialProtection.url); }, [initialProtection?.url]);
   const state = loaded.state;
+  const progressForDisplay = authorityProgress ?? state.mediaSchoolingProgress;
+  const displayState = authorityProgress ? { ...state, mediaSchoolingProgress: authorityProgress } : state;
   const classify = createCreditClassifier(catalog, state.selectedScopeId);
   const thesisProgress = thesisProgressForScope(state, catalog, state.selectedScopeId);
   const thesisGuidance = guidanceForScope(state, state.selectedScopeId);
@@ -152,9 +172,34 @@ export default function PlannerPage() {
   const canConfirmSource = (id: string) => state.importedCourseAchievements.filter(row => row.id === id).length === 1
     && canConfirmMedia(sourceById.get(id));
   const curriculumProgress = deriveCurriculumCourseProgress(state.items, catalog, state.importedCourseAchievements, state.selectedScopeId, state.importedStudyRecords, state.correspondenceProgress, state.graduationProfile);
-  const managedMedia = managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById);
-  const mediaAccess = mediaProgressAccess(state.items, offeringsById, managedMedia);
-  const curriculumCourseView = deriveCurriculumCourseView(state, catalog);
+  const linkedSourceIds = independent?.linkedSourceIds ?? [];
+  const { managed: managedMedia, independent: independentRows } = authority
+    ? sameOriginImportedRows(state, offeringsById, linkedSourceIds)
+    : { managed: managedImportedMedia(state.importedCourseAchievements, state.importedStudyRecords, state.importedCourseUserMeta, offeringsById), independent: [] };
+  const independentSourceIds = new Set(independentRows.map(({ row }) => row.id));
+  const carriedImported = new Set(independent?.carriedImportedOfferingIds);
+  const mediaItemsForDisplay = state.items.filter(item =>
+    !carriedImported.has(item.offeringId)
+    && (!item.importedSourceCourseId || !independentSourceIds.has(item.importedSourceCourseId)));
+  const mediaAccess = mediaProgressAccess(mediaItemsForDisplay, offeringsById, managedMedia);
+  if (authority) {
+    const claimed = new Set(independent?.claimedLegacyOfferingIds);
+    for (const offeringId of authorityHeld) {
+      mediaAccess.heldOfferingIds.add(offeringId);
+      mediaAccess.owners.delete(offeringId);
+    }
+    for (const [offeringId, sourceId] of mediaAccess.owners) {
+      if ((Object.hasOwn(state.mediaSchoolingProgress, offeringId) && !claimed.has(offeringId))
+        || !sameOriginMediaCanEdit(state, catalog, offeringId, sourceId, linkedSourceIds)) {
+        mediaAccess.heldOfferingIds.add(offeringId);
+        mediaAccess.owners.delete(offeringId);
+      }
+    }
+    for (const offeringId of Object.keys(progressForDisplay)) {
+      if (!mediaAccess.owners.has(offeringId)) mediaAccess.heldOfferingIds.add(offeringId);
+    }
+  }
+  const curriculumCourseView = deriveCurriculumCourseView(displayState, catalog);
   // A grade-table total does not identify the learner's active Media attempt.
   const partialEarnedMediaSourceIds = new Set(state.importedCourseAchievements
     .filter(row => row.earnedCreditsTotal !== null && row.earnedCreditsTotal > 0 && state.importedCourseUserMeta[row.id]?.lifecycleStatus === 'in_progress')
@@ -170,9 +215,10 @@ export default function PlannerPage() {
     .filter(history => !officialMediaIds.has(history.sourceCourseId))
     .map(history => ({ ...history, canConfirmOffering: canConfirmSource(history.sourceCourseId) }));
   const pendingMedia = [...importedDerived.mediaPending, ...managedMedia.pending, ...(orphanDerived?.mediaPending ?? [])]
+    .filter(row => !independentSourceIds.has(row.sourceCourseId))
     .map(row => ({ ...row, canConfirmOffering: canConfirmSource(row.sourceCourseId) }));
   const personalMediaStartOptions: PersonalMediaStartOption[] = state.importedCourseAchievements
-    .filter(row => partialEarnedMediaSourceIds.has(row.id) && (
+    .filter(row => !independentSourceIds.has(row.id) && partialEarnedMediaSourceIds.has(row.id) && (
       (row.schoolingCreditsTotal !== null && row.schoolingCreditsTotal > 0)
       || officialMediaIds.has(row.id) || legacyMedia.some(history => history.sourceCourseId === row.id)
     ))
@@ -195,11 +241,17 @@ export default function PlannerPage() {
       return { sourceCourseId: row.id, rawName: row.rawName, offering, status: 'new',
         reason: 'この成績行と同じ履修回だとは扱いません。方式・期と本人の計画年度を選び、新しい本人計画を明示的に作成できます。' };
     });
-  const exportPresentation = plannerExportPresentation(state, catalog, mediaAccess.heldOfferingIds);
+  const exportPresentation = plannerExportPresentation(displayState, catalog, mediaAccess.heldOfferingIds);
   const annualLimitRows = annualCreditLimitReferences(state.items, offeringsById, state.importedCourseAchievements);
   const profileNeedsAttention = state.selectedScopeId === null || missingGraduationProfilePrerequisites(state.graduationProfile).length > 0;
 
   useEffect(() => {
+    if (authority) {
+      let active = true;
+      const stopObserving = observeSameOriginAuthority(authority, next => { if (active) applyAuthorityView(next); });
+      void authority.refresh().then(next => { if (active) applyAuthorityView(next); });
+      return () => { active = false; stopObserving(); };
+    }
     const onStorage = (event: StorageEvent) => {
       if (event.key === null || event.key === STORAGE_KEY || event.key === BACKUP_KEY) mediaStorageRevision.current += 1;
       if (event.key === STORAGE_KEY || event.key === null) {
@@ -208,7 +260,7 @@ export default function PlannerPage() {
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  }, [authority, applyAuthorityView]);
 
   useLayoutEffect(() => {
     if (activeTab !== 'profile' || !profileNavigationRequested.current) return;
@@ -225,6 +277,8 @@ export default function PlannerPage() {
   }, []);
 
   useEffect(() => {
+    // The framed workspace takes grade files or pasted JSON directly.
+    if (window.self !== window.top) return;
     const token = gradeHandoffToken(window.location.hash);
     if (!token) return;
     const receive = (event: MessageEvent) => {
@@ -234,25 +288,55 @@ export default function PlannerPage() {
       if (!event.data.ok) { setNotice('拡張機能から成績データを受信できませんでした。JSONを保存またはコピーして取り込めます。'); return; }
       setActiveTab('annual');
       setGradeImportOpen(true);
+      if (authority) markGradeDraft(true);
       setDirectImport(event.data.importData);
     };
     window.addEventListener('message', receive);
     window.postMessage({ type: GRADE_HANDOFF_REQUEST, token }, window.location.origin);
     return () => window.removeEventListener('message', receive);
-  }, []);
+  }, [authority, markGradeDraft]);
 
-  async function commit(next: PlannerState, message: string, beforeWrite?: () => void): Promise<boolean> {
+  async function commit(next: PlannerState, message: string, beforeWrite?: () => void,
+    media?: AuthorityMediaEdit): Promise<boolean> {
     if (loaded.error || writePending.current) return false;
     writePending.current = true; setSaving(true);
     try {
-      setLoaded(await savePlannerState(window.localStorage, next, loaded, catalog, navigator.locks, beforeWrite));
+      if (authority) {
+        const stillCurrent = documentGeneration;
+        applyAuthorityView(await authority.save(loaded.raw, next, () => {
+          if (documentGenerationRef.current !== stillCurrent) return false;
+          beforeWrite?.();
+          return true;
+        }, media));
+        setUndoItem(null);
+        setUndoImport(null);
+      } else {
+        setLoaded(await savePlannerState(window.localStorage, next, loaded, catalog, navigator.locks, beforeWrite));
+      }
       setSaveError(null);
       setNotice(message);
       return true;
     } catch (error) {
+      if (authority) { const next = await authority.refresh(); if (next.error) applyAuthorityView(next); }
       setSaveError(`${error instanceof Error ? error.message : '保存できませんでした。'} 変更は反映していません。保存設定・空き容量を確認し、再操作してください。`);
       return false;
     } finally { writePending.current = false; setSaving(false); }
+  }
+
+  function claimLegacyProgress(review: LegacyProgressReview, reviewedRaw: string, stillConfirmed: () => boolean) {
+    if (!authority || reviewedRaw !== loaded.raw || mediaDocument.current !== documentGeneration || !stillConfirmed()) {
+      return Promise.resolve(false);
+    }
+    return commit(state, '旧進捗を本人の履修回へ引き継ぎました。元の進捗と公式成績を保持しています。', () => {
+      if (!stillConfirmed() || mediaDocument.current !== documentGeneration) throw new Error('引継ぎの確認が変わりました。');
+    }, { legacyReview: review });
+  }
+
+  function changeIndependentProgress(sourceId: string, recordId: string, progress: IndependentProgress, approveV3: boolean) {
+    if (!authority || mediaDocument.current !== documentGeneration) return Promise.resolve(false);
+    return commit(state, '本人のメディア進捗を保存しました。公式成績は変更していません。', () => {
+      if (mediaDocument.current !== documentGeneration) throw new Error('進捗の編集画面が変わりました。');
+    }, { offeringId: null, sourceId, recordId, progress, approveV3 });
   }
 
   function addOffering(id: string) {
@@ -269,7 +353,7 @@ export default function PlannerPage() {
     // The legacy save still performs its own same-lock CAS. This preflight also
     // rejects a changed source before the confirmation enters that lock.
     try {
-      if (window.localStorage.getItem(STORAGE_KEY) !== request.reviewedRaw) {
+      if (!authority && window.localStorage.getItem(STORAGE_KEY) !== request.reviewedRaw) {
         setSaveError('別の画面で保存データが変更されました。再読み込みしてから本人計画を確認してください。');
         return false;
       }
@@ -290,6 +374,11 @@ export default function PlannerPage() {
   function changeMediaProgress(offeringId: string, progress: PlannerState['mediaSchoolingProgress'][string], sourceCourseId: string | null) {
     if (mediaDocument.current !== documentGeneration || progress.offeringId !== offeringId ||
       mediaAccess.owners.get(offeringId) !== sourceCourseId) return false;
+    if (authority) {
+      return commit(state, 'メディアスクーリングの進捗を保存しました。', () => {
+        if (mediaDocument.current !== documentGeneration) throw new Error('進捗の編集画面が変わりました。');
+      }, { offeringId, sourceId: sourceCourseId, progress });
+    }
     const revision = mediaStorageRevision.current;
     return commit({ ...state, mediaSchoolingProgress: { ...state.mediaSchoolingProgress, [offeringId]: progress } }, 'メディアスクーリングの進捗を保存しました。', () => {
       if (mediaDocument.current !== documentGeneration) throw new Error('進捗の編集画面が変わりました。');
@@ -513,7 +602,7 @@ export default function PlannerPage() {
     // A storage event may still be queued. The existing locked CAS also checks
     // the original bytes if another writer wins after this preflight.
     try {
-      if (window.localStorage.getItem(STORAGE_KEY) !== loaded.raw) {
+      if (!authority && window.localStorage.getItem(STORAGE_KEY) !== loaded.raw) {
         setSaveError('別の画面で保存データが変更されました。再読み込みして照合先を確認してください。');
         return;
       }
@@ -553,7 +642,7 @@ export default function PlannerPage() {
         <p className="text-sm">確認が済むまで追加・変更を停止しています。</p>
         <div className="flex flex-wrap gap-3">
           <button type="button" className="underline" onClick={() => window.location.reload()}>再読み込み</button>
-          {loaded.raw !== null && <>
+          {!authority && loaded.raw !== null && <>
             <button type="button" className="underline" onClick={() => downloadOriginal(loaded.raw!)}>元データをダウンロード</button>
             <button type="button" className="underline" disabled={saving || recoveryRetryRequired} onClick={recover}>バックアップして初期化</button>
           </>}
@@ -623,11 +712,17 @@ export default function PlannerPage() {
         <CourseSearch curriculumProgress={curriculumProgress} classify={classify} catalog={catalog} selectedScopeId={state.selectedScopeId} offerings={catalog.offerings} addedIds={new Set(state.items.map(item => item.offeringId))} disabled={loaded.error !== null || saving} onAdd={addOffering} onAddPublicCourse={addPublicCourse} />
         {mediaAccess.heldOfferingIds.size > 0 && <p className="text-sm text-amber-900">履修回を確認できないメディア進捗は、メディアタブで閲覧できます。履修計画の進捗表示と書き出しでは保留しています。</p>}
         <CurriculumCourseList key={importEpoch} heldMediaOfferingIds={mediaAccess.heldOfferingIds} catalog={catalog} classify={classify} view={curriculumCourseView} publicCourses={state.publicCourses} offerings={offeringsById} disabled={loaded.error !== null || saving} onChange={changeItem} onChangeImportedMeta={changeImportedUserMeta} onChangeImportedCourse={changeImportedCourseAchievement} onRemove={removeItem} onChangePublicCourse={changePublicCourse} onRemovePublicCourse={removePublic} onChangeEvaluation={changeEvaluation} onChangeCorrespondence={changeCorrespondenceProgress} onOpenMedia={() => setActiveTab('media')} />
-        <PlannerExportActions presentation={exportPresentation} />
-        <PlannerBackupPanel catalog={catalog} loaded={loaded} disabled={saving} onRestored={next => {
+        <PlannerExportActions presentation={exportPresentation} showPlanImage={!authority} />
+        {authority ? <SameOriginBackupPanel authority={authority} disabled={saving}
+          gradeDraft={gradeDraft} readGradeDraft={readGradeDraft}
+          onBusyChange={busy => { writePending.current = busy; setSaving(busy); setRestoringBackup(busy); }}
+          onRestored={next => {
+            applyAuthorityView(next); setUndoItem(null); setUndoImport(null);
+            setImportEpoch(epoch => epoch + 1); setSaveError(null); setNotice('保護ファイル照合後の復元を保存しました。');
+          }} /> : <PlannerBackupPanel catalog={catalog} loaded={loaded} disabled={saving} onRestored={next => {
           setLoaded(next); setUndoItem(null); setUndoImport(null); setDirectImport(undefined);
           setImportEpoch(epoch => epoch + 1); setSaveError(null); setNotice('バックアップで全データを置き換えました。');
-        }} onBusyChange={busy => { writePending.current = busy; setSaving(busy); }} />
+        }} onBusyChange={busy => { writePending.current = busy; setSaving(busy); }} />}
         <details
           id="grade-import"
           tabIndex={-1}
@@ -638,13 +733,19 @@ export default function PlannerPage() {
           <summary className="cursor-pointer p-4 font-medium text-[#002255]">
             成績データを取り込む
           </summary>
-          <GradeImportPanel key={importEpoch} offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null || saving} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult} />
+          <GradeImportPanel key={authority ? 'same-origin-draft' : importEpoch} offerings={catalog.offerings} plannedItems={state.items} existing={state.importedStudyRecords} existingCourses={state.importedCourseAchievements} disabled={loaded.error !== null || saving} onApply={applyGradeImport} directImport={directImport} onDirectResult={onDirectResult}
+            onDraftChange={authority ? markGradeDraft : undefined}
+            onDiscardDraft={authority ? () => setDirectImport(undefined) : undefined}
+            restoreEpoch={authority ? importEpoch : undefined}
+            allowDraftEditing={Boolean(authority && restoringBackup && !loaded.error)} />
         </details>
         <ImportedAchievements records={state.importedStudyRecords} courseRows={state.importedCourseAchievements} offerings={catalog.offerings} catalog={catalog} notices={graduationProgress.importedWarnings} disabled={loaded.error !== null || saving} onChange={changeImportedAchievement} onChangeCourse={changeImportedCourseAchievement} onDelete={deleteImportedAchievement} />
         {selectablePrograms(catalog).some(program => program.scopeId === state.selectedScopeId) && <><GraduationProgress progress={graduationProgress} context={{ catalog, scopeId: state.selectedScopeId, profile: state.graduationProfile, importedRows: state.importedCourseAchievements }} onOpenProfile={openProfileFromCondition} />{shouldShowThesisGuidance(state, catalog, state.selectedScopeId) && <ThesisGuidance key={importEpoch} disabled={loaded.error !== null || saving} catalog={catalog} scopeId={state.selectedScopeId} profile={state.graduationProfile} progress={thesisGuidance} eligibilityCredits={guidanceEligibilityCredits(state, catalog)} onChange={next => state.selectedScopeId && commit({ ...state, thesisGuidanceByScope: { ...state.thesisGuidanceByScope, [state.selectedScopeId]: next } }, '卒論手続の記録を保存しました。')} />}</>}
       </div>}
       {activeTab === 'media' && <div id="media-panel" role="tabpanel" aria-labelledby="media-tab" tabIndex={-1} className="scroll-mt-40 md:scroll-mt-24">
-        <MediaSchoolingProgress key={importEpoch} items={state.items} offerings={offeringsById} progress={state.mediaSchoolingProgress} officialAchievements={officialMedia} importedAchievements={legacyMedia} importedManaged={managedMedia.media} heldOfferingIds={mediaAccess.heldOfferingIds} importedPending={pendingMedia} partialEarnedSourceIds={partialEarnedMediaSourceIds} personalStartOptions={personalMediaStartOptions} onStartPersonalMedia={startPersonalMediaPlan} routeKey={navigationKey} savedRaw={loaded.raw} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={resolveImportedMedia} />
+        <MediaSchoolingProgress key={importEpoch} items={mediaItemsForDisplay} offerings={offeringsById} progress={progressForDisplay} officialAchievements={officialMedia} importedAchievements={legacyMedia} importedManaged={managedMedia.media} heldOfferingIds={mediaAccess.heldOfferingIds} importedPending={pendingMedia} partialEarnedSourceIds={partialEarnedMediaSourceIds} personalStartOptions={personalMediaStartOptions} onStartPersonalMedia={startPersonalMediaPlan} routeKey={navigationKey} savedRaw={loaded.raw} disabled={loaded.error !== null || saving} onChange={changeMediaProgress} onResolveImportedMedia={resolveImportedMedia}
+          legacyProgressReviews={independent?.legacyProgressReviews} authorityGeneration={independent?.generation} onClaimLegacyProgress={claimLegacyProgress}
+          independentRows={independentRows} heldIndependentRecordIds={independent?.heldIndependentRecordIds} independentProgress={independent?.independentProgress} needsIndependentUpgrade={independent?.needsIndependentUpgrade} onIndependentChange={changeIndependentProgress} />
       </div>}
       {activeTab === 'profile' && <div ref={profilePanelRef} id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" tabIndex={-1} className="scroll-mt-24">
         <PlannerProfileTab

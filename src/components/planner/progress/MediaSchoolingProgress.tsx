@@ -1,9 +1,11 @@
+import type { IndependentProgress, LegacyProgressReview } from '../../../planner/candidate2026/sameOriginAuthority';
+import type { independentImportedMedia } from '../../../planner/gradeImport/importedAchievementCalculations';
 import type { MediaConfirmation } from '../../../planner/gradeImport/mediaConfirmation';
 import type { OfficialMediaAchievement } from '../../../planner/gradeImport/officialMediaAchievements';
 import FuturePlanNotice from '../planning/FuturePlanNotice';
 import CommittedInput from '../common/CommittedInput';
 import { planningTermLabel } from '../../../planner/planning/futurePlanning';
-import { useId, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { addAssessment, assessmentLabel, completeVideosThroughLesson, mediaPlanItems, mediaProgressSummary, mediaShareViewModel, progressFor, removeAssessment, setTotalLessons, toggleLesson, updateAssessment, type ImportedMediaShareItem } from '../../../planner/progress/mediaSchooling';
 import type { MediaAssessment, MediaCourseProgress, Offering, PlannerItem } from '../../../planner/plannerCatalog';
 import MediaProgressShareModal from './MediaProgressShareModal';
@@ -33,6 +35,14 @@ type Props = {
   importedAchievements: (ImportedMediaAchievement & { canConfirmOffering?: boolean })[];
   importedManaged: ImportedManagedMedia[];
   heldOfferingIds?: ReadonlySet<string>;
+  legacyProgressReviews?: readonly LegacyProgressReview[];
+  authorityGeneration?: string;
+  onClaimLegacyProgress?: (review: LegacyProgressReview, raw: string, stillConfirmed: () => boolean) => Promise<boolean>;
+  independentRows?: ReturnType<typeof independentImportedMedia>;
+  heldIndependentRecordIds?: readonly string[];
+  independentProgress?: Record<string, IndependentProgress>;
+  needsIndependentUpgrade?: boolean;
+  onIndependentChange?: (sourceId: string, recordId: string, progress: IndependentProgress, approveV3: boolean) => Promise<boolean>;
   importedPending: (ImportedMediaPending & { canConfirmOffering: boolean })[];
   partialEarnedSourceIds: ReadonlySet<string>;
   personalStartOptions: PersonalMediaStartOption[];
@@ -130,7 +140,12 @@ function PendingMediaRow({ row, savedRaw, disabled, onResolveImportedMedia }:
   </form>;
 }
 
-function CourseCard({ item, offering, saved, disabled, onChange }: { item: PlannerItem; offering: Offering; saved: MediaCourseProgress; disabled: boolean; onChange: (offeringId: string, progress: MediaCourseProgress) => ReturnType<Props['onChange']> }) {
+function CourseCard<T extends IndependentProgress>({ item, offering, source, saved, disabled, onChange }: {
+  item?: PlannerItem; offering?: Offering;
+  source?: { recordId: string; name: string; caption: string };
+  saved: T; disabled: boolean; onChange: (progress: T) => ReturnType<Props['onChange']>;
+}) {
+  const name = source?.name ?? offering?.name ?? '';
   const [lessonsExpanded, setLessonsExpanded] = useState(false);
   const lessonsId = useId();
   const [error, setError] = useState('');
@@ -139,34 +154,37 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
   const summary = mediaProgressSummary(saved);
   const saveTotal = (raw: string) => {
     const value = raw.trim() === '' ? null : Number(raw);
+    if (source && value === null) throw new Error('本人進捗を記録するには全回数が必要です。');
     if (value !== null && (!Number.isInteger(value) || value < 1 || value > 200)) throw new Error('全回数は1〜200の整数で入力してください。');
     const next = setTotalLessons(saved, value);
     if (next === null) throw new Error('完了済みの回があるため、その回より小さくは設定できません。');
-    setError(''); return onChange(item.offeringId, next);
+    setError(''); return onChange(next);
   };
   const chooseTotal = async (totalLessons: number) => {
     const next = setTotalLessons(saved, totalLessons);
     if (next === null) { setError('完了済みの回があるため、その回より小さくは設定できません。'); return; }
-    setError(''); const result = await onChange(item.offeringId, next);
+    setError(''); const result = await onChange(next);
     if (result !== false) setTotalEpoch(epoch => epoch + 1);
   };
   const addNewAssessment = () => {
     const assessment: MediaAssessment = { id: crypto.randomUUID(), type: 'midterm', label: '中間試験', scheduledDate: null, completed: false };
-    onChange(item.offeringId, addAssessment(saved, assessment));
+    onChange(addAssessment(saved, assessment));
   };
   const changeVideo = (lesson: number, checked: boolean) => {
     const next = checked
       ? completeVideosThroughLesson(saved, lesson)
       : toggleLesson(saved, lesson, 'videoCompleted');
-    if (next !== null) onChange(item.offeringId, next);
+    if (next !== null) onChange(next);
   };
-  return <article data-media-offering-id={item.offeringId} tabIndex={-1} className="border border-gray-200 bg-white p-4 sm:p-6 min-w-0">
-    <h3 className="font-medium text-lg break-words text-[#002255]">{offering.name}</h3>
-    <p className="mt-1 text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {planningTermLabel(item, offering)} / {statusLabels[item.status]}</p>
-    <FuturePlanNotice item={item} offering={offering} />
+  return <article data-media-offering-id={item?.offeringId} data-media-source-record={source?.recordId} tabIndex={-1} className="border border-gray-200 bg-white p-4 sm:p-6 min-w-0">
+    <h3 className="font-medium text-lg break-words text-[#002255]">{name}</h3>
+    {item && offering ? <>
+      <p className="mt-1 text-sm text-gray-600">{item.plannedYear === null ? '年度未設定' : `${item.plannedYear}年度`} / {planningTermLabel(item, offering)} / {statusLabels[item.status]}</p>
+      <FuturePlanNotice item={item} offering={offering} />
+    </> : <p className="mt-1 text-sm text-gray-600">{source?.caption}</p>}
     <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <label className="block text-sm">全回数
-        <CommittedInput key={totalEpoch} inputRef={totalInput} aria-label={`${offering.name}の全回数`} inputMode="numeric" value={saved.totalLessons?.toString() ?? ''} disabled={disabled} onCommit={saveTotal} saveLabel="保存" placeholder="未設定" className="mt-1 w-full border border-gray-300 rounded-sm p-2 disabled:opacity-50" />
+        <CommittedInput key={totalEpoch} inputRef={totalInput} aria-label={`${name}の全回数`} inputMode="numeric" value={saved.totalLessons?.toString() ?? ''} disabled={disabled} onCommit={saveTotal} saveLabel="保存" placeholder="未設定" className="mt-1 w-full border border-gray-300 rounded-sm p-2 disabled:opacity-50" />
       </label>
     </div>
     <div className="mt-2 flex flex-wrap gap-2 text-sm"><span className="self-center text-gray-600">よくある回数:</span><button type="button" disabled={disabled} data-replaces-draft="true" onClick={() => chooseTotal(14)} className="planner-button border border-gray-300 px-3 py-1 disabled:opacity-50">14回</button><button type="button" disabled={disabled} data-replaces-draft="true" onClick={() => chooseTotal(15)} className="planner-button border border-gray-300 px-3 py-1 disabled:opacity-50">15回</button><button type="button" disabled={disabled} data-replaces-draft="true" onClick={() => { totalInput.current?.focus(); totalInput.current?.select(); }} className="planner-button border border-gray-300 px-3 py-1 disabled:opacity-50">その他</button><span className="self-center text-xs text-gray-500">その他は上の入力欄に回数を入力</span></div>
@@ -175,7 +193,7 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
     <div className="mt-2 h-2 bg-gray-100" aria-label={`総合進捗 ${summary.percent === null ? '未設定' : `${summary.percent}%`}`}><div className="h-full bg-[#E65C00]" style={{ width: `${summary.percent ?? 0}%` }} /></div>
     <p className="mt-2 text-sm text-gray-600">各回の動画・テスト：{saved.totalLessons === null ? '全回数未設定（完了判定なし）' : summary.video < saved.totalLessons || summary.test < saved.totalLessons ? '未完了あり' : 'すべて完了'}</p>
     {saved.totalLessons === null ? <p className="mt-5 text-sm text-gray-600">全回数を設定すると、各回の動画とテストの進捗を記録できます。</p> : <>
-      <button type="button" aria-expanded={lessonsExpanded} aria-controls={lessonsId} aria-label={`${offering.name}の各回一覧を${lessonsExpanded ? '折りたたむ' : '表示'}`} onClick={() => setLessonsExpanded(expanded => !expanded)} className="planner-button mt-4 border border-[#002255] px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">各回一覧を{lessonsExpanded ? '折りたたむ' : '表示'}</button>
+      <button type="button" aria-expanded={lessonsExpanded} aria-controls={lessonsId} aria-label={`${name}の各回一覧を${lessonsExpanded ? '折りたたむ' : '表示'}`} onClick={() => setLessonsExpanded(expanded => !expanded)} className="planner-button mt-4 border border-[#002255] px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#002255]">各回一覧を{lessonsExpanded ? '折りたたむ' : '表示'}</button>
       <div id={lessonsId} hidden={!lessonsExpanded}>
       <p className="mt-5 text-xs text-gray-600">動画にチェックを入れると、その回まで一括で視聴済みになります。外す場合はその回のみ解除されます。</p>
       <div className="mt-3 space-y-2">
@@ -183,20 +201,20 @@ function CourseCard({ item, offering, saved, disabled, onChange }: { item: Plann
         const entry = saved.lessons.find(current => current.lesson === lesson);
         return <div key={lesson} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-gray-100 pt-2 text-sm"><span>第{lesson}回</span>
           <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.videoCompleted ?? false} disabled={disabled} onChange={event => changeVideo(lesson, event.target.checked)} />動画</label>
-          <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.testCompleted ?? false} disabled={disabled} onChange={() => onChange(item.offeringId, toggleLesson(saved, lesson, 'testCompleted'))} />テスト</label>
+          <label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={entry?.testCompleted ?? false} disabled={disabled} onChange={() => onChange(toggleLesson(saved, lesson, 'testCompleted'))} />テスト</label>
         </div>;
       })}
       </div>
       </div>
     </>}
-    <section className="mt-6 border-t border-gray-200 pt-4" aria-label={`${offering.name}の試験・評価予定`}>
+    <section className="mt-6 border-t border-gray-200 pt-4" aria-label={`${name}の試験・評価予定`}>
       <p className="mb-2 text-xs text-gray-600">名称・全回数・予定日は、入力欄を離れるかEnterキーで確定して保存します。</p>
-      <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="font-medium text-[#002255]">試験・評価予定</h4><p className="mt-1 text-xs text-gray-600">試験の有無・方式・日程は科目ごとに異なります。最新の「法政通信」を確認してください。</p></div><button type="button" disabled={disabled} onClick={addNewAssessment} className="planner-button border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">試験を追加</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="font-medium text-[#002255]">試験・評価予定</h4><p className="mt-1 text-xs text-gray-600">試験の有無・方式・日程は科目ごとに異なります。最新の「法政通信」を確認してください。</p></div><button type="button" disabled={disabled || (!!source && saved.totalLessons === null)} onClick={addNewAssessment} className="planner-button border border-[#002255] px-3 py-2 text-sm disabled:opacity-50">試験を追加</button></div>
       {(saved.assessments ?? []).length > 0 && <div className="mt-3 space-y-3">{(saved.assessments ?? []).map(assessment => <div key={assessment.id} className="grid gap-2 border border-gray-200 bg-slate-50 p-3 sm:grid-cols-[9rem_minmax(0,1fr)_10rem_auto] sm:items-end">
-        <label className="text-xs">種類<select value={assessment.type} disabled={disabled} onChange={event => { const type = event.target.value as MediaAssessment['type']; onChange(item.offeringId, updateAssessment(saved, assessment.id, { type, label: type === 'midterm' ? '中間試験' : type === 'final' ? '期末試験' : assessment.label || 'その他の試験' })); }} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm"><option value="midterm">中間試験</option><option value="final">期末試験</option><option value="other">その他</option></select></label>
-        {assessment.type === 'other' ? <label className="text-xs">名称<CommittedInput aria-label="試験・評価予定の名称" value={assessment.label} maxLength={200} disabled={disabled} normalize={raw => raw.trim() ? raw : 'その他の試験'} onCommit={label => onChange(item.offeringId, updateAssessment(saved, assessment.id, { label }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label> : <p className="pb-2 text-sm">{assessmentLabel(assessment)}</p>}
-        <label className="text-xs">予定日<CommittedInput type="date" value={assessment.scheduledDate ?? ''} disabled={disabled} onCommit={raw => onChange(item.offeringId, updateAssessment(saved, assessment.id, { scheduledDate: raw || null }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label>
-        <div className="flex items-center justify-between gap-3 pb-2"><label className="flex items-center gap-1 whitespace-nowrap text-sm"><input type="checkbox" checked={assessment.completed} disabled={disabled} onChange={() => onChange(item.offeringId, updateAssessment(saved, assessment.id, { completed: !assessment.completed }))} />実施済み</label><button type="button" disabled={disabled} onClick={() => onChange(item.offeringId, removeAssessment(saved, assessment.id))} className="text-sm text-red-700 underline disabled:opacity-50">削除</button></div>
+        <label className="text-xs">種類<select value={assessment.type} disabled={disabled} onChange={event => { const type = event.target.value as MediaAssessment['type']; onChange(updateAssessment(saved, assessment.id, { type, label: type === 'midterm' ? '中間試験' : type === 'final' ? '期末試験' : assessment.label || 'その他の試験' })); }} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm"><option value="midterm">中間試験</option><option value="final">期末試験</option><option value="other">その他</option></select></label>
+        {assessment.type === 'other' ? <label className="text-xs">名称<CommittedInput aria-label="試験・評価予定の名称" value={assessment.label} maxLength={200} disabled={disabled} normalize={raw => raw.trim() ? raw : 'その他の試験'} onCommit={label => onChange(updateAssessment(saved, assessment.id, { label }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label> : <p className="pb-2 text-sm">{assessmentLabel(assessment)}</p>}
+        <label className="text-xs">予定日<CommittedInput type="date" value={assessment.scheduledDate ?? ''} disabled={disabled} onCommit={raw => onChange(updateAssessment(saved, assessment.id, { scheduledDate: raw || null }))} className="mt-1 w-full border border-gray-300 bg-white p-2 text-sm" /></label>
+        <div className="flex items-center justify-between gap-3 pb-2"><label className="flex items-center gap-1 whitespace-nowrap text-sm"><input type="checkbox" checked={assessment.completed} disabled={disabled} onChange={() => onChange(updateAssessment(saved, assessment.id, { completed: !assessment.completed }))} />実施済み</label><button type="button" disabled={disabled} onClick={() => onChange(removeAssessment(saved, assessment.id))} className="text-sm text-red-700 underline disabled:opacity-50">削除</button></div>
       </div>)}</div>}
     </section>
   </article>;
@@ -264,20 +282,83 @@ function PersonalMediaStartRow({ option, savedRaw, routeKey, disabled, onStart }
   </li>;
 }
 
-export default function MediaSchoolingProgress({ items, offerings, progress, officialAchievements = [], importedAchievements, importedManaged, heldOfferingIds = noHeldOfferings, importedPending, partialEarnedSourceIds, personalStartOptions = [], onStartPersonalMedia, routeKey, savedRaw, disabled, onChange, onResolveImportedMedia }: Props) {
+function LegacyProgressClaim({ review, savedRaw, disabled, onClaim }: {
+  review: LegacyProgressReview;
+  savedRaw: string;
+  disabled: boolean;
+  onClaim: NonNullable<Props['onClaimLegacyProgress']>;
+}) {
+  const [confirmed, setConfirmed] = useState(false);
+  const revision = useRef(0);
+  useLayoutEffect(() => () => { ++revision.current; }, [savedRaw]);
+  return <>
+    <p className="text-sm">引継ぎ先：{review.year}年度
+      {review.imported ? '・' + review.imported.term + 'の成績取込の本人詳細回' : 'の本人履修計画'}。旧進捗の原文は保持します。</p>
+    <label className="block text-sm">
+      <input type="checkbox" checked={confirmed} disabled={disabled} onChange={event => {
+        ++revision.current;
+        setConfirmed(event.target.checked);
+      }} />{' '}
+      科目・年度・旧進捗を確認し、この履修回へ引き継ぐ。保存形式は{review.imported ? 'v5' : 'v4以上'}になり、以前の版では編集できなくなります。
+    </label>
+    <div className="flex flex-wrap gap-2">
+      <button type="button" disabled={disabled || !confirmed} className="border p-2 text-sm disabled:opacity-50" onClick={() => {
+        const intent = revision.current;
+        void onClaim(review, savedRaw, () => revision.current === intent);
+      }}>旧進捗の引継ぎを確定</button>
+      {confirmed && <button type="button" className="border p-2 text-sm" onClick={() => {
+        ++revision.current;
+        setConfirmed(false);
+      }}>引継ぎを取り消す</button>}
+    </div>
+  </>;
+}
+
+export default function MediaSchoolingProgress({ items, offerings, progress, officialAchievements = [], importedAchievements, importedManaged, heldOfferingIds = noHeldOfferings, legacyProgressReviews = [], authorityGeneration, onClaimLegacyProgress, independentRows = [], heldIndependentRecordIds = [], independentProgress = {}, needsIndependentUpgrade = false, onIndependentChange, importedPending, partialEarnedSourceIds, personalStartOptions = [], onStartPersonalMedia, routeKey, savedRaw, disabled, onChange, onResolveImportedMedia }: Props) {
+  const legacyReviewById = new Map(legacyProgressReviews.map(review => [review.offeringId, review]));
   const availableItems = items.filter(item => !heldOfferingIds.has(item.offeringId));
   const mediaItems = mediaPlanItems(availableItems, offerings);
   const plannerOfferingIds = new Set(mediaItems.map(item => item.offeringId));
   const uniqueImportedManaged = importedManaged.filter(achievement => !heldOfferingIds.has(achievement.offering.id) && !plannerOfferingIds.has(achievement.offering.id));
   const importedShareItems: ImportedMediaShareItem[] = uniqueImportedManaged.map(achievement => ({ offering: achievement.offering, name: achievement.rawName }));
   const [isSharing, setIsSharing] = useState(false);
-  const shareGroups = mediaShareViewModel(availableItems, offerings, progress, importedShareItems);
-  if (heldOfferingIds.size === 0 && officialAchievements.length === 0 && mediaItems.length === 0 && importedManaged.length === 0 && importedAchievements.length === 0 && importedPending.length === 0 && personalStartOptions.length === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
-  return <section aria-labelledby="media-heading" className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">進捗管理 {mediaItems.length + uniqueImportedManaged.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div>{shareGroups.length > 0 && <button type="button" onClick={() => setIsSharing(true)} className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">全科目を共有</button>}</div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={(id, value) => onChange(id, value, null)} />)}{uniqueImportedManaged.length > 0 && <section className="space-y-3"><div className="border border-blue-200 bg-blue-50 p-4"><h3 className="font-medium text-[#002255]">成績表から取り込んだ履修中のメディア</h3><p className="mt-1 text-xs text-gray-600">成績表の元データは変更せず、ユーザー管理の履修状態に紐づけて進捗を記録します。</p></div>{uniqueImportedManaged.map(achievement => <CourseCard key={`imported:${achievement.sourceCourseId}`} item={{ offeringId: achievement.offering.id, status: achievement.meta.lifecycleStatus!, plannedYear: achievement.meta.plannedYear, plannedTerm: achievement.meta.plannedTerm, studyYear: achievement.meta.studyYear, earnedOrder: null }} offering={{ ...achievement.offering, name: achievement.rawName }} saved={progressFor(achievement.offering.id, progress)} disabled={disabled} onChange={(id, value) => onChange(id, value, achievement.sourceCourseId)} />)}</section>}
+  const [approveV3, setApproveV3] = useState(false);
+  const heldIndependent = new Set(heldIndependentRecordIds);
+  const visibleIndependentRows = independentRows.filter(({ record }) =>
+    !heldIndependent.has(record.id) || Boolean(independentProgress[record.id]));
+  const independentShareItems = visibleIndependentRows.flatMap(({ row, record }) => {
+    const saved = independentProgress[record.id];
+    if (!saved || heldIndependent.has(record.id)) return [];
+    const term = record.rawTerm?.normalize('NFKC').replace(/\s/g, '');
+    const deliveryCategory: '前期メディア' | '後期メディア' | '履修期未設定' =
+      term === '前期メディア' || term === '後期メディア' ? term : '履修期未設定';
+    return [{
+      name: record.rawYear ? `${row.rawName}（原年度 ${record.rawYear}）` : row.rawName,
+      deliveryCategory,
+      progress: saved,
+    }];
+  });
+  const shareGroups = mediaShareViewModel(availableItems, offerings, progress, importedShareItems, independentShareItems);
+  if (heldOfferingIds.size === 0 && officialAchievements.length === 0 && mediaItems.length === 0 && importedManaged.length === 0 && importedAchievements.length === 0 && importedPending.length === 0 && personalStartOptions.length === 0 && visibleIndependentRows.length === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
+  return <section aria-labelledby="media-heading" className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">進捗管理 {mediaItems.length + uniqueImportedManaged.length + visibleIndependentRows.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div>{shareGroups.length > 0 && <button type="button" onClick={() => setIsSharing(true)} className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">全科目を共有</button>}</div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={value => onChange(item.offeringId, value, null)} />)}{uniqueImportedManaged.length > 0 && <section className="space-y-3"><div className="border border-blue-200 bg-blue-50 p-4"><h3 className="font-medium text-[#002255]">成績表から取り込んだ履修中のメディア</h3><p className="mt-1 text-xs text-gray-600">成績表の元データは変更せず、ユーザー管理の履修状態に紐づけて進捗を記録します。</p></div>{uniqueImportedManaged.map(achievement => <CourseCard key={`imported:${achievement.sourceCourseId}`} item={{ offeringId: achievement.offering.id, status: achievement.meta.lifecycleStatus!, plannedYear: achievement.meta.plannedYear, plannedTerm: achievement.meta.plannedTerm, studyYear: achievement.meta.studyYear, earnedOrder: null }} offering={{ ...achievement.offering, name: achievement.rawName }} saved={progressFor(achievement.offering.id, progress)} disabled={disabled} onChange={value => onChange(achievement.offering.id, value, achievement.sourceCourseId)} />)}</section>}
+    {visibleIndependentRows.length > 0 && onIndependentChange && <section className="space-y-3" aria-label="成績表の行ごとの本人メディア進捗">
+      <h3 className="text-[#002255] font-medium">成績表の行ごとの本人メディア進捗</h3>
+      <p className="text-sm">本人の進捗は成績表と別に保存します。開講照合や単位算入は変わりません。</p>
+      {needsIndependentUpgrade && <label className="block rounded border border-amber-300 p-3 text-sm">
+        <input type="checkbox" checked={approveV3} disabled={disabled} onChange={event => setApproveV3(event.target.checked)} />{' '}
+        バックアップを確認し、保存形式をv3に更新する。以前の版からは編集できなくなります。
+      </label>}
+      {visibleIndependentRows.map(({ row, record }) => <CourseCard key={record.id}
+        source={{ recordId: record.id, name: row.rawName, caption: `${record.rawYear ?? '原年度未設定'} / ${record.rawTerm ?? '原期未設定'} / ${heldIndependent.has(record.id) ? '旧進捗との対応確認待ち' : '履修中'}` }}
+        saved={independentProgress[record.id] ?? { totalLessons: null, lessons: [], assessments: [] }}
+        disabled={disabled || heldIndependent.has(record.id) || (needsIndependentUpgrade && !approveV3)}
+        onChange={progress => onIndependentChange(row.id, record.id, progress, approveV3)} />)}
+    </section>}
     {heldOfferingIds.size > 0 && <section aria-label="編集を保留したメディア進捗" className="space-y-2 border border-amber-300 bg-amber-50 p-4">
       <h3 className="font-medium text-[#002255]">編集を保留したメディア進捗</h3>
-      <p className="text-sm">複数の履修記録が同じ開講を指し、進捗をどの履修回に紐づけるか確認できません。公式履歴と保存済み進捗は保持しています。</p>
+      <p className="text-sm">確認が必要な進捗です。公式履歴と保存済み進捗は保持しています。</p>
       {[...heldOfferingIds].sort().map(id => {
+        const review = legacyReviewById.get(id);
         const saved = progress[id];
         const summary = saved && mediaProgressSummary(saved);
         return <article key={id} data-media-held-offering-id={id} className="break-words border bg-white p-3">
@@ -286,6 +367,9 @@ export default function MediaSchoolingProgress({ items, offerings, progress, off
             <p>保存済み（履修回未確定） 動画 {summary.video}/{saved.totalLessons ?? '—'} ／ テスト {summary.test}/{saved.totalLessons ?? '—'}</p>
             {saved.assessments?.map(assessment => <p key={assessment.id}>{assessmentLabel(assessment)} {assessment.scheduledDate ?? '予定日未設定'} ／ {assessment.completed ? '完了' : '未完了'}</p>)}
           </div> : <p className="text-sm">保存済み進捗なし</p>}
+          {review && savedRaw !== null && onClaimLegacyProgress
+            ? <LegacyProgressClaim key={authorityGeneration} review={review} savedRaw={savedRaw} disabled={disabled} onClaim={onClaimLegacyProgress} />
+            : <p className="text-sm">履修回が未確定、または複数の記録が競合しています。確認できるまで編集を保留します。</p>}
         </article>;
       })}
     </section>}{importedPending.length > 0 && <section className="border border-amber-200 bg-amber-50 p-4"><h3 className="font-medium text-[#002255]">判定できない取込スクーリング実績</h3><p className="mt-1 text-xs text-gray-600">方式または進捗管理用の照合先が未確定です。メディアの進捗を記録する場合は、照合先を確認して選んでください。成績表由来の方式表示とは別の操作です。</p>{importedPending.map(row => <PendingMediaRow key={JSON.stringify([row.sourceCourseId, ...row.candidates.map(candidate => candidate.id)])}
