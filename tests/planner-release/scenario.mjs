@@ -701,8 +701,11 @@ async function runCandidate() {
   assert.equal(await page.getByRole('complementary', { name: '広告', exact: true }).count(), 0);
   assert.equal(await frame.getByRole('tab').count(), 3);
   assert.equal(await page.evaluate(() => document.querySelector('iframe').contentDocument), null);
-  assert.equal(await frame.getByRole('button', { name: '画像を生成', exact: true }).count(), 0);
-  assert.equal(await frame.getByRole('button', { name: /生成されたPNG|ファイルをダウンロード/ }).count(), 0);
+  const exportActions = frame.getByRole('region', { name: '履修計画の保存', exact: true });
+  assert.equal(await exportActions.getByRole('button', { name: 'CSVで保存', exact: true }).count(), 1);
+  assert.equal(await exportActions.getByRole('button', { name: /画像を生成|共有・保存/ }).count(), 0);
+  assert.equal(await exportActions.getByText('生成されたPNGの確認', { exact: true }).count(), 0);
+  assert.equal(await exportActions.locator('img, a[download], a[href^="data:image/"]').count(), 0);
   assert.equal(await frame.getByRole('button', { name: 'CSVで保存', exact: true }).count(), 1);
   await frame.locator('.edge-scroll').waitFor();
   await shot('annual');

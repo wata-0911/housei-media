@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { motion } from 'framer-motion';
+import { useReducedMotion, motion } from 'framer-motion';
 
 type ContactApiResponse = {
   status: 'success' | 'error'
@@ -18,6 +18,7 @@ function isContactApiResponse(value: unknown): value is ContactApiResponse {
 }
 
 export default function Contact() {
+  const shouldReduceMotion = useReducedMotion();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sendEmail = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -83,16 +84,16 @@ export default function Contact() {
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         <div className="container mx-auto px-4 text-center relative z-10">
           <motion.span
-            initial={{ opacity: 0, y: 10 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="block text-[#E65C00] text-sm tracking-[0.2em] font-medium mb-4"
           >
             CONTACT
           </motion.span>
           <motion.h2
-            initial={{ opacity: 0, y: 20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.1 }}
             className="text-3xl md:text-5xl font-light tracking-wider"
           >
             お問い合わせ
@@ -103,9 +104,9 @@ export default function Contact() {
       <section className="py-20 md:py-32">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { duration: 0.8, ease: "easeOut" }}
             className="bg-white p-8 md:p-16 relative z-20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)] border-t-4 border-[#002255]"
           >
 
@@ -162,7 +163,7 @@ export default function Contact() {
 
               <div className="pt-6 text-center">
                 <motion.button
-                  whileTap={{ scale: 0.95 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
                   type="submit"
                   disabled={isSubmitting}
                   className="inline-flex justify-center items-center text-white bg-[#E65C00] hover:bg-[#CC5200] text-sm tracking-widest px-12 py-4 rounded-md shadow-md hover:shadow-lg transition-all duration-300 font-medium disabled:opacity-50"

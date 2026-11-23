@@ -1,6 +1,6 @@
-import { type ChangeEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { useRef, useState, type ChangeEvent, type CompositionEvent } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useReducedMotion, motion } from 'framer-motion';
 import { qaData, type QAItem } from '../data/qaData';
 
 const groupByCategory = (
@@ -28,19 +28,71 @@ const getCategoryId = (category: string) =>
   `category-${category.trim().replace(/\s+/g, '-')}`
 
 export default function QA() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const searchQuery = searchParams.get('q') ?? ''
+  const shouldReduceMotion = useReducedMotion();
+  const location = useLocation()
+  const navigate = useNavigate()
+  const searchQuery = new URLSearchParams(location.search).get('q') ?? ''
+  const [draft, setDraft] = useState<{ value: string; locationKey: string | null } | null>(null)
+  const compositionQuery = useRef<string | null>(null)
+  const pendingQuery = useRef<{ value: string; locationKey: string } | null>(null)
+  const discardedComposition = useRef<string | null>(null)
+  const inputValue = draft && (draft.locationKey === null || draft.locationKey === location.key)
+    ? draft.value
+    : searchQuery
 
-  const handleSearchChange = (
-    e: ChangeEvent<HTMLInputElement>
-  ) => {
-    const value = e.target.value
+  const commitSearch = (value: string) => {
+    setDraft({ value, locationKey: location.key })
 
-    if (value) {
-      setSearchParams({ q: value }, { replace: true })
-    } else {
-      setSearchParams({}, { replace: true })
+    // The final composition and input events can arrive before the router renders.
+    const pending = pendingQuery.current
+    const currentQuery = pending?.locationKey === location.key ? pending.value : searchQuery
+    if (value === currentQuery) return
+
+    const params = new URLSearchParams(location.search)
+    if (value) params.set('q', value)
+    else params.delete('q')
+    pendingQuery.current = { value, locationKey: location.key }
+    const search = params.toString()
+    navigate(
+      { pathname: location.pathname, search: search ? `?${search}` : '', hash: location.hash },
+      { replace: true, state: location.state },
+    )
+  }
+
+  const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.currentTarget.value
+    const input = event.nativeEvent as InputEvent
+    const discarded = discardedComposition.current
+    discardedComposition.current = null
+    // Some composition inputs have no inputType after a history change.
+    if (value === discarded &&
+      (!input.inputType || input.inputType === 'insertCompositionText' || input.inputType === 'insertFromComposition')) return
+
+    if (compositionQuery.current !== null || input.isComposing) {
+      compositionQuery.current ??= searchQuery
+      setDraft({ value, locationKey: null })
+      return
     }
+    commitSearch(value)
+  }
+
+  const handleCompositionStart = (event: CompositionEvent<HTMLInputElement>) => {
+    compositionQuery.current = searchQuery
+    discardedComposition.current = null
+    setDraft({ value: event.currentTarget.value, locationKey: null })
+  }
+
+  const handleCompositionEnd = (event: CompositionEvent<HTMLInputElement>) => {
+    const originalQuery = compositionQuery.current
+    compositionQuery.current = null
+    const value = event.currentTarget.value
+    if (originalQuery !== null && originalQuery !== searchQuery) {
+      // A history change to q takes precedence over this unfinished edit.
+      discardedComposition.current = value
+      setDraft(null)
+      return
+    }
+    commitSearch(value)
   }
 
   const filteredData = qaData.filter((item) => {
@@ -66,24 +118,24 @@ export default function QA() {
 
         <div className="container mx-auto px-4 text-center relative z-10">
           <motion.span
-            initial={{ opacity: 0, y: 10 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="block text-[#E65C00] text-sm tracking-[0.2em] font-medium mb-4"
           >
             FAQ
           </motion.span>
           <motion.h2
-            initial={{ opacity: 0, y: 20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.1 }}
             className="text-3xl md:text-5xl font-light tracking-wider drop-shadow-lg"
           >
             よくある質問
           </motion.h2>
           <motion.p
-            initial={{ opacity: 0 }}
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
+            transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.3 }}
             className="text-white/90 mt-6 text-sm md:text-base tracking-widest font-light drop-shadow-md"
           >
             学生生活の疑問を解消しましょう。
@@ -95,7 +147,7 @@ export default function QA() {
         <div className="max-w-4xl mx-auto">
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-16 relative"
           >
@@ -110,16 +162,18 @@ export default function QA() {
               type="text"
               placeholder="キーワードで検索 (例: スクーリング、試験、単位...)"
               className="w-full pl-14 pr-6 py-4 bg-white border border-gray-200 shadow-sm focus:ring-2 focus:ring-[#002255] focus:border-[#002255] outline-none transition-all duration-300 font-light tracking-wide text-[#1A1A1A] placeholder-gray-400"
-              value={searchQuery}
+              value={inputValue}
               onChange={handleSearchChange}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
             />
           </motion.div>
 
           {categories.length > 0 && (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={shouldReduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
+              transition={shouldReduceMotion ? { duration: 0, delay: 0 } : { delay: 0.2 }}
               className="mb-16"
             >
               <div className="flex flex-wrap justify-center gap-4">
@@ -153,7 +207,7 @@ export default function QA() {
                 key={category}
                 id={getCategoryId(category)}
                 className="scroll-mt-32"
-                initial={{ opacity: 0, y: 20 }}
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-50px' }}
               >
