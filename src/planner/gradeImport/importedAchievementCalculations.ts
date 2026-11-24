@@ -140,6 +140,31 @@ export function independentImportedMedia(state: PlannerState, offerings: Map<str
   });
 }
 
+/** A source-level offering change cannot identify one of several imported details. */
+export function unresolvedMediaReviewDetails(
+  records: ImportedStudyRecord[], rows: ImportedCourseAchievement[],
+  offerings: Map<string, Offering>, reviewSourceIds: ReadonlySet<string>,
+) {
+  const sourceRows = new Map(rows.filter(row => reviewSourceIds.has(row.id)).map(row => [row.id, row]));
+  const detailCounts = new Map<string, number>();
+  for (const record of records) {
+    const id = record.sourceCourseId;
+    if (id && sourceRows.has(id)) detailCounts.set(id, (detailCounts.get(id) ?? 0) + 1);
+  }
+
+  return records.filter(record => {
+    const id = record.sourceCourseId;
+    if (!id || record.method !== 'schooling' || (detailCounts.get(id) ?? 0) < 2) return false;
+    const source = sourceRows.get(id);
+    if (!source || hasImportedMediaEvidence(record, source, offerings)) return false;
+    const offering = record.offeringId ? offerings.get(record.offeringId) : undefined;
+    // A known non-media detail does not need a media review.
+    return !(record.match === 'exact_unique' && offering?.method === 'schooling'
+      && offering.resolutionStatus === 'matched' && offering.academicYear === record.academicYear
+      && offering.deliveryCategory && !isMediaSchooling(offering));
+  });
+}
+
 /** A persisted Offering key alone never identifies an imported attempt. */
 export function mediaProgressAccess(items: PlannerItem[], offerings: Map<string, Offering>, managed: ManagedImportedMedia) {
   const heldOfferingIds = new Set<string>();

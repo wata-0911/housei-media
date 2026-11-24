@@ -10,6 +10,7 @@ import { addAssessment, assessmentLabel, completeVideosThroughLesson, mediaPlanI
 import type { MediaAssessment, MediaCourseProgress, Offering, PlannerItem } from '../../../planner/plannerCatalog';
 import MediaProgressShareModal from './MediaProgressShareModal';
 import type { ImportedManagedMedia, ImportedMediaAchievement, ImportedMediaPending } from '../../../planner/gradeImport/importedAchievementCalculations';
+import type { ImportedStudyRecord } from '../../../planner/gradeImport/gradeImportApply';
 
 export type PersonalMediaStartOption = {
   sourceCourseId: string;
@@ -45,6 +46,7 @@ type Props = {
   onExportUpgradeBackup?: () => Promise<void>;
   onIndependentChange?: (sourceId: string, recordId: string, progress: IndependentProgress, approveV3: boolean) => Promise<boolean>;
   importedPending: (ImportedMediaPending & { canConfirmOffering: boolean })[];
+  unresolvedMediaDetails: ImportedStudyRecord[];
   partialEarnedSourceIds: ReadonlySet<string>;
   personalStartOptions: PersonalMediaStartOption[];
   onStartPersonalMedia: (request: PersonalMediaStartRequest) => Promise<boolean>;
@@ -315,7 +317,7 @@ function LegacyProgressClaim({ review, savedRaw, disabled, onClaim }: {
   </>;
 }
 
-export default function MediaSchoolingProgress({ items, offerings, progress, officialAchievements = [], importedAchievements, importedManaged, heldOfferingIds = noHeldOfferings, legacyProgressReviews = [], authorityGeneration, onClaimLegacyProgress, independentRows = [], heldIndependentRecordIds = [], independentProgress = {}, needsIndependentUpgrade = false, onExportUpgradeBackup, onIndependentChange, importedPending, partialEarnedSourceIds, personalStartOptions = [], onStartPersonalMedia, routeKey, savedRaw, disabled, onChange, onResolveImportedMedia }: Props) {
+export default function MediaSchoolingProgress({ items, offerings, progress, officialAchievements = [], importedAchievements, importedManaged, heldOfferingIds = noHeldOfferings, legacyProgressReviews = [], authorityGeneration, onClaimLegacyProgress, independentRows = [], heldIndependentRecordIds = [], independentProgress = {}, needsIndependentUpgrade = false, onExportUpgradeBackup, onIndependentChange, importedPending, unresolvedMediaDetails, partialEarnedSourceIds, personalStartOptions = [], onStartPersonalMedia, routeKey, savedRaw, disabled, onChange, onResolveImportedMedia }: Props) {
   const legacyReviewById = new Map(legacyProgressReviews.map(review => [review.offeringId, review]));
   const availableItems = items.filter(item => !heldOfferingIds.has(item.offeringId));
   const mediaItems = mediaPlanItems(availableItems, offerings);
@@ -341,7 +343,7 @@ export default function MediaSchoolingProgress({ items, offerings, progress, off
     }];
   });
   const shareGroups = mediaShareViewModel(availableItems, offerings, progress, importedShareItems, independentShareItems);
-  if (heldOfferingIds.size === 0 && officialAchievements.length === 0 && mediaItems.length === 0 && importedManaged.length === 0 && importedAchievements.length === 0 && importedPending.length === 0 && personalStartOptions.length === 0 && visibleIndependentRows.length === 0 && heldIndependent.size === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
+  if (heldOfferingIds.size === 0 && officialAchievements.length === 0 && mediaItems.length === 0 && importedManaged.length === 0 && importedAchievements.length === 0 && importedPending.length === 0 && unresolvedMediaDetails.length === 0 && personalStartOptions.length === 0 && visibleIndependentRows.length === 0 && heldIndependent.size === 0) return <section aria-labelledby="media-heading" className="bg-white border border-gray-200 p-5 sm:p-7"><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング</h2><p className="mt-4 text-sm text-gray-600">年間履修計画にメディアスクーリング科目を追加すると、ここで進捗を管理できます。</p></section>;
   return <section aria-labelledby="media-heading" className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 id="media-heading" className="text-xl text-[#002255]">メディアスクーリング <span className="text-sm">進捗管理 {mediaItems.length + uniqueImportedManaged.length + visibleIndependentRows.length}件</span></h2><p className="mt-2 text-sm text-gray-600">動画と視聴後テストの進捗を記録します。成績・単位取得の状態は変更しません。</p></div>{shareGroups.length > 0 && <button type="button" onClick={() => setIsSharing(true)} className="planner-button planner-button--navy border border-[#002255] bg-[#002255] px-3 py-2 text-sm text-white">全科目を共有</button>}</div>{mediaItems.map(item => <CourseCard key={item.offeringId} item={item} offering={offerings.get(item.offeringId)!} saved={progressFor(item.offeringId, progress)} disabled={disabled} onChange={value => onChange(item.offeringId, value, null)} />)}{uniqueImportedManaged.length > 0 && <section className="space-y-3"><div className="border border-blue-200 bg-blue-50 p-4"><h3 className="font-medium text-[#002255]">成績表から取り込んだ履修中のメディア</h3><p className="mt-1 text-xs text-gray-600">成績表の元データは変更せず、ユーザー管理の履修状態に紐づけて進捗を記録します。</p></div>{uniqueImportedManaged.map(achievement => <CourseCard key={`imported:${achievement.sourceCourseId}`} item={{ offeringId: achievement.offering.id, status: achievement.meta.lifecycleStatus!, plannedYear: achievement.meta.plannedYear, plannedTerm: achievement.meta.plannedTerm, studyYear: achievement.meta.studyYear, earnedOrder: null }} offering={{ ...achievement.offering, name: achievement.rawName }} saved={progressFor(achievement.offering.id, progress)} disabled={disabled} onChange={value => onChange(achievement.offering.id, value, achievement.sourceCourseId)} />)}</section>}
     {visibleIndependentRows.length > 0 && onIndependentChange && <section className="space-y-3" aria-label="成績表の行ごとの本人メディア進捗">
       <h3 className="text-[#002255] font-medium">成績表の行ごとの本人メディア進捗</h3>
@@ -381,9 +383,19 @@ export default function MediaSchoolingProgress({ items, offerings, progress, off
             : <p className="text-sm">履修回が未確定、または複数の記録が競合しています。確認できるまで編集を保留します。</p>}
         </article>;
       })}
-    </section>}{importedPending.length > 0 && <details className="border border-gray-200 bg-white p-4">
+    </section>}{(importedPending.length > 0 || unresolvedMediaDetails.length > 0) && <details className="border border-gray-200 bg-white p-4">
       <summary className="cursor-pointer font-medium text-[#002255]">スクーリング方式・期の確認（必要な場合のみ）</summary>
-      <p className="mt-2 text-sm text-gray-600">方式や履修期がはっきりしない記録です。元の履修回を確認できる場合にだけ照合先を選んでください。</p>
+      {unresolvedMediaDetails.length > 0 && <>
+        <p className="mt-2 text-sm text-gray-600">同じ成績行に複数の履修内訳があります。方式が未確定の履修回を表示しています。</p>
+        <ul className="mt-2 space-y-2 text-sm">
+          {unresolvedMediaDetails.map(record => <li key={record.id} data-media-review-detail-id={record.id}
+            data-media-review-source-id={record.sourceCourseId} className="break-words border border-gray-200 p-3">
+            <p className="font-medium">{record.rawName}</p>
+            <p>原年度：{record.rawYear ?? '未記載'} / 原期：{record.rawTerm ?? '未記載'} / 方式未確定（参照のみ）</p>
+          </li>)}
+        </ul>
+      </>}
+      {importedPending.length > 0 && <p className="mt-2 text-sm text-gray-600">方式や履修期がはっきりしない記録です。元の履修回を確認できる場合にだけ照合先を選んでください。</p>}
       {importedPending.map(row => <PendingMediaRow key={JSON.stringify([row.sourceCourseId, ...row.candidates.map(candidate => candidate.id)])}
         row={row} savedRaw={savedRaw} disabled={disabled} onResolveImportedMedia={onResolveImportedMedia} />)}
     </details>}{officialAchievements.length > 0 && <OfficialMediaHistory achievements={officialAchievements} partialEarnedSourceIds={partialEarnedSourceIds} />}{importedAchievements.length > 0 && <CompatibilityMediaHistory importedAchievements={importedAchievements} partialEarnedSourceIds={partialEarnedSourceIds} savedRaw={savedRaw} disabled={disabled} onResolveImportedMedia={onResolveImportedMedia} />}{personalStartOptions.length > 0 && <section aria-label="成績表から本人メディア計画を始める" className="border border-amber-200 bg-amber-50 p-4"><h3 className="font-medium text-[#002255]">成績表から本人メディア計画を始める</h3><p className="mt-1 text-xs">この操作は公式成績と同じ履修回を結び付けません。本人の記録を別に作ります。</p><ul className="mt-3 space-y-3">{personalStartOptions.map(option => <PersonalMediaStartRow key={option.sourceCourseId} option={option} savedRaw={savedRaw} routeKey={routeKey} disabled={disabled} onStart={onStartPersonalMedia} />)}</ul></section>}{isSharing && <MediaProgressShareModal groups={shareGroups} onClose={() => setIsSharing(false)} />}</section>;
