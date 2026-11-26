@@ -1,0 +1,19 @@
+.page-edge-navigation { position: fixed; z-index: 40; pointer-events: none; font-family: "Noto Serif JP", serif; box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.page-edge-navigation * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.page-edge-navigation button { pointer-events: auto; min-height: 44px; border: 1px solid #cbd5e1; background: white; color: #002255; border-radius: 20px; padding: 6px; font-size: 12px; box-shadow: 0 3px 12px #00225526; }
+.page-edge-navigation .is-selected { background: #002255; color: white; }
+.page-edge-navigation button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.page-edge-navigation .edge-scroll { position: relative; z-index: 2; width: 100%; background: #002255; color: white; touch-action: none; cursor: grab; }
+.page-edge-navigation .edge-scroll:active { cursor: grabbing; }
+.edge-safe-area { position: absolute; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.edge-bridge { position: absolute; pointer-events: auto; }
+.edge-shortcuts { position: absolute; z-index: 1; pointer-events: none; }
+.edge-destination { position: absolute; width: 132px; }
+.edge-destination-0 { top: 0; left: 86px; }
+.edge-destination-1 { top: 90px; left: 218px; width: 86px; }
+.edge-destination-2 { top: 180px; left: 78px; width: 148px; }
+.edge-destination-3 { top: 90px; left: 0; width: 86px; }
+.page-edge-navigation .edge-destination-1, .page-edge-navigation .edge-destination-3 { font-size: 11px; padding: 3px; white-space: nowrap; }
+.edge-shortcuts.is-compact:not([hidden]) { display: flex; flex-direction: column; min-height: 44px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; pointer-events: auto; background: white; border: 1px solid #cbd5e1; border-radius: 12px; }
+.page-edge-navigation .is-compact .edge-destination { position: static; width: 100%; flex: 0 0 44px; min-height: 44px; font-size: 12px; padding: 6px; white-space: normal; border-radius: 8px; box-shadow: none; }
+@media (hover: hover) and (pointer: fine) { .page-edge-navigation button:hover { background: #002255; color: white; } }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -10,6 +10,8 @@ import {
 // 共通部品の読み込み
 import Header from './components/Header';
 import Footer from './components/Footer';
+import PageEdgeNavigation from './components/PageEdgeNavigation';
+import ViewportBottomAd, { hasViewportBottomAd } from './components/ViewportBottomAd';
 
 // 各ページの読み込み
 import Home from './pages/Home';
@@ -19,6 +21,24 @@ import Message from './pages/Message'; // 重複を削除し、1つにまとめ�
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProfileCard from './pages/member';
 import NotFound from './pages/NotFound'
+import { embeddedPlannerSource, isEmbeddedPlannerParentBuild } from './planner/candidate2026/embeddedPlanner';
+
+function EmbeddedPlanner() {
+  const { hash } = useLocation();
+  const src = embeddedPlannerSource(hash);
+  if (!src) return <p role="status" className="p-4">この環境では履修プランナーを利用できません。</p>;
+
+  // Allow the admitted Planner frame to focus its own hash destination on entry.
+  const childOrigin = new URL(src).origin;
+  return <iframe
+    title="2026年度版 履修プランナー"
+    src={src}
+    sandbox="allow-scripts allow-same-origin allow-downloads allow-forms allow-popups allow-top-navigation-by-user-activation"
+    allow={`clipboard-write ${childOrigin}; web-share ${childOrigin}; focus-without-user-activation ${childOrigin}`}
+    referrerPolicy="origin"
+    className="absolute inset-0 block h-full w-full border-0"
+  />;
+}
 
 type PageMetaEntry = {
   title: string
@@ -95,7 +115,9 @@ function PageMeta() {
 
   useEffect(() => {
     const normalizedPathname = normalizePathname(pathname)
-    const meta = pageMeta[normalizedPathname] ?? fallbackMeta
+    const meta = isEmbeddedPlannerParentBuild && normalizedPathname === '/planner'
+      ? { title: '2026年度版 履修プランナー | 法政通信メディア', description: '2026年度の履修計画、成績取込、進捗と単位の記録。' }
+      : pageMeta[normalizedPathname] ?? fallbackMeta
 
     document.title = meta.title;
 
@@ -125,18 +147,21 @@ function PageMeta() {
 
   return null;
 }
-export default function App() {
-  return (
-    <Router>
+function SiteLayout() {
+  const { pathname } = useLocation();
+  const [adInset, setAdInset] = useState(0);
+  const embedded = ['/planner', '/planner/'].includes(pathname) && embeddedPlannerSource() !== null;
+  return <>
       <PageMeta />
       <ScrollToTop />
 
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className={`bg-gray-50 ${embedded ? 'grid grid-rows-[auto_minmax(0,1fr)]' : 'flex min-h-screen flex-col'}`}
+        style={embedded ? { minHeight: 'calc(100dvh - ' + adInset + 'px)' } : { paddingBottom: adInset }}>
         {/* 切り出したヘッダー */}
         <Header />
 
         {/* ページの中身が変わる部分 */}
-        <main className="flex-grow">
+        <main className={embedded ? 'relative min-h-0' : 'flex-grow'}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/qa" element={<QA />} />
@@ -144,15 +169,20 @@ export default function App() {
             {/* 創立者からのメッセージページへのルーティング */}
             <Route path="/message" element={<Message />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
+            {isEmbeddedPlannerParentBuild && <Route path="/planner" element={<EmbeddedPlanner />} />}
             <Route path="/member" element={<ProfileCard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
 
         {/* 切り出したフッター */}
-        <Footer />
+        {!embedded && <Footer />}
 
       </div>
-    </Router>
-  );
+      {!embedded && <PageEdgeNavigation bottomInset={adInset} reloadPlannerLocation
+        plannerPath={import.meta.env.VITE_PLANNER_2026_URL === '/planner' ? '/planner' : null} />}
+      {hasViewportBottomAd && <ViewportBottomAd onInsetChange={setAdInset} />}
+    </>;
 }
+
+export default function App() { return <Router><SiteLayout /></Router>; }

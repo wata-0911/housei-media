@@ -1,6 +1,11 @@
 import { Link } from 'react-router-dom';
+import { isEmbeddedPlannerParentBuild } from '../planner/candidate2026/embeddedPlanner';
 
-export default function Footer() {
+const footerLinkClass = 'text-white hover:text-[#E65C00] transition-colors duration-300';
+const publicPaths = [['/', 'ホーム'], ['/qa', 'Q&A'], ['/message', '創立者からのメッセージ'],
+  ['/member', '運営メンバー紹介'], ['/privacy', 'プライバシーポリシー'], ['/contact', 'お問い合わせ']] as const;
+
+export default function Footer({ parentOrigin, reloadDocument = false }: { parentOrigin?: string; reloadDocument?: boolean } = {}) {
   return (
     <footer className="bg-[#002255] text-white/80 py-16 border-t border-white/10 mt-auto" style={{ fontFamily: '"Noto Serif JP", serif' }}>
       <div className="max-w-7xl mx-auto px-6 text-center antialiased">
@@ -23,12 +28,9 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-6 md:gap-10 mb-12 text-xs md:text-sm tracking-widest font-light">
-          <Link to="/" className="text-white hover:text-[#E65C00] transition-colors duration-300">ホーム</Link>
-          <Link to="/qa" className="text-white hover:text-[#E65C00] transition-colors duration-300">Q&A</Link>
-          <Link to="/message" className="text-white hover:text-[#E65C00] transition-colors duration-300">創立者からのメッセージ</Link>
-          <Link to="/member" className="text-white hover:text-[#E65C00] transition-colors duration-300">運営メンバー紹介</Link>
-          <Link to="/privacy" className="text-white hover:text-[#E65C00] transition-colors duration-300">プライバシーポリシー</Link>
-          <Link to="/contact" className="text-white hover:text-[#E65C00] transition-colors duration-300">お問い合わせ</Link>
+          {publicPaths.map(([path, text]) => parentOrigin
+            ? <a key={path} href={new URL(path, parentOrigin).href} target="_top" className={footerLinkClass}>{text}</a>
+            : <Link key={path} reloadDocument={reloadDocument || (path === '/' && isEmbeddedPlannerParentBuild)} to={path} className={footerLinkClass}>{text}</Link>)}
         </div>
 
         <p className="text-xs text-white/40 tracking-widest font-light">

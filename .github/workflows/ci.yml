@@ -8,22 +8,35 @@ on:
     branches:
       - main
 
-jobs:
-  check:
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+jobs:
+  planner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    name: Planner (Node ${{ matrix.node }})
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Planner integration tests
+        run: npm run test:planner
 
       - name: Type check
         run: npm run typecheck
@@ -31,5 +44,22 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build
+      - name: Build with catalog and grade import verification
         run: npm run build
+
+      - name: Provision the pinned Chromium
+        run: npx --no-install playwright-core install --with-deps --no-shell chromium
+
+      - name: Planner release builds and loopback browser profiles
+        run: npm run test:planner:browser -- "$RUNNER_TEMP/planner-browser"
+
+  check:
+    if: ${{ always() }}
+    needs: planner
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require both Node jobs to pass
+        env:
+          PLANNER_MATRIX_RESULT: ${{ needs.planner.result }}
+        run: test "$PLANNER_MATRIX_RESULT" = success

@@ -1,0 +1,544 @@
+{
+  "routes": [
+    {
+      "src": "^/planner/?$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/index.html",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": "default-src 'none'; script-src 'self' https://platform.twitter.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://www.transparenttextures.com https://pbs.twimg.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://syndication.twitter.com https://platform.twitter.com; frame-src https://planner-staging.hosei-tsukyo-media.com; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      }
+    },
+    {
+      "src": "^/(?:|(?:qa|contact|message|privacy|member)/?)$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/index.html",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": "default-src 'none'; script-src 'self' https://platform.twitter.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://www.transparenttextures.com https://pbs.twimg.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://syndication.twitter.com https://platform.twitter.com; frame-src https://platform.twitter.com https://syndication.twitter.com; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      }
+    },
+    {
+      "src": "^/child$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^planner-staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-child-content/planner.html",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'none'; frame-src 'none'; frame-ancestors https://staging.hosei-tsukyo-media.com; base-uri 'none'; form-action 'none'"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/assets/index-BnX0DAof\\.js$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/assets/index-BnX0DAof.js",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/assets/index-DsxXqYqF\\.css$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/assets/index-DsxXqYqF.css",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "text/css; charset=utf-8",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/hedda\\.jpeg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/hedda.jpeg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/hedda\\.jpeg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/hedda.jpeg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/icon-128\\.png$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/icon-128.png",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/png",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/icon-128\\.png$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/icon-128.png",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/png",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/member-founder\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member-founder.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/member-founder\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member-founder.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/member1\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member1.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/member1\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member1.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/member2\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member2.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/member2\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member2.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/member3\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member3.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/member3\\.jpg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/member3.jpg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/qa\\.jpeg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/qa.jpeg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/qa\\.jpeg$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/qa.jpeg",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/jpeg",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-parent/schedule-calendar\\.png$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/schedule-calendar.png",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/png",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/schedule-calendar\\.png$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-parent-content/schedule-calendar.png",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "image/png",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-child/assets/planner-CiySVk1f\\.css$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^planner-staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-child-content/assets/planner-CiySVk1f.css",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "text/css; charset=utf-8",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/_stage69-child/assets/planner-Inc5AM_W\\.js$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^planner-staging\\.hosei-tsukyo-media\\.com$"
+        }
+      ],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "caseSensitive": true,
+      "dest": "/stage69-child-content/assets/planner-Inc5AM_W.js",
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Type": "text/javascript; charset=utf-8",
+        "Cross-Origin-Resource-Policy": "same-origin"
+      }
+    },
+    {
+      "src": "^/.*$",
+      "status": 404,
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"
+      }
+    }
+  ]
+}
