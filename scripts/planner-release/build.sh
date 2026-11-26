@@ -5,14 +5,20 @@ scripts="$root/scripts/planner-release"
 fixtures="$root/tests/fixtures/planner-release"
 output=$(realpath -m -- "$root/dist/planner-release")
 test_profiles=false
-if [[ $# -gt 0 ]]; then
+production_on=false
+cloudflare=false
+if [[ $# -gt 0 && "$1" != --* ]]; then
   output=$(realpath -m -- "$1")
   shift
 fi
-if [[ "$*" == '--test-profiles' ]]; then
-  test_profiles=true
-elif [[ $# -ne 0 ]]; then
-  printf '%s\n' 'usage: build.sh [new output directory] [--test-profiles]' >&2
+case "${1-}" in
+  --test-profiles) test_profiles=true; shift ;;
+  --production-on) production_on=true; shift ;;
+  --cloudflare) cloudflare=true; shift ;;
+  --cloudflare-production-on) cloudflare=true; production_on=true; shift ;;
+esac
+if [[ $# -ne 0 ]]; then
+  printf '%s\n' 'usage: build.sh [new output directory] [--test-profiles|--production-on|--cloudflare|--cloudflare-production-on]' >&2
   exit 2
 fi
 mkdir -p -- "$(dirname "$output")"
@@ -32,6 +38,8 @@ build() {
 unset VITE_PLANNER_2026_PARENT_ORIGIN VITE_PLANNER_2026_CHILD_ORIGIN
 unset VITE_SITE_AD_IMAGE VITE_SITE_AD_ALT VITE_SITE_AD_URL
 build stage69-parent staging-parent 0 0
+# Keep the live seller declaration out of the protected staging package.
+rm -f -- "$work/staging-parent/ads.txt"
 build stage69-child staging-child-on 1 0
 build stage69-child staging-child-off 0 0
 build main-planner-parent production-parent 0 0
@@ -43,13 +51,22 @@ for edit in on off; do
 done
 python3 "$scripts/assemble-production.py" "$work/production-parent" "$work/production-child-off" "$output/production-off"
 
-if [[ "$test_profiles" == true ]]; then
+if [[ "$production_on" == true || "$test_profiles" == true ]]; then
   build main-planner-child production-child-on 0 1
   python3 "$scripts/assemble-production.py" "$work/production-parent" "$work/production-child-on" "$output/production-on"
+fi
+
+if [[ "$test_profiles" == true ]]; then
   VITE_SITE_AD_IMAGE=/ads-fixture.png VITE_SITE_AD_ALT='合成素材・配置確認のみ' \
     VITE_SITE_AD_URL=https://ads-placement-fixture.example.test/ build main-planner-parent production-parent-ad 0 0
   python3 "$root/tests/planner-release/mock-banner.py" "$work/production-parent-ad/ads-fixture.png"
   python3 "$scripts/assemble-production.py" "$work/production-parent-ad" "$work/production-child-on" "$output/production-ad"
+fi
+if [[ "$cloudflare" == true ]]; then
+  python3 "$scripts/assemble-cloudflare.py" "$output/production-off" "$output/cloudflare-off"
+  if [[ "$production_on" == true ]]; then
+    python3 "$scripts/assemble-cloudflare.py" "$output/production-on" "$output/cloudflare-on"
+  fi
 fi
 (cd "$output" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$work/manifest"
 cp "$work/manifest" "$output/SHA256SUMS"

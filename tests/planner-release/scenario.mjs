@@ -7,6 +7,11 @@ import { pathToFileURL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { chromium } from 'playwright-core';
 
+// The optional transport forwards to real local Wrangler listeners, never to public hosts.
+const cfPorts = [process.env.PLANNER_CF_PAGES_PORT, process.env.PLANNER_CF_WORKER_PORT];
+const cloudflare = cfPorts.some(Boolean);
+if (cloudflare) assert(cfPorts.every(port => /^\d+$/.test(port ?? '') && Number(port) > 0 && Number(port) < 65536));
+
 const width = Number(process.argv[2]);
 const profile = process.argv[3] ?? 'staging';
 const mode = process.argv[4] ?? 'on';
@@ -17,6 +22,7 @@ assert.ok([390, 1280].includes(width) && ['on', 'off', 'ad'].includes(mode) && (
 if (!process.argv[5]) throw new Error('usage: scenario.mjs WIDTH PROFILE MODE WORK_DIR');
 const work = pathToFileURL(resolve(process.argv[5]) + sep);
 const root = new URL('profiles/' + profile + '-' + mode + '/', work);
+if (cloudflare) assert(production && mode !== 'ad');
 const parentRoot = production ? new URL('parent/', root) : dev ? new URL('dev-dist/', work) : root;
 const childRoot = production ? new URL('child/', root) : root;
 const parentRoutes = dev ? [{ handle: 'filesystem' }, { src: '^/.*$', dest: '/index.html' }]
@@ -27,8 +33,8 @@ const parent = production ? 'https://hosei-tsukyo-media.com'
   : dev ? 'https://dev.hosei-tsukyo-media.com' : 'https://staging.hosei-tsukyo-media.com';
 const child = production ? 'https://planner.hosei-tsukyo-media.com' : 'https://planner-staging.hosei-tsukyo-media.com';
 const outside = 'https://outside-a-fixture.example.test';
-const alias = 'https://preview-a-fixture.vercel.app';
-const childAlias = 'https://child-a-fixture.vercel.app';
+const alias = cloudflare ? 'https://hosei-media-web.pages.dev' : 'https://preview-a-fixture.vercel.app';
+const childAlias = cloudflare ? 'https://child-a-fixture.workers.dev' : 'https://child-a-fixture.vercel.app';
 const offScope = [outside, alias, ...(production ? ['https://staging.hosei-tsukyo-media.com'] : ['https://hosei-tsukyo-media.com'])];
 const fixtureOrigins = [parent, child, childAlias, ...offScope];
 const fixtureHosts = fixtureOrigins.map(value => new URL(value).hostname);
@@ -103,6 +109,18 @@ const server = createServer({
     return;
   }
   const useChild = production && (host === childHost || host === new URL(childAlias).hostname);
+  if (cloudflare) {
+    const upstream = request({
+      hostname: '127.0.0.1', port: Number(cfPorts[useChild ? 1 : 0]),
+      path: req.url, method, headers: req.headers, rejectUnauthorized: false, agent: false,
+    }, incoming => {
+      response.writeHead(incoming.statusCode, incoming.headers);
+      incoming.pipe(response);
+    });
+    upstream.on('error', () => response.writeHead(502).end());
+    req.pipe(upstream);
+    return;
+  }
   const which = useChild ? childRoot : parentRoot;
   const localRoutes = useChild ? childRoutes : parentRoutes;
   const contentType = name => name.endsWith('.html') ? 'text/html; charset=utf-8'
@@ -310,12 +328,15 @@ try {
   if (dev) await runDev();
   else {
     await routeChecks();
+    if (cloudflare) await cloudflareContractChecks();
     if (mode === 'off') await holdChecks(true);
     else if (mode === 'ad') await runAd();
     else {
       await runCandidate();
-      await runOrdinaryDevCarryForward();
-      await runImportedDevCarryForward();
+      if (!cloudflare) {
+        await runOrdinaryDevCarryForward();
+        await runImportedDevCarryForward();
+      }
       await holdChecks(false);
     }
   }
@@ -349,6 +370,56 @@ async function routeChecks() {
   assert.equal((await local(child, '/child', 'POST')).statusCode, 404);
   log('HTTP host, asset and normalized path checks', { strictFrameAncestors: true, strictFrameSrc: true,
     deniedWrongHostAndPath: true, childAssetNotServedOnParent: true });
+}
+
+async function cloudflareContractChecks() {
+  const ctx = await context();
+  try {
+    const page = await ctx.newPage();
+    for (const [path, title] of [
+      ['/', /法政通信メディア/], ['/qa', /Q&A/], ['/contact', /お問い合わせ/],
+      ['/message', /創立者/], ['/privacy', /プライバシー/], ['/member', /運営メンバー/],
+    ]) {
+      assert.equal((await page.goto(parent + path)).status(), 200, path);
+      await page.waitForFunction(pattern => new RegExp(pattern).test(document.title), title.source);
+      assert.equal((await page.reload()).status(), 200, path);
+      await page.waitForFunction(pattern => new RegExp(pattern).test(document.title), title.source);
+      assert.deepEqual((await readRaw(page)).writes, []);
+    }
+    await page.locator('footer a[href="/qa"]').click();
+    await page.waitForURL(parent + '/qa');
+    await page.locator('#qa-search').waitFor();
+    const ad = await page.goto(parent + '/ads.txt');
+    assert.equal(ad.status(), 200);
+    assert.match(ad.headers()['content-type'], /^text\/plain(?:;|$)/);
+    assert.deepEqual(await ad.body(), await readFile(new URL('ads.txt', parentRoot)));
+    const compareHeaders = async (origin, path, route) => {
+      for (const method of ['GET', 'HEAD']) {
+        const response = await local(origin, path, method);
+        assert.equal(response.statusCode, 200, origin + path);
+        for (const [name, value] of Object.entries(route.headers)) {
+          assert.equal(response.headers[name.toLowerCase()], value, method + ' ' + path + ' ' + name);
+        }
+      }
+    };
+    await compareHeaders(parent, '/planner/?fixture=1', parentRoutes[0]);
+    await compareHeaders(child, '/child', childRoutes[0]);
+    for (const route of childRoutes.slice(1, -1)) {
+      await compareHeaders(child, '/_planner-child/assets/' + route.dest.split('/').at(-1), route);
+    }
+    for (const [origin, path] of [
+      [parent, '/planner.html'], [parent, '/release-child/planner.html'],
+      [child, '/child/'], [child, '/_planner-child/assets/missing.js'],
+    ]) {
+      const response = await local(origin, path);
+      assert.equal(response.statusCode, 404, origin + path);
+      assert.equal(response.headers['content-security-policy'], "default-src 'none'; frame-ancestors 'none'");
+      assert.equal(response.headers['cache-control'], 'private, no-store');
+    }
+    log('Cloudflare routes, SPA documents and ads.txt', { pages: 6, reloads: 6, navigation: true, exactAdsBytes: true });
+  } finally {
+    await ctx.close();
+  }
 }
 
 async function holdChecks(disabled) {

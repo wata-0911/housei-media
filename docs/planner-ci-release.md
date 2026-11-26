@@ -39,11 +39,11 @@ tests/fixtures/planner-release/ordinary-dev-import.json.gz は監査原本を無
 
 ## 配信入力の生成
 
-npm run build:planner:release -- /new/output-directory で、production-off/parent、production-off/child、staging-on、staging-off と全収録ファイルの SHA256SUMS を生成する。出力先は新規ディレクトリを指定。通常の npm run build とは別の構成で、stagingだけでGA初期化を除去し、保護境界のルートを固定参照と照合する。production-onと合成広告はブラウザ試験の作業領域にだけ生成する。
+npm run build:planner:release -- /new/output-directory で、production-off/parent、production-off/child、staging-on、staging-off と全収録ファイルの SHA256SUMS を生成する。出力先は新規ディレクトリを指定。通常の npm run build とは別の構成で、stagingだけでGA初期化を除去し、保護境界のルートを固定参照と照合する。production-onは明示オプションで生成し、合成広告はブラウザ試験のプロファイルに限る。
 
 - 本番親は main-planner-parent のindex.html。親の https://hosei-tsukyo-media.com/planner と /planner/ は、生成構成の限定ルートからこのindex.htmlを開く。
 - 本番子は main-planner-child の静的出力。予定URLは https://planner.hosei-tsukyo-media.com/child 。このホスト専用の生成配置に子のみを入れる。既定は編集OFF。
-- リポジトリルートのvercel.jsonは既存の /planner → /planner.html を保持する。生成した production-off/parent/vercel.json は親indexを返す別の構成。mainマージだけでは公開されず、親の実プロジェクトの入力と子DNS/TLS/domain/SSOに別承認が要る。
+- リポジトリルートのvercel.jsonは既存の /planner → /planner.html を保持する。生成した production-off/parent/vercel.json は親indexを返す別の構成。mainの更新は自動配信を起動し得る。親子分離を実ホストに適用するには親の実プロジェクトの入力と子DNS/TLS/domain/保護に別承認が要る。
 - 子の予定domainは既存のprj_J3HhUwPF28zjmMvU7puZkUmFGn7Bに未登録という管理情報。子SSO allの変更は対象外。AdSenseの設定、実素材とタグは対象外。
 
 ## PRブランチの配信抑止と切戻し
@@ -51,3 +51,22 @@ npm run build:planner:release -- /new/output-directory で、production-off/pare
 git.deploymentEnabled は feature/planner-2026-stage29-20261118 のみfalse。これはGit連携プロジェクトが実効ルートでこの設定を読む場合の抑止。main/devや他ブランチの既定に影響させず、Webhookや別の配信経路の停止までは示さない。push前に全連携プロジェクトの実効ルートと他経路を確認する。 [Vercel Git設定](https://vercel.com/docs/project-configuration/git-configuration)
 
 切戻しは別承認で行う。親と子の既存配信ID、生成設定と入力SHAを先に控え、先に親の旧入口へ戻す。子の保存originと保存領域は保持する。v3を使った記録は対応版で可搬バックアップを退避し、v2コードにv3の上書きをさせない。SSOや配信切替だけでは既に開いている編集タブの停止を保証しない。
+
+## Cloudflare向けの独立した親子入力
+
+通常のビルドや既定のリリース入力は維持する。明示指定の追加出力は次のとおり。いずれも新規出力先を指定する。
+
+| オプション | 追加出力 |
+| --- | --- |
+| `--cloudflare` | `cloudflare-off/{parent,child}`。編集OFF。 |
+| `--cloudflare-production-on` | 上記に加え `cloudflare-on/{parent,child}`。編集ONの候補入力。 |
+| `--production-on` | Vercel用の `production-on/{parent,child}` を追加する。 |
+
+`npm run build:planner:release -- /new/output --cloudflare` で、リリースアセンブラーから親子を個別に準備する。既存の `--test-profiles` とVercel用ルートは維持する。本番親は固定mainの `ads.txt` をそのまま含む。公開用の販売者宣言は staging の出力に混ぜない。
+
+- **親**は既存Pages `hosei-media-web` 向けの独立ディレクトリ。advanced modeの `_worker.js` で `https://hosei-tsukyo-media.com/planner` と `/planner/` に限定し、既存親CSP・Referrer-Policy・親のGA/X/GAS設定を保つ。実ファイルは `_routes.json` の除外で静的に配る。子のHTML・資産を収録しない。Functionsが配送されないときは静的 `404.html` により専用Planner URLを出さない。 [_worker.js の詳細](https://developers.cloudflare.com/pages/functions/advanced-mode/) · [Functionsのルート設定](https://developers.cloudflare.com/pages/functions/routing/)
+- **子**は既存devから独立したWorker Static Assetsの入力。`run_worker_first: true` とHTML正規化・SPAフォールバックなしで、完全一致のHTTPS子originの `/child` と生成JS/CSSだけをGET/HEADで配る。CSP等は従来の生成ルールから同じ値を取り込む。`workers_dev` と `preview_urls` はfalse、カスタムドメインは入力段階では未設定。 [Workers静的アセットの設定](https://developers.cloudflare.com/workers/static-assets/binding/)
+
+現在のPages Git連携は `npm run build → dist` でmainの更新が配信を起動する。統合前にこの実効配信を一時保留するか、別承認で既定OFFの入力に切り替えて確認する。Pagesの設定・専用子の保護と利用枠、子DNS/TLS、固定SHAと両ホストの実効ヘッダー、切戻し先が成立した後に配信を別承認する。公開アクセスでは既定OFFから段階的に確認し、On入力には別の切替判断が要る。
+
+再現する場合はローカル専用Wrangler 4で `WRANGLER_CLI=/path/to/node_modules/wrangler/bin/wrangler.js PLANNER_CI_CHROMIUM=/path/to/chromium bash tests/planner-release/run-cloudflare-local.sh /new/output off /new/evidence 18751 18752` を実行する。編集ONは明示ビルドの出力に対し別の証跡ディレクトリで実行する。実ホストへ送らない合成データ試験で、クラウドの保護、課金、稼働を証明しない。Pages FunctionsとWorker実行は無料枠を共有する。 [Pages Functionsの料金と無料枠](https://developers.cloudflare.com/pages/functions/pricing/)
