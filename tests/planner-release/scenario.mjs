@@ -515,6 +515,61 @@ async function runAd() {
     });
     return (await box()).y;
   };
+  const assertSettledPlannerAdLayout = async (width, height, phase) => {
+    const samples = await page.evaluate(({ width, height }) => new Promise((resolve, reject) => {
+      const ad = document.querySelector('aside[aria-label="広告"]');
+      const iframe = document.querySelector('iframe[title="2026年度版 履修プランナー"]');
+      const layout = iframe?.closest('main')?.parentElement;
+      if (!ad || !iframe || !layout) {
+        reject(new Error('Planner or ad is absent during layout measurement'));
+        return;
+      }
+
+      const samples = [];
+      let frame;
+      let previous;
+      let unchanged = 0;
+      const timeout = setTimeout(() => {
+        cancelAnimationFrame(frame);
+        reject(new Error('Planner ad layout did not settle: ' + JSON.stringify(samples.slice(-3))));
+      }, 2500);
+
+      function sample() {
+        const adBox = ad.getBoundingClientRect().toJSON();
+        const iframeBox = iframe.getBoundingClientRect().toJSON();
+        const viewport = window.visualViewport;
+        const geometry = {
+          innerWidth, innerHeight,
+          visualViewport: viewport && {
+            width: viewport.width, height: viewport.height, scale: viewport.scale,
+            top: viewport.offsetTop, left: viewport.offsetLeft,
+          },
+          ad: adBox, iframe: iframeBox,
+          parentMinHeight: getComputedStyle(layout).minHeight,
+          insetStyle: layout.style.minHeight,
+        };
+        samples.push({ t: performance.now(), ...geometry });
+        const ready = innerWidth === width && innerHeight === height &&
+          adBox.height > 20 && Math.abs(adBox.bottom - innerHeight) <= 2;
+        const current = ready ? JSON.stringify(geometry) : undefined;
+        unchanged = current === undefined ? 0 : current === previous ? unchanged + 1 : 1;
+        previous = current;
+
+        // The overlap is evaluated separately, even if a bad layout is stable.
+        if (unchanged === 3) {
+          clearTimeout(timeout);
+          resolve(samples);
+          return;
+        }
+        frame = requestAnimationFrame(sample);
+      }
+
+      frame = requestAnimationFrame(sample);
+    }), { width, height });
+    const { ad, iframe } = samples.at(-1);
+    log('settled Planner ad geometry', { phase, samples, delta: iframe.bottom - ad.top });
+    assert.ok(iframe.bottom <= ad.top + 1, phase + ': iframe overlaps the ad');
+  };
   await adTopAfterLayout();
   assert.equal(await ad.getByRole('img', { name: '合成素材・配置確認のみ' }).count(), 1);
   const first = await box();
@@ -530,8 +585,8 @@ async function runAd() {
   await shot('home-footer');
   await page.goto(parent + '/planner');
   let frame = await workspace(page);
-  let top = await adTopAfterLayout();
-  let iframe = await page.getByTitle('2026年度版 履修プランナー').boundingBox();
+  const top = await adTopAfterLayout();
+  const iframe = await page.getByTitle('2026年度版 履修プランナー').boundingBox();
   assert.ok(iframe.y + iframe.height <= top + 1);
   assert.equal(await frame.getByRole('complementary', { name: '広告' }).count(), 0);
   const input = frame.locator('#course-query');
@@ -554,12 +609,10 @@ async function runAd() {
   await shot('planner-footer');
   if (width < 600) {
     await page.setViewportSize({ width: 844, height: 390 });
-    top = await adTopAfterLayout();
-    iframe = await page.getByTitle('2026年度版 履修プランナー').boundingBox();
-    assert.ok(iframe.y + iframe.height <= top + 1);
+    await assertSettledPlannerAdLayout(844, 390, 'landscape');
     await shot('landscape');
     await page.setViewportSize({ width: 390, height: 900 });
-    await adTopAfterLayout();
+    await assertSettledPlannerAdLayout(390, 900, 'restored portrait');
     await page.evaluate(() => {
       Object.defineProperty(window.visualViewport, 'height', { configurable: true, value: innerHeight - 260 });
       window.visualViewport.dispatchEvent(new Event('resize'));
@@ -569,7 +622,7 @@ async function runAd() {
       Reflect.deleteProperty(window.visualViewport, 'height');
       window.visualViewport.dispatchEvent(new Event('resize'));
     });
-    await adTopAfterLayout();
+    await assertSettledPlannerAdLayout(390, 900, 'keyboard dismissed');
   }
   assert.deepEqual(await readRaw(page), { raw: [null, null, null], reads: [], writes: [] });
   log('synthetic fixed bottom banner', { parentOnly: true, fixedDuringBothScrolls: true,
