@@ -53,13 +53,131 @@ jobs:
       - name: Planner release builds and loopback browser profiles
         run: npm run test:planner:browser -- "$RUNNER_TEMP/planner-browser"
 
+  b-normal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Materialize and test fixed B
+        run: |
+          node tools/planner-b/materialize.mjs b-native "$RUNNER_TEMP/b-native"
+          node tools/planner-b/build.mjs install "$RUNNER_TEMP/b-native" b-native
+          node --test tools/planner-b/build-boundary.test.mjs
+          node tools/planner-b/build.mjs quality "$RUNNER_TEMP/b-native" b-native
+      - name: Run and retain the normal B regression
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/b-normal"
+          status=0
+          node tools/planner-b/build.mjs normal "$RUNNER_TEMP/b-native" b-native 2>&1 | tee "$RUNNER_TEMP/b-normal/planner.tap" || status=$?
+          printf '%s\n' "$status" > "$RUNNER_TEMP/b-normal/planner.exit"
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: planner-b-normal-evidence
+          path: ${{ runner.temp }}/b-normal
+          if-no-files-found: warn
+  b-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install isolated pinned roots and browser
+        run: |
+          node tools/planner-b/materialize.mjs b-native "$RUNNER_TEMP/b-native"
+          node tools/planner-b/materialize.mjs b78 "$RUNNER_TEMP/b78"
+          node tools/planner-b/materialize.mjs b70 "$RUNNER_TEMP/b70"
+          node tools/planner-b/materialize.mjs b59 "$RUNNER_TEMP/b59" "$RUNNER_TEMP/b70"
+          node tools/planner-b/build.mjs install "$RUNNER_TEMP/b-native" b-native
+          node tools/planner-b/build.mjs install "$RUNNER_TEMP/b78" b78
+          node tools/planner-b/build.mjs install "$RUNNER_TEMP/b70" b70
+          node tools/planner-b/build.mjs install "$RUNNER_TEMP/b59" b59
+          npm install --prefix "$RUNNER_TEMP/b-playwright" --no-save --package-lock=false playwright@1.62.1
+          PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/b-chromium" node "$RUNNER_TEMP/b-playwright/node_modules/playwright/cli.js" install --with-deps chromium
+          node tools/planner-b/build.mjs history "$RUNNER_TEMP/b59" "$RUNNER_TEMP/b59-history"
+          node tools/planner-b/build.mjs history-cold "$RUNNER_TEMP/b59" "$RUNNER_TEMP/b59-cold"
+          node tools/planner-b/build.mjs split "$RUNNER_TEMP/b70" "$RUNNER_TEMP/b70-build"
+          node tools/planner-b/build.mjs split "$RUNNER_TEMP/b78" "$RUNNER_TEMP/b78-build" b78
+          node tools/planner-b/build.mjs cold "$RUNNER_TEMP/b78" "$RUNNER_TEMP/b78-cold" b78
+          node tools/planner-b/build.mjs split "$RUNNER_TEMP/b-native" "$RUNNER_TEMP/b-native-build" b-native
+          node tools/planner-b/build.mjs cold "$RUNNER_TEMP/b-native" "$RUNNER_TEMP/b-native-cold" b-native
+      - name: Verify the local protected split build
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/b-protected"
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/b-chromium"
+          export PLANNER_PLAYWRIGHT_MODULE="$RUNNER_TEMP/b-playwright/node_modules/playwright/index.mjs"
+          export B72_DIST="$RUNNER_TEMP/b70-build" B72_ROOT="$RUNNER_TEMP/b70"
+          export B78_DIST="$RUNNER_TEMP/b78-build" B78_COLD_DIST="$RUNNER_TEMP/b78-cold"
+          export B78_EVIDENCE="$RUNNER_TEMP/b-protected/archive78"
+          export NATIVE_DIST="$RUNNER_TEMP/b-native-build" NATIVE_COLD_DIST="$RUNNER_TEMP/b-native-cold"
+          export NATIVE_B78_DIST="$B78_DIST" NATIVE_PROTECTED_EVIDENCE="$RUNNER_TEMP/b-protected/native28"
+          export B72_OLD_COLD_DIST="$RUNNER_TEMP/b59-cold" B72_EVIDENCE="$RUNNER_TEMP/b-protected"
+          PLANNER_BROWSER_EXECUTABLE=$(node --input-type=module -e 'const { chromium } = await import(process.env.PLANNER_PLAYWRIGHT_MODULE); console.log(chromium.executablePath());')
+          export PLANNER_BROWSER_EXECUTABLE
+          run_probe() {
+            local label=$1 status=0
+            shift
+            "$@" 2>&1 | tee "$B72_EVIDENCE/$label.tap" || status=$?
+            printf '%s\n' "$status" > "$B72_EVIDENCE/$label.exit" || return 1
+            return "$status"
+          }
+          status=0
+          run_probe gate node --test tools/planner-b/gate.test.mjs || status=1
+          run_probe protected node --import "$RUNNER_TEMP/b70/node_modules/tsx/dist/loader.mjs" --test tools/planner-b/protected.browser.mjs || status=1
+          if run_probe verify_b78 node tools/planner-b/build.mjs verify-browser "$RUNNER_TEMP/b78" \
+            "$B78_DIST" "$B78_COLD_DIST" "$RUNNER_TEMP/b59" "$RUNNER_TEMP/b59-history" b78; then
+            run_probe protected_archive node --test tools/planner-b/protected-archive.browser.mjs || status=1
+          else
+            status=1
+          fi
+          if run_probe verify_native node tools/planner-b/build.mjs verify-browser "$RUNNER_TEMP/b-native" \
+            "$NATIVE_DIST" "$NATIVE_COLD_DIST" "$RUNNER_TEMP/b59" "$RUNNER_TEMP/b59-history" "$B78_DIST" b-native; then
+            run_probe protected_native node --test tools/planner-b/protected-native.browser.mjs || status=1
+          else
+            status=1
+          fi
+          exit "$status"
+      - name: Run registered suites on the verified native B assets
+        if: ${{ success() || failure() }}
+        run: |
+          PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/b-chromium" node tools/planner-b/build.mjs browser "$RUNNER_TEMP/b-native" \
+            "$RUNNER_TEMP/b-playwright/node_modules/playwright" "$RUNNER_TEMP/b-evidence" \
+            "$RUNNER_TEMP/b-native-build" "$RUNNER_TEMP/b-native-cold" "$RUNNER_TEMP/b59" "$RUNNER_TEMP/b59-history" \
+            "$RUNNER_TEMP/b78-build" b-native
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: planner-b-browser-evidence
+          path: |
+            ${{ runner.temp }}/b-evidence
+            ${{ runner.temp }}/b-protected
+          if-no-files-found: warn
   check:
     if: ${{ always() }}
-    needs: planner
+    needs: [planner, b-normal, b-browser]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
-      - name: Require both Node jobs to pass
+      - name: Require all required Planner jobs to pass
         env:
-          PLANNER_MATRIX_RESULT: ${{ needs.planner.result }}
-        run: test "$PLANNER_MATRIX_RESULT" = success
+          A_RESULT: ${{ needs.planner.result }}
+          B_NORMAL_RESULT: ${{ needs.b-normal.result }}
+          B_BROWSER_RESULT: ${{ needs.b-browser.result }}
+        run: |
+          test "$A_RESULT" = success
+          test "$B_NORMAL_RESULT" = success
+          test "$B_BROWSER_RESULT" = success
