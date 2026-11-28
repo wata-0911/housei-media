@@ -80,7 +80,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "feature/planner-2026-stage29-20261118": false
+      "feature/planner-2026-stage29-20261118": false,
+      "ci/planner-b-native-a675681b": false
     }
   }
 }
